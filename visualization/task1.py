@@ -154,7 +154,7 @@ def adjust_frames(frames, target_frame_count = 32):
 
     return adjusted_frames
 
-def Embedding(model, video_paths = None, text_label = None):
+def Embedding(model, video_paths = None):
     """
     Generates embeddings for video and text using a given model.
 
@@ -169,9 +169,6 @@ def Embedding(model, video_paths = None, text_label = None):
 
     batch_video = []
     batch_text = []
-    if text_label:
-        text_output = model.text_module([text_label])
-        text_embedding = text_output['text_embedding']
     if video_paths:
         for video_path in video_paths:
             #print(video_path)
@@ -246,15 +243,15 @@ def list_webm_files(folder_path):
 # test_frame = preprocess_human_demo(test_frame)
 # video = th.from_numpy(test_frame)
 # print(test_frame.shape)
-video_paths = list_webm_files('vidz4jesse')
+video_paths = list_webm_files('../20bn-something-something-v2')
 #print(video_paths)
 s3d = S3D('../s3d_dict.npy', 512)
 s3d.load_state_dict(th.load('../s3d_howto100m.pth'))
 s3d.eval()
 video_embeddings, text_embeddings = Embedding(s3d, video_paths)
-#print(video_embedding.shape, text_embedding.shape)
+#print(video_embeddings.shape, text_embeddings.shape)
 l2_distances = th.norm(text_embeddings - video_embeddings, p=2, dim=1)
-
+#print(l2_distances.shape)
 mean_distance = th.mean(l2_distances)
 std_distance = th.std(l2_distances)
 

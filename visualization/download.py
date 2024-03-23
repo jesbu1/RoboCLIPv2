@@ -1,3 +1,3 @@
 import gdown
-url = "https://drive.google.com/drive/folders/1kpyNEu2Xz9cKHW2dY40N2I1McbVMi8U0?usp=sharing"
+url = "https://drive.google.com/drive/folders/1WXQr_Cg6ZODAWowLKfXq4HHQgzNtfPvt?usp=share_link"
 gdown.download_folder(url)
