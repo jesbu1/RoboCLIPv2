@@ -6,7 +6,7 @@ import json
 import numpy as np
 import os
 import cv2
-
+from pca import plot_embeddings_3d,plot_embeddings
 
 def readGif(filename, asNumpy=True):
     """ readGif(filename, asNumpy=True)
@@ -82,34 +82,34 @@ def read_webm_frames(video_path):
     cap.release()
     return frames
 
-def find_label(video_filename, json_path='labels/train.json'):
+
+def find_label(video_filename, json_paths=['../labels/train.json', '../labels/validation.json']):
     """
-    Finds the corresponding label for a given video filename in the train.json file.
+    Finds the corresponding label for a given video filename in the train.json or validation.json file.
 
     Parameters:
     - video_filename: Name of the video file (without the extension).
-    - json_path: Path to the 'train.json' file.
+    - json_paths: List of paths to the 'train.json' and 'validation.json' files.
 
     Returns:
     - The found label as a string, or None if not found.
     """
-    try:
-        # Open and load the JSON file
-        with open(json_path, 'r') as json_file:
-            data = json.load(json_file)
+    for json_path in json_paths:
+        try:
+            if os.path.exists(json_path):
+                with open(json_path, 'r') as json_file:
+                    data = json.load(json_file)
 
-        for item in data:
-            if item['id'] == video_filename:
-                return item['label']
+                for item in data:
+                    if item['id'] == video_filename:
+                        return item['label']
 
-        return None
+        except FileNotFoundError:
+            print(f"file '{json_path}' Not Found")
+        except json.JSONDecodeError:
+            print(f"file '{json_path}' not valid json")
 
-    except FileNotFoundError:
-        print(f"file '{json_path}' Not Found")
-        return None
-    except json.JSONDecodeError:
-        print(f"file '{json_path}' not valid json")
-        return None
+    return None
 
 def get_filename_without_extension(file_path):
     """Returns the filename without the extension for a given file path."""
@@ -134,15 +134,27 @@ def preprocess_human_demo(frames):
     frames = frames.transpose(0, 4, 1, 2, 3)
     return frames
 
-def adjust_frames(frames):
+def adjust_frames(frames, target_frame_count = 32):
     """
-    Ensures an even number of frames. If there's an odd number of frames, removes the last frame.
+    Ensures same numbers of frames(32).
     """
-    if frames.shape[2] % 2 != 0:  # Check the T dimension
-        frames = frames[:, :, :-1, :, :]  # Remove the last frame
-    return frames
+    _, _, frame_count, _, _ = frames.shape
+    frames = th.from_numpy(frames)
+    if frame_count < target_frame_count:
+        blank_frames = th.zeros(
+            (frames.shape[0], frames.shape[1], target_frame_count - frame_count, frames.shape[3], frames.shape[4]),
+            dtype=frames.dtype)
+        adjusted_frames = th.cat((frames, blank_frames), dim=2)
 
-def Embedding(model, video_path = None, text_label = None):
+    elif frame_count > target_frame_count:
+        indices = th.linspace(0, frame_count - 1, target_frame_count, dtype=th.long)
+        adjusted_frames = th.index_select(frames, 2, indices)
+    else:
+        adjusted_frames = frames
+
+    return adjusted_frames
+
+def Embedding(model, video_paths = None, text_label = None):
     """
     Generates embeddings for video and text using a given model.
 
@@ -154,26 +166,39 @@ def Embedding(model, video_path = None, text_label = None):
     Returns:
     - video_embedding, text_embedding: Embeddings for the video and text.
     """
+
+    batch_video = []
+    batch_text = []
     if text_label:
         text_output = model.text_module([text_label])
         text_embedding = text_output['text_embedding']
-    if video_path:
-        video_id = get_filename_without_extension(video_path)
-        text_label = find_label(video_id)
-        print(text_label)
-        frames = read_webm_frames(video_path)
-        frames = preprocess_human_demo(frames)
-        frames = adjust_frames(frames)
-        if frames.shape[1] > 3:
-            frames = frames[:, :3]
-        video = th.from_numpy(frames)
-        print(video.shape)
+    if video_paths:
+        for video_path in video_paths:
+            #print(video_path)
+            video_id = get_filename_without_extension(video_path)
+            text_label = find_label(video_id)
+            # if text_label == None:
+            #     print(video_path)
+            frames = read_webm_frames(video_path)
+            frames = preprocess_human_demo(frames)
+            frames = adjust_frames(frames)
+            if frames.shape[1] > 3:
+                frames = frames[:, :3]
+            video = frames
+            batch_video.append(video)
+            batch_text.append(text_label)
 
-        video_output = model(video.float())
-        video_embedding = video_output['video_embedding']
-        text_output = model.text_module([text_label])
-        text_embedding = text_output['text_embedding']
-        return video_embedding, text_embedding
+        videos = th.cat(batch_video, dim=0)
+        with th.no_grad():
+            video_output = model(videos.float())
+            video_embeddings = video_output['video_embedding']
+            text_output = model.text_module(batch_text)
+            text_embeddings = text_output['text_embedding']
+            # video_embeddings.append(video_embedding)
+            # text_embeddings.append(text_embedding)
+            # batched_video_tensor = th.cat(video_embeddings, dim=0)
+            # batched_text_tensor = th.cat(text_embeddings, dim=0)
+        return video_embeddings, text_embeddings
 
 def adjust_size(frames):
     """
@@ -188,8 +213,8 @@ def adjust_size(frames):
     if len(frames) == 0:
         return np.array([])
 
-    target_height = 240
-    target_width = 320
+    target_height = 224
+    target_width = 224
 
     height, width, _ = frames[0].shape
     start_x = width // 2 - target_width // 2
@@ -202,17 +227,33 @@ def adjust_size(frames):
 
     return np.array(cropped_frames)
 
+def list_webm_files(folder_path):
+    """
+    Lists all .webm files within a given folder.
+
+    Parameters:
+    - folder_path (str): The path to the folder contains the dataset(webm).
+
+    Returns:
+    - list: A list of full paths to the .webm files within the specified folder.
+    """
+    return [os.path.join(folder_path, f) for f in os.listdir(folder_path) if f.endswith('.webm')]
+
+
+
 
 # test_frame = readGif('gifs/dense_original.gif')
 # test_frame = preprocess_human_demo(test_frame)
 # video = th.from_numpy(test_frame)
 # print(test_frame.shape)
-s3d = S3D('./s3d_dict.npy', 512)
-s3d.load_state_dict(th.load('./s3d_howto100m.pth'))
+video_paths = list_webm_files('vidz4jesse')
+#print(video_paths)
+s3d = S3D('../s3d_dict.npy', 512)
+s3d.load_state_dict(th.load('../s3d_howto100m.pth'))
 s3d.eval()
-video_embedding, text_embedding = Embedding(s3d, './20bn-something-something-v2/7.webm')
+video_embeddings, text_embeddings = Embedding(s3d, video_paths)
 #print(video_embedding.shape, text_embedding.shape)
-l2_distances = th.norm(text_embedding - video_embedding, p=2, dim=1)
+l2_distances = th.norm(text_embeddings - video_embeddings, p=2, dim=1)
 
 mean_distance = th.mean(l2_distances)
 std_distance = th.std(l2_distances)
@@ -220,3 +261,5 @@ std_distance = th.std(l2_distances)
 print("Mean L2 Distance:", mean_distance.item())
 print("STD L2 Distance:", std_distance.item())
 
+plot_embeddings_3d(video_embeddings, text_embeddings, directory_name='plots', file_name='pca_plot_3d_3.png')
+plot_embeddings(video_embeddings, text_embeddings,directory_name='plots', file_name='pca_plot_3.png')
