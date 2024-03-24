@@ -169,11 +169,15 @@ def Embedding(model, video_paths = None):
 
     batch_video = []
     batch_text = []
+    video_id_to_text_label = {}
+    index_to_video_id = {}
+    index_to_text_label = {}
     if video_paths:
-        for video_path in video_paths:
+        for index, video_path in enumerate(video_paths):
             #print(video_path)
             video_id = get_filename_without_extension(video_path)
             text_label = find_label(video_id)
+            #print(f'video{video_id}, text{text_label}')
             # if text_label == None:
             #     print(video_path)
             frames = read_webm_frames(video_path)
@@ -182,10 +186,19 @@ def Embedding(model, video_paths = None):
             if frames.shape[1] > 3:
                 frames = frames[:, :3]
             video = frames
+
+            video_id_to_text_label[video_id] = text_label
+            index_to_video_id[index] = video_id
+            index_to_text_label[index] = text_label
             batch_video.append(video)
             batch_text.append(text_label)
 
         videos = th.cat(batch_video, dim=0)
+        mappings = {
+            "video_id_to_text_label": video_id_to_text_label,
+            "index_to_video_id": index_to_video_id,
+            "index_to_text_label": index_to_text_label
+        }
         with th.no_grad():
             video_output = model(videos.float())
             video_embeddings = video_output['video_embedding']
@@ -195,7 +208,7 @@ def Embedding(model, video_paths = None):
             # text_embeddings.append(text_embedding)
             # batched_video_tensor = th.cat(video_embeddings, dim=0)
             # batched_text_tensor = th.cat(text_embeddings, dim=0)
-        return video_embeddings, text_embeddings
+        return video_embeddings, text_embeddings, mappings
 
 def adjust_size(frames):
     """
@@ -243,12 +256,12 @@ def list_webm_files(folder_path):
 # test_frame = preprocess_human_demo(test_frame)
 # video = th.from_numpy(test_frame)
 # print(test_frame.shape)
-video_paths = list_webm_files('vidz4jesse')
+video_paths = list_webm_files('vidz4jesse') #'../20bn-something-something-v2'
 #print(video_paths)
 s3d = S3D('../s3d_dict.npy', 512)
 s3d.load_state_dict(th.load('../s3d_howto100m.pth'))
 s3d.eval()
-video_embeddings, text_embeddings = Embedding(s3d, video_paths)
+video_embeddings, text_embeddings, mappings = Embedding(s3d, video_paths)
 #print(video_embeddings.shape, text_embeddings.shape)
 l2_distances = th.norm(text_embeddings - video_embeddings, p=2, dim=1)
 similarity_scores = th.matmul(text_embeddings, video_embeddings.t())
@@ -283,5 +296,7 @@ stats_info = (
 )
 
 
-plot_embeddings(video_embeddings, text_embeddings, directory_name='plots', file_name='pca_plot_4.png')
-plot_embeddings_3d(video_embeddings, text_embeddings, directory_name='plots', file_name='pca_plot_3d_4.png')
+plot_embeddings(video_embeddings, text_embeddings, mappings,
+                'plots', 'pca_plot_4.png', True)
+plot_embeddings_3d(video_embeddings, text_embeddings, mappings,
+                   'plots', 'pca_plot_3d_4.png', True)
