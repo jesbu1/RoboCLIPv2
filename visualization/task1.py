@@ -243,7 +243,7 @@ def list_webm_files(folder_path):
 # test_frame = preprocess_human_demo(test_frame)
 # video = th.from_numpy(test_frame)
 # print(test_frame.shape)
-video_paths = list_webm_files('../20bn-something-something-v2')
+video_paths = list_webm_files('vidz4jesse')
 #print(video_paths)
 s3d = S3D('../s3d_dict.npy', 512)
 s3d.load_state_dict(th.load('../s3d_howto100m.pth'))
@@ -251,12 +251,37 @@ s3d.eval()
 video_embeddings, text_embeddings = Embedding(s3d, video_paths)
 #print(video_embeddings.shape, text_embeddings.shape)
 l2_distances = th.norm(text_embeddings - video_embeddings, p=2, dim=1)
+similarity_scores = th.matmul(text_embeddings, video_embeddings.t())
 #print(l2_distances.shape)
 mean_distance = th.mean(l2_distances)
 std_distance = th.std(l2_distances)
+min_distance = th.min(l2_distances)
+max_distance = th.max(l2_distances)
 
+mean_score = th.mean(similarity_scores)
+min_score = th.min(similarity_scores)
+max_score = th.max(similarity_scores)
+std_score = th.std(similarity_scores)
+
+print("Mean similarity score:", mean_score.item())
+print("Min similarity score:", min_score.item())
+print("Max similarity score:", max_score.item())
+print("STD of similarity scores:", std_score.item())
 print("Mean L2 Distance:", mean_distance.item())
 print("STD L2 Distance:", std_distance.item())
+print("Min L2 Distance:", min_distance.item())
+print("Max L2 Distance:", max_distance.item())
+stats_info = (
+    f"Mean similarity score: {mean_score.item():.2f}\n"
+    f"Min similarity score: {min_score.item():.2f}\n"
+    f"Max similarity score: {max_score.item():.2f}\n"
+    f"STD of similarity scores: {std_score.item():.2f}\n"
+    f"Mean L2 Distance: {mean_distance.item():.2f}\n"
+    f"STD L2 Distance: {std_distance.item():.2f}\n"
+    f"Min L2 Distance: {min_distance.item():.2f}\n"
+    f"Max L2 Distance: {max_distance.item():.2f}"
+)
 
-plot_embeddings_3d(video_embeddings, text_embeddings, directory_name='plots', file_name='pca_plot_3d_3.png')
-plot_embeddings(video_embeddings, text_embeddings,directory_name='plots', file_name='pca_plot_3.png')
+
+plot_embeddings(video_embeddings, text_embeddings, directory_name='plots', file_name='pca_plot_4.png')
+plot_embeddings_3d(video_embeddings, text_embeddings, directory_name='plots', file_name='pca_plot_3d_4.png')
