@@ -1,0 +1,229 @@
+from torch.utils.data import Dataset, DataLoader
+import torch as th
+import json
+#from kitchen_env_wrappers import readGif
+import numpy as np
+import os
+import cv2
+
+class VideoTextDataset(Dataset):
+    def __init__(self, video_paths, transform=None):
+        self.video_paths = video_paths
+        self.transform = transform
+
+    def __len__(self):
+        return len(self.video_paths)
+
+    def __getitem__(self, idx):
+        video_path = self.video_paths[idx]
+        video_id = get_filename_without_extension(video_path)
+        text_label = find_label(video_id)
+
+        frames = read_webm_frames(video_path)
+        frames = preprocess_human_demo(frames)
+        frames = adjust_frames(frames)
+        if self.transform:
+            frames = self.transform(frames)
+
+        sample = {'video': frames, 'text': text_label, 'video_id': video_id}
+
+        return sample
+
+
+class EmbeddingsDataset(Dataset):
+    def __init__(self, video_embeddings, text_embeddings, video_ids, text_labels):
+        self.video_embeddings = video_embeddings
+        self.text_embeddings = text_embeddings
+        self.video_ids = video_ids
+        self.text_labels = text_labels
+
+    def __len__(self):
+        return len(self.video_embeddings)
+
+    def __getitem__(self, idx):
+        video_embedding = self.video_embeddings[idx]
+        text_embedding = self.text_embeddings[idx]
+        video_id = self.video_ids[idx]
+        text_label = self.text_labels[idx]
+        return {"video_embedding": video_embedding,
+                "text_embedding": text_embedding,
+                "video_id": video_id,
+                "text_label": text_label}
+def find_label(video_filename, json_paths=['../labels/train.json', '../labels/validation.json']):
+    """
+    Finds the corresponding label for a given video filename in the train.json or validation.json file.
+
+    Parameters:
+    - video_filename: Name of the video file (without the extension).
+    - json_paths: List of paths to the 'train.json' and 'validation.json' files.
+
+    Returns:
+    - The found label as a string, or None if not found.
+    """
+    for json_path in json_paths:
+        try:
+            if os.path.exists(json_path):
+                with open(json_path, 'r') as json_file:
+                    data = json.load(json_file)
+
+                for item in data:
+                    if item['id'] == video_filename:
+                        return item['label']
+
+        except FileNotFoundError:
+            print(f"file '{json_path}' Not Found")
+        except json.JSONDecodeError:
+            print(f"file '{json_path}' not valid json")
+
+    return None
+
+def get_filename_without_extension(file_path):
+    """Returns the filename without the extension for a given file path."""
+    file_name_with_extension = os.path.basename(file_path)
+    file_name_without_extension, _ = os.path.splitext(file_name_with_extension)
+    return file_name_without_extension
+
+def preprocess_human_demo(frames):
+    """
+    Preprocesses frames for video by adjusting size, adding a batch dimension,
+    and transposing dimensions to match S3D model input requirements.
+
+    Parameters:
+    - frames: A list of video frames.
+
+    Returns:
+    - Preprocessed frames as a numpy array.
+    """
+    frames = np.array(frames)
+    frames = adjust_size(frames)
+    frames = frames[None, :,:,:,:]
+    frames = frames.transpose(0, 4, 1, 2, 3)
+    frames = frames / 255
+    return frames
+
+def adjust_frames(frames, target_frame_count = 32):
+    """
+    Ensures same numbers of frames(32).
+    """
+    _, _, frame_count, _, _ = frames.shape
+    frames = th.from_numpy(frames)
+    if frame_count < target_frame_count:
+        blank_frames = th.zeros(
+            (frames.shape[0], frames.shape[1], target_frame_count - frame_count, frames.shape[3], frames.shape[4]),
+            dtype=frames.dtype)
+        adjusted_frames = th.cat((frames, blank_frames), dim=2)
+
+    elif frame_count > target_frame_count:
+        indices = th.linspace(0, frame_count - 1, target_frame_count, dtype=th.long)
+        adjusted_frames = th.index_select(frames, 2, indices)
+    else:
+        adjusted_frames = frames
+
+    return adjusted_frames
+
+def adjust_size(frames):
+    """
+    Adjusts the size of the frames to a target height and width by cropping.
+
+    Parameters:
+    - frames: A list of video frames.
+
+    Returns:
+    - Cropped frames as a numpy array.
+    """
+    if len(frames) == 0:
+        return np.array([])
+
+    target_height = 224
+    target_width = 224
+
+    height, width, _ = frames[0].shape
+    start_x = width // 2 - target_width // 2
+    start_y = height // 2 - target_height // 2
+
+    cropped_frames = [
+        frame[start_y:start_y + target_height, start_x:start_x + target_width]
+        for frame in frames
+    ]
+
+    return np.array(cropped_frames)
+
+def read_webm_frames(video_path):
+    """
+    Reads frames from a .webm video file using OpenCV.
+
+    Parameters:
+    - video_path: Path to the video file.
+
+    Returns:
+    - frames: A list of video frames.
+    """
+    cap = cv2.VideoCapture(video_path)
+    frames = []
+
+    while True:
+        ret, frame = cap.read()
+        if not ret:
+            break
+        # Convert color space from BGR to RGB since OpenCV uses BGR by default
+        frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+        frames.append(frame)
+
+    cap.release()
+    return frames
+
+def list_webm_files(folder_path):
+    """
+    Lists all .webm files within a given folder.
+
+    Parameters:
+    - folder_path (str): The path to the folder contains the dataset(webm).
+
+    Returns:
+    - list: A list of full paths to the .webm files within the specified folder.
+    """
+    return [os.path.join(folder_path, f) for f in os.listdir(folder_path) if f.endswith('.webm')]
+
+def Embedding(model, data_loader):
+    """
+    Generates embeddings for video and text using a given model and accumulates them along with video IDs and text labels into a dataset.
+
+    Parameters:
+    - model: The model used for generating embeddings.
+    - data_loader: DataLoader providing batches of videos and corresponding text labels.
+
+    Returns:
+    - embeddings_dataset: A custom dataset containing all video embeddings, text embeddings, video IDs, and text labels.
+    - mappings: A dictionary containing mappings from video IDs to text labels, and indices to video IDs and text labels.
+    """
+    all_video_embeddings = []
+    all_text_embeddings = []
+    video_ids, text_labels = [], []
+    for batch in data_loader:
+        videos = th.squeeze(batch['video'].float(), dim=1)
+        text_labels_batch = batch['text']
+        video_ids_batch = batch['video_id']
+
+        with th.no_grad():
+            video_output = model(videos)
+            text_output = model.text_module(text_labels_batch)
+
+            all_video_embeddings.append(video_output['video_embedding'])
+            all_text_embeddings.append(text_output['text_embedding'])
+
+        video_ids.extend(video_ids_batch)
+        text_labels.extend(text_labels_batch)
+
+    all_video_embeddings = th.cat(all_video_embeddings, dim=0)
+    all_text_embeddings = th.cat(all_text_embeddings, dim=0)
+
+    # Construct mappings
+    mappings = {
+        "video_id_to_text_label": dict(zip(video_ids, text_labels)),
+        "index_to_video_id": {i: vid for i, vid in enumerate(video_ids)},
+        "index_to_text_label": {i: lbl for i, lbl in enumerate(text_labels)}
+    }
+
+    embeddings_dataset = EmbeddingsDataset(all_video_embeddings.cpu(), all_text_embeddings.cpu(), video_ids,
+                                           text_labels)
+    return all_video_embeddings, all_text_embeddings, embeddings_dataset, mappings

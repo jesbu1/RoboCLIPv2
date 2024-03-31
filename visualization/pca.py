@@ -78,6 +78,12 @@ def plot_embeddings(video_embeddings, text_embeddings, mappings, directory_name=
     reduced_video_embeddings = reduced_embeddings[:len(video_embeddings)]
     reduced_text_embeddings = reduced_embeddings[len(video_embeddings):]
 
+    # pca_video = PCA(n_components=2)
+    # reduced_video_embeddings = pca_video.fit_transform(video_embeddings)
+    #
+    # pca_text = PCA(n_components=2)
+    # reduced_text_embeddings = pca_text.fit_transform(text_embeddings)
+
     plt.figure(figsize=(10, 6))
 
     if small_scale:
@@ -142,6 +148,13 @@ def plot_embeddings_3d(video_embeddings, text_embeddings, mappings, directory_na
 
     reduced_video_embeddings = reduced_embeddings[:len(video_embeddings)]
     reduced_text_embeddings = reduced_embeddings[len(video_embeddings):]
+
+    # pca_video = PCA(n_components=3)
+    # reduced_video_embeddings = pca_video.fit_transform(video_embeddings)
+    #
+    # pca_text = PCA(n_components=3)
+    # reduced_text_embeddings = pca_text.fit_transform(text_embeddings)
+
 
     if small_scale:
         cmap = plt.get_cmap('Set3')
