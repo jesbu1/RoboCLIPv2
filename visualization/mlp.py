@@ -41,7 +41,8 @@ def mlp_train(num_epochs, video_embeddings, text_embeddings, dimension):
     optimizer = torch.optim.Adam(model.parameters(), lr=0.0005)
     checkpoint_interval = 100
     save_dir = "/scr/yusenluo/RoboCLIP/visualization/saved_model"
-    video_embeddings, text_embeddings = reduce_dimension(video_embeddings,text_embeddings,dimension)
+    if dimension != 512:
+        video_embeddings, text_embeddings = reduce_dimension(video_embeddings,text_embeddings,dimension)
     for epoch in range(num_epochs):
         adjusted_video_embeddings = model(video_embeddings)
         loss = criterion(adjusted_video_embeddings, text_embeddings)
@@ -68,8 +69,8 @@ def mlp_train(num_epochs, video_embeddings, text_embeddings, dimension):
 
 def mlp_eval(video_embeddings, text_embeddings = None):
 
-    model = SimpleMLP(input_dim=16, output_dim=16)
-    model_path = "/scr/yusenluo/RoboCLIP/visualization/saved_model/final_model_16.pth"
+    model = SimpleMLP(input_dim=512, output_dim=512)
+    model_path = "/scr/yusenluo/RoboCLIP/visualization/saved_model/final_model.pth"
     model.load_state_dict(torch.load(model_path))
 
     model.eval()
@@ -92,4 +93,4 @@ if __name__ == '__main__':
     s3d.eval()
     video_embeddings, text_embeddings, embeddings_dataset, mappings = Embedding(s3d, data_loader)
     #video_embeddings, text_embeddings = reduce_dimension(video_embeddings,text_embeddings, 16)
-    mlp_train(2000, video_embeddings, text_embeddings, 16)
+    mlp_train(2000, video_embeddings, text_embeddings, 512)

@@ -1,13 +1,181 @@
-/var/spool/slurmd/job00194/slurm_script: line 6: SBATCH: command not found
-Traceback (most recent call last):
-  File "/scr/yusenluo/RoboCLIP/visualization/mlp.py", line 89, in <module>
-    video_embeddings, text_embeddings = reduce_dimension(video_embeddings,text_embeddings, 256)
-  File "/scr/yusenluo/RoboCLIP/visualization/mlp.py", line 24, in reduce_dimension
-    video_embeddings_pca = pca.fit_transform(video_embeddings_np)  # 对视频嵌入进行PCA降维
-  File "/scr/yusenluo/anaconda3/envs/roboclip/lib/python3.8/site-packages/sklearn/decomposition/_pca.py", line 433, in fit_transform
-    U, S, Vt = self._fit(X)
-  File "/scr/yusenluo/anaconda3/envs/roboclip/lib/python3.8/site-packages/sklearn/decomposition/_pca.py", line 483, in _fit
-    return self._fit_full(X, n_components)
-  File "/scr/yusenluo/anaconda3/envs/roboclip/lib/python3.8/site-packages/sklearn/decomposition/_pca.py", line 501, in _fit_full
-    raise ValueError(
-ValueError: n_components=256 must be between 0 and min(n_samples, n_features)=42 with svd_solver='full'
+/var/spool/slurmd/job00202/slurm_script: line 6: SBATCH: command not found
+Mean variance in video embeddings: 5.03963041305542
+Mean variance in text embeddings: 30.228330612182617
+Mean similarity score: -168.2418975830078
+Min similarity score: -2343.29248046875
+Max similarity score: 810.2882690429688
+STD of similarity scores: 369.8431396484375
+Mean L2 Distance: 144.3281707763672
+STD L2 Distance: 26.790021896362305
+Min L2 Distance: 104.68378448486328
+Max L2 Distance: 186.83724975585938
+result before mlp
+Plot saved to plots/pca_plot_nomlp2D.png
+Results in 2D space
+Top 1 accuracy: 8.33%
+Top 3 accuracy: 25.00%
+Top 5 accuracy: 41.67%
+IDs of incorrectly paired video embeddings: ['149540', '155104', '137011', '171342', '175953', '79698', '71039']
+Video 149540:
+Ground truth text label: taking toothpaste out of cup
+Sorted Matching text labels: ['putting an anti-perspirant upright on the table', 'taking remote', 'showing a photo of person to the camera', 'putting knife next to scissors', 'lifting a spectacle box up completely without letting it drop down', 'putting pen into box', 'putting three buttons onto a book', 'putting lip balm into box', 'putting spoon into plate', 'putting phone underneath pillow', 'holding a multi color soccer ball in front of beidge tiles', 'taking toothpaste out of cup']
+Video 155401:
+Ground truth text label: putting an anti-perspirant upright on the table
+Sorted Matching text labels: ['putting an anti-perspirant upright on the table', 'taking remote', 'showing a photo of person to the camera', 'putting knife next to scissors', 'lifting a spectacle box up completely without letting it drop down', 'putting pen into box', 'putting three buttons onto a book', 'putting lip balm into box', 'putting spoon into plate', 'putting phone underneath pillow', 'holding a multi color soccer ball in front of beidge tiles', 'taking toothpaste out of cup']
+Video 129670:
+Ground truth text label: putting knife next to scissors
+Sorted Matching text labels: ['putting an anti-perspirant upright on the table', 'taking remote', 'showing a photo of person to the camera', 'putting knife next to scissors', 'lifting a spectacle box up completely without letting it drop down', 'putting pen into box', 'putting three buttons onto a book', 'putting lip balm into box', 'putting spoon into plate', 'putting phone underneath pillow', 'holding a multi color soccer ball in front of beidge tiles', 'taking toothpaste out of cup']
+Video 155104:
+Ground truth text label: putting phone underneath pillow
+Sorted Matching text labels: ['putting an anti-perspirant upright on the table', 'taking remote', 'showing a photo of person to the camera', 'lifting a spectacle box up completely without letting it drop down', 'putting knife next to scissors', 'putting pen into box', 'putting three buttons onto a book', 'putting lip balm into box', 'putting spoon into plate', 'putting phone underneath pillow', 'holding a multi color soccer ball in front of beidge tiles', 'taking toothpaste out of cup']
+Video 137011:
+Ground truth text label: putting three buttons onto a book
+Sorted Matching text labels: ['putting an anti-perspirant upright on the table', 'taking remote', 'showing a photo of person to the camera', 'putting knife next to scissors', 'lifting a spectacle box up completely without letting it drop down', 'putting pen into box', 'putting three buttons onto a book', 'putting lip balm into box', 'putting spoon into plate', 'putting phone underneath pillow', 'holding a multi color soccer ball in front of beidge tiles', 'taking toothpaste out of cup']
+Video 171342:
+Ground truth text label: putting pen into box
+Sorted Matching text labels: ['putting an anti-perspirant upright on the table', 'taking remote', 'showing a photo of person to the camera', 'putting knife next to scissors', 'lifting a spectacle box up completely without letting it drop down', 'putting pen into box', 'putting three buttons onto a book', 'putting lip balm into box', 'putting spoon into plate', 'putting phone underneath pillow', 'holding a multi color soccer ball in front of beidge tiles', 'taking toothpaste out of cup']
+Video 175953:
+Ground truth text label: holding a multi color soccer ball in front of beidge tiles
+Sorted Matching text labels: ['putting an anti-perspirant upright on the table', 'taking remote', 'showing a photo of person to the camera', 'putting knife next to scissors', 'lifting a spectacle box up completely without letting it drop down', 'putting pen into box', 'putting three buttons onto a book', 'putting lip balm into box', 'putting spoon into plate', 'putting phone underneath pillow', 'holding a multi color soccer ball in front of beidge tiles', 'taking toothpaste out of cup']
+Video 79698:
+Ground truth text label: putting spoon into plate
+Sorted Matching text labels: ['putting an anti-perspirant upright on the table', 'taking remote', 'showing a photo of person to the camera', 'lifting a spectacle box up completely without letting it drop down', 'putting knife next to scissors', 'putting pen into box', 'putting three buttons onto a book', 'putting lip balm into box', 'putting spoon into plate', 'putting phone underneath pillow', 'holding a multi color soccer ball in front of beidge tiles', 'taking toothpaste out of cup']
+Video 11428:
+Ground truth text label: showing a photo of person to the camera
+Sorted Matching text labels: ['putting an anti-perspirant upright on the table', 'taking remote', 'showing a photo of person to the camera', 'putting knife next to scissors', 'lifting a spectacle box up completely without letting it drop down', 'putting pen into box', 'putting three buttons onto a book', 'putting lip balm into box', 'putting spoon into plate', 'putting phone underneath pillow', 'holding a multi color soccer ball in front of beidge tiles', 'taking toothpaste out of cup']
+Video 71039:
+Ground truth text label: putting lip balm into box
+Sorted Matching text labels: ['putting an anti-perspirant upright on the table', 'taking remote', 'showing a photo of person to the camera', 'putting knife next to scissors', 'lifting a spectacle box up completely without letting it drop down', 'putting pen into box', 'putting three buttons onto a book', 'putting lip balm into box', 'putting spoon into plate', 'putting phone underneath pillow', 'holding a multi color soccer ball in front of beidge tiles', 'taking toothpaste out of cup']
+Video 52764:
+Ground truth text label: taking remote
+Sorted Matching text labels: ['putting an anti-perspirant upright on the table', 'taking remote', 'showing a photo of person to the camera', 'putting knife next to scissors', 'lifting a spectacle box up completely without letting it drop down', 'putting pen into box', 'putting three buttons onto a book', 'putting lip balm into box', 'putting spoon into plate', 'putting phone underneath pillow', 'holding a multi color soccer ball in front of beidge tiles', 'taking toothpaste out of cup']
+Video 136514:
+Ground truth text label: lifting a spectacle box up completely without letting it drop down
+Sorted Matching text labels: ['putting an anti-perspirant upright on the table', 'taking remote', 'showing a photo of person to the camera', 'putting knife next to scissors', 'lifting a spectacle box up completely without letting it drop down', 'putting pen into box', 'putting lip balm into box', 'putting three buttons onto a book', 'putting spoon into plate', 'putting phone underneath pillow', 'holding a multi color soccer ball in front of beidge tiles', 'taking toothpaste out of cup']
+Plot saved to plots/pca_plot_nomlp3D.png
+Results in 3D space
+Top 1 accuracy: 8.33%
+Top 3 accuracy: 25.00%
+Top 5 accuracy: 41.67%
+IDs of incorrectly paired video embeddings: ['149540', '155104', '137011', '175953', '79698', '71039', '136514']
+Video 149540:
+Ground truth text label: taking toothpaste out of cup
+Sorted Matching text labels: ['putting an anti-perspirant upright on the table', 'taking remote', 'showing a photo of person to the camera', 'putting knife next to scissors', 'putting pen into box', 'putting lip balm into box', 'putting three buttons onto a book', 'putting spoon into plate', 'putting phone underneath pillow', 'lifting a spectacle box up completely without letting it drop down', 'holding a multi color soccer ball in front of beidge tiles', 'taking toothpaste out of cup']
+Video 155401:
+Ground truth text label: putting an anti-perspirant upright on the table
+Sorted Matching text labels: ['putting an anti-perspirant upright on the table', 'taking remote', 'showing a photo of person to the camera', 'putting knife next to scissors', 'putting pen into box', 'putting lip balm into box', 'putting three buttons onto a book', 'putting spoon into plate', 'putting phone underneath pillow', 'lifting a spectacle box up completely without letting it drop down', 'holding a multi color soccer ball in front of beidge tiles', 'taking toothpaste out of cup']
+Video 129670:
+Ground truth text label: putting knife next to scissors
+Sorted Matching text labels: ['putting an anti-perspirant upright on the table', 'taking remote', 'showing a photo of person to the camera', 'putting knife next to scissors', 'putting pen into box', 'putting lip balm into box', 'putting three buttons onto a book', 'putting spoon into plate', 'putting phone underneath pillow', 'lifting a spectacle box up completely without letting it drop down', 'holding a multi color soccer ball in front of beidge tiles', 'taking toothpaste out of cup']
+Video 155104:
+Ground truth text label: putting phone underneath pillow
+Sorted Matching text labels: ['putting an anti-perspirant upright on the table', 'taking remote', 'showing a photo of person to the camera', 'putting knife next to scissors', 'putting pen into box', 'putting lip balm into box', 'putting three buttons onto a book', 'putting spoon into plate', 'putting phone underneath pillow', 'lifting a spectacle box up completely without letting it drop down', 'holding a multi color soccer ball in front of beidge tiles', 'taking toothpaste out of cup']
+Video 137011:
+Ground truth text label: putting three buttons onto a book
+Sorted Matching text labels: ['putting an anti-perspirant upright on the table', 'taking remote', 'showing a photo of person to the camera', 'putting knife next to scissors', 'putting pen into box', 'putting lip balm into box', 'putting three buttons onto a book', 'putting spoon into plate', 'putting phone underneath pillow', 'lifting a spectacle box up completely without letting it drop down', 'holding a multi color soccer ball in front of beidge tiles', 'taking toothpaste out of cup']
+Video 171342:
+Ground truth text label: putting pen into box
+Sorted Matching text labels: ['putting an anti-perspirant upright on the table', 'taking remote', 'showing a photo of person to the camera', 'putting knife next to scissors', 'putting pen into box', 'putting lip balm into box', 'putting three buttons onto a book', 'putting spoon into plate', 'putting phone underneath pillow', 'lifting a spectacle box up completely without letting it drop down', 'holding a multi color soccer ball in front of beidge tiles', 'taking toothpaste out of cup']
+Video 175953:
+Ground truth text label: holding a multi color soccer ball in front of beidge tiles
+Sorted Matching text labels: ['putting an anti-perspirant upright on the table', 'taking remote', 'showing a photo of person to the camera', 'putting knife next to scissors', 'putting pen into box', 'putting lip balm into box', 'putting three buttons onto a book', 'putting spoon into plate', 'putting phone underneath pillow', 'lifting a spectacle box up completely without letting it drop down', 'holding a multi color soccer ball in front of beidge tiles', 'taking toothpaste out of cup']
+Video 79698:
+Ground truth text label: putting spoon into plate
+Sorted Matching text labels: ['putting an anti-perspirant upright on the table', 'taking remote', 'showing a photo of person to the camera', 'putting knife next to scissors', 'putting pen into box', 'putting lip balm into box', 'putting three buttons onto a book', 'lifting a spectacle box up completely without letting it drop down', 'putting spoon into plate', 'putting phone underneath pillow', 'holding a multi color soccer ball in front of beidge tiles', 'taking toothpaste out of cup']
+Video 11428:
+Ground truth text label: showing a photo of person to the camera
+Sorted Matching text labels: ['putting an anti-perspirant upright on the table', 'taking remote', 'showing a photo of person to the camera', 'putting knife next to scissors', 'putting pen into box', 'putting lip balm into box', 'putting three buttons onto a book', 'putting spoon into plate', 'putting phone underneath pillow', 'lifting a spectacle box up completely without letting it drop down', 'holding a multi color soccer ball in front of beidge tiles', 'taking toothpaste out of cup']
+Video 71039:
+Ground truth text label: putting lip balm into box
+Sorted Matching text labels: ['putting an anti-perspirant upright on the table', 'taking remote', 'showing a photo of person to the camera', 'putting knife next to scissors', 'putting pen into box', 'putting lip balm into box', 'putting three buttons onto a book', 'putting spoon into plate', 'putting phone underneath pillow', 'lifting a spectacle box up completely without letting it drop down', 'holding a multi color soccer ball in front of beidge tiles', 'taking toothpaste out of cup']
+Video 52764:
+Ground truth text label: taking remote
+Sorted Matching text labels: ['putting an anti-perspirant upright on the table', 'taking remote', 'showing a photo of person to the camera', 'putting knife next to scissors', 'putting pen into box', 'putting lip balm into box', 'putting three buttons onto a book', 'putting spoon into plate', 'putting phone underneath pillow', 'lifting a spectacle box up completely without letting it drop down', 'holding a multi color soccer ball in front of beidge tiles', 'taking toothpaste out of cup']
+Video 136514:
+Ground truth text label: lifting a spectacle box up completely without letting it drop down
+Sorted Matching text labels: ['putting an anti-perspirant upright on the table', 'taking remote', 'showing a photo of person to the camera', 'putting knife next to scissors', 'putting pen into box', 'putting lip balm into box', 'putting three buttons onto a book', 'putting spoon into plate', 'lifting a spectacle box up completely without letting it drop down', 'putting phone underneath pillow', 'holding a multi color soccer ball in front of beidge tiles', 'taking toothpaste out of cup']
+result after mlp
+Plot saved to plots/pca_plot_mlp2D_16.png
+Results in 2D space
+Top 1 accuracy: 8.33%
+Top 3 accuracy: 25.00%
+Top 5 accuracy: 33.33%
+IDs of incorrectly paired video embeddings: ['149540', '155104', '137011', '171342', '79698', '11428', '52764', '136514']
+Video 149540:
+Ground truth text label: taking toothpaste out of cup
+Sorted Matching text labels: ['putting lip balm into box', 'putting knife next to scissors', 'putting an anti-perspirant upright on the table', 'showing a photo of person to the camera', 'holding a multi color soccer ball in front of beidge tiles', 'taking remote', 'putting pen into box', 'putting phone underneath pillow', 'putting spoon into plate', 'putting three buttons onto a book', 'lifting a spectacle box up completely without letting it drop down', 'taking toothpaste out of cup']
+Video 155401:
+Ground truth text label: putting an anti-perspirant upright on the table
+Sorted Matching text labels: ['putting lip balm into box', 'putting knife next to scissors', 'putting an anti-perspirant upright on the table', 'showing a photo of person to the camera', 'holding a multi color soccer ball in front of beidge tiles', 'taking remote', 'putting pen into box', 'putting phone underneath pillow', 'putting spoon into plate', 'putting three buttons onto a book', 'lifting a spectacle box up completely without letting it drop down', 'taking toothpaste out of cup']
+Video 129670:
+Ground truth text label: putting knife next to scissors
+Sorted Matching text labels: ['putting lip balm into box', 'putting knife next to scissors', 'putting an anti-perspirant upright on the table', 'showing a photo of person to the camera', 'holding a multi color soccer ball in front of beidge tiles', 'taking remote', 'putting pen into box', 'putting phone underneath pillow', 'putting spoon into plate', 'putting three buttons onto a book', 'lifting a spectacle box up completely without letting it drop down', 'taking toothpaste out of cup']
+Video 155104:
+Ground truth text label: putting phone underneath pillow
+Sorted Matching text labels: ['showing a photo of person to the camera', 'putting lip balm into box', 'putting knife next to scissors', 'holding a multi color soccer ball in front of beidge tiles', 'putting an anti-perspirant upright on the table', 'taking remote', 'putting pen into box', 'putting phone underneath pillow', 'putting spoon into plate', 'putting three buttons onto a book', 'lifting a spectacle box up completely without letting it drop down', 'taking toothpaste out of cup']
+Video 137011:
+Ground truth text label: putting three buttons onto a book
+Sorted Matching text labels: ['putting lip balm into box', 'putting knife next to scissors', 'putting an anti-perspirant upright on the table', 'showing a photo of person to the camera', 'holding a multi color soccer ball in front of beidge tiles', 'taking remote', 'putting pen into box', 'putting phone underneath pillow', 'putting spoon into plate', 'putting three buttons onto a book', 'lifting a spectacle box up completely without letting it drop down', 'taking toothpaste out of cup']
+Video 171342:
+Ground truth text label: putting pen into box
+Sorted Matching text labels: ['putting lip balm into box', 'putting knife next to scissors', 'putting an anti-perspirant upright on the table', 'showing a photo of person to the camera', 'holding a multi color soccer ball in front of beidge tiles', 'taking remote', 'putting pen into box', 'putting phone underneath pillow', 'putting spoon into plate', 'putting three buttons onto a book', 'lifting a spectacle box up completely without letting it drop down', 'taking toothpaste out of cup']
+Video 175953:
+Ground truth text label: holding a multi color soccer ball in front of beidge tiles
+Sorted Matching text labels: ['putting an anti-perspirant upright on the table', 'taking remote', 'putting lip balm into box', 'putting knife next to scissors', 'holding a multi color soccer ball in front of beidge tiles', 'showing a photo of person to the camera', 'putting pen into box', 'putting phone underneath pillow', 'putting spoon into plate', 'putting three buttons onto a book', 'lifting a spectacle box up completely without letting it drop down', 'taking toothpaste out of cup']
+Video 79698:
+Ground truth text label: putting spoon into plate
+Sorted Matching text labels: ['putting lip balm into box', 'putting knife next to scissors', 'showing a photo of person to the camera', 'holding a multi color soccer ball in front of beidge tiles', 'putting an anti-perspirant upright on the table', 'taking remote', 'putting pen into box', 'putting spoon into plate', 'putting phone underneath pillow', 'putting three buttons onto a book', 'lifting a spectacle box up completely without letting it drop down', 'taking toothpaste out of cup']
+Video 11428:
+Ground truth text label: showing a photo of person to the camera
+Sorted Matching text labels: ['putting an anti-perspirant upright on the table', 'taking remote', 'holding a multi color soccer ball in front of beidge tiles', 'putting lip balm into box', 'putting knife next to scissors', 'showing a photo of person to the camera', 'putting pen into box', 'putting phone underneath pillow', 'putting spoon into plate', 'putting three buttons onto a book', 'lifting a spectacle box up completely without letting it drop down', 'taking toothpaste out of cup']
+Video 71039:
+Ground truth text label: putting lip balm into box
+Sorted Matching text labels: ['putting lip balm into box', 'putting knife next to scissors', 'putting an anti-perspirant upright on the table', 'showing a photo of person to the camera', 'holding a multi color soccer ball in front of beidge tiles', 'taking remote', 'putting pen into box', 'putting phone underneath pillow', 'putting spoon into plate', 'putting three buttons onto a book', 'lifting a spectacle box up completely without letting it drop down', 'taking toothpaste out of cup']
+Video 52764:
+Ground truth text label: taking remote
+Sorted Matching text labels: ['putting lip balm into box', 'putting knife next to scissors', 'putting an anti-perspirant upright on the table', 'showing a photo of person to the camera', 'holding a multi color soccer ball in front of beidge tiles', 'taking remote', 'putting pen into box', 'putting phone underneath pillow', 'putting spoon into plate', 'putting three buttons onto a book', 'lifting a spectacle box up completely without letting it drop down', 'taking toothpaste out of cup']
+Video 136514:
+Ground truth text label: lifting a spectacle box up completely without letting it drop down
+Sorted Matching text labels: ['putting an anti-perspirant upright on the table', 'taking remote', 'holding a multi color soccer ball in front of beidge tiles', 'showing a photo of person to the camera', 'putting lip balm into box', 'putting knife next to scissors', 'putting pen into box', 'putting phone underneath pillow', 'putting three buttons onto a book', 'lifting a spectacle box up completely without letting it drop down', 'putting spoon into plate', 'taking toothpaste out of cup']
+Plot saved to plots/pca_plot_mlp3D_16.png
+Results in 3D space
+Top 1 accuracy: 8.33%
+Top 3 accuracy: 25.00%
+Top 5 accuracy: 41.67%
+IDs of incorrectly paired video embeddings: ['149540', '155104', '137011', '175953', '79698', '11428', '136514']
+Video 149540:
+Ground truth text label: taking toothpaste out of cup
+Sorted Matching text labels: ['putting an anti-perspirant upright on the table', 'putting lip balm into box', 'putting knife next to scissors', 'taking remote', 'putting pen into box', 'putting phone underneath pillow', 'showing a photo of person to the camera', 'putting spoon into plate', 'holding a multi color soccer ball in front of beidge tiles', 'putting three buttons onto a book', 'lifting a spectacle box up completely without letting it drop down', 'taking toothpaste out of cup']
+Video 155401:
+Ground truth text label: putting an anti-perspirant upright on the table
+Sorted Matching text labels: ['putting an anti-perspirant upright on the table', 'putting lip balm into box', 'taking remote', 'putting knife next to scissors', 'putting pen into box', 'putting phone underneath pillow', 'showing a photo of person to the camera', 'putting spoon into plate', 'holding a multi color soccer ball in front of beidge tiles', 'putting three buttons onto a book', 'lifting a spectacle box up completely without letting it drop down', 'taking toothpaste out of cup']
+Video 129670:
+Ground truth text label: putting knife next to scissors
+Sorted Matching text labels: ['putting an anti-perspirant upright on the table', 'putting lip balm into box', 'putting knife next to scissors', 'taking remote', 'putting pen into box', 'putting phone underneath pillow', 'showing a photo of person to the camera', 'putting spoon into plate', 'holding a multi color soccer ball in front of beidge tiles', 'putting three buttons onto a book', 'lifting a spectacle box up completely without letting it drop down', 'taking toothpaste out of cup']
+Video 155104:
+Ground truth text label: putting phone underneath pillow
+Sorted Matching text labels: ['putting an anti-perspirant upright on the table', 'putting lip balm into box', 'putting knife next to scissors', 'taking remote', 'putting pen into box', 'putting phone underneath pillow', 'showing a photo of person to the camera', 'holding a multi color soccer ball in front of beidge tiles', 'putting spoon into plate', 'putting three buttons onto a book', 'lifting a spectacle box up completely without letting it drop down', 'taking toothpaste out of cup']
+Video 137011:
+Ground truth text label: putting three buttons onto a book
+Sorted Matching text labels: ['putting an anti-perspirant upright on the table', 'putting lip balm into box', 'putting knife next to scissors', 'taking remote', 'putting pen into box', 'putting phone underneath pillow', 'showing a photo of person to the camera', 'putting spoon into plate', 'holding a multi color soccer ball in front of beidge tiles', 'putting three buttons onto a book', 'lifting a spectacle box up completely without letting it drop down', 'taking toothpaste out of cup']
+Video 171342:
+Ground truth text label: putting pen into box
+Sorted Matching text labels: ['putting an anti-perspirant upright on the table', 'putting lip balm into box', 'putting knife next to scissors', 'taking remote', 'putting pen into box', 'putting phone underneath pillow', 'showing a photo of person to the camera', 'putting spoon into plate', 'holding a multi color soccer ball in front of beidge tiles', 'putting three buttons onto a book', 'lifting a spectacle box up completely without letting it drop down', 'taking toothpaste out of cup']
+Video 175953:
+Ground truth text label: holding a multi color soccer ball in front of beidge tiles
+Sorted Matching text labels: ['putting an anti-perspirant upright on the table', 'taking remote', 'putting lip balm into box', 'putting knife next to scissors', 'putting pen into box', 'showing a photo of person to the camera', 'putting phone underneath pillow', 'putting spoon into plate', 'holding a multi color soccer ball in front of beidge tiles', 'putting three buttons onto a book', 'lifting a spectacle box up completely without letting it drop down', 'taking toothpaste out of cup']
+Video 79698:
+Ground truth text label: putting spoon into plate
+Sorted Matching text labels: ['putting lip balm into box', 'putting an anti-perspirant upright on the table', 'putting knife next to scissors', 'taking remote', 'putting pen into box', 'putting spoon into plate', 'putting phone underneath pillow', 'holding a multi color soccer ball in front of beidge tiles', 'showing a photo of person to the camera', 'putting three buttons onto a book', 'lifting a spectacle box up completely without letting it drop down', 'taking toothpaste out of cup']
+Video 11428:
+Ground truth text label: showing a photo of person to the camera
+Sorted Matching text labels: ['taking remote', 'putting an anti-perspirant upright on the table', 'putting lip balm into box', 'putting knife next to scissors', 'putting pen into box', 'showing a photo of person to the camera', 'putting phone underneath pillow', 'putting spoon into plate', 'putting three buttons onto a book', 'holding a multi color soccer ball in front of beidge tiles', 'lifting a spectacle box up completely without letting it drop down', 'taking toothpaste out of cup']
+Video 71039:
+Ground truth text label: putting lip balm into box
+Sorted Matching text labels: ['putting an anti-perspirant upright on the table', 'putting lip balm into box', 'taking remote', 'putting knife next to scissors', 'putting pen into box', 'putting phone underneath pillow', 'showing a photo of person to the camera', 'holding a multi color soccer ball in front of beidge tiles', 'putting spoon into plate', 'putting three buttons onto a book', 'lifting a spectacle box up completely without letting it drop down', 'taking toothpaste out of cup']
+Video 52764:
+Ground truth text label: taking remote
+Sorted Matching text labels: ['putting an anti-perspirant upright on the table', 'putting lip balm into box', 'putting knife next to scissors', 'taking remote', 'putting pen into box', 'putting phone underneath pillow', 'showing a photo of person to the camera', 'putting spoon into plate', 'holding a multi color soccer ball in front of beidge tiles', 'putting three buttons onto a book', 'lifting a spectacle box up completely without letting it drop down', 'taking toothpaste out of cup']
+Video 136514:
+Ground truth text label: lifting a spectacle box up completely without letting it drop down
+Sorted Matching text labels: ['putting an anti-perspirant upright on the table', 'taking remote', 'putting lip balm into box', 'putting knife next to scissors', 'putting phone underneath pillow', 'holding a multi color soccer ball in front of beidge tiles', 'putting pen into box', 'showing a photo of person to the camera', 'putting three buttons onto a book', 'lifting a spectacle box up completely without letting it drop down', 'putting spoon into plate', 'taking toothpaste out of cup']

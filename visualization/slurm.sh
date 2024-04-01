@@ -10,6 +10,6 @@ source /scr/yusenluo/anaconda3/etc/profile.d/conda.sh  # 这里需要替换成�
 conda activate roboclip      # 替换 myenv 为你的 Conda 环境名
 
 # 执行 Python 脚本
-python /scr/yusenluo/RoboCLIP/visualization/mlp.py  # 替换为你的 Python 脚本路径
+python /scr/yusenluo/RoboCLIP/visualization/task1.py  # 替换为你的 Python 脚本路径
 
 # 如果需要，可以在这里添加更多的命令

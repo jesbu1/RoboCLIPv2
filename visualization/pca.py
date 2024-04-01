@@ -21,14 +21,18 @@ def check_pairs(reduced_video_embeddings, reduced_text_embeddings, mappings, sma
     index_to_text_label = mappings["index_to_text_label"]
 
     if small_scale:
-        nearest_text_indices = sorted_text_indices[:, 0]
-        correct_pairs = nearest_text_indices == np.arange(len(reduced_video_embeddings))
-        accuracy = np.mean(correct_pairs)
-        print(f"Top1 accuracy: {accuracy * 100:.2f}%")
+        ground_truth_indices = np.arange(len(reduced_video_embeddings))
+        for n in [1, 3, 5]:
+            correct_pairs = np.array(
+                [ground_truth in sorted_text_indices[i, :n] for i, ground_truth in enumerate(ground_truth_indices)])
+            accuracy = np.mean(correct_pairs)
+            print(f"Top {n} accuracy: {accuracy * 100:.2f}%")
+        top_1_indices = sorted_text_indices[:, 0]
+        correct_top_1_pairs = top_1_indices == ground_truth_indices
+        incorrect_top_1_indices = np.where(~correct_top_1_pairs)[0]
 
-        incorrect_pair_indices = np.where(~correct_pairs)[0]
-        incorrect_pair_video_id = [index_to_video_id[j] for j in incorrect_pair_indices]
-        print(f"IDs of incorrectly paired video embeddings: {incorrect_pair_video_id}")
+        incorrect_pair_video_id = [mappings["index_to_video_id"][i] for i in incorrect_top_1_indices]
+        print(f"IDs of incorrectly paired video embeddings (Top 1): {incorrect_pair_video_id}")
 
         for i, indices in enumerate(sorted_text_indices):
             video_id = index_to_video_id[i]

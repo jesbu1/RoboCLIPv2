@@ -128,19 +128,21 @@ if __name__ == '__main__':
         f"Max L2 Distance: {max_distance.item():.2f}"
     )
 
-    pca = joblib.load('saved_model/pca_model_16.pkl')
-    video_embeddings = pca.transform(video_embeddings)
-    text_embeddings = pca.transform(text_embeddings)
-
+    # pca = joblib.load('saved_model/pca_model_16.pkl')
+    # video_embeddings = pca.transform(video_embeddings)
+    # text_embeddings = pca.transform(text_embeddings)
+    print("result before mlp")
     plot_embeddings(video_embeddings, text_embeddings, mappings,
                     'plots', 'pca_plot_nomlp2D.png', True)
     plot_embeddings_3d(video_embeddings, text_embeddings, mappings,
                        'plots', 'pca_plot_nomlp3D.png', True)
 
-
-    adjust_video_embeddings = mlp_eval(th.from_numpy(video_embeddings).float())
+    print("result after mlp")
+    #video_embeddings = th.from_numpy(video_embeddings).float()
+    adjust_video_embeddings = mlp_eval(video_embeddings)
     #video_embeddings_recovered = pca.inverse_transform(adjust_video_embeddings)
+
     plot_embeddings(adjust_video_embeddings, text_embeddings, mappings,
-                    'plots', 'pca_plot_mlp2D_16.png', True)
+                    'plots', 'pca_plot_mlp2D.png', True)
     plot_embeddings_3d(adjust_video_embeddings, text_embeddings, mappings,
-                       'plots', 'pca_plot_mlp3D_16.png', True)
+                       'plots', 'pca_plot_mlp3D.png', True)
