@@ -10,7 +10,7 @@ from pca import plot_embeddings_3d,plot_embeddings
 from mlp import mlp_eval
 from torch.utils.data import Dataset, DataLoader
 from Dataload import VideoTextDataset, Embedding, list_webm_files
-
+import joblib
 
 
 
@@ -128,12 +128,19 @@ if __name__ == '__main__':
         f"Max L2 Distance: {max_distance.item():.2f}"
     )
 
+    pca = joblib.load('saved_model/pca_model_16.pkl')
+    video_embeddings = pca.transform(video_embeddings)
+    text_embeddings = pca.transform(text_embeddings)
+
     plot_embeddings(video_embeddings, text_embeddings, mappings,
                     'plots', 'pca_plot_nomlp2D.png', True)
     plot_embeddings_3d(video_embeddings, text_embeddings, mappings,
                        'plots', 'pca_plot_nomlp3D.png', True)
-    adjust_video_embeddings = mlp_eval(video_embeddings)
+
+
+    adjust_video_embeddings = mlp_eval(th.from_numpy(video_embeddings).float())
+    #video_embeddings_recovered = pca.inverse_transform(adjust_video_embeddings)
     plot_embeddings(adjust_video_embeddings, text_embeddings, mappings,
-                    'plots', 'pca_plot_mlp2D.png', True)
+                    'plots', 'pca_plot_mlp2D_16.png', True)
     plot_embeddings_3d(adjust_video_embeddings, text_embeddings, mappings,
-                       'plots', 'pca_plot_mlp3D.png', True)
+                       'plots', 'pca_plot_mlp3D_16.png', True)

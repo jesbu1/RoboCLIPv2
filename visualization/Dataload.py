@@ -98,7 +98,7 @@ def preprocess_human_demo(frames):
     frames = adjust_size(frames)
     frames = frames[None, :,:,:,:]
     frames = frames.transpose(0, 4, 1, 2, 3)
-    frames = frames / 255
+    #frames = frames / 255
     return frames
 
 def adjust_frames(frames, target_frame_count = 32):

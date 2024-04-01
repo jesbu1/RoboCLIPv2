@@ -1,0 +1,13 @@
+/var/spool/slurmd/job00194/slurm_script: line 6: SBATCH: command not found
+Traceback (most recent call last):
+  File "/scr/yusenluo/RoboCLIP/visualization/mlp.py", line 89, in <module>
+    video_embeddings, text_embeddings = reduce_dimension(video_embeddings,text_embeddings, 256)
+  File "/scr/yusenluo/RoboCLIP/visualization/mlp.py", line 24, in reduce_dimension
+    video_embeddings_pca = pca.fit_transform(video_embeddings_np)  # 对视频嵌入进行PCA降维
+  File "/scr/yusenluo/anaconda3/envs/roboclip/lib/python3.8/site-packages/sklearn/decomposition/_pca.py", line 433, in fit_transform
+    U, S, Vt = self._fit(X)
+  File "/scr/yusenluo/anaconda3/envs/roboclip/lib/python3.8/site-packages/sklearn/decomposition/_pca.py", line 483, in _fit
+    return self._fit_full(X, n_components)
+  File "/scr/yusenluo/anaconda3/envs/roboclip/lib/python3.8/site-packages/sklearn/decomposition/_pca.py", line 501, in _fit_full
+    raise ValueError(
+ValueError: n_components=256 must be between 0 and min(n_samples, n_features)=42 with svd_solver='full'
