@@ -7,7 +7,7 @@ import numpy as np
 import os
 import cv2
 from pca import plot_embeddings_3d,plot_embeddings
-from mlp import mlp_eval
+from mlp import mlp_eval, normalize_embeddings
 from torch.utils.data import Dataset, DataLoader
 from Dataload import VideoTextDataset, Embedding, list_webm_files
 import joblib
@@ -71,7 +71,8 @@ if __name__ == '__main__':
             pca_text_model_path = f'saved_model/pca_model_text_{variance_threshold}_{sample_size}.pkl'
             text_pca = joblib.load(pca_text_model_path)
 
-
+            video_embeddings = normalize_embeddings(video_embeddings)
+            text_embeddings = normalize_embeddings(text_embeddings)
             #print(video_embeddings_pca.shape[1], text_embeddings_pca.shape[1])
             print(f"Results with variance_threshold {variance_threshold}:")
 
@@ -83,11 +84,10 @@ if __name__ == '__main__':
 
             video_embeddings_pca = video_pca.transform(video_embeddings)
             text_embeddings_pca = text_pca.transform(text_embeddings)
-            # 将PCA处理后的嵌入转换回torch.Tensor，并进行MLP评估
+
             video_embeddings_tensor = th.from_numpy(video_embeddings_pca).float().to(device)
             text_embeddings_tensor = th.from_numpy(text_embeddings_pca).float().to(device)
 
-            # 注意确保mlp_eval函数和模型在正确的设备上执行
             mlp_model_path = f'saved_model/final_model_{variance_threshold}_{sample_size}.pth'
             adjusted_video_embeddings = mlp_eval(video_embeddings_tensor, text_embeddings_tensor, mlp_model_path)
 

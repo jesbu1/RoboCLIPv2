@@ -23,10 +23,10 @@ def normalize_embeddings(embeddings):
     return normalized_embeddings
 
 def reduce_dimension(embeddings, variance_threshold, train_size, embed_type):
-    normalized_embeddings = normalize_embeddings(embeddings)
+    #normalized_embeddings = normalize_embeddings(embeddings)
     pca = PCA(n_components=variance_threshold)
-    reduced_embeddings = pca.fit_transform(normalized_embeddings)
-    model_filename = f'saved_model/pca_model_{embed_type}_{variance_threshold}_{train_size}_nonorm.pkl'
+    reduced_embeddings = pca.fit_transform(embeddings)
+    model_filename = f'saved_model/pca_model_{embed_type}_{variance_threshold}_{train_size}.pkl'
     joblib.dump(pca, model_filename)
     print(f"PCA model for {embed_type} saved to {model_filename}")
     return torch.from_numpy(reduced_embeddings).float()
@@ -67,7 +67,7 @@ def mlp_train(num_epochs, video_embeddings, text_embeddings, variance_threshold,
         #     }
         #     torch.save(checkpoint, f'{save_dir}/checkpoint_{epoch + 1}_{dimension}_norm.pth')
         #     print(f'Checkpoint saved at epoch {epoch + 1}')
-    final_model_path = f"{save_dir}/final_model_{variance_threshold}_{train_size}_nonorm.pth"
+    final_model_path = f"{save_dir}/final_model_{variance_threshold}_{train_size}.pth"
     torch.save(model.state_dict(), final_model_path)
     print(f'Final model saved to {final_model_path}')
 
@@ -75,6 +75,7 @@ def mlp_train(num_epochs, video_embeddings, text_embeddings, variance_threshold,
 def mlp_eval(video_embeddings, text_embeddings, model_path):
     device = th.device("cuda" if th.cuda.is_available() else "cpu")
     model = SimpleMLP(input_dim=video_embeddings.shape[1], output_dim=text_embeddings.shape[1]).to(device)
+    #video_embeddings = normalize_embeddings(video_embeddings)
     model.load_state_dict(torch.load(model_path))
     #print(video_embeddings.shape[1], text_embeddings.shape[1])
     model.eval()
