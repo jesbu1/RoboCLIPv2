@@ -1,23 +1,36 @@
 from torch.utils.data import Dataset, DataLoader
 import torch as th
 import json
-#from kitchen_env_wrappers import readGif
 import numpy as np
 import os
 import cv2
+import random
+import pandas as pd
+
+
 
 class VideoTextDataset(Dataset):
-    def __init__(self, video_paths, transform=None):
+    def __init__(self, video_paths, transform=None, num_samples=None, random_samples=False, dataset_type = 'train'):
         self.video_paths = video_paths
         self.transform = transform
+        self.random_samples = random_samples
+        self.dataset_type = dataset_type
+        if num_samples is not None:
+            if random_samples:
+                self.indices = random.sample(range(len(self.video_paths)), num_samples)
+            else:
+                self.indices = list(range(num_samples))
+        else:
+            self.indices = list(range(len(self.video_paths)))
 
     def __len__(self):
-        return len(self.video_paths)
+        return len(self.indices)
 
     def __getitem__(self, idx):
-        video_path = self.video_paths[idx]
+        video_idx = self.indices[idx]
+        video_path = self.video_paths[video_idx]
         video_id = get_filename_without_extension(video_path)
-        text_label = find_label(video_id)
+        text_label = find_label(video_id, self.dataset_type)
 
         frames = read_webm_frames(video_path)
         frames = preprocess_human_demo(frames)
@@ -49,31 +62,44 @@ class EmbeddingsDataset(Dataset):
                 "text_embedding": text_embedding,
                 "video_id": video_id,
                 "text_label": text_label}
-def find_label(video_filename, json_paths=['../labels/train.json', '../labels/validation.json']):
+
+
+def find_label(video_filename, dataset_name):
     """
-    Finds the corresponding label for a given video filename in the train.json or validation.json file.
+    Finds the corresponding label for a given video filename based on the dataset name.
 
     Parameters:
     - video_filename: Name of the video file (without the extension).
-    - json_paths: List of paths to the 'train.json' and 'validation.json' files.
+    - dataset_name: Name of the dataset ('train', 'validate', 'test').
 
     Returns:
-    - The found label as a string, or None if not found.
+    - The found label as a string, or None if not found. If the dataset is 'test', always returns None since labels are not available.
     """
-    for json_path in json_paths:
-        try:
-            if os.path.exists(json_path):
-                with open(json_path, 'r') as json_file:
-                    data = json.load(json_file)
+    json_path_map = {
+        'train': '../labels/train.json',
+        'validation': '../labels/validation.json',
+        'test': None  # Assuming test.json does not contain labels
+    }
 
-                for item in data:
-                    if item['id'] == video_filename:
-                        return item['label']
+    json_path = json_path_map.get(dataset_name)
 
-        except FileNotFoundError:
-            print(f"file '{json_path}' Not Found")
-        except json.JSONDecodeError:
-            print(f"file '{json_path}' not valid json")
+    if json_path is None:
+        print(f"No label file for dataset '{dataset_name}'.")
+        return None
+
+    try:
+        if os.path.exists(json_path):
+            with open(json_path, 'r') as json_file:
+                data = json.load(json_file)
+
+            for item in data:
+                if item['id'] == video_filename:
+                    return item.get('label')  # Using .get in case 'label' key is missing
+
+    except FileNotFoundError:
+        print(f"File '{json_path}' not found.")
+    except json.JSONDecodeError:
+        print(f"File '{json_path}' is not valid JSON.")
 
     return None
 
