@@ -5,16 +5,26 @@ import numpy as np
 import os
 
 
-def check_pairs(reduced_video_embeddings, reduced_text_embeddings, mappings, small_scale = True):
+def check_pairs(
+    reduced_video_embeddings: np.array,
+    reduced_text_embeddings: np.array,
+    mappings,
+    small_scale=True,
+):
     """
-        Checks the pairing accuracy between video and text embeddings by finding
-        the nearest text embedding for each video embedding and see whether it is the corresponding text of the video.
+    Checks the pairing accuracy between video and text embeddings by finding
+    the nearest text embedding for each video embedding and see whether it is the corresponding text of the video.
 
-        Prints the accuracy of correct pairings and the indices of video embeddings that are incorrectly paired.
-        """
-    distances = np.linalg.norm(reduced_video_embeddings[:, np.newaxis, :] - reduced_text_embeddings[np.newaxis, :, :],
-                               axis=2)
-    sorted_text_indices = np.argsort(distances, axis=1)
+    Prints the accuracy of correct pairings and the indices of video embeddings that are incorrectly paired.
+    """
+    distances = np.linalg.norm(
+        reduced_video_embeddings[:, np.newaxis, :]
+        - reduced_text_embeddings[np.newaxis, :, :],
+        axis=2,
+    )
+    similarities = reduced_text_embeddings @ reduced_video_embeddings.T
+
+    sorted_text_indices = np.argsort(-similarities, axis=1)
 
     video_id_to_text_label = mappings["video_id_to_text_label"]
     index_to_video_id = mappings["index_to_video_id"]
@@ -24,15 +34,23 @@ def check_pairs(reduced_video_embeddings, reduced_text_embeddings, mappings, sma
         ground_truth_indices = np.arange(len(reduced_video_embeddings))
         for n in [1, 3, 5]:
             correct_pairs = np.array(
-                [ground_truth in sorted_text_indices[i, :n] for i, ground_truth in enumerate(ground_truth_indices)])
+                [
+                    ground_truth in sorted_text_indices[i, :n]
+                    for i, ground_truth in enumerate(ground_truth_indices)
+                ]
+            )
             accuracy = np.mean(correct_pairs)
             print(f"Top {n} accuracy: {accuracy * 100:.2f}%")
         top_1_indices = sorted_text_indices[:, 0]
         correct_top_1_pairs = top_1_indices == ground_truth_indices
         incorrect_top_1_indices = np.where(~correct_top_1_pairs)[0]
 
-        incorrect_pair_video_id = [mappings["index_to_video_id"][i] for i in incorrect_top_1_indices]
-        print(f"IDs of incorrectly paired video embeddings (Top 1): {incorrect_pair_video_id}")
+        incorrect_pair_video_id = [
+            mappings["index_to_video_id"][i] for i in incorrect_top_1_indices
+        ]
+        print(
+            f"IDs of incorrectly paired video embeddings (Top 1): {incorrect_pair_video_id}"
+        )
 
         for i, indices in enumerate(sorted_text_indices):
             video_id = index_to_video_id[i]
@@ -52,7 +70,16 @@ def check_pairs(reduced_video_embeddings, reduced_text_embeddings, mappings, sma
             accuracy_n = np.mean(cumulative_accuracy)
             print(f"Accuracy within top {n}: {accuracy_n * 100:.2f}%")
 
-def plot_embeddings(video_embeddings, text_embeddings, mappings, directory_name='plots', file_name='embeddings_plot.png', small_scale = True,stats_info = None):
+
+def plot_embeddings(
+    video_embeddings,
+    text_embeddings,
+    mappings,
+    directory_name="plots",
+    file_name="embeddings_plot.png",
+    small_scale=True,
+    stats_info=None,
+):
     """
     Plots 2D PCA visualizations of video and text embeddings, saving the plot to a file.
 
@@ -79,8 +106,8 @@ def plot_embeddings(video_embeddings, text_embeddings, mappings, directory_name=
     pca = PCA(n_components=2)
     reduced_embeddings = pca.fit_transform(combined_embeddings)
 
-    reduced_video_embeddings = reduced_embeddings[:len(video_embeddings)]
-    reduced_text_embeddings = reduced_embeddings[len(video_embeddings):]
+    reduced_video_embeddings = reduced_embeddings[: len(video_embeddings)]
+    reduced_text_embeddings = reduced_embeddings[len(video_embeddings) :]
 
     # pca_video = PCA(n_components=2)
     # reduced_video_embeddings = pca_video.fit_transform(video_embeddings)
@@ -91,27 +118,47 @@ def plot_embeddings(video_embeddings, text_embeddings, mappings, directory_name=
     plt.figure(figsize=(10, 6))
 
     if small_scale:
-        cmap = plt.get_cmap('Set3')
+        cmap = plt.get_cmap("Set3")
         colors = [cmap(i) for i in range(num_samples)]
     else:
-        cmap = plt.get_cmap('inferno')
+        cmap = plt.get_cmap("inferno")
         colors = [cmap(i) for i in np.linspace(0, 1, num_samples)]
 
     for i in range(num_samples):
-        plt.scatter(reduced_video_embeddings[i, 0], reduced_video_embeddings[i, 1],
-                   color=colors[i], marker='+', s=100, label = f"Video_Embeddings" if i == 0 else "", alpha = 1)
-        plt.scatter(reduced_text_embeddings[i, 0], reduced_text_embeddings[i, 1],
-                   color=colors[i], marker='o', s=100, label = f"Text_Embeddings" if i == 0 else "", alpha = 1)
+        plt.scatter(
+            reduced_video_embeddings[i, 0],
+            reduced_video_embeddings[i, 1],
+            color=colors[i],
+            marker="+",
+            s=100,
+            label=f"Video_Embeddings" if i == 0 else "",
+            alpha=1,
+        )
+        plt.scatter(
+            reduced_text_embeddings[i, 0],
+            reduced_text_embeddings[i, 1],
+            color=colors[i],
+            marker="o",
+            s=100,
+            label=f"Text_Embeddings" if i == 0 else "",
+            alpha=1,
+        )
 
     if stats_info is not None:
-        plt.text(0.05, 0.95, stats_info,
-                 verticalalignment='top', horizontalalignment='left',
-                 transform=plt.gca().transAxes,
-                 color='black', fontsize=10)
+        plt.text(
+            0.05,
+            0.95,
+            stats_info,
+            verticalalignment="top",
+            horizontalalignment="left",
+            transform=plt.gca().transAxes,
+            color="black",
+            fontsize=10,
+        )
 
-    plt.title('PCA of Video and Text Embeddings')
-    plt.xlabel('Principal Component 1')
-    plt.ylabel('Principal Component 2')
+    plt.title("PCA of Video and Text Embeddings")
+    plt.xlabel("Principal Component 1")
+    plt.ylabel("Principal Component 2")
 
     plt.legend()
 
@@ -119,11 +166,21 @@ def plot_embeddings(video_embeddings, text_embeddings, mappings, directory_name=
     plt.savefig(save_path)
     print(f"Plot saved to {save_path}")
     print("Results in 2D space")
-    check_pairs(reduced_video_embeddings, reduced_text_embeddings, mappings, small_scale)
+    check_pairs(
+        reduced_video_embeddings, reduced_text_embeddings, mappings, small_scale
+    )
     plt.close()
 
 
-def plot_embeddings_3d(video_embeddings, text_embeddings, mappings, directory_name='plots', file_name='3d_embeddings_plot.png', small_scale = True, stats_info = None):
+def plot_embeddings_3d(
+    video_embeddings,
+    text_embeddings,
+    mappings,
+    directory_name="plots",
+    file_name="3d_embeddings_plot.png",
+    small_scale=True,
+    stats_info=None,
+):
     """
     Plots 3D PCA visualizations of video and text embeddings, saving the plot to a file.
 
@@ -150,8 +207,8 @@ def plot_embeddings_3d(video_embeddings, text_embeddings, mappings, directory_na
     combined_embeddings = np.vstack((video_embeddings, text_embeddings))
     reduced_embeddings = pca.fit_transform(combined_embeddings)
 
-    reduced_video_embeddings = reduced_embeddings[:len(video_embeddings)]
-    reduced_text_embeddings = reduced_embeddings[len(video_embeddings):]
+    reduced_video_embeddings = reduced_embeddings[: len(video_embeddings)]
+    reduced_text_embeddings = reduced_embeddings[len(video_embeddings) :]
 
     # pca_video = PCA(n_components=3)
     # reduced_video_embeddings = pca_video.fit_transform(video_embeddings)
@@ -159,38 +216,61 @@ def plot_embeddings_3d(video_embeddings, text_embeddings, mappings, directory_na
     # pca_text = PCA(n_components=3)
     # reduced_text_embeddings = pca_text.fit_transform(text_embeddings)
 
-
     if small_scale:
-        cmap = plt.get_cmap('Set3')
+        cmap = plt.get_cmap("Set3")
         colors = [cmap(i) for i in range(num_samples)]
     else:
-        cmap = plt.get_cmap('inferno')
+        cmap = plt.get_cmap("inferno")
         colors = [cmap(i) for i in np.linspace(0, 1, num_samples)]
 
     fig = plt.figure()
-    ax = fig.add_subplot(111, projection='3d')
+    ax = fig.add_subplot(111, projection="3d")
 
     for i in range(num_samples):
-        ax.scatter(reduced_video_embeddings[i, 0], reduced_video_embeddings[i, 1], reduced_video_embeddings[i, 2],
-                   color=colors[i], marker='+', s=60, label = f"Video_Embeddings" if i == 0 else "", alpha = 1)
-        ax.scatter(reduced_text_embeddings[i, 0], reduced_text_embeddings[i, 1], reduced_text_embeddings[i, 2],
-                   color=colors[i], marker='o', s=60, label = f"Text_Embeddings" if i == 0 else "", alpha = 1)
+        ax.scatter(
+            reduced_video_embeddings[i, 0],
+            reduced_video_embeddings[i, 1],
+            reduced_video_embeddings[i, 2],
+            color=colors[i],
+            marker="+",
+            s=60,
+            label=f"Video_Embeddings" if i == 0 else "",
+            alpha=1,
+        )
+        ax.scatter(
+            reduced_text_embeddings[i, 0],
+            reduced_text_embeddings[i, 1],
+            reduced_text_embeddings[i, 2],
+            color=colors[i],
+            marker="o",
+            s=60,
+            label=f"Text_Embeddings" if i == 0 else "",
+            alpha=1,
+        )
 
     ax.legend()
-    ax.set_title('3D PCA of Video and Text Embeddings')
-    ax.set_xlabel('Principal Component 1')
-    ax.set_ylabel('Principal Component 2')
-    ax.set_zlabel('Principal Component 3')
+    ax.set_title("3D PCA of Video and Text Embeddings")
+    ax.set_xlabel("Principal Component 1")
+    ax.set_ylabel("Principal Component 2")
+    ax.set_zlabel("Principal Component 3")
 
     if stats_info is not None:
-        ax.text2D(0.05, 0.95, stats_info,
-                 verticalalignment='top', horizontalalignment='left',
-                 transform=plt.gca().transAxes,
-                 color='black', fontsize=10)
+        ax.text2D(
+            0.05,
+            0.95,
+            stats_info,
+            verticalalignment="top",
+            horizontalalignment="left",
+            transform=plt.gca().transAxes,
+            color="black",
+            fontsize=10,
+        )
 
     save_path = os.path.join(directory_name, file_name)
     plt.savefig(save_path)
     print(f"Plot saved to {save_path}")
     print("Results in 3D space")
-    check_pairs(reduced_video_embeddings, reduced_text_embeddings, mappings, small_scale)
+    check_pairs(
+        reduced_video_embeddings, reduced_text_embeddings, mappings, small_scale
+    )
     plt.close()
