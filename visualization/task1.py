@@ -6,7 +6,7 @@ import json
 import numpy as np
 import os
 import cv2
-from pca import plot_embeddings_3d,plot_embeddings
+from pca import plot_embeddings_3d,plot_embeddings, check_pairs
 from mlp import mlp_eval, normalize_embeddings
 from torch.utils.data import Dataset, DataLoader
 from Dataload import VideoTextDataset, Embedding, list_webm_files
@@ -61,26 +61,44 @@ if __name__ == '__main__':
     print("Min L2 Distance:", min_distance.item())
     print("Max L2 Distance:", max_distance.item())
 
-    variance_thresholds = [0.9, 0.95, 0.99]
+    video_embeddings = normalize_embeddings(video_embeddings)
+    text_embeddings = normalize_embeddings(text_embeddings)
+    video_embeddings_normalized = video_embeddings.clone()
+    text_embeddings_normalized = text_embeddings.clone()
+
+    print(f"Result before MLP without any PCA in the {video_embeddings_normalized.shape[1]}D space")
+    check_pairs(video_embeddings.numpy(),text_embeddings.numpy(),mappings,False)
+
+    plot_embeddings(video_embeddings, text_embeddings, mappings,
+                    'plots', 'pca_plot_nomlp2D.png', False)
+    plot_embeddings_3d(video_embeddings, text_embeddings, mappings,
+                       'plots', 'pca_plot_nomlp3D.png', False)
+
+
+    variance_thresholds = [1]#[0.9, 0.95, 0.99]
     sample_sizes = [1, 2, 4, 8, 16]
+    check_points = [200, 400, 800, 1000, 1200, 1400, 1600, 1800, 2000]
     for variance_threshold in variance_thresholds:
         for sample_size in sample_sizes:
             sample_size = 50 * sample_size
+            video_embeddings = video_embeddings_normalized.clone()
+            text_embeddings = text_embeddings_normalized.clone()
             pca_video_model_path = f'saved_model/pca_model_video_{variance_threshold}_{sample_size}.pkl'
             video_pca = joblib.load(pca_video_model_path)
             pca_text_model_path = f'saved_model/pca_model_text_{variance_threshold}_{sample_size}.pkl'
             text_pca = joblib.load(pca_text_model_path)
+            print(f"Results with variance_threshold {variance_threshold} and {sample_size}:")
 
-            video_embeddings = normalize_embeddings(video_embeddings)
-            text_embeddings = normalize_embeddings(text_embeddings)
-            #print(video_embeddings_pca.shape[1], text_embeddings_pca.shape[1])
-            print(f"Results with variance_threshold {variance_threshold}:")
+            print(f"Result before MLP with PCA_Text_{variance_threshold} and {sample_size} in {text_pca.n_components_}D space")
+            video_embeddings_text_pca = text_pca.transform(video_embeddings)
+            text_embeddings_text_pca = text_pca.transform(text_embeddings)
+            check_pairs(video_embeddings_text_pca, text_embeddings_text_pca, mappings, False)
 
-            print("Result before MLP")
-            plot_embeddings(video_embeddings, text_embeddings, mappings,
-                            'plots', f'pca_plot_nomlp2D_{variance_threshold}_{sample_size}.png', False)
-            plot_embeddings_3d(video_embeddings, text_embeddings, mappings,
-                               'plots', f'pca_plot_nomlp3D_{variance_threshold}_{sample_size}.png', False)
+            plot_embeddings(video_embeddings_text_pca, text_embeddings_text_pca, mappings,
+                            'plots/PCA_nomlp', f'pca_plot_nomlp2D_{variance_threshold}_{sample_size}.png', False)
+            plot_embeddings_3d(video_embeddings_text_pca, text_embeddings_text_pca, mappings,
+                               'plots/PCA_nomlp', f'pca_plot_nomlp3D_{variance_threshold}_{sample_size}.png', False)
+
 
             video_embeddings_pca = video_pca.transform(video_embeddings)
             text_embeddings_pca = text_pca.transform(text_embeddings)
@@ -89,11 +107,13 @@ if __name__ == '__main__':
             text_embeddings_tensor = th.from_numpy(text_embeddings_pca).float().to(device)
 
             mlp_model_path = f'saved_model/final_model_{variance_threshold}_{sample_size}.pth'
-            adjusted_video_embeddings = mlp_eval(video_embeddings_tensor, text_embeddings_tensor, mlp_model_path)
+            #mlp_model_path = f'saved_model/checkpoint/checkpoint_{check_point}_{sample_size}.pth'
+            adjusted_video_embeddings = mlp_eval(video_embeddings_pca, text_embeddings_pca, mlp_model_path)
 
-            print("Result after MLP")
+            print(f"Result after MLP_{variance_threshold}_{sample_size} in {adjusted_video_embeddings.shape[1]}D space")
+            check_pairs(adjusted_video_embeddings.cpu().numpy(), text_embeddings_pca, mappings, False)
             plot_embeddings(adjusted_video_embeddings.cpu().numpy(), text_embeddings_pca, mappings,
-                            'plots', f'pca_plot_mlp2D_{variance_threshold}_{sample_size}.png', False)
-            plot_embeddings_3d(adjusted_video_embeddings.cpu().numpy(), text_embeddings_pca, mappings,
-                               'plots', f'pca_plot_mlp3D_{variance_threshold}_{sample_size}.png', False)
+                            'plots/PCA_mlp', f'pca_plot_mlp2D_{variance_threshold}_{sample_size}.png', False)
+            plot_embeddings_3d(adjusted_video_embeddings.cpu().numpy(), text_embeddings, mappings,
+                               'plots/PCA_mlp', f'pca_plot_mlp3D_{variance_threshold}_{sample_size}.png', False)
 
