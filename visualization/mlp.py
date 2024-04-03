@@ -39,9 +39,9 @@ def mlp_train(num_epochs, video_embeddings, text_embeddings, variance_threshold,
     video_embeddings = normalize_embeddings(video_embeddings)
     text_embeddings = normalize_embeddings(text_embeddings)
 
-    # text_embeddings = reduce_dimension(text_embeddings, variance_threshold, train_size, 'text')
-    # video_embeddings = reduce_dimension(video_embeddings, variance_threshold, train_size,
-    #                                     'video', dimension = text_embeddings.shape[1])
+    text_embeddings = reduce_dimension(text_embeddings, variance_threshold, train_size, 'text')
+    video_embeddings = reduce_dimension(video_embeddings, variance_threshold, train_size,
+                                        'video', dimension = text_embeddings.shape[1])
 
     video_embeddings = video_embeddings.to(device)
     text_embeddings = text_embeddings.to(device)
@@ -65,13 +65,14 @@ def mlp_train(num_epochs, video_embeddings, text_embeddings, variance_threshold,
         if (epoch + 1) % 100 == 0:
             print(f'Epoch [{epoch + 1}/{num_epochs}], Loss: {loss.item()}')
 
-        checkpoint_interval = 200
-        if (epoch + 1) % checkpoint_interval == 0:
-            checkpoint = {
-                'state_dict': model.state_dict(),
-            }
-            torch.save(checkpoint, f'{save_dir}/checkpoint/checkpoint_{epoch + 1}_{train_size}.pth')
-            print(f'Checkpoint saved at epoch {epoch + 1}')
+        # checkpoint_interval = 200
+        # if (epoch + 1) % checkpoint_interval == 0:
+        #     checkpoint = {
+        #         'state_dict': model.state_dict(),
+        #     }
+        #     torch.save(checkpoint, f'{save_dir}/checkpoint/checkpoint_{epoch + 1}_{train_size}.pth')
+        #     print(f'Checkpoint saved at epoch {epoch + 1}')
+
     final_model_path = f"{save_dir}/final_model_{variance_threshold}_{train_size}.pth"
     torch.save(model.state_dict(), final_model_path)
     print(f'Final model saved to {final_model_path}')
@@ -94,7 +95,7 @@ def mlp_eval(video_embeddings, text_embeddings, model_path):
 
 
 if __name__ == '__main__':
-    variance_thresholds = [1] #[0.9, 0.95, 0.99]
+    variance_thresholds = [0.9, 0.95]
     sample_sizes = [1, 2, 4, 8, 16]
     if torch.cuda.is_available():
         print("CUDA is available! Training on GPU.")

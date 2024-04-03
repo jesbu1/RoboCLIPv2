@@ -165,10 +165,10 @@ def plot_embeddings(
     save_path = os.path.join(directory_name, file_name)
     plt.savefig(save_path)
     print(f"Plot saved to {save_path}")
-    print("Results in 2D space")
-    check_pairs(
-        reduced_video_embeddings, reduced_text_embeddings, mappings, small_scale
-    )
+    #print("Results in 2D space")
+    # check_pairs(
+    #     reduced_video_embeddings, reduced_text_embeddings, mappings, small_scale
+    # )
     plt.close()
 
 
@@ -269,8 +269,8 @@ def plot_embeddings_3d(
     save_path = os.path.join(directory_name, file_name)
     plt.savefig(save_path)
     print(f"Plot saved to {save_path}")
-    print("Results in 3D space")
-    check_pairs(
-        reduced_video_embeddings, reduced_text_embeddings, mappings, small_scale
-    )
+    # print("Results in 3D space")
+    # check_pairs(
+    #     reduced_video_embeddings, reduced_text_embeddings, mappings, small_scale
+    # )
     plt.close()
