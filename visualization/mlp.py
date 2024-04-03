@@ -9,6 +9,7 @@ import joblib
 import torch.nn.functional as F
 import numpy as np
 
+
 class SimpleMLP(nn.Module):
     def __init__(self, input_dim, output_dim):
         super(SimpleMLP, self).__init__()
@@ -18,39 +19,68 @@ class SimpleMLP(nn.Module):
         x = self.fc(x)
         return x
 
+
+class SimpleWeightVector(nn.Module):
+    def __init__(self, dim):
+        super(SimpleWeightVector, self).__init__()
+        self.weight = nn.Parameter(torch.randn(1, dim))
+
+    def forward(self, x):
+        # x: (batch_size, dim)
+        # self.weight: (1, dim)
+        # output: (batch_size, dim)
+        return x * self.weight
+
+
 def normalize_embeddings(embeddings):
     normalized_embeddings = F.normalize(embeddings, p=2, dim=1)
     return normalized_embeddings
 
-def reduce_dimension(embeddings, variance_threshold, train_size, embed_type, dimension = None):
-    #normalized_embeddings = normalize_embeddings(embeddings)
+
+def reduce_dimension(
+    embeddings, variance_threshold, train_size, embed_type, dimension=None
+):
+    # normalized_embeddings = normalize_embeddings(embeddings)
     if dimension:
         pca = PCA(n_components=dimension)
     else:
         pca = PCA(n_components=variance_threshold)
     reduced_embeddings = pca.fit_transform(embeddings)
-    model_filename = f'saved_model/pca_model_{embed_type}_{variance_threshold}_{train_size}.pkl'
+    model_filename = (
+        f"saved_model/pca_model_{embed_type}_{variance_threshold}_{train_size}.pkl"
+    )
     joblib.dump(pca, model_filename)
     print(f"PCA model for {embed_type} saved to {model_filename}")
     return torch.from_numpy(reduced_embeddings).float()
 
 
-def mlp_train(num_epochs, video_embeddings, text_embeddings, variance_threshold, train_size):
+def mlp_train(
+    num_epochs, video_embeddings, text_embeddings, variance_threshold, train_size
+):
     video_embeddings = normalize_embeddings(video_embeddings)
     text_embeddings = normalize_embeddings(text_embeddings)
 
-    text_embeddings = reduce_dimension(text_embeddings, variance_threshold, train_size, 'text')
-    video_embeddings = reduce_dimension(video_embeddings, variance_threshold, train_size,
-                                        'video', dimension = text_embeddings.shape[1])
+    text_embeddings = reduce_dimension(
+        text_embeddings, variance_threshold, train_size, "text"
+    )
+    video_embeddings = reduce_dimension(
+        video_embeddings,
+        variance_threshold,
+        train_size,
+        "video",
+        dimension=text_embeddings.shape[1],
+    )
 
     video_embeddings = video_embeddings.to(device)
     text_embeddings = text_embeddings.to(device)
 
     # L1 Distance
-    #criterion = nn.L1Loss()
+    # criterion = nn.L1Loss()
     criterion = nn.MSELoss()
-    print(video_embeddings.shape[1],text_embeddings.shape[1])
-    model = SimpleMLP(input_dim=video_embeddings.shape[1], output_dim=text_embeddings.shape[1]).to(device)
+    print(video_embeddings.shape[1], text_embeddings.shape[1])
+    model = SimpleMLP(
+        input_dim=video_embeddings.shape[1], output_dim=text_embeddings.shape[1]
+    ).to(device)
 
     optimizer = torch.optim.Adam(model.parameters(), lr=0.0005)
     save_dir = "/scr/yusenluo/RoboCLIP/visualization/saved_model"
@@ -63,7 +93,7 @@ def mlp_train(num_epochs, video_embeddings, text_embeddings, variance_threshold,
         optimizer.step()
 
         if (epoch + 1) % 100 == 0:
-            print(f'Epoch [{epoch + 1}/{num_epochs}], Loss: {loss.item()}')
+            print(f"Epoch [{epoch + 1}/{num_epochs}], Loss: {loss.item()}")
 
         # checkpoint_interval = 200
         # if (epoch + 1) % checkpoint_interval == 0:
@@ -75,15 +105,17 @@ def mlp_train(num_epochs, video_embeddings, text_embeddings, variance_threshold,
 
     final_model_path = f"{save_dir}/final_model_{variance_threshold}_{train_size}.pth"
     torch.save(model.state_dict(), final_model_path)
-    print(f'Final model saved to {final_model_path}')
+    print(f"Final model saved to {final_model_path}")
 
 
 def mlp_eval(video_embeddings, text_embeddings, model_path):
     device = th.device("cuda" if th.cuda.is_available() else "cpu")
-    model = SimpleMLP(input_dim=video_embeddings.shape[1], output_dim=text_embeddings.shape[1]).to(device)
-    #video_embeddings = normalize_embeddings(video_embeddings)
+    model = SimpleMLP(
+        input_dim=video_embeddings.shape[1], output_dim=text_embeddings.shape[1]
+    ).to(device)
+    # video_embeddings = normalize_embeddings(video_embeddings)
     model.load_state_dict(torch.load(model_path))
-    #print(video_embeddings.shape[1], text_embeddings.shape[1])
+    # print(video_embeddings.shape[1], text_embeddings.shape[1])
     model.eval()
 
     with torch.no_grad():
@@ -94,7 +126,7 @@ def mlp_eval(video_embeddings, text_embeddings, model_path):
     return adjusted_video_embeddings
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     variance_thresholds = [0.9, 0.95]
     sample_sizes = [1, 2, 4, 8, 16]
     if torch.cuda.is_available():
@@ -103,19 +135,34 @@ if __name__ == '__main__':
         print("CUDA is not available. Training on CPU.")
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-    video_paths = list_webm_files('../20bn-something-something-v2/train')  # '../20bn-something-something-v2'
-    s3d = S3D('../s3d_dict.npy', 512)
-    s3d.load_state_dict(torch.load('../s3d_howto100m.pth'))
+    video_paths = list_webm_files(
+        "../20bn-something-something-v2/train"
+    )  # '../20bn-something-something-v2'
+    s3d = S3D("../s3d_dict.npy", 512)
+    s3d.load_state_dict(torch.load("../s3d_howto100m.pth"))
     s3d.eval()
 
     for variance_threshold in variance_thresholds:
         for size_multiplier in sample_sizes:
             current_sample_size = 50 * size_multiplier
-            video_text_dataset = VideoTextDataset(video_paths, num_samples=current_sample_size, random_samples=False)
-            data_loader = DataLoader(video_text_dataset, batch_size=50, shuffle=True, num_workers=2)
-            video_embeddings, text_embeddings, embeddings_dataset, mappings = Embedding(s3d, data_loader)
+            video_text_dataset = VideoTextDataset(
+                video_paths, num_samples=current_sample_size, random_samples=False
+            )
+            data_loader = DataLoader(
+                video_text_dataset, batch_size=50, shuffle=True, num_workers=2
+            )
+            video_embeddings, text_embeddings, embeddings_dataset, mappings = Embedding(
+                s3d, data_loader
+            )
 
-            print(f'Training with variance threshold {variance_threshold} and sample size {current_sample_size}.')
+            print(
+                f"Training with variance threshold {variance_threshold} and sample size {current_sample_size}."
+            )
 
-            mlp_train(num_epochs=2000, video_embeddings=video_embeddings, text_embeddings=text_embeddings,
-                      variance_threshold=variance_threshold, train_size=current_sample_size)
+            mlp_train(
+                num_epochs=2000,
+                video_embeddings=video_embeddings,
+                text_embeddings=text_embeddings,
+                variance_threshold=variance_threshold,
+                train_size=current_sample_size,
+            )

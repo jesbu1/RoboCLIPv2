@@ -12,11 +12,15 @@ from mlp import mlp_eval, normalize_embeddings
 from torch.utils.data import Dataset, DataLoader
 from Dataload import VideoTextDataset, Embedding, list_webm_files
 import joblib
+import argparse
 
 START_SAMPLE_SIZE = 50
 VAL_SAMPLE_SIZE = 150
 
 if __name__ == "__main__":
+    args = argparse.ArgumentParser()
+    args.add_argument("--validation", type=bool, default=False)
+
     if th.cuda.is_available():
         print("CUDA is available! Training on GPU.")
     else:
@@ -50,10 +54,9 @@ if __name__ == "__main__":
     #     train_mappings,
     # ) = Embedding(s3d, validate_data_loader)
 
-
     variance_thresholds = [0.9, 0.95]
     sample_sizes = np.array([1, 2, 4, 8, 16]) * START_SAMPLE_SIZE
-    #check_points = [1000, 2000]
+    # check_points = [1000, 2000]
     for sample_size in sample_sizes:
         training_dataset = VideoTextDataset(
             training_video_paths,
@@ -88,22 +91,24 @@ if __name__ == "__main__":
             train_video_embeddings_normalized.numpy(),
             train_text_embeddings_normalized.numpy(),
             train_mappings,
-            False
+            False,
         )
-        plot_embeddings(train_video_embeddings_normalized.numpy(),
+        plot_embeddings(
+            train_video_embeddings_normalized.numpy(),
             train_text_embeddings_normalized.numpy(),
             train_mappings,
             "plots/taskB/Train/nomlp",
             f"pca_plot_PCA_{1}_{sample_size}.png",
-            False)
+            False,
+        )
         """
         No PCA AFTER MLP
         """
-        mlp_model_path = (
-            f"saved_model/final_model_{1}_{sample_size}.pth"
-        )
+        mlp_model_path = f"saved_model/final_model_{1}_{sample_size}.pth"
         adjusted_video_embeddings = mlp_eval(
-            train_video_embeddings_normalized.to(device), train_text_embeddings_normalized.to(device), mlp_model_path
+            train_video_embeddings_normalized.to(device),
+            train_text_embeddings_normalized.to(device),
+            mlp_model_path,
         )
         print(
             f"Normalized result AFTER MLP without any PCA in the {train_video_embeddings_normalized.shape[1]}D space"
@@ -112,14 +117,16 @@ if __name__ == "__main__":
             adjusted_video_embeddings.cpu().numpy(),
             train_text_embeddings_normalized.cpu().numpy(),
             train_mappings,
-            False
+            False,
         )
-        plot_embeddings(adjusted_video_embeddings.cpu().numpy(),
-                        train_text_embeddings_normalized.numpy(),
-                        train_mappings,
-                        "plots/taskB/Train/mlp",
-                        f"pca_plot_mlp2D_{1}_{sample_size}.png",
-                        False)
+        plot_embeddings(
+            adjusted_video_embeddings.cpu().numpy(),
+            train_text_embeddings_normalized.numpy(),
+            train_mappings,
+            "plots/taskB/Train/mlp",
+            f"pca_plot_mlp2D_{1}_{sample_size}.png",
+            False,
+        )
 
         for variance_threshold in variance_thresholds:
             """
@@ -149,7 +156,10 @@ if __name__ == "__main__":
                 f"Training result BEFORE MLP with PCA_Text_{variance_threshold} and {sample_size} in {text_pca.n_components_}D space:"
             )
             check_pairs(
-                train_video_embeddings_text_pca, train_text_embeddings_text_pca, train_mappings, False
+                train_video_embeddings_text_pca,
+                train_text_embeddings_text_pca,
+                train_mappings,
+                False,
             )
             plot_embeddings(
                 train_video_embeddings_text_pca,
@@ -163,11 +173,12 @@ if __name__ == "__main__":
             TOP K accuracies after PCA AFTER MLP
             """
 
-
             video_embeddings_pca = video_pca.transform(
                 train_video_embeddings_normalized.clone()
             )
-            text_embeddings_pca = text_pca.transform(train_text_embeddings_normalized.clone())
+            text_embeddings_pca = text_pca.transform(
+                train_text_embeddings_normalized.clone()
+            )
 
             video_embeddings_tensor = (
                 th.from_numpy(video_embeddings_pca).float().to(device)
