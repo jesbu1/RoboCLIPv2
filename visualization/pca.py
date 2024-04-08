@@ -3,6 +3,7 @@ import matplotlib.pyplot as plt
 import torch as th
 import numpy as np
 import os
+from Transformation_Matrix import similarity_score
 
 
 def check_pairs(
@@ -22,8 +23,8 @@ def check_pairs(
         - reduced_text_embeddings[np.newaxis, :, :],
         axis=2,
     )
-    similarities = reduced_text_embeddings @ reduced_video_embeddings.T
-
+    similarities = reduced_video_embeddings @ reduced_text_embeddings.T
+    #similarities = (similarity_score(reduced_video_embeddings, reduced_text_embeddings)).numpy()
     sorted_text_indices = np.argsort(-similarities, axis=1)
 
     video_id_to_text_label = mappings["video_id_to_text_label"]

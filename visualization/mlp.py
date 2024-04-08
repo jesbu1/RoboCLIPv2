@@ -47,7 +47,7 @@ def reduce_dimension(
         pca = PCA(n_components=variance_threshold)
     reduced_embeddings = pca.fit_transform(embeddings)
     model_filename = (
-        f"saved_model/pca_model_{embed_type}_{variance_threshold}_{train_size}.pkl"
+        f"saved_model/pca_model/pca_model_{embed_type}_{variance_threshold}_{train_size}.pkl"
     )
     joblib.dump(pca, model_filename)
     print(f"PCA model for {embed_type} saved to {model_filename}")
@@ -60,16 +60,17 @@ def mlp_train(
     video_embeddings = normalize_embeddings(video_embeddings)
     text_embeddings = normalize_embeddings(text_embeddings)
 
-    text_embeddings = reduce_dimension(
-        text_embeddings, variance_threshold, train_size, "text"
-    )
-    video_embeddings = reduce_dimension(
-        video_embeddings,
-        variance_threshold,
-        train_size,
-        "video",
-        dimension=text_embeddings.shape[1],
-    )
+    if variance_threshold != 1:
+        text_embeddings = reduce_dimension(
+            text_embeddings, variance_threshold, train_size, "text"
+        )
+        video_embeddings = reduce_dimension(
+            video_embeddings,
+            variance_threshold,
+            train_size,
+            "video",
+            dimension=text_embeddings.shape[1],
+        )
 
     video_embeddings = video_embeddings.to(device)
     text_embeddings = text_embeddings.to(device)
@@ -78,12 +79,15 @@ def mlp_train(
     # criterion = nn.L1Loss()
     criterion = nn.MSELoss()
     print(video_embeddings.shape[1], text_embeddings.shape[1])
+
     model = SimpleMLP(
         input_dim=video_embeddings.shape[1], output_dim=text_embeddings.shape[1]
     ).to(device)
 
+    #model = SimpleWeightVector(dim = video_embeddings.shape[1]).to(device)
+
     optimizer = torch.optim.Adam(model.parameters(), lr=0.0005)
-    save_dir = "/scr/yusenluo/RoboCLIP/visualization/saved_model"
+    save_dir = "/scr/yusenluo/RoboCLIP/visualization/saved_model/mlp_model"
     for epoch in range(num_epochs):
         adjusted_video_embeddings = model(video_embeddings)
         loss = criterion(adjusted_video_embeddings, text_embeddings)
@@ -95,13 +99,12 @@ def mlp_train(
         if (epoch + 1) % 100 == 0:
             print(f"Epoch [{epoch + 1}/{num_epochs}], Loss: {loss.item()}")
 
-        # checkpoint_interval = 200
-        # if (epoch + 1) % checkpoint_interval == 0:
-        #     checkpoint = {
-        #         'state_dict': model.state_dict(),
-        #     }
-        #     torch.save(checkpoint, f'{save_dir}/checkpoint/checkpoint_{epoch + 1}_{train_size}.pth')
-        #     print(f'Checkpoint saved at epoch {epoch + 1}')
+        checkpoint_interval = 500
+        if (epoch + 1) % checkpoint_interval == 0:
+
+            torch.save(model.state_dict(),
+                       f'{save_dir}/checkpoint/checkpoint_{epoch + 1}_{variance_threshold}_{train_size}.pth')
+            print(f'Checkpoint saved at epoch {epoch + 1}')
 
     final_model_path = f"{save_dir}/final_model_{variance_threshold}_{train_size}.pth"
     torch.save(model.state_dict(), final_model_path)
@@ -113,7 +116,7 @@ def mlp_eval(video_embeddings, text_embeddings, model_path):
     model = SimpleMLP(
         input_dim=video_embeddings.shape[1], output_dim=text_embeddings.shape[1]
     ).to(device)
-    # video_embeddings = normalize_embeddings(video_embeddings)
+    #model = SimpleWeightVector(dim = video_embeddings.shape[1]).to(device)
     model.load_state_dict(torch.load(model_path))
     # print(video_embeddings.shape[1], text_embeddings.shape[1])
     model.eval()
@@ -127,8 +130,9 @@ def mlp_eval(video_embeddings, text_embeddings, model_path):
 
 
 if __name__ == "__main__":
-    variance_thresholds = [0.9, 0.95]
+    variance_thresholds = [0.9, 0.95, 1]
     sample_sizes = [1, 2, 4, 8, 16]
+    check_points = [500, 1000, 1500]
     if torch.cuda.is_available():
         print("CUDA is available! Training on GPU.")
     else:

@@ -253,3 +253,19 @@ def Embedding(model, data_loader):
     embeddings_dataset = EmbeddingsDataset(all_video_embeddings.cpu(), all_text_embeddings.cpu(), video_ids,
                                            text_labels)
     return all_video_embeddings, all_text_embeddings, embeddings_dataset, mappings
+
+
+def filter_top_embeddings(video_embeddings, text_embeddings, top_portion):
+
+    video_embeddings_norm = video_embeddings / video_embeddings.norm(dim=1, keepdim=True)
+    text_embeddings_norm = text_embeddings / text_embeddings.norm(dim=1, keepdim=True)
+    similarities = (video_embeddings_norm * text_embeddings_norm).sum(dim=1)
+
+    top_k = int(len(video_embeddings) * top_portion)
+    _, top_indices = th.topk(similarities, top_k, largest=False)
+
+    top_video_embeddings = video_embeddings[top_indices]
+    top_text_embeddings = text_embeddings[top_indices]
+    #print(top_video_embeddings.shape)
+
+    return top_video_embeddings, top_text_embeddings
