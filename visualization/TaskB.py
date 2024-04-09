@@ -2,7 +2,7 @@ import PIL
 from s3dg import S3D
 import torch as th
 import json
-
+import csv
 # from kitchen_env_wrappers import readGif
 import numpy as np
 import os
@@ -19,6 +19,13 @@ START_SAMPLE_SIZE = 50
 VAL_SAMPLE_SIZE = 150
 
 if __name__ == "__main__":
+    csv_file_path = "WeightVector_Result.csv"
+    if not os.path.exists(csv_file_path) or os.stat(csv_file_path).st_size == 0:
+        with open(csv_file_path, 'a', newline='') as file:
+            writer = csv.writer(file)
+            writer.writerow(
+                ["Sample Category", "Sample Size for Test", "Variance Threshold", "Sample Size for Training",
+                 "Model Name", "Dimensions", "Top 1 Accuracy", "Top 3 Accuracy", "Top 5 Accuracy", "Top 10 Accuracy"])
     parser = argparse.ArgumentParser()
     parser.add_argument("--validation", type=bool, default=False)
     args = parser.parse_args()
@@ -42,6 +49,7 @@ if __name__ == "__main__":
     plot_dir_name = 'Train'
     if args.validation:
         plot_dir_name = 'Validate'
+        sample_size_for_test = VAL_SAMPLE_SIZE
         validate_dataset = VideoTextDataset(
             validation_video_paths,
             num_samples= VAL_SAMPLE_SIZE,
@@ -59,10 +67,12 @@ if __name__ == "__main__":
         ) = Embedding(s3d, validate_data_loader)
 
     variance_thresholds = [0.9, 0.95]
-    sample_sizes = np.array([1, 2, 4, 8, 16]) * START_SAMPLE_SIZE
+    sample_sizes = np.array([1, 2, 4, 8, 16, 21]) * START_SAMPLE_SIZE
     # check_points = [1000, 2000]
     for sample_size in sample_sizes:
+        sample_size_for_training = sample_size
         if not args.validation:
+            sample_size_for_test = sample_size
             training_dataset = VideoTextDataset(
                 training_video_paths,
                 num_samples=sample_size,
@@ -80,14 +90,14 @@ if __name__ == "__main__":
             ) = Embedding(s3d, train_data_loader)
 
         print(f"{plot_dir_name} RESULTS with {sample_size} samples")
-        top_video_embeddings, top_text_embeddings = filter_top_embeddings(train_video_embeddings,
-                                                                          train_text_embeddings,
-                                                                          0.5)
+        # top_video_embeddings, top_text_embeddings = filter_top_embeddings(train_video_embeddings,
+        #                                                                   train_text_embeddings,
+        #                                                                   0.5)
         train_video_embeddings_normalized = normalize_embeddings(
-            top_video_embeddings
+            train_video_embeddings
         ).clone()
         train_text_embeddings_normalized = normalize_embeddings(
-            top_text_embeddings
+            train_text_embeddings
         ).clone()
         """
         No PCA BEFORE MLP
@@ -96,20 +106,30 @@ if __name__ == "__main__":
         print(
             f"Normalized result BEFORE MLP without any PCA in the {train_video_embeddings_normalized.shape[1]}D space"
         )
-        check_pairs(
+        accuracies_original = check_pairs(
             train_video_embeddings_normalized.numpy(),
             train_text_embeddings_normalized.numpy(),
             train_mappings,
             False,
         )
-        plot_embeddings(
-            train_video_embeddings_normalized.numpy(),
-            train_text_embeddings_normalized.numpy(),
-            train_mappings,
-            f"plots/taskC/original/filter/{plot_dir_name}",
-            f"pca_plot_original_{sample_size}.png",
-            False,
-        )
+        data_to_write_original = [
+            plot_dir_name, sample_size_for_test, 'No PCA',
+            sample_size_for_training, 'Original', train_video_embeddings_normalized.shape[1],
+            accuracies_original.get("Top 1", ""), accuracies_original.get("Top 3", ""),
+            accuracies_original.get("Top 5", ""),
+            accuracies_original.get("Top 10", "")
+        ]
+        with open(csv_file_path, 'a', newline='') as file:
+            writer = csv.writer(file)
+            writer.writerow(data_to_write_original)
+        # plot_embeddings(
+        #     train_video_embeddings_normalized.numpy(),
+        #     train_text_embeddings_normalized.numpy(),
+        #     train_mappings,
+        #     f"plots/taskC/original/filter/{plot_dir_name}",
+        #     f"pca_plot_original_{sample_size}.png",
+        #     False,
+        # )
         """
         No PCA AFTER MLP
         """
@@ -122,31 +142,41 @@ if __name__ == "__main__":
         print(
             f"Normalized result AFTER MLP without any PCA in the {train_video_embeddings_normalized.shape[1]}D space"
         )
-        check_pairs(
+        accuracies_mlp_noPCA = check_pairs(
             adjusted_video_embeddings.cpu().numpy(),
             train_text_embeddings_normalized.cpu().numpy(),
             train_mappings,
             False,
         )
-        plot_embeddings(
-            adjusted_video_embeddings.cpu().numpy(),
-            train_text_embeddings_normalized.numpy(),
-            train_mappings,
-            f"plots/taskB/{plot_dir_name}/mlp",
-            f"pca_plot_mlp2D_{1}_{sample_size}.png",
-            False,
-        )
+        data_to_write_mlp_noPCA = [
+            plot_dir_name, sample_size_for_test, 'No PCA',
+            sample_size_for_training, 'Weight Vector only', train_video_embeddings_normalized.shape[1],
+            accuracies_mlp_noPCA.get("Top 1", ""), accuracies_mlp_noPCA.get("Top 3", ""),
+            accuracies_mlp_noPCA.get("Top 5", ""),
+            accuracies_mlp_noPCA.get("Top 10", "")
+        ]
+        with open(csv_file_path, 'a', newline='') as file:
+            writer = csv.writer(file)
+            writer.writerow(data_to_write_mlp_noPCA)
+        # plot_embeddings(
+        #     adjusted_video_embeddings.cpu().numpy(),
+        #     train_text_embeddings_normalized.numpy(),
+        #     train_mappings,
+        #     f"plots/taskB/{plot_dir_name}/mlp",
+        #     f"pca_plot_mlp2D_{1}_{sample_size}.png",
+        #     False,
+        # )
 
         for variance_threshold in variance_thresholds:
             """
             PCA
             """
             pca_video_model_path = (
-                f"saved_model/M/pca_model_video_{variance_threshold}_{sample_size}.pkl"
+                f"saved_model/weight_vector/pca_model_video_{variance_threshold}_{sample_size}.pkl"
             )
             video_pca = joblib.load(pca_video_model_path)
             pca_text_model_path = (
-                f"saved_model/M/pca_model_text_{variance_threshold}_{sample_size}.pkl"
+                f"saved_model/weight_vector/pca_model_text_{variance_threshold}_{sample_size}.pkl"
             )
             text_pca = joblib.load(pca_text_model_path)
             train_video_embeddings_text_pca = text_pca.transform(
@@ -164,20 +194,30 @@ if __name__ == "__main__":
             print(
                 f"Training result BEFORE MLP with PCA_Text_{variance_threshold} and {sample_size} in {text_pca.n_components_}D space:"
             )
-            check_pairs(
+            accuracies_PCA = check_pairs(
                 train_video_embeddings_text_pca,
                 train_text_embeddings_text_pca,
                 train_mappings,
                 False,
             )
-            plot_embeddings(
-                train_video_embeddings_text_pca,
-                train_text_embeddings_text_pca,
-                train_mappings,
-                f"plots/taskB/{plot_dir_name}/nomlp",
-                f"pca_plot_PCA_{variance_threshold}_{sample_size}.png",
-                False,
-            )
+            data_to_write_PCA = [
+                plot_dir_name, sample_size_for_test, variance_threshold,
+                sample_size_for_training, 'TEXT PCA only', text_pca.n_components_,
+                accuracies_PCA.get("Top 1", ""), accuracies_PCA.get("Top 3", ""),
+                accuracies_PCA.get("Top 5", ""),
+                accuracies_PCA.get("Top 10", "")
+            ]
+            with open(csv_file_path, 'a', newline='') as file:
+                writer = csv.writer(file)
+                writer.writerow(data_to_write_PCA)
+            # plot_embeddings(
+            #     train_video_embeddings_text_pca,
+            #     train_text_embeddings_text_pca,
+            #     train_mappings,
+            #     f"plots/taskB/{plot_dir_name}/nomlp",
+            #     f"pca_plot_PCA_{variance_threshold}_{sample_size}.png",
+            #     False,
+            # )
             """
             TOP K accuracies after PCA AFTER MLP
             """
@@ -212,20 +252,30 @@ if __name__ == "__main__":
             print(
                 f"Result after MLP_{variance_threshold}_{sample_size} in {adjusted_video_embeddings.shape[1]}D space"
             )
-            check_pairs(
+            accuracies_mlp = check_pairs(
                 adjusted_video_embeddings.cpu().numpy(),
                 text_embeddings_pca,
                 train_mappings,
                 False,
             )
-            plot_embeddings(
-                adjusted_video_embeddings.cpu().numpy(),
-                text_embeddings_pca,
-                train_mappings,
-                f"plots/taskB/{plot_dir_name}/mlp",
-                f"pca_plot_mlp2D_{variance_threshold}_{sample_size}.png",
-                False,
-            )
+            data_to_write_mlp = [
+                plot_dir_name, sample_size_for_test, variance_threshold,
+                sample_size_for_training, 'Weight Vector with PCA', adjusted_video_embeddings.shape[1],
+                accuracies_mlp.get("Top 1", ""), accuracies_mlp.get("Top 3", ""),
+                accuracies_mlp.get("Top 5", ""),
+                accuracies_mlp.get("Top 10", "")
+            ]
+            with open(csv_file_path, 'a', newline='') as file:
+                writer = csv.writer(file)
+                writer.writerow(data_to_write_mlp)
+            # plot_embeddings(
+            #     adjusted_video_embeddings.cpu().numpy(),
+            #     text_embeddings_pca,
+            #     train_mappings,
+            #     f"plots/taskB/{plot_dir_name}/mlp",
+            #     f"pca_plot_mlp2D_{variance_threshold}_{sample_size}.png",
+            #     False,
+            # )
             # plot_embeddings_3d(
             #    adjusted_video_embeddings.cpu().numpy(),
             #    text_embeddings,
