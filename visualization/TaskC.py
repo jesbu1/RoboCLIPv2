@@ -62,7 +62,7 @@ if __name__ == "__main__":
             dataset_type="validation",
         )
         validate_data_loader = DataLoader(
-            validate_dataset, batch_size=25, shuffle=True, num_workers=2
+            validate_dataset, batch_size=25, shuffle=True, num_workers=5
         )
         (
             train_video_embeddings,
@@ -87,7 +87,7 @@ if __name__ == "__main__":
                 dataset_type="train",
             )
             train_data_loader = DataLoader(
-                training_dataset, batch_size=25, shuffle=True, num_workers=2
+                training_dataset, batch_size=50, shuffle=True, num_workers=10
             )
             (
                 train_video_embeddings,
@@ -98,15 +98,22 @@ if __name__ == "__main__":
 
         print(f"{plot_dir_name} RESULTS with {sample_size} samples")
         if filter:
-            train_video_embeddings, train_text_embeddings = filter_top_embeddings(train_video_embeddings,
+            filtered_video_embeddings, filtered_text_embeddings = filter_top_embeddings(train_video_embeddings.clone(),
                                                                           train_text_embeddings,
                                                                           0.5)
-        train_video_embeddings_normalized = normalize_embeddings(
-            train_video_embeddings
-        ).clone()
-        train_text_embeddings_normalized = normalize_embeddings(
-            train_text_embeddings
-        ).clone()
+            train_video_embeddings_normalized = normalize_embeddings(
+                filtered_video_embeddings
+            ).clone()
+            train_text_embeddings_normalized = normalize_embeddings(
+                filtered_text_embeddings
+            ).clone()
+        else:
+            train_video_embeddings_normalized = normalize_embeddings(
+                train_video_embeddings
+            ).clone()
+            train_text_embeddings_normalized = normalize_embeddings(
+                train_text_embeddings
+            ).clone()
         """
         Original Embeddings space
         """
@@ -142,32 +149,6 @@ if __name__ == "__main__":
             f"pca_plot_original_{sample_size}.png",
             False,
         )
-        """
-        No PCA AFTER MLP
-        """
-        # mlp_model_path = f"saved_model/weight_vector/final_model_{1}_{sample_size}.pth"
-        # adjusted_video_embeddings = mlp_eval(
-        #     train_video_embeddings_normalized.to(device),
-        #     train_text_embeddings_normalized.to(device),
-        #     mlp_model_path,
-        # )
-        # print(
-        #     f"Normalized result AFTER MLP without any PCA in the {train_video_embeddings_normalized.shape[1]}D space"
-        # )
-        # check_pairs(
-        #     adjusted_video_embeddings.cpu().numpy(),
-        #     train_text_embeddings_normalized.cpu().numpy(),
-        #     train_mappings,
-        #     False,
-        # )
-        # plot_embeddings(
-        #     adjusted_video_embeddings.cpu().numpy(),
-        #     train_text_embeddings_normalized.numpy(),
-        #     train_mappings,
-        #     f"plots/taskB/{plot_dir_name}/mlp",
-        #     f"pca_plot_mlp2D_{1}_{sample_size}.png",
-        #     False,
-        # )
 
         for variance_threshold in variance_thresholds:
             """
@@ -196,29 +177,9 @@ if __name__ == "__main__":
             train_text_embeddings_text_pca = text_pca.transform(
                 train_text_embeddings_normalized.clone()
             )
-            """
-            TOP K accuracies after PCA NO MLP
-            """
             print(
                 f"Results with variance_threshold {variance_threshold} and {sample_size}:"
             )
-            # print(
-            #     f"Training result BEFORE MLP with PCA_Text_{variance_threshold} and {sample_size} in {text_pca.n_components_}D space:"
-            # )
-            # check_pairs(
-            #     train_video_embeddings_text_pca,
-            #     train_text_embeddings_text_pca,
-            #     train_mappings,
-            #     False,
-            # )
-            # plot_embeddings(
-            #     train_video_embeddings_text_pca,
-            #     train_text_embeddings_text_pca,
-            #     train_mappings,
-            #     f"plots/taskB/{plot_dir_name}/nomlp",
-            #     f"pca_plot_PCA_{variance_threshold}_{sample_size}.png",
-            #     False,
-            # )
             """
             TOP K accuracies after PCA AFTER M
             """
@@ -236,13 +197,6 @@ if __name__ == "__main__":
             text_embeddings_tensor = (
                 th.from_numpy(text_embeddings_pca).float().to(device)
             )
-
-            # mlp_model_path = (
-            #     f"saved_model/weight_vector/final_model_{variance_threshold}_{sample_size}.pth"
-            # )
-            # adjusted_video_embeddings = mlp_eval(
-            #     video_embeddings_tensor, text_embeddings_tensor, mlp_model_path
-            # )
             if filter:
                 M_model_path = f"saved_model/M/filter/M_model_{variance_threshold}_{sample_size}.pth"
                 plot_path = f"plots/taskC/M/filter/{plot_dir_name}"
