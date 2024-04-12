@@ -3,6 +3,7 @@ import matplotlib.pyplot as plt
 import torch as th
 import numpy as np
 import os
+from scipy.stats import percentileofscore
 from Transformation_Matrix import similarity_score
 
 
@@ -30,7 +31,7 @@ def check_pairs(
     video_id_to_text_label = mappings["video_id_to_text_label"]
     index_to_video_id = mappings["index_to_video_id"]
     index_to_text_label = mappings["index_to_text_label"]
-
+    accuracies = {}
     if small_scale:
         ground_truth_indices = np.arange(len(reduced_video_embeddings))
         for n in [1, 3, 5]:
@@ -41,6 +42,7 @@ def check_pairs(
                 ]
             )
             accuracy = np.mean(correct_pairs)
+            accuracies[f"Top {n}"] = round(accuracy * 100, 4)
             print(f"Top {n} accuracy: {accuracy * 100:.2f}%")
         top_1_indices = sorted_text_indices[:, 0]
         correct_top_1_pairs = top_1_indices == ground_truth_indices
@@ -69,7 +71,9 @@ def check_pairs(
                 if ground_truth_indices[i] in sorted_text_indices[i, :n]:
                     cumulative_accuracy[i] = 1
             accuracy_n = np.mean(cumulative_accuracy)
+            accuracies[f"Top {n}"] = round(accuracy_n * 100, 4)
             print(f"Accuracy within top {n}: {accuracy_n * 100:.2f}%")
+    return accuracies
 
 
 def plot_embeddings(
@@ -102,6 +106,10 @@ def plot_embeddings(
         text_embeddings = text_embeddings.numpy()
 
     num_samples = len(video_embeddings)
+    similarities = video_embeddings @ text_embeddings.T
+    self_similarities = np.diag(similarities)
+    percentiles = [percentileofscore(self_similarities, sim, 'rank') for sim in self_similarities]
+
 
     combined_embeddings = np.vstack((video_embeddings, text_embeddings))
     pca = PCA(n_components=2)
@@ -118,15 +126,17 @@ def plot_embeddings(
 
     plt.figure(figsize=(10, 6))
 
-    if small_scale:
-        cmap = plt.get_cmap("Set3")
-        colors = [cmap(i) for i in range(num_samples)]
-    else:
-        cmap = plt.get_cmap("inferno")
-        colors = [cmap(i) for i in np.linspace(0, 1, num_samples)]
+    # if small_scale:
+    #     cmap = plt.get_cmap("Set3")
+    #     colors = [cmap(i) for i in range(num_samples)]
+    # else:
+    #     cmap = plt.get_cmap("inferno")
+    #     colors = [cmap(i) for i in np.linspace(0, 1, num_samples)]
+    cmap = plt.get_cmap("viridis")
+    colors = [cmap(p / 100) for p in percentiles]
 
     for i in range(num_samples):
-        plt.scatter(
+        sc = plt.scatter(
             reduced_video_embeddings[i, 0],
             reduced_video_embeddings[i, 1],
             color=colors[i],
@@ -156,7 +166,7 @@ def plot_embeddings(
             color="black",
             fontsize=10,
         )
-
+    plt.colorbar(sc, label='Similarity Percentile')
     plt.title("PCA of Video and Text Embeddings")
     plt.xlabel("Principal Component 1")
     plt.ylabel("Principal Component 2")

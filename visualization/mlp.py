@@ -7,6 +7,7 @@ from s3dg import S3D
 from sklearn.decomposition import PCA
 import joblib
 import torch.nn.functional as F
+from sklearn.preprocessing import StandardScaler
 import numpy as np
 
 
@@ -35,6 +36,11 @@ class SimpleWeightVector(nn.Module):
 def normalize_embeddings(embeddings):
     normalized_embeddings = F.normalize(embeddings, p=2, dim=1)
     return normalized_embeddings
+
+def standradize_embeddings(embeddings):
+    scaler = StandardScaler()
+    standardized_embeddings = scaler.fit_transform(embeddings)
+    return th.from_numpy(standardized_embeddings)
 
 
 def reduce_dimension(

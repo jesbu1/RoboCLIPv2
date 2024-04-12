@@ -19,7 +19,7 @@ START_SAMPLE_SIZE = 50
 VAL_SAMPLE_SIZE = 150
 
 if __name__ == "__main__":
-    csv_file_path = "SubspaceAlignment_allTextPCA_Result.csv"
+    csv_file_path = "SubspaceAlignment_filter_Result.csv"
     if not os.path.exists(csv_file_path) or os.stat(csv_file_path).st_size == 0:
         with open(csv_file_path, 'a', newline='') as file:
             writer = csv.writer(file)
@@ -138,9 +138,9 @@ if __name__ == "__main__":
             writer = csv.writer(file)
             writer.writerow(data_to_write_original)
         if filter:
-            plot_original = f"plots/taskC/original/filter/all_text_pca/{plot_dir_name}"
+            plot_original = f"plots/taskC/original/filter/{plot_dir_name}"
         else:
-            plot_original = f"plots/taskC/original/all_text_pca/{plot_dir_name}"
+            plot_original = f"plots/taskC/original/{plot_dir_name}"
         plot_embeddings(
             train_video_embeddings_normalized.numpy(),
             train_text_embeddings_normalized.numpy(),
@@ -156,14 +156,14 @@ if __name__ == "__main__":
             """
             if filter:
                 pca_video_model_path = (
-                    f"saved_model/M/filter/pca_model_text_{variance_threshold}_{sample_size}.pkl"
+                    f"saved_model/M/filter/pca_model_video_{variance_threshold}_{sample_size}.pkl"
                 )
                 pca_text_model_path = (
                     f"saved_model/M/filter/pca_model_text_{variance_threshold}_{sample_size}.pkl"
                 )
             else:
                 pca_video_model_path = (
-                    f"saved_model/M/pca_model_text_{variance_threshold}_{sample_size}.pkl"
+                    f"saved_model/M/pca_model_video_{variance_threshold}_{sample_size}.pkl"
                 )
                 pca_text_model_path = (
                     f"saved_model/M/pca_model_text_{variance_threshold}_{sample_size}.pkl"
@@ -171,12 +171,7 @@ if __name__ == "__main__":
 
             video_pca = joblib.load(pca_video_model_path)
             text_pca = joblib.load(pca_text_model_path)
-            train_video_embeddings_text_pca = text_pca.transform(
-                train_video_embeddings_normalized.clone()
-            )
-            train_text_embeddings_text_pca = text_pca.transform(
-                train_text_embeddings_normalized.clone()
-            )
+
             print(
                 f"Results with variance_threshold {variance_threshold} and {sample_size}:"
             )
@@ -198,11 +193,11 @@ if __name__ == "__main__":
                 th.from_numpy(text_embeddings_pca).float().to(device)
             )
             if filter:
-                M_model_path = f"saved_model/M/filter/all_text_pca/M_model_{variance_threshold}_{sample_size}.pth"
-                plot_path = f"plots/taskC/M/filter/all_text_pca/{plot_dir_name}"
+                M_model_path = f"saved_model/M/filter/M_model_{variance_threshold}_{sample_size}.pth"
+                plot_path = f"plots/taskC/M/filter/{plot_dir_name}"
             else:
-                M_model_path = f"saved_model/M/all_text_pca/M_model_{variance_threshold}_{sample_size}.pth"
-                plot_path = f"plots/taskC/M/all_text_pca/{plot_dir_name}"
+                M_model_path = f"saved_model/M/M_model_{variance_threshold}_{sample_size}.pth"
+                plot_path = f"plots/taskC/M/{plot_dir_name}"
             adjusted_video_embeddings = eval_M(
                 video_embeddings_tensor, M_model_path
             )
