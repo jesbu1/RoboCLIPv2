@@ -80,26 +80,26 @@ def main(args):
             # sample = data
             if args.dataset_name in ["droid_100", "droid"]:
                 left_1 = list()
-                left_2 = list()
-                left_3 = list()
+                # left_2 = list()
+                # left_3 = list()
                 for j, step in enumerate(data["steps"]):
                     img1 = step["observation"]["exterior_image_1_left"].numpy(),
-                    img2 = step["observation"]["exterior_image_2_left"].numpy(),
-                    img3 = step["observation"]["wrist_image_left"].numpy(),
+                    # img2 = step["observation"]["exterior_image_2_left"].numpy(),
+                    # img3 = step["observation"]["wrist_image_left"].numpy(),
                     # import pdb ; pdb.set_trace()
                     left_1.append(img1)
-                    left_2.append(img2)
-                    left_3.append(img3)
+                    # left_2.append(img2)
+                    # left_3.append(img3)
 
                 left_1 = np.squeeze(np.stack(left_1))
-                left_2 = np.squeeze(np.stack(left_2))
-                left_3 = np.squeeze(np.stack(left_3))
+                # left_2 = np.squeeze(np.stack(left_2))
+                # left_3 = np.squeeze(np.stack(left_3))
 
                 save_path = args.save_folder
                 dataset_path = os.path.join(save_path, args.dataset_name)
                 left_1_path = os.path.join(dataset_path, "left_1")
-                left_2_path = os.path.join(dataset_path, "left_2")
-                left_3_path = os.path.join(dataset_path, "top_3")
+                # left_2_path = os.path.join(dataset_path, "left_2")
+                # left_3_path = os.path.join(dataset_path, "top_3")
                 if not os.path.exists(save_path):
                     os.makedirs(save_path)
                 if not os.path.exists(dataset_path):
@@ -116,44 +116,56 @@ def main(args):
                     df.at[row_index, 'OpenX'] = ann
                     df.to_csv('/scr/yusenluo/RoboCLIP/visualization/video_text_data.csv', index=False)
                     save_1 = os.path.join(left_1_path, file_name)
-                    save_2 = os.path.join(left_2_path, file_name)
-                    save_3 = os.path.join(left_3_path, file_name)
+                    # save_2 = os.path.join(left_2_path, file_name)
+                    # save_3 = os.path.join(left_3_path, file_name)
 
                     imageio.mimsave(save_1, left_1, fps=args.fps)
-                    imageio.mimsave(save_2, left_2, fps=args.fps)
-                    imageio.mimsave(save_3, left_3, fps=args.fps)
+                    # imageio.mimsave(save_2, left_2, fps=args.fps)
+                    # imageio.mimsave(save_3, left_3, fps=args.fps)
 
                 else:
                     if args.format == 'mp4':
                         fourcc = cv2.VideoWriter_fourcc(*'mp4v')
                         save_1 = ann.replace(" ", "_") + ".mp4"
-                        save_2 = ann.replace(" ", "_") + ".mp4"
-                        save_3 = ann.replace(" ", "_") + ".mp4"
+                        # save_2 = ann.replace(" ", "_") + ".mp4"
+                        # save_3 = ann.replace(" ", "_") + ".mp4"
 
                         save_1 = os.path.join(left_1_path, save_1)
-                        save_2 = os.path.join(left_2_path, save_2)
-                        save_3 = os.path.join(left_3_path, save_3)
+                        # save_2 = os.path.join(left_2_path, save_2)
+                        # save_3 = os.path.join(left_3_path, save_3)
 
                     elif args.format == 'webm':
                         fourcc = cv2.VideoWriter_fourcc(*'VP90')  # WebM codec
                         save_1 = ann.replace(" ", "_") + ".webm"
-                        save_2 = ann.replace(" ", "_") + ".webm"
-                        save_3 = ann.replace(" ", "_") + ".webm"
+                        # save_2 = ann.replace(" ", "_") + ".webm"
+                        # save_3 = ann.replace(" ", "_") + ".webm"
 
                         save_1 = os.path.join(left_1_path, save_1)
-                        save_2 = os.path.join(left_2_path, save_2)
-                        save_3 = os.path.join(left_3_path, save_3)
+                        # save_2 = os.path.join(left_2_path, save_2)
+                        # save_3 = os.path.join(left_3_path, save_3)
+
+                    elif args.format == 'avi':
+                        fourcc = cv2.VideoWriter_fourcc("M", "J", "P", "G")
+
+                        save_1 = ann.replace(" ", "_") + ".avi"
+                        # save_2 = ann.replace(" ", "_") + ".avi"
+                        # save_3 = ann.replace(" ", "_") + ".avi"
+
+                        save_1 = os.path.join(left_1_path, save_1)
+                        # save_2 = os.path.join(left_2_path, save_2)
+                        # save_3 = os.path.join(left_3_path, save_3)
 
 
                     else:
                         raise ValueError("Invalid video format choice. Choose 'gif', 'mp4', or 'webm'.")
-                    width, height = imgs.shape[1], imgs.shape[2]
-                    # import pdb ; pdb.set_trace()
-                    out = cv2.VideoWriter(video_path, fourcc, args.fps, (width, height))
+                    width, height = left_1.shape[1], left_1.shape[2]
+                    out = cv2.VideoWriter(save_1, fourcc, args.fps, (width, height))
 
-                    for frame_idx in range (imgs.shape[0]):
-                        frame = imgs[frame_idx]
-                        if args.format == 'mp4':
+                    indices = np.linspace(0, left_1.shape[0] - 1, args.ds_frames, dtype=int)
+
+                    for frame_idx in indices:
+                        frame = left_1[frame_idx]
+                        if args.format == 'mp4' or args.format == 'avi':
                             # Convert from RGB to BGR if saving as MP4
                             frame = cv2.cvtColor(frame, cv2.COLOR_RGB2BGR)
                         out.write(frame)
@@ -194,15 +206,24 @@ def main(args):
                         fourcc = cv2.VideoWriter_fourcc(*'VP90')  # WebM codec
                         file_name = ann.replace(" ", "_") + ".webm"
                         video_path = os.path.join(video_path, file_name)
+
+                    elif args.format == 'avi':
+                        fourcc = cv2.VideoWriter_fourcc("M", "J", "P", "G")
+                        file_name = ann.replace(" ", "_") + ".avi"
+                        video_path = os.path.join(video_path, file_name)
+
+
                     else:
                         raise ValueError("Invalid video format choice. Choose 'gif', 'mp4', or 'webm'.")
                     width, height = imgs.shape[1], imgs.shape[2]
                     # import pdb ; pdb.set_trace()
                     out = cv2.VideoWriter(video_path, fourcc, args.fps, (width, height))
 
-                    for frame_idx in range (imgs.shape[0]):
+                    indices = np.linspace(0, imgs.shape[0] - 1, args.ds_frames, dtype=int)
+
+                    for frame_idx in indices:
                         frame = imgs[frame_idx]
-                        if args.format == 'mp4':
+                        if args.format == 'mp4' or args.format == 'avi':
                             # Convert from RGB to BGR if saving as MP4
                             frame = cv2.cvtColor(frame, cv2.COLOR_RGB2BGR)
                         out.write(frame)
@@ -224,7 +245,8 @@ if __name__ == '__main__':
     parser.add_argument("--split", type=str, default='train', help='training set or test set')
     parser.add_argument("--save_folder", type=str, default='sample_video', help='save_folder')
     parser.add_argument("--fps", type=int, default=30, help='fps of video')
-    parser.add_argument("--format", type=str, default="gif", choices=["gif", "mp4", "webm"], help='save video format')
+    parser.add_argument("--format", type=str, default="avi", choices=["gif", "mp4", "webm", "avi"], help='save video format')
+    parser.add_argument("--ds_frames", type=int, default=32, help='downsample frames')
     args = parser.parse_args()
 
     main(args)
