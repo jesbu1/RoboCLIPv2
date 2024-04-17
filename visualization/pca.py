@@ -5,7 +5,7 @@ import numpy as np
 import os
 from scipy.stats import percentileofscore
 from Transformation_Matrix import similarity_score
-
+import joblib
 
 def check_pairs(
     reduced_video_embeddings: np.array,
@@ -106,10 +106,6 @@ def plot_embeddings(
         text_embeddings = text_embeddings.numpy()
 
     num_samples = len(video_embeddings)
-    similarities = video_embeddings @ text_embeddings.T
-    self_similarities = np.diag(similarities)
-    percentiles = [percentileofscore(self_similarities, sim, 'rank') for sim in self_similarities]
-
 
     combined_embeddings = np.vstack((video_embeddings, text_embeddings))
     pca = PCA(n_components=2)
@@ -117,6 +113,10 @@ def plot_embeddings(
 
     reduced_video_embeddings = reduced_embeddings[: len(video_embeddings)]
     reduced_text_embeddings = reduced_embeddings[len(video_embeddings) :]
+
+    similarities = reduced_video_embeddings @ reduced_text_embeddings.T
+    self_similarities = np.diag(similarities)
+    percentiles = [percentileofscore(self_similarities, sim, 'rank') for sim in self_similarities]
 
     # pca_video = PCA(n_components=2)
     # reduced_video_embeddings = pca_video.fit_transform(video_embeddings)
@@ -181,6 +181,7 @@ def plot_embeddings(
     #     reduced_video_embeddings, reduced_text_embeddings, mappings, small_scale
     # )
     plt.close()
+    return pca
 
 
 def plot_embeddings_3d(

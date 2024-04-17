@@ -141,7 +141,8 @@ if __name__ == "__main__":
             plot_original = f"plots/taskC/original/filter/{plot_dir_name}"
         else:
             plot_original = f"plots/taskC/original/{plot_dir_name}"
-        plot_embeddings(
+        full_pca_path = f"saved_model/Full_PCA/pca_model_full_original_{sample_size}.pkl"
+        pca = plot_embeddings(
             train_video_embeddings_normalized.numpy(),
             train_text_embeddings_normalized.numpy(),
             train_mappings,
@@ -149,6 +150,8 @@ if __name__ == "__main__":
             f"pca_plot_original_{sample_size}.png",
             False,
         )
+        if not filter:
+            joblib.dump(pca, full_pca_path)
 
         for variance_threshold in variance_thresholds:
             """
@@ -211,7 +214,8 @@ if __name__ == "__main__":
                 train_mappings,
                 False,
             )
-            plot_embeddings(
+            full_pca_path = f"saved_model/Full_PCA/pca_model_full_{variance_threshold}_{sample_size}.pkl"
+            pca = plot_embeddings(
                 adjusted_video_embeddings.cpu().numpy(),
                 text_embeddings_pca,
                 train_mappings,
@@ -219,6 +223,8 @@ if __name__ == "__main__":
                 f"pca_plot_M_{variance_threshold}_{sample_size}.png",
                 False,
             )
+            if not filter:
+                joblib.dump(pca, full_pca_path)
             data_to_write_model= [
                 plot_dir_name, filter, sample_size_for_test, variance_threshold,
                 sample_size_for_training, model_name, dimensions,

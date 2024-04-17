@@ -31,41 +31,56 @@ if __name__ == "__main__":
                 ["Sample Category", "Sample Size for Test",
                  "Model Name", "Top 1 Accuracy", "Top 3 Accuracy", "Top 5 Accuracy", "Top 10 Accuracy",
                  "Mean Similarity Score", "Min Similarity Score", "Max Similarity Score", "Std Similarity Score"])
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--validation", type=bool, default=False)
-    args = parser.parse_args()
-    device = th.device("cuda" if th.cuda.is_available() else "cpu")
-    validation_video_paths = list_webm_files(
-        "../20bn-something-something-v2/validation"
-    )  #'../20bn-something-something-v2'
+    # parser = argparse.ArgumentParser()
+    # parser.add_argument("--validation", type=bool, default=False)
+    # args = parser.parse_args()
+    # device = th.device("cuda" if th.cuda.is_available() else "cpu")
+    # validation_video_paths = list_webm_files(
+    #     "../20bn-something-something-v2/validation"
+    # )  #'../20bn-something-something-v2'
+    # training_video_paths = list_webm_files(
+    #     "../20bn-something-something-v2/train"
+    # )  # '../20bn-something-something-v2'
+    # # print(video_paths)
+    # training_dataset = VideoTextDataset(
+    #     training_video_paths,
+    #     num_samples=1050,
+    #     random_samples=False,
+    #     dataset_type="train",
+    # )
+    # validation_dataset = VideoTextDataset(
+    #     validation_video_paths,
+    #     num_samples=150,
+    #     random_samples=False,
+    #     dataset_type="validation",
+    # )
     training_video_paths = list_webm_files(
-        "../20bn-something-something-v2/train"
+        "../OpenX/droid/left_1"
     )  # '../20bn-something-something-v2'
     # print(video_paths)
     training_dataset = VideoTextDataset(
         training_video_paths,
-        num_samples=1050,
         random_samples=False,
         dataset_type="train",
+        dataset= 'OpenX',
     )
-    validation_dataset = VideoTextDataset(
-        validation_video_paths,
-        num_samples=150,
-        random_samples=False,
-        dataset_type="validation",
+    data_loader = DataLoader(
+                training_dataset, batch_size=50, shuffle=False, num_workers=5
     )
-    if not args.validation:
-        data_loader = DataLoader(
-            training_dataset, batch_size=50, shuffle=False, num_workers=5
-        )
-        sample_size = 1050
-        data_type = "Train"
-    else:
-        data_loader = DataLoader(
-            validation_dataset, batch_size=50, shuffle=False, num_workers=5
-        )
-        sample_size = 150
-        data_type = "Validation"
+    data_type = "OpenX"
+    sample_size = len(training_dataset)
+    # if not args.validation:
+    #     data_loader = DataLoader(
+    #         training_dataset, batch_size=50, shuffle=False, num_workers=5
+    #     )
+    #     sample_size = 1050
+    #     data_type = "Train"
+    # else:
+    #     data_loader = DataLoader(
+    #         validation_dataset, batch_size=50, shuffle=False, num_workers=5
+    #     )
+    #     sample_size = 150
+    #     data_type = "Validation"
 
     s3d = S3D("../s3d_dict.npy", 512)
     s3d.load_state_dict(th.load("../s3d_howto100m.pth"))
@@ -112,8 +127,8 @@ if __name__ == "__main__":
     Standardnize
     """
 
-    video_embeddings_stan = standradize_embeddings(video_embeddings)
-    text_embeddings_stan = standradize_embeddings(text_embeddings)
+    video_embeddings_stan = standradize_embeddings(video_embeddings).clone()
+    text_embeddings_stan = standradize_embeddings(text_embeddings).clone()
     similarity_scores_stan = th.matmul(
         video_embeddings_stan, text_embeddings_stan.t()
     )
@@ -176,26 +191,26 @@ if __name__ == "__main__":
     """
     PCA PLOT
     """
-    combined_embeddings = np.vstack((video_embeddings, text_embeddings))
-    pca = PCA(n_components=2)
-    reduced_embeddings = pca.fit_transform(combined_embeddings)
-
-    combined_embeddings_norm = np.vstack((video_embeddings_normalized, text_embeddings_normalized))
-    pca_norm = PCA(n_components=2)
-    reduced_embeddings_norm = pca_norm.fit_transform(combined_embeddings_norm)
-
-    combined_embeddings_stan = np.vstack((video_embeddings_stan, text_embeddings_stan))
-    pca_stan = PCA(n_components=2)
-    reduced_embeddings_stan = pca_stan.fit_transform(combined_embeddings_stan)
-
-    reduced_video_embeddings = th.from_numpy(reduced_embeddings[: len(video_embeddings)]).float()
-    reduced_text_embeddings = th.from_numpy(reduced_embeddings[len(text_embeddings):]).float()
-
-    reduced_video_embeddings_norm = th.from_numpy(reduced_embeddings_norm[: len(video_embeddings_normalized)]).float()
-    reduced_text_embeddings_norm = th.from_numpy(reduced_embeddings_norm[len(text_embeddings_normalized):]).float()
-
-    reduced_video_embeddings_stan = th.from_numpy(reduced_embeddings_stan[: len(video_embeddings_stan)]).float()
-    reduced_text_embeddings_stan = th.from_numpy(reduced_embeddings_stan[len(text_embeddings_stan):]).float()
+    # combined_embeddings = np.vstack((video_embeddings, text_embeddings))
+    # pca = PCA(n_components=2)
+    # reduced_embeddings = pca.fit_transform(combined_embeddings)
+    #
+    # combined_embeddings_norm = np.vstack((video_embeddings_normalized, text_embeddings_normalized))
+    # pca_norm = PCA(n_components=2)
+    # reduced_embeddings_norm = pca_norm.fit_transform(combined_embeddings_norm)
+    #
+    # combined_embeddings_stan = np.vstack((video_embeddings_stan, text_embeddings_stan))
+    # pca_stan = PCA(n_components=2)
+    # reduced_embeddings_stan = pca_stan.fit_transform(combined_embeddings_stan)
+    #
+    # reduced_video_embeddings = th.from_numpy(reduced_embeddings[: len(video_embeddings)]).float()
+    # reduced_text_embeddings = th.from_numpy(reduced_embeddings[len(text_embeddings):]).float()
+    #
+    # reduced_video_embeddings_norm = th.from_numpy(reduced_embeddings_norm[: len(video_embeddings_normalized)]).float()
+    # reduced_text_embeddings_norm = th.from_numpy(reduced_embeddings_norm[len(text_embeddings_normalized):]).float()
+    #
+    # reduced_video_embeddings_stan = th.from_numpy(reduced_embeddings_stan[: len(video_embeddings_stan)]).float()
+    # reduced_text_embeddings_stan = th.from_numpy(reduced_embeddings_stan[len(text_embeddings_stan):]).float()
 
     # similarity_scores_PCA = th.matmul(
     #     reduced_text_embeddings, reduced_video_embeddings.t()
@@ -209,8 +224,8 @@ if __name__ == "__main__":
         f"TOP K accuracies of normalized embeddings with 2D PCA"
     )
     #check_pairs(reduced_video_embeddings_norm.numpy(), reduced_text_embeddings_norm.numpy(), mappings, False)
-    plot_embeddings(reduced_video_embeddings_norm,
-                    reduced_text_embeddings_norm, mappings, 'plots/taskA/norm', f'{data_type}_norm', False)
+    plot_embeddings(video_embeddings_normalized,
+                    text_embeddings_normalized, mappings, 'plots/taskA/OpenX/norm', f'{data_type}_norm', False)
     print(
         "TOP K accuracies of UNnormalized embeddings with 2D PCA"
     )
@@ -220,8 +235,8 @@ if __name__ == "__main__":
     #     mappings,
     #     False,
     # )
-    plot_embeddings(reduced_video_embeddings,
-                    reduced_text_embeddings, mappings, 'plots/taskA/unnorm', f'{data_type}_Unnorm', False)
-    plot_embeddings(reduced_video_embeddings_stan,
-                    reduced_text_embeddings_stan, mappings, 'plots/taskA/stan', f'{data_type}_stan', False)
+    plot_embeddings(video_embeddings,
+                    text_embeddings, mappings, 'plots/taskA//OpenX/unnorm', f'{data_type}_Unnorm', False)
+    plot_embeddings(video_embeddings_stan,
+                    text_embeddings_stan, mappings, 'plots/taskA//OpenX/stan', f'{data_type}_stan', False)
 
