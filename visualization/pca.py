@@ -181,6 +181,18 @@ def plot_embeddings(
     #     reduced_video_embeddings, reduced_text_embeddings, mappings, small_scale
     # )
     plt.close()
+    plt.figure(figsize=(10, 6))
+    norms1 = np.linalg.norm(video_embeddings, axis=1)
+    norms2 = np.linalg.norm(text_embeddings, axis=1)
+    if np.any((norms1 < 0) | (norms2 < 0)):
+        print("There are negative values in the norms")
+    else:
+        print("All norms are non-negative.")
+    plt.boxplot([norms1, norms2], labels = ['Video', 'Text'])
+    plt.title('Distribution of Each Feature in Embeddings')
+    plt.ylabel('Norm Value')
+    save_path = os.path.join(directory_name, 'BoxPlot.png')
+    plt.savefig(save_path)
     return pca
 
 

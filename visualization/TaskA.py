@@ -10,7 +10,7 @@ import cv2
 from pca import plot_embeddings_3d, plot_embeddings, check_pairs
 from mlp import mlp_eval, normalize_embeddings, standradize_embeddings
 from torch.utils.data import Dataset, DataLoader
-from Dataload import VideoTextDataset, Embedding, list_webm_files
+from Dataload import VideoTextDataset, Embedding, list_webm_files, OpenXDataset
 import joblib
 from sklearn.decomposition import PCA
 import argparse
@@ -54,21 +54,14 @@ if __name__ == "__main__":
     #     random_samples=False,
     #     dataset_type="validation",
     # )
-    training_video_paths = list_webm_files(
-        "../OpenX/droid/left_1"
-    )  # '../20bn-something-something-v2'
-    # print(video_paths)
-    training_dataset = VideoTextDataset(
-        training_video_paths,
-        random_samples=False,
-        dataset_type="train",
-        dataset= 'OpenX',
+    video_text_dataset = OpenXDataset(
+        '/scr/yusenluo/RoboCLIP/OpenX/droid/left_1', random_samples=False
     )
     data_loader = DataLoader(
-                training_dataset, batch_size=50, shuffle=False, num_workers=5
+                video_text_dataset, batch_size=50, shuffle=False, num_workers=5
     )
     data_type = "OpenX"
-    sample_size = len(training_dataset)
+    sample_size = len(video_text_dataset)
     # if not args.validation:
     #     data_loader = DataLoader(
     #         training_dataset, batch_size=50, shuffle=False, num_workers=5
