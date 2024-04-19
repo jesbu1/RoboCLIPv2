@@ -11,15 +11,16 @@ from pca import plot_embeddings_3d, plot_embeddings, check_pairs
 from mlp import mlp_eval, normalize_embeddings
 from Transformation_Matrix import  eval_M2, eval_M
 from torch.utils.data import Dataset, DataLoader
-from Dataload import VideoTextDataset, Embedding, list_webm_files, filter_top_embeddings
+from Dataload import VideoTextDataset, Embedding, list_webm_files, filter_top_embeddings, OpenXDataset, SthDataset
 import joblib
 import argparse
+from sklearn.model_selection import train_test_split
 
 START_SAMPLE_SIZE = 50
 VAL_SAMPLE_SIZE = 150
 
 if __name__ == "__main__":
-    csv_file_path = "SubspaceAlignment_filter_Result.csv"
+    csv_file_path = "SubspaceAlignment_Result.csv"
     if not os.path.exists(csv_file_path) or os.stat(csv_file_path).st_size == 0:
         with open(csv_file_path, 'a', newline='') as file:
             writer = csv.writer(file)
@@ -46,12 +47,11 @@ if __name__ == "__main__":
     training_video_paths = list_webm_files(
         "../20bn-something-something-v2/train"
     )  # '../20bn-something-something-v2'
-    # print(video_paths)
 
     s3d = S3D("../s3d_dict.npy", 512)
     s3d.load_state_dict(th.load("../s3d_howto100m.pth"))
     s3d.eval()
-    plot_dir_name = 'Train'
+    plot_dir_name = 'Droid_Validate_XtoX'
     if args.validation:
         plot_dir_name = 'Validate'
         sample_size_for_test = VAL_SAMPLE_SIZE
@@ -72,22 +72,34 @@ if __name__ == "__main__":
         ) = Embedding(s3d, validate_data_loader)
 
     variance_thresholds = [0.9, 0.95]
-    sample_sizes = np.array([1, 2, 4, 8, 16, 21]) * START_SAMPLE_SIZE
+    sample_sizes = np.array([1]) * START_SAMPLE_SIZE
     # check_points = [1000, 2000]
     for sample_size in sample_sizes:
-        sample_size_for_training = sample_size
+        sample_size_for_training = 299 #sample_size
+        sample_size = 75
         if sample_size == 1050:
             variance_thresholds.append(512)
         if not args.validation:
-            sample_size_for_test = sample_size
-            training_dataset = VideoTextDataset(
-                training_video_paths,
-                num_samples=sample_size,
-                random_samples=False,
-                dataset_type="train",
+            # sample_size_for_test = sample_size
+            # training_dataset = VideoTextDataset(
+            #     training_video_paths,
+            #     num_samples=sample_size,
+            #     random_samples=False,
+            #     dataset_type="train",
+            # )
+            # train_data_loader = DataLoader(
+            #     training_dataset, batch_size=50, shuffle=True, num_workers=10
+            # )
+            video_text_dataset = OpenXDataset(
+                '/scr/yusenluo/RoboCLIP/OpenX/droid/left_1', random_samples=False
             )
+            # video_text_dataset = SthDataset(
+            #     "../20bn-something-something-v2/train", random_samples=False
+            # )
+            train_dataset, val_dataset = train_test_split(video_text_dataset, test_size=0.2, random_state=42)
+            sample_size_for_test = len(val_dataset)
             train_data_loader = DataLoader(
-                training_dataset, batch_size=50, shuffle=True, num_workers=10
+                val_dataset, batch_size=50, shuffle=False, num_workers=5
             )
             (
                 train_video_embeddings,
@@ -138,20 +150,20 @@ if __name__ == "__main__":
             writer = csv.writer(file)
             writer.writerow(data_to_write_original)
         if filter:
-            plot_original = f"plots/taskC/original/filter/{plot_dir_name}"
+            plot_original = f"plots/taskC/OpenX/droid/alignXtoX/original/filter/{plot_dir_name}"
         else:
-            plot_original = f"plots/taskC/original/{plot_dir_name}"
-        full_pca_path = f"saved_model/Full_PCA/pca_model_full_original_{sample_size}.pkl"
+            plot_original = f"plots/taskC/OpenX/droid/alignXtoX/original/{plot_dir_name}"
+        #full_pca_path = f"saved_model/Full_PCA/pca_model_full_original_{sample_size}.pkl"
         pca = plot_embeddings(
             train_video_embeddings_normalized.numpy(),
             train_text_embeddings_normalized.numpy(),
             train_mappings,
             plot_original,
-            f"pca_plot_original_{sample_size}.png",
+            f"pca_plot_original_{sample_size_for_training}.png",
             False,
         )
-        if not filter:
-            joblib.dump(pca, full_pca_path)
+        # if not filter:
+        #     joblib.dump(pca, full_pca_path)
 
         for variance_threshold in variance_thresholds:
             """
@@ -159,17 +171,17 @@ if __name__ == "__main__":
             """
             if filter:
                 pca_video_model_path = (
-                    f"saved_model/M/filter/pca_model_video_{variance_threshold}_{sample_size}.pkl"
+                    f"saved_model/M/OpenX/droid/alignXtoX/filter/pca_model_video_{variance_threshold}_{sample_size_for_training}.pkl"
                 )
                 pca_text_model_path = (
-                    f"saved_model/M/filter/pca_model_text_{variance_threshold}_{sample_size}.pkl"
+                    f"saved_model/M/OpenX/droid/alignXtoX/filter/pca_model_text_{variance_threshold}_{sample_size_for_training}.pkl"
                 )
             else:
                 pca_video_model_path = (
-                    f"saved_model/M/pca_model_video_{variance_threshold}_{sample_size}.pkl"
+                    f"saved_model/M/OpenX/droid/alignXtoX/pca_model_video_{variance_threshold}_{sample_size_for_training}.pkl"
                 )
                 pca_text_model_path = (
-                    f"saved_model/M/pca_model_text_{variance_threshold}_{sample_size}.pkl"
+                    f"saved_model/M/OpenX/droid/alignXtoX/pca_model_text_{variance_threshold}_{sample_size_for_training}.pkl"
                 )
 
             video_pca = joblib.load(pca_video_model_path)
@@ -196,17 +208,17 @@ if __name__ == "__main__":
                 th.from_numpy(text_embeddings_pca).float().to(device)
             )
             if filter:
-                M_model_path = f"saved_model/M/filter/M_model_{variance_threshold}_{sample_size}.pth"
-                plot_path = f"plots/taskC/M/filter/{plot_dir_name}"
+                M_model_path = f"saved_model/M/OpenX/droid/alignXtoX/filter/M_model_{variance_threshold}_{sample_size_for_training}.pth"
+                plot_path = f"plots/taskC/M/OpenX/droid/alignXtoX/filter/{plot_dir_name}"
             else:
-                M_model_path = f"saved_model/M/M_model_{variance_threshold}_{sample_size}.pth"
-                plot_path = f"plots/taskC/M/{plot_dir_name}"
+                M_model_path = f"saved_model/M/OpenX/droid/alignXtoX/M_model_{variance_threshold}_{sample_size_for_training}.pth"
+                plot_path = f"plots/taskC/M/OpenX/droid/alignXtoX/{plot_dir_name}"
             adjusted_video_embeddings = eval_M(
                 video_embeddings_tensor, M_model_path
             )
             dimensions = adjusted_video_embeddings.shape[1]
             print(
-                f"Result after MLP_{variance_threshold}_{sample_size} in {dimensions}D space"
+                f"Result after MLP_{variance_threshold}_{sample_size_for_training} in {dimensions}D space"
             )
             accuracies_Model = check_pairs(
                 adjusted_video_embeddings.cpu().numpy(),
@@ -214,17 +226,17 @@ if __name__ == "__main__":
                 train_mappings,
                 False,
             )
-            full_pca_path = f"saved_model/Full_PCA/pca_model_full_{variance_threshold}_{sample_size}.pkl"
+            #full_pca_path = f"saved_model/Full_PCA/pca_model_full_{variance_threshold}_{sample_size}.pkl"
             pca = plot_embeddings(
                 adjusted_video_embeddings.cpu().numpy(),
                 text_embeddings_pca,
                 train_mappings,
                 plot_path,
-                f"pca_plot_M_{variance_threshold}_{sample_size}.png",
+                f"pca_plot_M_{variance_threshold}_{sample_size_for_training}.png",
                 False,
             )
-            if not filter:
-                joblib.dump(pca, full_pca_path)
+            # if not filter:
+            #     joblib.dump(pca, full_pca_path)
             data_to_write_model= [
                 plot_dir_name, filter, sample_size_for_test, variance_threshold,
                 sample_size_for_training, model_name, dimensions,

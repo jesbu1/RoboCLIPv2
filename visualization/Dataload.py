@@ -1,3 +1,5 @@
+import PIL
+import imageio
 from torch.utils.data import Dataset, DataLoader
 import torch as th
 import json
@@ -10,11 +12,12 @@ import pandas as pd
 
 
 class VideoTextDataset(Dataset):
-    def __init__(self, video_paths, transform=None, num_samples=None, random_samples=False, dataset_type = 'train'):
+    def __init__(self, video_paths, transform=None, num_samples=None, random_samples=False, dataset_type = 'train', dataset = 'Sth'):
         self.video_paths = video_paths
         self.transform = transform
         self.random_samples = random_samples
         self.dataset_type = dataset_type
+        self.dataset = dataset
         if num_samples is not None:
             if random_samples:
                 self.indices = random.sample(range(len(self.video_paths)), num_samples)
@@ -30,16 +33,97 @@ class VideoTextDataset(Dataset):
         video_idx = self.indices[idx]
         video_path = self.video_paths[video_idx]
         video_id = get_filename_without_extension(video_path)
-        text_label = find_label(video_id, self.dataset_type)
-
-        frames = read_webm_frames(video_path)
+        if self.dataset == 'OpenX':
+            text_label = video_id.replace('_',' ')
+            print(text_label)
+            frames = readGif(video_path)
+        else:
+            text_label = find_label(video_id, self.dataset_type)
+            frames = read_webm_frames(video_path)
         frames = preprocess_human_demo(frames)
         frames = adjust_frames(frames)
+        print(frames.shape)
         if self.transform:
             frames = self.transform(frames)
 
         sample = {'video': frames, 'text': text_label, 'video_id': video_id}
 
+        return sample
+
+
+class SthDataset(Dataset):
+    def __init__(self, video_folder_path, transform=None, num_samples=None, random_samples=False,
+                 csv_path='/scr/yusenluo/RoboCLIP/visualization/video_text_data.csv'):
+        self.transform = transform
+        self.random_samples = random_samples
+        self.csv_path = csv_path
+        self.df = pd.read_csv(csv_path)
+        self.video_folder_path = video_folder_path
+
+        if num_samples is not None:
+            if random_samples:
+                self.df = self.df.sample(n=num_samples)
+            else:
+                self.df = self.df.head(num_samples)
+        self.df = self.df[self.df['OpenX'].notnull()]
+
+    def __len__(self):
+        return len(self.df)
+
+    def __getitem__(self, idx):
+        row = self.df.iloc[idx]
+        video_id = str(int(row['video_id']))
+        text_label = row['OpenX']
+
+        video_path = os.path.join(self.video_folder_path, f"{video_id}.webm")
+        frames = read_webm_frames(video_path)
+
+        frames = preprocess_human_demo(frames)
+        frames = adjust_frames(frames)
+
+        if self.transform:
+            frames = self.transform(frames)
+
+        sample = {'video': frames, 'text': text_label, 'video_id': video_id}
+        #print(video_id, text_label)
+        return sample
+
+
+class OpenXDataset(Dataset):
+    def __init__(self, video_folder_path, transform=None, num_samples=None, random_samples=False,
+                 csv_path='/scr/yusenluo/RoboCLIP/visualization/video_text_data.csv'):
+        self.transform = transform
+        self.random_samples = random_samples
+        self.csv_path = csv_path
+        self.df = pd.read_csv(csv_path)
+        self.video_folder_path = video_folder_path
+
+        if num_samples is not None:
+            if random_samples:
+                self.df = self.df.sample(n=num_samples)
+            else:
+                self.df = self.df.head(num_samples)
+        self.df = self.df[self.df['OpenX'].notnull()]
+
+    def __len__(self):
+        return len(self.df)
+
+    def __getitem__(self, idx):
+        row = self.df.iloc[idx]
+        video_id = row['OpenX'].replace(' ', '_')
+        #text_label = row['text_label']
+        text_label = row['OpenX']
+        video_path = os.path.join(self.video_folder_path, f"{video_id}.gif")
+        frames = readGif(video_path)
+        #print(frames.shape)
+        frames = preprocess_human_demo(frames)
+        frames = adjust_frames(frames)
+
+        if self.transform:
+            frames = self.transform(frames)
+
+        sample = {'video': frames, 'text': text_label, 'video_id': video_id}
+        #print(video_id, text_label)
         return sample
 
 
@@ -124,6 +208,8 @@ def preprocess_human_demo(frames):
     frames = adjust_size(frames)
     frames = frames[None, :,:,:,:]
     frames = frames.transpose(0, 4, 1, 2, 3)
+    if frames.shape[1] > 3:
+        frames = frames[:, :3]
     frames = frames / 255
     return frames
 
@@ -132,6 +218,7 @@ def adjust_frames(frames, target_frame_count = 32):
     Ensures same numbers of frames(32).
     """
     _, _, frame_count, _, _ = frames.shape
+    #print(f"frames number{frame_count}")
     frames = th.from_numpy(frames)
     if frame_count < target_frame_count:
         blank_frames = th.zeros(
@@ -164,15 +251,16 @@ def adjust_size(frames):
     target_width = 224
 
     height, width, _ = frames[0].shape
-    start_x = width // 2 - target_width // 2
-    start_y = height // 2 - target_height // 2
 
-    cropped_frames = [
-        frame[start_y:start_y + target_height, start_x:start_x + target_width]
-        for frame in frames
-    ]
+    if height < target_height or width < target_width:
+        adjusted_frames = [cv2.resize(frame, (target_width, target_height), interpolation=cv2.INTER_LINEAR) for frame in
+                           frames]
+    else:
+        start_x = width // 2 - target_width // 2
+        start_y = height // 2 - target_height // 2
+        adjusted_frames = [frame[start_y:start_y + target_height, start_x:start_x + target_width] for frame in frames]
 
-    return np.array(cropped_frames)
+    return np.array(adjusted_frames)
 
 def read_webm_frames(video_path):
     """
@@ -208,7 +296,7 @@ def list_webm_files(folder_path):
     Returns:
     - list: A list of full paths to the .webm files within the specified folder.
     """
-    return [os.path.join(folder_path, f) for f in os.listdir(folder_path) if f.endswith('.webm')]
+    return sorted([os.path.join(folder_path, f) for f in os.listdir(folder_path) if f.endswith('.gif')])
 
 def Embedding(model, data_loader):
     """
@@ -266,6 +354,27 @@ def filter_top_embeddings(video_embeddings, text_embeddings, top_portion):
 
     top_video_embeddings = video_embeddings[top_indices]
     top_text_embeddings = text_embeddings[top_indices]
-    #print(top_video_embeddings.shape)
+    print(top_video_embeddings.shape)
 
     return top_video_embeddings, top_text_embeddings
+
+
+def readGif(file_path):
+    reader = imageio.get_reader(file_path)
+    frames = []
+
+    for frame in reader:
+        frames.append(np.array(frame))
+    return np.stack(frames)
+
+def readAvi(video_path):
+    cap = cv2.VideoCapture(video_path)
+
+    frames = []
+    while cap.isOpened():
+        ret, frame = cap.read()
+        if not ret:
+            break
+        frames.append(frame)
+    cap.release()
+    return np.array(frames)
