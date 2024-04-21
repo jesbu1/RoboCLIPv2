@@ -132,7 +132,8 @@ def main(args):
                     else:
                         raise ValueError("Invalid video format choice. Choose 'gif', 'mp4', 'avi', or 'webm'.")
                     width, height = left_1.shape[1], left_1.shape[2]
-                    out = cv2.VideoWriter(save_1, fourcc, args.fps, (width, height))
+                    # out = cv2.VideoWriter(save_1, fourcc, args.fps, (width, height), True)
+                    out = cv2.VideoWriter(save_1, fourcc, args.fps, (height, width), True)
 
                     # indices = np.linspace(0, left_1.shape[0] - 1, args.ds_frames, dtype=int)
 
@@ -142,6 +143,7 @@ def main(args):
                             # Convert from RGB to BGR if saving as MP4
                             frame = cv2.cvtColor(frame, cv2.COLOR_RGB2BGR)
                         out.write(frame)
+
                     # Release the video writer
                     out.release()
 
@@ -191,11 +193,10 @@ def main(args):
                     else:
                         raise ValueError("Invalid video format choice. Choose 'gif', 'mp4', or 'webm'.")
                     width, height = imgs.shape[1], imgs.shape[2]
-                    # import pdb ; pdb.set_trace()
-                    out = cv2.VideoWriter(video_path, fourcc, args.fps, (width, height))
+
+                    out = cv2.VideoWriter(video_path, fourcc, args.fps, (height, width), True)
 
                     # indices = np.linspace(0, imgs.shape[0] - 1, args.ds_frames, dtype=int)
-
                     for frame_idx in range(imgs.shape[0]):
                         frame = imgs[frame_idx]
                         if args.format == 'mp4' or args.format == 'avi':
