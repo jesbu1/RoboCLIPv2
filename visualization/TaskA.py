@@ -31,9 +31,10 @@ if __name__ == "__main__":
                 ["Sample Category", "Sample Size for Test",
                  "Model Name", "Top 1 Accuracy", "Top 3 Accuracy", "Top 5 Accuracy", "Top 10 Accuracy",
                  "Mean Similarity Score", "Min Similarity Score", "Max Similarity Score", "Std Similarity Score"])
-    # parser = argparse.ArgumentParser()
-    # parser.add_argument("--validation", type=bool, default=False)
-    # args = parser.parse_args()
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--validation", type=bool, default=False)
+    parser.add_argument("--dataset", type=str, default="droid")
+    args = parser.parse_args()
     # device = th.device("cuda" if th.cuda.is_available() else "cpu")
     # validation_video_paths = list_webm_files(
     #     "../20bn-something-something-v2/validation"
@@ -55,12 +56,12 @@ if __name__ == "__main__":
     #     dataset_type="validation",
     # )
     video_text_dataset = OpenXDataset(
-        '/scr/yusenluo/RoboCLIP/OpenX/droid/left_1', random_samples=False
+        f'/scr/yusenluo/RoboCLIP/OpenX/{args.dataset}', random_samples=False, dataset_name=args.dataset
     )
     data_loader = DataLoader(
                 video_text_dataset, batch_size=50, shuffle=False, num_workers=5
     )
-    data_type = "OpenX"
+    data_type = args.dataset
     sample_size = len(video_text_dataset)
     # if not args.validation:
     #     data_loader = DataLoader(
@@ -134,7 +135,7 @@ if __name__ == "__main__":
     print(
         f"TOP K accuracies of UNnormalized embeddings without PCA"
     )
-    accuracies_unnorm = check_pairs(video_embeddings.numpy(), text_embeddings.numpy(), mappings, False)
+    accuracies_unnorm, _ = check_pairs(video_embeddings.numpy(), text_embeddings.numpy(), mappings, False)
     data_to_write_unnorm = [
         data_type, sample_size, 'Unnormalized',
         accuracies_unnorm.get("Top 1", ""), accuracies_unnorm.get("Top 3", ""),
@@ -147,7 +148,7 @@ if __name__ == "__main__":
     print(
         "TOP K accuracies of normalized embeddings without PCA"
     )
-    accuracies_norm = check_pairs(
+    accuracies_norm, _ = check_pairs(
         video_embeddings_normalized.numpy(),
         text_embeddings_normalized.numpy(),
         mappings,
@@ -166,7 +167,7 @@ if __name__ == "__main__":
     print(
         "TOP K accuracies of standardized embeddings without PCA"
     )
-    accuracies_stan = check_pairs(
+    accuracies_stan, _ = check_pairs(
         video_embeddings_stan.numpy(),
         text_embeddings_stan.numpy(),
         mappings,
@@ -218,7 +219,7 @@ if __name__ == "__main__":
     )
     #check_pairs(reduced_video_embeddings_norm.numpy(), reduced_text_embeddings_norm.numpy(), mappings, False)
     plot_embeddings(video_embeddings_normalized,
-                    text_embeddings_normalized, mappings, 'plots/taskA/OpenX/norm', f'{data_type}_norm', False)
+                    text_embeddings_normalized, mappings, f'plots/taskA/OpenX/{args.dataset}/norm', f'{data_type}_norm', False)
     print(
         "TOP K accuracies of UNnormalized embeddings with 2D PCA"
     )
@@ -229,7 +230,7 @@ if __name__ == "__main__":
     #     False,
     # )
     plot_embeddings(video_embeddings,
-                    text_embeddings, mappings, 'plots/taskA//OpenX/unnorm', f'{data_type}_Unnorm', False)
+                    text_embeddings, mappings, f'plots/taskA//OpenX/{args.dataset}/unnorm', f'{data_type}_Unnorm', False)
     plot_embeddings(video_embeddings_stan,
-                    text_embeddings_stan, mappings, 'plots/taskA//OpenX/stan', f'{data_type}_stan', False)
+                    text_embeddings_stan, mappings, f'plots/taskA//OpenX/{args.dataset}/stan', f'{data_type}_stan', False)
 

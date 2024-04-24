@@ -6,6 +6,7 @@ import os
 from scipy.stats import percentileofscore
 from Transformation_Matrix import similarity_score
 import joblib
+import seaborn as sns
 
 def check_pairs(
     reduced_video_embeddings: np.array,
@@ -24,7 +25,8 @@ def check_pairs(
         - reduced_text_embeddings[np.newaxis, :, :],
         axis=2,
     )
-    similarities = reduced_video_embeddings @ reduced_text_embeddings.T
+    #similarities = reduced_video_embeddings @ reduced_text_embeddings.T
+    similarities = reduced_text_embeddings @ reduced_video_embeddings.T
     #similarities = (similarity_score(reduced_video_embeddings, reduced_text_embeddings)).numpy()
     sorted_text_indices = np.argsort(-similarities, axis=1)
 
@@ -32,8 +34,10 @@ def check_pairs(
     index_to_video_id = mappings["index_to_video_id"]
     index_to_text_label = mappings["index_to_text_label"]
     accuracies = {}
+    mrr = {}
     if small_scale:
         ground_truth_indices = np.arange(len(reduced_video_embeddings))
+        mrr_k = mrr_score(similarities, ground_truth_indices, k_list=[1, 3, 5])
         for n in [1, 3, 5]:
             correct_pairs = np.array(
                 [
@@ -64,6 +68,7 @@ def check_pairs(
             print(f"Sorted Matching text labels: {sorted_text_labels}")
     else:
         ground_truth_indices = np.arange(len(reduced_video_embeddings))
+        mrr_k = mrr_score(similarities, ground_truth_indices, k_list = [1,3,5,10])
         cumulative_accuracy = np.zeros(len(reduced_video_embeddings))
         top_n_values = [1, 3, 5, 10]
         for n in top_n_values:
@@ -73,7 +78,7 @@ def check_pairs(
             accuracy_n = np.mean(cumulative_accuracy)
             accuracies[f"Top {n}"] = round(accuracy_n * 100, 4)
             print(f"Accuracy within top {n}: {accuracy_n * 100:.2f}%")
-    return accuracies
+    return accuracies, mrr_k
 
 
 def plot_embeddings(
@@ -114,7 +119,7 @@ def plot_embeddings(
     reduced_video_embeddings = reduced_embeddings[: len(video_embeddings)]
     reduced_text_embeddings = reduced_embeddings[len(video_embeddings) :]
 
-    similarities = reduced_video_embeddings @ reduced_text_embeddings.T
+    similarities = video_embeddings @ text_embeddings.T
     self_similarities = np.diag(similarities)
     percentiles = [percentileofscore(self_similarities, sim, 'rank') for sim in self_similarities]
 
@@ -181,9 +186,11 @@ def plot_embeddings(
     #     reduced_video_embeddings, reduced_text_embeddings, mappings, small_scale
     # )
     plt.close()
-    plt.figure(figsize=(10, 6))
+    plt.figure(figsize=(12, 8))
     norms1 = np.linalg.norm(video_embeddings, axis=1)
     norms2 = np.linalg.norm(text_embeddings, axis=1)
+    print(norms1)
+    print(norms2)
     if np.any((norms1 < 0) | (norms2 < 0)):
         print("There are negative values in the norms")
     else:
@@ -297,4 +304,57 @@ def plot_embeddings_3d(
     # check_pairs(
     #     reduced_video_embeddings, reduced_text_embeddings, mappings, small_scale
     # )
+    plt.close()
+
+
+def mrr_score(similarities, ground_truth_indices, k_list = [1, 3, 5, 10]):
+    """
+    Calculate the Mean Reciprocal Rank (MRR) at multiple values of k for a set of embeddings.
+
+    Parameters:
+    - similarities (np.array): A 2D numpy array where each row represents the similarity scores
+      between a video embedding and all text embeddings.
+    - ground_truth_indices (np.array): An array where each element is the index of the ground truth
+      text embedding for the corresponding video embedding.
+    - k_list (list): A list of integers specifying the k values to calculate MRR for.
+
+    Returns:
+    - dict: A dictionary where keys are k values and values are the MRR at each k.
+    """
+    sorted_indices = np.argsort(-similarities, axis=1)
+    mrr_scores = {}
+
+    for k in k_list:
+        reciprocal_ranks = []
+
+        for i, sorted_index_list in enumerate(sorted_indices):
+            ranks = np.where(sorted_index_list[:k] == ground_truth_indices[i])[0]
+            if ranks.size > 0:
+                # If found within the top k, append the reciprocal rank
+                reciprocal_ranks.append(1 / (ranks[0] + 1))
+            else:
+                # If not found within the top k, append 0
+                reciprocal_ranks.append(0)
+
+        # Calculate mean of the reciprocal ranks
+        mrr_scores[f"Top {k}"] = np.mean(reciprocal_ranks) #求平均
+
+    return mrr_scores
+
+
+def plot_distribution_histograms(*embeddings_pairs, labels, dataset_name):
+    plt.figure(figsize=(12, 8))
+    for (video_embeddings, text_embeddings), label in zip(embeddings_pairs, labels):
+        video_embeddings = video_embeddings.float()
+        text_embeddings = text_embeddings.float()
+        similarity = video_embeddings @ text_embeddings.T
+        true_match_similarity = np.diag(similarity)
+        sns.histplot(true_match_similarity, bins=20, kde=True, label=label, element='step', stat='density')
+    plt.title('Distribution of Similarity to True Match Across Different Models')
+    plt.xlabel('Similarity to True Match')
+    plt.ylabel('Density')
+    plt.legend(title='Embedding Types')
+    plt.grid(True)
+    save_path = f"/scr/yusenluo/RoboCLIP/visualization/plots/taskC/similarity_distribution/{dataset_name}.png"
+    plt.savefig(save_path)
     plt.close()

@@ -1,6 +1,7 @@
 import torch
 import torch.nn as nn
-from Dataload import VideoTextDataset, list_webm_files, Embedding, filter_top_embeddings
+from Dataload import VideoTextDataset, list_webm_files, Embedding, filter_top_embeddings, SthDataset, OpenXDataset
+from sklearn.model_selection import train_test_split
 import torch as th
 from torch.utils.data import Dataset, DataLoader
 from s3dg import S3D
@@ -22,11 +23,11 @@ def reduce_dimension(
     reduced_embeddings = pca.fit_transform(embeddings)
     if filter:
         model_filename = (
-            f"saved_model/M/filter/pca_model_{embed_type}_{variance_threshold}_{train_size}.pkl"
+            f"saved_model/M/OpenX/droid/filter/pca_model_{embed_type}_{variance_threshold}_{train_size}.pkl"
         )
     else:
         model_filename = (
-            f"saved_model/M/pca_model_{embed_type}_{variance_threshold}_{train_size}.pkl"
+            f"saved_model/M/OpenX/test/pca_model_{embed_type}_{variance_threshold}_{train_size}.pkl"
         )
     joblib.dump(pca, model_filename)
     print(f"PCA model for {embed_type} saved to {model_filename}")
@@ -52,17 +53,17 @@ def reduce_dimension_trained(
 
 
 def compute_M(video_embeddings, text_embeddings, variance_threshold, train_size, filter):
-    video_embeddings = normalize_embeddings(video_embeddings)
-    text_embeddings = normalize_embeddings(text_embeddings)
-    X_T, reduced_text = reduce_dimension_trained(text_embeddings, variance_threshold, train_size, 'text', filter=filter) # 35, 512
-    X_S, reduced_video = reduce_dimension_trained(video_embeddings, variance_threshold,
-                                          train_size, 'text', filter=filter)# 35，512
+    # video_embeddings = normalize_embeddings(video_embeddings)
+    # text_embeddings = normalize_embeddings(text_embeddings)
+    X_T, reduced_text = reduce_dimension(text_embeddings, variance_threshold, train_size, 'text', filter=filter) # 35, 512
+    X_S, reduced_video = reduce_dimension(video_embeddings, variance_threshold,
+                                          train_size, 'video', dimension= X_T.shape[0], filter=filter)# 35，512
     M = np.dot(X_S, X_T.T) # 35 35
     M_tensor = torch.from_numpy(M).float()
     if filter:
-        save_dir = "/scr/yusenluo/RoboCLIP/visualization/saved_model/M/filter/all_text_pca"
+        save_dir = "/scr/yusenluo/RoboCLIP/visualization/saved_model/M/OpenX/droid/filter"
     else:
-        save_dir = "/scr/yusenluo/RoboCLIP/visualization/saved_model/M/all_text_pca"
+        save_dir = "/scr/yusenluo/RoboCLIP/visualization/saved_model/M/OpenX/test"
     M_model_path = f"{save_dir}/M_model_{variance_threshold}_{train_size}.pth"
     torch.save(M_tensor, M_model_path)
     print(f'M model saved to {M_model_path}')
@@ -140,8 +141,8 @@ if __name__ == "__main__":
     filter = False
     if args.filter:
         filter = True
-    variance_thresholds = [0.9, 0.95]
-    sample_sizes = [1, 2, 4, 8, 16, 21]
+    variance_thresholds = [0.9, 0.95, 512]
+    sample_sizes = [1] #[1, 2, 4, 8, 16, 21]
     if torch.cuda.is_available():
         print("CUDA is available! Training on GPU.")
     else:
@@ -160,15 +161,30 @@ if __name__ == "__main__":
         current_sample_size = 50 * size_multiplier
         if current_sample_size == 1050:
             variance_thresholds.append(512)
-        video_text_dataset = VideoTextDataset(
-            video_paths, num_samples=current_sample_size, random_samples=False
+        # video_text_dataset = VideoTextDataset(
+        #     video_paths, num_samples=current_sample_size, random_samples=False
+        # )
+        # data_loader = DataLoader(
+        #     video_text_dataset, batch_size=50, shuffle=False, num_workers=10
+        # )
+        # video_text_dataset = SthDataset(
+        #         "../20bn-something-something-v2/train", random_samples=False
+        #     )
+        video_text_dataset = OpenXDataset(
+            '/scr/yusenluo/RoboCLIP/OpenX/droid', random_samples=False, dataset_name='droid'
         )
+        train_dataset, val_dataset = train_test_split(video_text_dataset, test_size=0.2, random_state=42)
+        current_sample_size = len(train_dataset)
         data_loader = DataLoader(
-            video_text_dataset, batch_size=50, shuffle=True, num_workers=10
+            train_dataset, batch_size=50, shuffle=False, num_workers=5
         )
         video_embeddings, text_embeddings, embeddings_dataset, mappings = Embedding(
             s3d, data_loader
         )
+        '''
+        test
+        '''
+        video_embeddings = 2 * text_embeddings - 0.5
         if filter:
             video_embeddings, text_embeddings = filter_top_embeddings(video_embeddings, text_embeddings, 0.5)
 

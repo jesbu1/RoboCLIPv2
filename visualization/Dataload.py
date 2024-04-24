@@ -91,28 +91,31 @@ class SthDataset(Dataset):
 
 class OpenXDataset(Dataset):
     def __init__(self, video_folder_path, transform=None, num_samples=None, random_samples=False,
-                 csv_path='/scr/yusenluo/RoboCLIP/visualization/video_text_data.csv'):
+                 csv_path='/scr/yusenluo/RoboCLIP/visualization/video_text_data.csv', dataset_name='droid'):
         self.transform = transform
         self.random_samples = random_samples
         self.csv_path = csv_path
         self.df = pd.read_csv(csv_path)
         self.video_folder_path = video_folder_path
+        self.dataset_name = dataset_name
 
         if num_samples is not None:
             if random_samples:
                 self.df = self.df.sample(n=num_samples)
             else:
                 self.df = self.df.head(num_samples)
-        self.df = self.df[self.df['OpenX'].notnull()]
+        if dataset_name == 'fractal':
+            self.df = self.df.drop_duplicates(subset=[dataset_name])
+        self.df = self.df[self.df[dataset_name].notnull()]
 
     def __len__(self):
         return len(self.df)
 
     def __getitem__(self, idx):
         row = self.df.iloc[idx]
-        video_id = row['OpenX'].replace(' ', '_')
+        video_id = row[self.dataset_name].replace(' ', '_')
         #text_label = row['text_label']
-        text_label = row['OpenX']
+        text_label = row[self.dataset_name]
         video_path = os.path.join(self.video_folder_path, f"{video_id}.gif")
         frames = readGif(video_path)
         #print(frames.shape)
@@ -296,7 +299,7 @@ def list_webm_files(folder_path):
     Returns:
     - list: A list of full paths to the .webm files within the specified folder.
     """
-    return sorted([os.path.join(folder_path, f) for f in os.listdir(folder_path) if f.endswith('.gif')])
+    return sorted([os.path.join(folder_path, f) for f in os.listdir(folder_path) if f.endswith('.webm')])
 
 def Embedding(model, data_loader):
     """
