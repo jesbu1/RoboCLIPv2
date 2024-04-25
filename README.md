@@ -1,3 +1,11 @@
+# debug command
+```sh
+CUDA_VISIBLE_DEVICES=7 python finetune_s3d.py --dataset_name droid --num_workers 8 --batch_size 16 --num_epochs 1 --debug False
+```
+
+
+
+
 # Pytorch + StableBaselines3 Implementation of RoboCLIP
 This repository contains the implementation for the NeurIPS 2023 paper, [RoboCLIP: One Demonstration is Enough to Learn Robot Policies](https://arxiv.org/abs/2310.07899).
 
