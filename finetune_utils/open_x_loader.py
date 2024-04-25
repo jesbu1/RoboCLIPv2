@@ -4,6 +4,7 @@ import numpy as np
 import random
 import os
 import cv2
+import torch
 
 
 def adjust_size(frames):
@@ -36,6 +37,8 @@ def adjust_size(frames):
 
 
 
+
+
 class TextVideoDataset(Dataset):
     def __init__(self, args, h5_file, split_file, split="train"):
         if args.debug:
@@ -60,9 +63,11 @@ class TextVideoDataset(Dataset):
         key = self.keys[idx]
         
         if self.args.dataset_name in ["droid_100", "droid"]:
-            video_frames = self.h5[key]["left_1"][()]
+            # video_frames = self.h5[key]["left_1"][()]
+            video_frames = np.asarray(self.h5[key]["left_1"])
+            # video_frames = video_frames["left_1"][()]
+
             video_frames = np.array(video_frames)
-            # video_frames = video_frames[0:10]
             indices = np.linspace(0, len(video_frames) - 1, self.ds_frames, dtype=int)
             video_frames = video_frames[indices]
             if self.preprocess:
@@ -83,6 +88,7 @@ class TextVideoDataset(Dataset):
             video_frames = video_frames[indices]
 
             text = self.h5[key]["ann"][()].decode()
+            
         return {"video_frames": video_frames, "text": text}
 
 
