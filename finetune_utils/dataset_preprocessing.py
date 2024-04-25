@@ -24,7 +24,7 @@ def main(args):
 
 
     # initialize a new h5 file
-    h5_file = args.dataset_name + "_torch_compress_" + args.split + ".h5"
+    h5_file = args.dataset_name + "_torch_compress_test_" + args.split + ".h5"
     h5_path = os.path.join(args.dataset_path, h5_file)
     h5 = h5py.File(h5_path, 'w')
 
@@ -40,9 +40,9 @@ def main(args):
                     key3 = step["language_instruction_3"].numpy().decode()
 
                 img1 = step["observation"]["exterior_image_1_left"].numpy()
-                img2 = step["observation"]["exterior_image_2_left"].numpy()
+                # img2 = step["observation"]["exterior_image_2_left"].numpy()
                 video_frames_1.append(img1)
-                video_frames_2.append(img2)
+                # video_frames_2.append(img2)
 
             if key1 == "" and key2 == "" and key3 == "":
                 continue
@@ -81,7 +81,8 @@ def main(args):
             h5_dataset_name = str(i)
             h5.create_group(h5_dataset_name)
             h5[h5_dataset_name].create_dataset("ann", data=ann)
-            h5[h5_dataset_name].create_dataset("video", data=video_frames, compression='gzip', compression_opts=9)
+            h5[h5_dataset_name].create_dataset("video", data=video_frames)
+            # h5[h5_dataset_name].create_dataset("video", data=video_frames, compression='gzip', compression_opts=9)
 
 
 
