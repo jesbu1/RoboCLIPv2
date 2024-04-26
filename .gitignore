@@ -164,3 +164,4 @@ cython_debug/
 
 s3d_dict.npy
 s3d_howto100m.pth
+wandb/
