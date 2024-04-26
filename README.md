@@ -1,6 +1,8 @@
 # debug command
 ```sh
 CUDA_VISIBLE_DEVICES=7 python finetune_s3d.py --dataset_name droid --num_workers 8 --batch_size 16 --num_epochs 1 --debug False
+srun -n 1 --cpus-per-task 10 --gres=gpu:1 python -m finetune_s3d --dataset_name droid --num_workers 8 --batch_size 80 --num_epochs 100 --debug False --finetune True --experiment_name droid_s3d_weights_bs_80 --run_group droid_finetune --save_freq 5
+
 ```
 
 
