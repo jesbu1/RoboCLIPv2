@@ -56,6 +56,7 @@ class TextVideoDataset(Dataset):
         
 
     def __len__(self):
+        # return 50
         return len(self.keys)
 
     def __getitem__(self, idx):

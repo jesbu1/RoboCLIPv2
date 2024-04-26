@@ -19,6 +19,7 @@ import json
 import h5py
 import re
 from finetune_utils.s3d_loss import MILNCELoss
+from torch.cuda.amp import autocast, GradScaler
 
 
 def str2bool(v):
@@ -75,10 +76,38 @@ class TextEmbedding:
 
 def main(args):
 
+
+
+    torch.manual_seed(args.seed)
+    np.random.seed(args.seed)
+
+    WANDB_ENTITY_NAME = "henry_32"
+    WANDB_PROJECT_NAME = "roboclip-v2"
+
+
+
+
+    if args.experiment_name is None:
+        exp_name = "s3d_droid_finetune"
+    else:
+        exp_name = args.experiment_name
+    wandb.init(
+        # set the wandb project where this run will be logged
+        entity=WANDB_ENTITY_NAME,
+        project=WANDB_PROJECT_NAME,
+        resume= exp_name,
+        group=args.run_group,
+        # track hyperparameters and run metadata
+        config=args,
+)
+
+
+
     s3d = S3D("./s3d_dict.npy", 512)
 
     if args.finetune:
         s3d.load_state_dict(torch.load("./s3d_howto100m.pth"))
+        print("weight loaded")
     s3d = s3d.cuda()
 
     # dp model
@@ -106,22 +135,79 @@ def main(args):
     train_dataset = TextVideoDataset(args, h5_file, split, split="train")
     train_dataloader = DataLoader(train_dataset, batch_size=args.batch_size, shuffle=True, num_workers=args.num_workers)
 
-    # val_dataset = TextVideoDataset(args, h5_file, split, split="val")
-    # val_dataloader = DataLoader(val_dataset, batch_size=args.batch_size, shuffle=True, num_workers=4)
+    val_dataset = TextVideoDataset(args, h5_file, split, split="val")
+    val_dataloader = DataLoader(val_dataset, batch_size=args.batch_size, shuffle=True, num_workers=args.num_workers)
+    criterion = MILNCELoss()
 
+    optimizer = torch.optim.Adam(s3d.parameters(), lr=args.lr)
 
+    grad_scaler = GradScaler()
+
+    step = 0
     for epoch in range(args.num_epochs):
         s3d.train()
         for data in tqdm(train_dataloader):
-            a = 0
+            optimizer.zero_grad()
             video_frames = data["video_frames"]
             video_frames = video_frames.permute(0,4,1,2,3).float().cuda()
             text = data["text"]
             text_emb = text_embedding._words_to_ids(text).cuda()
-            video_embeddings = s3d(video_frames)["video_embedding"]
-            text_embeddings = s3d.text_module(text_emb)["text_embedding"]
+            if args.use_amp:
+                with autocast():
+                    video_embeddings = s3d(video_frames)["video_embedding"]
+                    text_embeddings = s3d.text_module(text_emb)["text_embedding"]
+                    loss = criterion(video_embeddings, text_embeddings)
+                grad_scaler.scale(loss).backward()
+                grad_scaler.step(optimizer)
+                grad_scaler.update()
 
-            loss = MILNCELoss()(video_embeddings, text_embeddings)
+            else:
+                video_embeddings = s3d(video_frames)["video_embedding"]
+                text_embeddings = s3d.text_module(text_emb)["text_embedding"]
+                loss = criterion(video_embeddings, text_embeddings)
+                loss.backward()
+                optimizer.step()
+            wandb.log({"train_loss": loss.item()}, step=step)
+            step += 1
+
+        with torch.no_grad():
+            s3d.eval()
+            eval_loss = 0
+            for data in tqdm(val_dataloader):
+                video_frames = data["video_frames"]
+                video_frames = video_frames.permute(0,4,1,2,3).float().cuda()
+                text = data["text"]
+                text_emb = text_embedding._words_to_ids(text).cuda()
+                if args.use_amp:
+                    with autocast():
+                        video_embeddings = s3d(video_frames)["video_embedding"]
+                        text_embeddings = s3d.text_module(text_emb)["text_embedding"]
+                        loss = criterion(video_embeddings, text_embeddings)
+                    eval_loss += loss.item()
+                else:
+                    video_embeddings = s3d(video_frames)["video_embedding"]
+                    text_embeddings = s3d.text_module(text_emb)["text_embedding"]
+                    loss = criterion(video_embeddings, text_embeddings)
+                    eval_loss += loss.item()
+            eval_loss /= len(val_dataloader)
+            wandb.log({"eval_loss": eval_loss}, step=step)
+
+        if epoch % args.save_freq == args.save_freq - 1:
+            if not os.path.exists(args.save_path):
+                os.makedirs(args.save_path)
+            folder = os.path.join(args.save_path, args.experiment_name)
+            if not os.path.exists(folder):
+                os.makedirs(folder)
+            name = os.path.join(folder, f"s3d_finetune_{epoch}.pth")
+            torch.save(s3d.state_dict(), name)
+
+        
+
+        
+
+
+
+
 
 
 
@@ -135,6 +221,8 @@ if __name__ == "__main__":
 
 
     parser = argparse.ArgumentParser()
+    parser.add_argument("--experiment_name", type=str, default="s3d_finetune", help="Name of the experiment")
+    parser.add_argument("--run_group", type=str, default="s3d_finetune", help="Name of the run group")
     parser.add_argument("--finetune", type=str2bool, default=False, help="Whether to finetune the model, if False will train from scratch")
     parser.add_argument("--dataset_name", type=str, default="droid", choices=["droid", "droid_100", "bridge", "fractal"], help="Dataset to use")
     parser.add_argument("--batch_size", type=int, default=256, help="Batch size")
@@ -145,6 +233,10 @@ if __name__ == "__main__":
     parser.add_argument("--preprocess", type=str2bool, default=True, help="Whether to preprocess the dataset")
     parser.add_argument("--ds_frames", type=int, default=32, help="Number of frames to sample from the video")
     parser.add_argument("--debug", type=str2bool, default=True, help="Debug mode")
+    parser.add_argument("--seed", type=int, default=42, help="Random seed")
+    parser.add_argument("--save_path", type=str, default="/scr/jzhang96/s3d_finetune", help="Path to save the model")
+    parser.add_argument("--save_freq", type=int, default=10, help="Frequency to save the model")
+    parser.add_argument("--use_amp", type=str2bool, default=True, help="Whether to use automatic mixed precision")
 
 
     args = parser.parse_args()
