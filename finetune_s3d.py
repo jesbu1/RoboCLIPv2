@@ -104,6 +104,7 @@ def main(args):
 
 
     s3d = S3D("./s3d_dict.npy", 512)
+    s3d = torch.compile(s3d)
 
     if args.finetune:
         s3d.load_state_dict(torch.load("./s3d_howto100m.pth"))
