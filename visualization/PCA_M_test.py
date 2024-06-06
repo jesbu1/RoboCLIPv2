@@ -237,9 +237,9 @@ if __name__ == "__main__":
         augmentation = True
     variance_thresholds = [512]
     sample_sizes = [10]  # [1, 2, 4, 8, 16, 21]
-    seeds = [3]
+    seeds = [4]
     pca_sample_size = [59, 99, 199] #600, 1000, 1500, 2000
-    strong_augmented = [ 'strong', 'weak', 'normal'] #'weak', 'strong'
+    strong_augmented = ['strong'] #'weak', 'strong' , 'weak', 'normal'
     if torch.cuda.is_available():
         print("CUDA is available! Training on GPU.")
     else:
@@ -310,12 +310,12 @@ if __name__ == "__main__":
                                                              num_augmented_samples=99)
                     augmented_dataset_pca = AugmentedDataset(sampled_dataset, augmentation_pipeline, device=device,
                                                          num_augmented_samples=num_augmented_per_video)
-                    save_augmented_videos(augmented_dataset_pca, f'/scr/yusenluo/RoboCLIP/OpenX/droid_augmented_video_{strong}/{seed}',
+                    save_augmented_videos(augmented_dataset_pca, f'/scr/yusenluo/RoboCLIP/OpenX/droid_augmented_video_{strong}/Seed_{seed}',
                                           num_videos=15)
                     print(len(augmented_dataset_pca))
         
                     pca_data_loader = DataLoader(
-                        augmented_dataset_pca, batch_size=50, shuffle=True, num_workers=1
+                        augmented_dataset_pca, batch_size=32, shuffle=True, num_workers=5, pin_memory=True
                     )
                     augmented_video_embeddings, augmented_text_embeddings, _, mappings = Embedding_gpu(
                         s3d, pca_data_loader
@@ -345,7 +345,7 @@ if __name__ == "__main__":
                         )
                         reduced_train_video, reduced_train_text, reduced_validate_video, reduced_validate_text, pca_video, pca_text = normalize_and_pca(
                             augmented_video_embeddings, augmented_text_embeddings, validate_video_embeddings_normalized,
-                            validate_text_embeddings_normalized, variance_threshold, current_sample_size, seed, device)
+                            validate_text_embeddings_normalized, variance_threshold, current_sample_size, seed, device, strong, num_augmented_per_video)
                         Test_Model(augmented_video_embeddings.float().to(device), augmented_text_embeddings.float().to(device),
                                    mappings, -1, None, 'Train')
                         Test_Model(validate_video_embeddings_normalized.float().to(device),
@@ -374,7 +374,7 @@ if __name__ == "__main__":
                             # augmented_dataset = Augmented_Batched_Dataset(sampled_dataset, augmentation_pipeline,
                             #                                               num_augmented_samples=99)
                             sampled_data_loader = DataLoader(
-                                augmented_dataset, batch_size=50, shuffle=True, num_workers=1
+                                augmented_dataset, batch_size=32, shuffle=True, num_workers=5, pin_memory=True
                             )
                             augmented_video_embeddings, augmented_text_embeddings, _, augmented_mappings = Embedding_gpu(
                                 s3d, sampled_data_loader

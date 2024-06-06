@@ -77,11 +77,11 @@ class AugmentedDataset(Dataset):
         base_idx = idx // (1 + self.num_augmented_samples)# 商 0到9
         aug_idx = idx % (1 + self.num_augmented_samples)#余数 0到99
 
-        #sample = self.base_dataset[base_idx]
-        sample = self.cached_videos[base_idx]
+        sample = self.base_dataset[base_idx]
+        #sample = self.cached_videos[base_idx]
 
         augmented_sample = {
-            'video': sample['video'].to(self.device),
+            'video': sample['video'],
             'text': sample['text'],
             'video_id': sample['video_id']
         }
@@ -223,7 +223,7 @@ def generate_augmented_dataset(dataset, num_augmented, augment_fn):
 
 
 def reduce_dimension(
-        embeddings, variance_threshold, train_size, embed_type, seed, dimension=None, filter=False
+        embeddings, variance_threshold, train_size, embed_type, seed, strong, num, dimension=None, filter=False
 ):
     if variance_threshold == 0:
         return None, embeddings.float()
@@ -239,15 +239,15 @@ def reduce_dimension(
         )
     else:
         model_filename = (
-            f"saved_model/M/OpenX/droid/pca_model/pca_model_{embed_type}_{variance_threshold}_{train_size}_Seed{seed}.pkl"
+            f"saved_model/M/OpenX/droid/pca_model/pca_model_{embed_type}_{variance_threshold}_{train_size}_Seed{seed}_{strong}_{num}.pkl"
         )
-    #joblib.dump(pca, model_filename)
+    joblib.dump(pca, model_filename)
     print(f"PCA model for {embed_type} saved to {model_filename}")
     return pca, torch.from_numpy(reduced_embeddings).float()
 
 
 def normalize_and_pca(sampled_video_embeddings, sampled_text_embeddings, validate_video_embeddings_normalized, validate_text_embeddings_normalized, variance_threshold, 
-                      current_sample_size, seed, device):
+                      current_sample_size, seed, device, strong, pca_sample_size):
     train_video_embeddings_normalized = normalize_embeddings(
         sampled_video_embeddings
     ).clone().cpu()
@@ -256,12 +256,12 @@ def normalize_and_pca(sampled_video_embeddings, sampled_text_embeddings, validat
     ).clone().cpu()
     pca_text, reduced_train_text = reduce_dimension(train_text_embeddings_normalized, variance_threshold,
                                                     current_sample_size,
-                                                    'text', seed=seed,
+                                                    'text', seed=seed, strong=strong, num=pca_sample_size,
                                                     filter=False)
     pca_video, reduced_train_video = reduce_dimension(train_video_embeddings_normalized, variance_threshold,
                                                       current_sample_size, 'video', filter=False,
                                                       dimension=reduced_train_text.shape[1],
-                                                      seed=seed)  # 35，512
+                                                      seed=seed, strong=strong, num=pca_sample_size,)  # 35，512
     if pca_text != None:
         reduced_validate_video = torch.from_numpy(
             pca_video.transform(validate_video_embeddings_normalized.cpu())).float().to(device)
