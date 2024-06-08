@@ -94,6 +94,62 @@ class TextVideoDataset(Dataset):
 
 
 
+class XCLIPDataset(TextVideoDataset):
+    def __init__(self, args, h5_file, split_file, split="train", tokenizer = None):
+        if args.debug:
+            split_file = {
+                "train": list(h5_file.keys()),
+                "val": list(h5_file.keys()),
+            }
+
+        self.args = args
+        self.ann_key = ["ann_1", "ann_2", "ann_3"]
+        self.preprocess = args.preprocess
+        self.ds_frames = args.ds_frames
+        self.keys = split_file[split]
+        self.h5 = h5_file
+        self.tokenizer = tokenizer
+        
+
+    def __len__(self):
+        # return 50
+        return len(self.keys)
+
+    def __getitem__(self, idx):
+
+        key = self.keys[idx]
+        
+        if self.args.dataset_name in ["droid_100", "droid"]:
+            # video_frames = self.h5[key]["left_1"][()]
+            video_frames = np.asarray(self.h5[key]["left_1"])
+            # video_frames = video_frames["left_1"][()]
+
+            video_frames = np.array(video_frames)
+            indices = np.linspace(0, len(video_frames) - 1, self.ds_frames, dtype=int)
+            video_frames = video_frames[indices]
+            if self.preprocess:
+                video_frames = video_frames / 255.0
+                # resize video frames to 224x224
+                video_frames = adjust_size(video_frames)
+            
+            texts = [self.h5[key][ann_key][()].decode() for ann_key in self.ann_key]
+            if not self.args.debug:
+                texts = [text for text in texts if text != ""]
+            # # random choice from texts
+            text = random.choice(texts)
+
+        else:
+            video_frames = self.h5[key]["video"][()]
+            video_frames = np.array(video_frames)
+            indices = np.linspace(0, len(video_frames) - 1, self.ds_frames, dtype=int)
+            video_frames = video_frames[indices]
+
+            text = self.h5[key]["ann"][()].decode()
+
+        # text_emb = self.tokenizer(text, padding=True, return_tensors="pt")
+        # video_emb = self.processor(videos=video_frames, return_tensors="pt")
+            
+        return {"video_frames": video_frames, "text": text}
 
 
 
