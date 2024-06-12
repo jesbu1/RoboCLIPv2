@@ -40,6 +40,9 @@ from metaworld.envs import (ALL_V2_ENVIRONMENTS_GOAL_OBSERVABLE,
 from kitchen_env_wrappers import readGif
 from matplotlib import animation
 import matplotlib.pyplot as plt
+from gym.wrappers import RecordVideo
+import imageio
+
 
 def get_args():
     parser = argparse.ArgumentParser(description='RL')
@@ -177,7 +180,10 @@ class MetaworldDense(Env):
         self.past_observations = []
         
         self.counter = 0
-
+        self.counter_total = 0
+        self.gif_buffer = []
+        self.rank = rank
+        
     def get_obs(self):
         return self.baseEnv._get_obs(self.baseEnv.prev_time_step)
         
@@ -192,9 +198,26 @@ class MetaworldDense(Env):
         obs, reward, done, info = self.env.step(action)
         # self.past_observations.append(self.env.render())
         self.counter += 1
+        self.counter_total += 1
         t = self.counter/128
+        self.gif_buffer.append(self.env.render())
+
+
         if self.time:
+
             obs = np.concatenate([obs, np.array([t])])
+            # save gif
+            if t - 1 == 0:
+                if self.counter_total % 1280 == 0:
+                    path = "/scr/jzhang96/metaworld_gifs/s3d/"+"door_opening_"+str(self.rank)
+                    # path = "metaworld_gifs/xclip/"+"door_opening_"+str(self.rank)
+                    if not os.path.exists(path):
+                        os.makedirs(path)
+                    file_name = f'{path}/output_{self.counter_total}.gif'
+                    # Save the frames as a GIF
+
+                    imageio.mimsave(file_name, self.gif_buffer, duration=0.1)
+                self.gif_buffer = []
         return obs, reward, done, info
         
     def reset(self):
@@ -233,12 +256,13 @@ def make_env(env_type, env_id, rank, seed=0):
 
 
 
+
 def main():
     global args
     global log_dir
     args = get_args()
     env_id = "button-press-v2-goal-hidden"
-    log_dir = f"metaworld/{args.env_id}_{args.env_type}{args.dir_add}"
+    log_dir = f"/scr/jzhang96/metaworld/{args.env_id}_{args.env_type}{args.dir_add}"+"/s3d"
     if not os.path.exists(log_dir):
         os.makedirs(log_dir)
     envs = SubprocVecEnv([make_env(args.env_type, args.env_id, i) for i in range(args.n_envs)])
@@ -249,10 +273,14 @@ def main():
         model = PPO.load(args.pretrained, env=envs, tensorboard_log=log_dir)
 
     eval_env = SubprocVecEnv([make_env("dense_original", args.env_id, i) for i in range(10, 10+args.n_envs)])#KitchenEnvDenseOriginalReward(time=True)
+
     # Use deterministic actions for evaluation
     eval_callback = EvalCallback(eval_env, best_model_save_path=log_dir,
-                                 log_path=log_dir, eval_freq=500,
+                                 log_path=log_dir, eval_freq=1000,
                                  deterministic=True, render=False)
+    # eval_callback = EvalCallback(eval_env, best_model_save_path=log_dir,
+    #                             log_path=log_dir, eval_freq=1500,
+    #                             deterministic=True, render=True)
 
     model.learn(total_timesteps=int(args.total_time_steps), callback=eval_callback)
     model.save(f"{log_dir}/trained")
