@@ -258,7 +258,7 @@ class MetaworldDense(Env):
 
             if t - 1 == 0:
                 if self.counter_total % 1280 == 0:
-                    path = "/scr/jzhang96/metaworld_gifs/xclip/"+"door_opening_"+str(self.rank)
+                    path = "/scr/jzhang96/metaworld_gifs/xclip_fix_text/"+"door_opening_"+str(self.rank)
                     # path = "metaworld_gifs/xclip/"+"door_opening_"+str(self.rank)
 
                     if not os.path.exists(path):
@@ -294,7 +294,7 @@ def make_env(env_type, env_id, rank, seed=0):
     def _init():
         # env = KitchenMicrowaveHingeSlideV0()
         if env_type == "sparse_learnt":
-            env = MetaworldSparse(env_id=env_id, text_string="robot closing green drawer", time=True, rank=rank)
+            env = MetaworldSparse(env_id=env_id, text_string=args.text_string, time=True, rank=rank)
             # env = MetaworldSparse(env_id=env_id, video_path="./gifs/human_opening_door.gif", time=True, rank=rank, human=True)
         
         elif env_type == "sparse_original":
@@ -309,33 +309,6 @@ def make_env(env_type, env_id, rank, seed=0):
 
 
 
-def make_env_render(env_type, env_id, rank, seed=0):
-    """
-    Utility function for multiprocessed env.
-
-    :param env_id: (str) the environment ID
-    :param num_env: (int) the number of environments you wish to have in subprocesses
-    :param seed: (int) the inital seed for RNG
-    :param rank: (int) index of the subprocess
-    """
-    def _init():
-        # env = KitchenMicrowaveHingeSlideV0()
-        if env_type == "sparse_learnt":
-            env = MetaworldSparse(env_id=env_id, text_string="robot closing green drawer", time=True, rank=rank)
-            # env = MetaworldSparse(env_id=env_id, video_path="./gifs/human_opening_door.gif", time=True, rank=rank, human=True)
-        
-        elif env_type == "sparse_original":
-            env = KitchenEnvSparseOriginalReward(time=True)
-        else:
-            env = MetaworldDense(env_id=env_id, time=True, rank=rank)
-        log_dir_video =  os.path.join(log_dir, str(rank))
-        env = Monitor(env, log_dir_video)
-        env = RecordVideo(env, log_dir_video, episode_trigger=lambda episode_id: True, name_prefix="eval")
-        env = DummyVecEnv([lambda: env])
-        # env.seed(seed + rank)
-        return env
-    # set_global_seeds(seed)
-    return _init
 
 
 
@@ -348,8 +321,7 @@ def main():
     global args
     global log_dir
     args = get_args()
-    env_id = "button-press-v2-goal-hidden"
-    log_dir = f"/scr/jzhang96/metaworld/{args.env_id}_{args.env_type}{args.dir_add}xclip_render_fix"
+    log_dir = f"/scr/jzhang96/metaworld/{args.env_id}_{args.env_type}{args.dir_add}xclip_render_fix_text"
     if not os.path.exists(log_dir):
         os.makedirs(log_dir)
     envs = SubprocVecEnv([make_env(args.env_type, args.env_id, i) for i in range(args.n_envs)])

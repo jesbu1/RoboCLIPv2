@@ -14,7 +14,7 @@ task_ann = {
     "coffee-push-v2-goal-observable": "Robot pushes the cup into the coffee machine.",
     "dial-turn-v2-goal-observable": "Robot turns the dial.",
     "disassemble-v2-goal-observable": "Robot disassembles the ring and the vertical stick.",
-    "door-close-v2-goal-observable": "Robot opens the door.",
+    "door-close-v2-goal-observable": "Robot closes the door.",
     "door-lock-v2-goal-observable": "Robot locks the door.",
     "door-open-v2-goal-observable": "Robot opens the door.",
     "door-unlock-v2-goal-observable": "Robot unlocks the door.",

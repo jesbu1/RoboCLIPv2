@@ -209,7 +209,7 @@ class MetaworldDense(Env):
             # save gif
             if t - 1 == 0:
                 if self.counter_total % 1280 == 0:
-                    path = "/scr/jzhang96/metaworld_gifs/s3d/"+"door_opening_"+str(self.rank)
+                    path = "/scr/jzhang96/metaworld_gifs/s3d_fix_text/"+"door_opening_"+str(self.rank)
                     # path = "metaworld_gifs/xclip/"+"door_opening_"+str(self.rank)
                     if not os.path.exists(path):
                         os.makedirs(path)
@@ -241,8 +241,8 @@ def make_env(env_type, env_id, rank, seed=0):
     def _init():
         # env = KitchenMicrowaveHingeSlideV0()
         if env_type == "sparse_learnt":
-            # env = MetaworldSparse(env_id=env_id, text_string="robot closing green drawer", time=True, rank=rank)
-            env = MetaworldSparse(env_id=env_id, video_path="./gifs/human_opening_door.gif", time=True, rank=rank, human=True)
+            env = MetaworldSparse(env_id=env_id, text_string=args.text_string, time=True, rank=rank)
+            # env = MetaworldSparse(env_id=env_id, video_path="./gifs/human_opening_door.gif", time=True, rank=rank, human=True)
         
         elif env_type == "sparse_original":
             env = KitchenEnvSparseOriginalReward(time=True)
@@ -262,7 +262,7 @@ def main():
     global log_dir
     args = get_args()
     env_id = "button-press-v2-goal-hidden"
-    log_dir = f"/scr/jzhang96/metaworld/{args.env_id}_{args.env_type}{args.dir_add}"+"/s3d"
+    log_dir = f"/scr/jzhang96/metaworld/{args.env_id}_{args.env_type}{args.dir_add}"+"/s3d_text"
     if not os.path.exists(log_dir):
         os.makedirs(log_dir)
     envs = SubprocVecEnv([make_env(args.env_type, args.env_id, i) for i in range(args.n_envs)])
