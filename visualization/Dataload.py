@@ -175,7 +175,7 @@ class AugmentationPipeline(nn.Module):
     def forward(self, x):
         # 将视频张量从 (1, 3, 32, 224, 224) 转换为 (32, 3, 224, 224)
         x = x.squeeze(0).permute(1, 0, 2, 3)  # (32, 3, 224, 224)
-        #x = x.to(self.device)
+        x = x.to(self.device)
         # 使用视频的第一帧生成增强参数
         first_frame = x[0].unsqueeze(0)  # (1, 3, 224, 224)
         video_params = {}

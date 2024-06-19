@@ -5,6 +5,11 @@ import numpy as np
 from pca import plot_embeddings_3d, plot_embeddings, check_pairs, plot_distribution_histograms
 from sklearn.metrics.pairwise import cosine_similarity
 import wandb
+import imageio
+from Dataload import preprocess_human_demo, adjust_frames, readGif, Embedding_gpu
+import json
+import random
+from meta_world_name_ann import task_ann
 import os
 import shutil
 import joblib
@@ -13,6 +18,65 @@ from torch.utils.data import Dataset
 from Transformation_Matrix import MILNCELoss
 from mlp import normalize_embeddings
 import torch
+
+
+class MetaDataset(Dataset):
+    def __init__(self, video_folder_path, indices, transform=None, num_samples=75, seed=42):
+        self.video_folder_path = video_folder_path
+        self.transform = transform
+        self.num_samples = num_samples
+        self.video_paths = []
+        self.labels = []
+        self.video_ids = []
+        self.seed = seed
+
+        with open('task_id.json', 'r') as f:
+            folder_ann = json.load(f)
+
+        random.seed(self.seed)
+
+        for index in indices:
+            task_name = folder_ann[str(index)]
+            #print(task_name)
+            task_folder = os.path.join(video_folder_path, str(index))
+            #print(task_folder)
+            if os.path.isdir(task_folder):
+                video_files = [f for f in os.listdir(task_folder)]
+                #print(len(video_files))
+                if len(video_files) >= num_samples:
+                    selected_videos = random.sample(video_files, self.num_samples)
+                    #print(len(selected_videos))
+                    self.video_paths.extend([os.path.join(task_folder, f) for f in selected_videos])
+                    label = task_ann.get(task_name, "Unknown task")
+                    #print(label)
+                    self.labels.extend([label] * len(selected_videos))
+                    self.video_ids.extend([f"{task_name}_{os.path.splitext(f)[0]}" for f in selected_videos])
+
+        assert len(self.video_paths) == len(self.labels) == len(self.video_ids), "Mismatch between video paths, labels, and video IDs"
+
+    def __len__(self):
+        return len(self.video_paths)
+
+    def __getitem__(self, idx):
+        video_path = self.video_paths[idx]
+        frames = self.readGIF(video_path)
+        frames = preprocess_human_demo(frames)
+        frames = adjust_frames(frames)
+
+        if self.transform:
+            frames = self.transform(frames)
+
+        video_id = self.video_ids[idx]
+        text_label = self.labels[idx]
+        sample = {'video': frames, 'video_id': video_id, 'text': text_label}
+        return sample
+
+    def readGIF(self, file_path):
+        reader = imageio.get_reader(file_path)
+        frames = []
+        for frame in reader:
+            frames.append(np.array(frame))
+        return np.stack(frames)
 
 
 class Augmented_Batched_Dataset(Dataset):
@@ -130,6 +194,7 @@ def Test_Model(video_embeddings, text_embeddings, train_mappings, epoch, model, 
         f'{Train_or_Validate}_similarity_score': simi_score.item(),
         f'{Train_or_Validate}_cosine_similarity': cos_simi
     })
+    return adjusted_video_embeddings, text_embeddings
 
 
 def generate_augmented_embeddings(video_embeddings, text_embeddings, num_augmented, augment_fn):
@@ -233,13 +298,14 @@ def reduce_dimension(
     else:
         pca = PCA(n_components=variance_threshold)
     reduced_embeddings = pca.fit_transform(embeddings)
+    os.makedirs('saved_model/M/metaworld/pca_model', exist_ok=True)
     if filter:
         model_filename = (
             f"saved_model/M/OpenX/droid/filter/pca_model_{embed_type}_{variance_threshold}_{train_size}.pkl"
         )
     else:
         model_filename = (
-            f"saved_model/M/OpenX/droid/pca_model/pca_model_{embed_type}_{variance_threshold}_{train_size}_Seed{seed}_{strong}_{num}.pkl"
+            f"saved_model/M/metaworld/pca_model/pca_model_{embed_type}_{variance_threshold}_{train_size}_Seed{seed}_{strong}_{num}.pkl"
         )
     joblib.dump(pca, model_filename)
     print(f"PCA model for {embed_type} saved to {model_filename}")
