@@ -17,7 +17,6 @@ import PIL
 import os
 import seaborn as sns
 import matplotlib.pylab as plt
-from stable_baselines3.common.vec_env import DummyVecEnv, VecVideoRecorder
 
 from typing import Any, Dict
 
@@ -32,7 +31,7 @@ import os
 from stable_baselines3.common.monitor import Monitor
 from memory_profiler import profile
 import argparse
-from stable_baselines3.common.callbacks import EvalCallback, CallbackList
+from stable_baselines3.common.callbacks import EvalCallback
 
 import metaworld
 from metaworld.envs import (ALL_V2_ENVIRONMENTS_GOAL_OBSERVABLE,
@@ -41,13 +40,12 @@ from metaworld.envs import (ALL_V2_ENVIRONMENTS_GOAL_OBSERVABLE,
 from kitchen_env_wrappers import readGif
 from matplotlib import animation
 import matplotlib.pyplot as plt
-
-from transformers import AutoTokenizer, AutoModel, AutoProcessor 
 from gym.wrappers import RecordVideo
 import imageio
-import wandb
 from wandb.integration.sb3 import WandbCallback
+import wandb
 import io
+
 
 
 def get_args():
@@ -66,9 +64,6 @@ def get_args():
     parser.add_argument('--eval_freq', type=int, default=512)
     parser.add_argument('--video_freq', type=int, default=2048)
 
-    # parser.add_argument('--xclip_model', type=str, default='microsoft/xclip-base-patch16-zero-shot')
-
-
     args = parser.parse_args()
     return args
 class MetaworldSparse(Env):
@@ -85,36 +80,25 @@ class MetaworldSparse(Env):
         self.action_space = self.env.action_space
         self.past_observations = []
         self.window_length = 16
-        # self.net = S3D('s3d_dict.npy', 512)
-        # # Load the model weights
-        # self.net.load_state_dict(th.load('s3d_howto100m.pth'))
+        self.net = S3D('s3d_dict.npy', 512)
 
-        # load xclip model
-        model_name = "microsoft/xclip-base-patch16-zero-shot"
-        self.tokenizer = AutoTokenizer.from_pretrained(model_name)
-        self.net = AutoModel.from_pretrained(model_name)
-        self.processor = AutoProcessor.from_pretrained(model_name)
-
-
+        # Load the model weights
+        self.net.load_state_dict(th.load('s3d_howto100m.pth'))
         # Evaluation mode
         self.net = self.net.eval()
         self.target_embedding = None
         if text_string:
             for _ in range (3):
                 print("text_string", text_string)
-            # text_output = self.net.text_module([text_string])
-            # self.target_embedding = text_output['text_embedding']
-            text_tokens = self.tokenizer([text_string], return_tensors="pt")
-            self.target_embedding = self.net.get_text_features(**text_tokens)
-
-
+            text_output = self.net.text_module([text_string])
+            self.target_embedding = text_output['text_embedding']
         if video_path:
             frames = readGif(video_path)
             
             if human:
                 frames = self.preprocess_human_demo(frames)
             else:
-                frames = self.preprocess_metaworld_xclip(frames)
+                frames = self.preprocess_metaworld(frames)
             if frames.shape[1]>3:
                 frames = frames[:,:3]
             video = th.from_numpy(frames)
@@ -147,44 +131,7 @@ class MetaworldSparse(Env):
             frames = frames[:, :,::4,:,:]
         # frames = frames/255
         return frames
-
-    def preprocess_metaworld_xclip(self, frames, shorten=True):
-        center = 240, 320
-        # h, w = (250, 250)
-        h, w = (224, 224)
-        x = int(center[1] - w/2)
-        y = int(center[0] - h/2)
-        # frames = np.array([cv2.resize(frame, dsize=(250, 250), interpolation=cv2.INTER_CUBIC) for frame in frames])
-        # frames = np.array([frame[y:y+h, x:x+w] for frame in frames])
-        # frames = frames[None, :,:,:,:] 
-        length = len(frames)
-        if shorten:
-            frames = [frames[i][y:y+h, x:x+w] for i in range (0, length, 4)]
-        else:
-            frames = [frame[y:y+h, x:x+w] for frame in frames]
-
-        # path = "test_imgs"
-        # if not os.path.exists(path):
-        #     os.makedirs(path)
-        # for i, frame in enumerate(frames):
-        #     cv2.imwrite(f"{path}/frame_{i}.png", frame)
-        # import imageio
-        # output_file = 'output.gif'
-
-        # Save the frames as a GIF
-
-        frames = self.processor(videos=frames, return_tensors="pt")
-        frames = frames["pixel_values"]
-        # frames = frames["pixel_values"].cpu().detach().numpy()
-
-
-        # frames = frames.transpose(0, 4, 1, 2, 3)
-
-
-        # frames = frames/255
-        return frames
-
-
+        
     
     def render(self):
         frame = self.env.render()
@@ -204,13 +151,15 @@ class MetaworldSparse(Env):
         if self.time:
             obs = np.concatenate([obs, np.array([t])])
         if done:
-            frames = self.preprocess_metaworld_xclip(self.past_observations)
+            frames = self.preprocess_metaworld(self.past_observations)
             
-            
-            # video = th.from_numpy(frames)
-            video_embedding = self.net.get_video_features(frames)
+        
+        
+            video = th.from_numpy(frames)
 
-            # video_embedding = video_output['video_embedding']
+            video_output = self.net(video.float())
+
+            video_embedding = video_output['video_embedding']
             similarity_matrix = th.matmul(self.target_embedding, video_embedding.t())
 
             reward = similarity_matrix.detach().numpy()[0][0]
@@ -243,16 +192,14 @@ class MetaworldDense(Env):
         self.counter_total = 0
         self.gif_buffer = []
         self.rank = rank
-
+        
     def get_obs(self):
         return self.baseEnv._get_obs(self.baseEnv.prev_time_step)
         
     
-    def render(self, camera_name="topview"):
+    def render(self, canera_name="topview"):
         # camera_name="topview"
         frame = self.env.render()
-        # self.gif_buffer.append(frame)
-
         return frame
 
 
@@ -263,25 +210,23 @@ class MetaworldDense(Env):
         self.counter_total += 1
         t = self.counter/128
         self.gif_buffer.append(self.env.render())
+
+
         if self.time:
+
             obs = np.concatenate([obs, np.array([t])])
-            # # save gif
+            # save gif
+            if t - 1 == 0:
+                if self.counter_total % 1280 == 0:
+                    path = "/scr/jzhang96/metaworld_gifs/s3d_draw_close/"+"door_opening_"+str(self.rank)
+                    # path = "metaworld_gifs/xclip/"+"door_opening_"+str(self.rank)
+                    if not os.path.exists(path):
+                        os.makedirs(path)
+                    file_name = f'{path}/output_{self.counter_total}.gif'
+                    # Save the frames as a GIF
 
-            # if t - 1 == 0:
-            #     if self.counter_total % 1280 == 0:
-            #         path = "/scr/jzhang96/metaworld_gifs/xclip_org_wrong/"+"door_closing_"+str(self.rank)
-            #         # path = "metaworld_gifs/xclip/"+"door_opening_"+str(self.rank)
-
-            #         if not os.path.exists(path):
-            #             os.makedirs(path)
-            #         file_name = f'{path}/output_{self.counter_total}.gif'
-            #         # Save the frames as a GIF
-            #         imageio.mimsave(file_name, self.gif_buffer, duration=0.1)
-            #     self.gif_buffer = []
-
-        
-
-            
+                    imageio.mimsave(file_name, self.gif_buffer, duration=0.1)
+                self.gif_buffer = []
         return obs, reward, done, info
         
     def reset(self):
@@ -320,7 +265,6 @@ def make_env(env_type, env_id, rank, seed=0):
 
 
 
-
 class CustomEvalCallback(EvalCallback):
     def __init__(self, *args, video_freq, **kwargs):
         super(CustomEvalCallback, self).__init__(*args, **kwargs)
@@ -333,9 +277,6 @@ class CustomEvalCallback(EvalCallback):
             video_buffer = self.record_video()
 
             wandb.log({f"evaluation_video": wandb.Video(video_buffer, fps=20, format="mp4")})
-        #     video_path = os.path.join(self.best_model_save_path, f"evaluation_video_{self.n_calls}.mp4")
-        #     self.record_video(video_path)
-        #     wandb.log({f"evaluation_video_{self.n_calls}": wandb.Video(video_path, fps=4, format="mp4")})
 
         return result
 
@@ -344,23 +285,15 @@ class CustomEvalCallback(EvalCallback):
         obs = self.eval_env.reset()
         for _ in range(128):  # You can adjust the number of steps for recording
             frame = self.eval_env.render(mode='rgb_array')
+
             # downsample frame
             frame = frame[::3, ::3, :3]
             frames.append(frame)
             action, _ = self.model.predict(obs, deterministic=self.deterministic)
             obs, _, _, _ = self.eval_env.step(action)
-            # if done:
-            #     break
 
-        # Save the video
-        # height, width, _ = frames[0].shape
         video_buffer = io.BytesIO()
-        # fourcc = cv2.VideoWriter_fourcc(*'mp4v')
-        # out = cv2.VideoWriter(video_buffer, fourcc, 20, (width, height))
 
-        # for frame in frames:
-        #     out.write(frame)
-        # out.release()
 
         with imageio.get_writer(video_buffer, format='mp4', fps=20) as writer:
             for frame in frames:
@@ -368,6 +301,7 @@ class CustomEvalCallback(EvalCallback):
 
         video_buffer.seek(0)
         return video_buffer
+
 
 
 
@@ -381,29 +315,22 @@ def main():
     # set seed
     th.manual_seed(args.seed)
     np.random.seed(args.seed)
-    
-
 
     WANDB_ENTITY_NAME = "clvr"
-    WANDB_PROJECT_NAME = "roboclip-v2"
-    # wandb_eval_task_name = "_".join([str(i) for i in eval_tasks])
-    # experiment_name = args.experiment_name + "_" + wandb_eval_task_name + "_" + str(args.seed)
-    # if args.mse:
-    #     experiment_name = experiment_name + "_mse_" + str(args.mse_weight)
-    experiment_name = "xclip-wandb-debug"
+    WANDB_PROJECT_NAME = "p-roboclip-v2"
+
+    experiment_name = "debug" # change to your experiment name
 
     if args.wandb:
         run = wandb.init(
             entity=WANDB_ENTITY_NAME,
             project=WANDB_PROJECT_NAME,
-            group="x-clip-roboclipv1-train-debug",
+            group="s3d-roboclipv1-train-debug", # also here
             config=args,
             name=experiment_name,
             monitor_gym=True,
             sync_tensorboard=True,
         )
-
-    
 
     column1 = ["text_string"]
     table1 = wandb.Table(columns=column1)
@@ -414,10 +341,7 @@ def main():
     table2.add_data([args.env_id])  
     wandb.log({"text_string": table1, "env_id": table2})
 
-
-
-
-    log_dir = f"/scr/jzhang96/logs/{experiment_name}"
+    log_dir = f"/scr/jzhang96/s3d_logs"  # change to your log directory
     if not os.path.exists(log_dir):
         os.makedirs(log_dir)
     envs = SubprocVecEnv([make_env(args.env_type, args.env_id, i) for i in range(args.n_envs)])
@@ -428,31 +352,19 @@ def main():
         model = PPO.load(args.pretrained, env=envs, tensorboard_log=log_dir)
 
     eval_env = SubprocVecEnv([make_env("dense_original", args.env_id, i) for i in range(10, 10+args.n_envs)])#KitchenEnvDenseOriginalReward(time=True)
+
     # Use deterministic actions for evaluation
     # eval_callback = EvalCallback(eval_env, best_model_save_path=log_dir,
-    #                              log_path=log_dir, eval_freq=200,
+    #                              log_path=log_dir, eval_freq=1000,
     #                              deterministic=True, render=False)
-
-
-
     eval_callback = CustomEvalCallback(eval_env, best_model_save_path=log_dir,
                                     log_path=log_dir, eval_freq=args.eval_freq, video_freq=args.video_freq,
                                     deterministic=True, render=False)
-
-
-
-                                 
+    
     wandb_callback = WandbCallback(verbose = 1)
-    callback = CallbackList([eval_callback, wandb_callback])
 
-
-
-    model.learn(total_timesteps=int(args.total_time_steps), callback=callback)
+    model.learn(total_timesteps=int(args.total_time_steps), callback=[eval_callback, wandb_callback])
     model.save(f"{log_dir}/trained")
-
-
-
-
 
 
 
