@@ -53,7 +53,7 @@ import io
 def get_args():
     parser = argparse.ArgumentParser(description='RL')
     parser.add_argument('--algo', type=str, default='ppo')
-    parser.add_argument('--text_string', type=str, default='closing door')
+    parser.add_argument('--text_string', type=str, default='Closing door')
     parser.add_argument('--dir_add', type=str, default='')
     parser.add_argument('--env_id', type=str, default='door-close-v2-goal-hidden')
     parser.add_argument('--env_type', type=str, default='sparse_learnt')
@@ -265,21 +265,6 @@ class MetaworldDense(Env):
         self.gif_buffer.append(self.env.render())
         if self.time:
             obs = np.concatenate([obs, np.array([t])])
-            # # save gif
-
-            # if t - 1 == 0:
-            #     if self.counter_total % 1280 == 0:
-            #         path = "/scr/jzhang96/metaworld_gifs/xclip_org_wrong/"+"door_closing_"+str(self.rank)
-            #         # path = "metaworld_gifs/xclip/"+"door_opening_"+str(self.rank)
-
-            #         if not os.path.exists(path):
-            #             os.makedirs(path)
-            #         file_name = f'{path}/output_{self.counter_total}.gif'
-            #         # Save the frames as a GIF
-            #         imageio.mimsave(file_name, self.gif_buffer, duration=0.1)
-            #     self.gif_buffer = []
-
-        
 
             
         return obs, reward, done, info
@@ -390,13 +375,13 @@ def main():
     # experiment_name = args.experiment_name + "_" + wandb_eval_task_name + "_" + str(args.seed)
     # if args.mse:
     #     experiment_name = experiment_name + "_mse_" + str(args.mse_weight)
-    experiment_name = "xclip-wandb-debug"
+    experiment_name = "xclip-wandb_" + args.env_id + "_" + str(args.seed)
 
     if args.wandb:
         run = wandb.init(
             entity=WANDB_ENTITY_NAME,
             project=WANDB_PROJECT_NAME,
-            group="x-clip-roboclipv1-train-debug",
+            group="x-clip-roboclipv1-train" + args.env_id,
             config=args,
             name=experiment_name,
             monitor_gym=True,

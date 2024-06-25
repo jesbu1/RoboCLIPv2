@@ -13,17 +13,8 @@ import torch.nn.functional as F
 # from sklearn.metrics import pairwise_distances
 
 def normalize_embeddings(embeddings):
-    """
-    Normalizes the embeddings to have unit norm.
-
-    Parameters:
-    - embeddings (array): The embeddings to normalize.
-
-    Returns:
-    - array: The normalized embeddings.
-    """
-    norms = np.linalg.norm(embeddings, axis=1)
-    return embeddings / norms[:, np.newaxis]
+    normalized_embeddings = F.normalize(embeddings, p=2, dim=1)
+    return normalized_embeddings
 
 
 def plot_embeddings(

@@ -60,6 +60,7 @@ print("min_episodes: ", min_episodes)
 data_group_1 = np.stack([s3d_train_0[:min_episodes], s3d_train_1[:min_episodes], s3d_train_2[:min_episodes], s3d_train_3[:min_episodes]])
 data_group_2 = np.stack([xclip_train_0[:min_episodes], xclip_train_1[:min_episodes], xclip_train_2[:min_episodes], xclip_train_3[:min_episodes]])
 
+import pdb ; pdb.set_trace()
 df_group1 = pd.DataFrame(data_group_1.T, columns=["s3d_train_0", "s3d_train_1", "s3d_train_2", "s3d_train_3"])
 df_group2 = pd.DataFrame(data_group_2.T, columns=["xclip_train_0", "xclip_train_1", "xclip_train_2", "xclip_train_3"])
 

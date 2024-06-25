@@ -166,5 +166,5 @@ xclip/wandb/
 s3d_dict.npy
 s3d_howto100m.pth
 metaworld
-metaworld_generation
+# metaworld_generation
 kitchem_alt

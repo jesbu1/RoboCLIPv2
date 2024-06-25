@@ -91,6 +91,8 @@ class MetaworldSparse(Env):
         self.net = self.net.eval()
         self.target_embedding = None
         if text_string:
+            for _ in range (3):
+                print("text_string", text_string)
             # text_output = self.net.text_module([text_string])
             # self.target_embedding = text_output['text_embedding']
             text_tokens = self.tokenizer([text_string], return_tensors="pt")
@@ -258,7 +260,7 @@ class MetaworldDense(Env):
 
             if t - 1 == 0:
                 if self.counter_total % 1280 == 0:
-                    path = "/scr/jzhang96/metaworld_gifs/xclip_fix_text/"+"door_opening_"+str(self.rank)
+                    path = "/scr/jzhang96/metaworld_gifs/xclip_org_wrong/"+"door_closing_"+str(self.rank)
                     # path = "metaworld_gifs/xclip/"+"door_opening_"+str(self.rank)
 
                     if not os.path.exists(path):
@@ -321,7 +323,7 @@ def main():
     global args
     global log_dir
     args = get_args()
-    log_dir = f"/scr/jzhang96/metaworld/{args.env_id}_{args.env_type}{args.dir_add}xclip_render_fix_text"
+    log_dir = f"/scr/jzhang96/metaworld/{args.env_id}_{args.env_type}{args.dir_add}xclip_org_wrong"
     if not os.path.exists(log_dir):
         os.makedirs(log_dir)
     envs = SubprocVecEnv([make_env(args.env_type, args.env_id, i) for i in range(args.n_envs)])

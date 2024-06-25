@@ -18,7 +18,7 @@ import h5py
 import numpy as np
 
 
-choose_task = [13,14,15,23,24,25, 35,36,37]
+choose_task = [13,14,15,23,24,25,35,36,37]
 video_sample_per_task = 10
 
 
@@ -27,7 +27,8 @@ def main():
     '''
     Main function.
     '''
-    h5_file_path = "/scr/jzhang96/metaworld_xclip_embeddings.h5"
+    # h5_file_path = "/scr/jzhang96/metaworld_xclip_embeddings.h5"
+    h5_file_path = "/scr/jzhang96/metaworld_25_generated_xclip_embeddings.h5"
     h5_file = h5py.File(h5_file_path, 'r')
     
     total_video_features = []
