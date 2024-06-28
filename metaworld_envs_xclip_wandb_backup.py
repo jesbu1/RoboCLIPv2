@@ -57,7 +57,7 @@ def get_args():
     parser.add_argument('--dir_add', type=str, default='')
     parser.add_argument('--env_id', type=str, default='door-close-v2-goal-hidden')
     parser.add_argument('--env_type', type=str, default='sparse_learnt')
-    parser.add_argument('--total_time-steps', type=int, default=1000000)
+    parser.add_argument('--total_time-steps', type=int, default=200000)
     parser.add_argument('--n_envs', type=int, default=8)
     parser.add_argument('--n_steps', type=int, default=128)
     parser.add_argument('--pretrained', type=str, default=None)

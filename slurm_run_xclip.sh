@@ -9,6 +9,6 @@
 
 
 # Run the srun command
-srun python metaworld_envs_xclip.py --env-type "sparse_learnt" --env-id "door-close-v2-goal-hidden" --dir-add "/scr/jzhang96/metaworld_log/" --text-string "robot closing green drawer" --n-envs 2  
+srun python metaworld_envs_xclip_wandb_fix_reset.py --env_type "sparse_learnt" --env_id "window-open-v2-goal-hidden" --dir_add "/scr/jzhang96/metaworld_log/" --text_string "opening window" --n_envs 1 --wandb --seed 42  
 # srun python metaworld_envs.py --env-type "sparse_learnt" --env-id "drawer-close-v2-goal-hidden" --dir-add "/scr/jzhang96/metaworld_log/" --text-string "robot closing green drawer" --n-envs 2 &
 # wait
