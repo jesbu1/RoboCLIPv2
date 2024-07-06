@@ -235,9 +235,10 @@ class MetaworldSparse(Env):
         for _ in range(32):
             action = self.env.action_space.sample()
             obs, _, done, _ = self.env.step(action)
-            self.past_observations.append(self.env.render())
+            # self.past_observations.append(self.env.render())
+            images.append(self.env.render())
         with th.no_grad():
-            embedding = self.preprocess_metaworld_xclip(self.past_observations).float().cuda()
+            embedding = self.preprocess_metaworld_xclip(images).float().cuda()
             embedding = self.net.get_video_features(embedding)
             embedding = normalize_embeddings(embedding, return_tensor=True).float()
         return embedding
