@@ -9,15 +9,79 @@ import imageio
 from Dataload import preprocess_human_demo, adjust_frames, readGif, Embedding_gpu
 import json
 import random
+from collections import defaultdict
 from meta_world_name_ann import task_ann
 import os
 import shutil
 import joblib
-from sklearn.decomposition import PCA
+import torch.nn.functional as F
+import matplotlib.pyplot as plt
+from sklearn.decomposition import PCA, KernelPCA
 from torch.utils.data import Dataset
-from Transformation_Matrix import MILNCELoss
 from mlp import normalize_embeddings
 import torch
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+class MILNCELoss(th.nn.Module):
+    def __init__(self):
+        super(MILNCELoss, self).__init__()
+
+    def forward(self, video_embd, text_embd):
+        x = th.matmul(video_embd, text_embd.t())
+        x = x.view(video_embd.shape[0], video_embd.shape[0], -1)
+        nominator = x * th.eye(x.shape[0])[:, :, None].to(device) #.cuda()
+        nominator = nominator.sum(dim=1)
+        nominator = th.logsumexp(nominator, dim=1)
+        denominator = th.cat((x, x.permute(1, 0, 2)), dim=1).view(x.shape[0], -1)
+        denominator = th.logsumexp(denominator, dim=1)
+        return th.mean(denominator - nominator)
+
+def plot_s3d(video_embeddings, text_embeddings, choose_task, mappings, wandb_log, video_sample_per_task=15):
+    if isinstance(video_embeddings, torch.Tensor):
+        video_embeddings = video_embeddings.numpy()
+    if isinstance(text_embeddings, torch.Tensor):
+        text_embeddings = text_embeddings.numpy()
+
+    pca = PCA(n_components=2)
+    all_embeddings = np.concatenate((video_embeddings, text_embeddings), axis=0)
+    reduced_embeddings = pca.fit_transform(all_embeddings)
+    print("reduced_embeddings: ", reduced_embeddings.shape)
+
+    index_to_video_id = mappings['index_to_video_id']
+    index_to_text_label = mappings['index_to_text_label']
+
+    # Plot the reduced embeddings
+    colors = plt.cm.tab10(np.linspace(0, 1, len(choose_task)))  # 28 groups
+    plt.figure(figsize=(10, 8))  # 创建一个新的图像
+
+    for i in range(len(choose_task)):
+        # Plot video embeddings
+        video_group_data = reduced_embeddings[i * video_sample_per_task:(i + 1) * video_sample_per_task]
+        x_video = video_group_data[:, 0]
+        y_video = video_group_data[:, 1]
+        video_ids = [index_to_video_id[i * video_sample_per_task + j] for j in range(video_sample_per_task)]
+        label = video_ids[0].split('_output')[0]
+
+        plt.scatter(x_video, y_video, color=colors[i], label=label)
+
+        # Plot text embeddings (每10个视频抽取一个文本)
+        text_index = len(video_embeddings) + i * video_sample_per_task
+        if text_index < len(reduced_embeddings):
+            text_x = reduced_embeddings[text_index, 0]
+            text_y = reduced_embeddings[text_index, 1]
+            plt.scatter(text_x, text_y, color=colors[i], marker='+')
+
+    plt.title('Different Scenes PCA Visualization')
+    plt.xlabel('x-dim')
+    plt.ylabel('y-dim')
+
+    plt.legend(loc='upper left', ncol=1, bbox_to_anchor=(1, 1))
+    plt.tight_layout(rect=[0, 0, 1, 1])  # adjust the plot to the right (to fit the legend)
+
+    # 将图像上传到 WandB
+    #wandb.log({"PCA Visualization": wandb.Image(plt)})
+    wandb_log["PCA Visualization"] = wandb.Image(plt)
+
 
 
 class MetaDataset(Dataset):
@@ -50,7 +114,8 @@ class MetaDataset(Dataset):
                     label = task_ann.get(task_name, "Unknown task")
                     #print(label)
                     self.labels.extend([label] * len(selected_videos))
-                    self.video_ids.extend([f"{task_name}_{os.path.splitext(f)[0]}" for f in selected_videos])
+                    simplified_task_name = task_name.split('-v2')[0]
+                    self.video_ids.extend([f"{simplified_task_name}_{os.path.splitext(f)[0]}" for f in selected_videos])
 
         assert len(self.video_paths) == len(self.labels) == len(self.video_ids), "Mismatch between video paths, labels, and video IDs"
 
@@ -156,44 +221,83 @@ class AugmentedDataset(Dataset):
         return augmented_sample
 
 
-def Test_Model(video_embeddings, text_embeddings, train_mappings, epoch, model, Train_or_Validate):
+def Test_Model(video_embeddings, text_embeddings, train_mappings, epoch, model, val_task, Train_or_Validate, wandb_log):
     if model != None:
         with th.no_grad():
             adjusted_video_embeddings = model(video_embeddings)
     else:
         adjusted_video_embeddings = video_embeddings
-
-    accuracies_original, mrr_original = check_pairs(
+    
+    adjusted_video_embeddings = normalize_embeddings(adjusted_video_embeddings)
+    text_embeddings = normalize_embeddings(text_embeddings)
+    
+    accuracies_text, mrr_text = check_pairs(
         adjusted_video_embeddings.cpu().numpy(),
         text_embeddings.cpu().numpy(),
         train_mappings,
         False,
     )
+    accuracies_video, mrr_video = check_pairs(
+        adjusted_video_embeddings.cpu().numpy(),
+        text_embeddings.cpu().numpy(),
+        train_mappings,
+        False,
+        user='video'
+    )
+    #video_1, video_3, _ = compute_similarity_sorted(adjusted_video_embeddings, text_embeddings, val_task, 15)
     simi_score = th.mean(th.diag(th.matmul(adjusted_video_embeddings.cpu().float(), text_embeddings.cpu().float().t())))
-    cos_simi = np.mean(np.diag
-                       (cosine_similarity(adjusted_video_embeddings.cpu().numpy(),
-                                          text_embeddings.cpu().numpy())))
+    true_paired_cos_simi = F.cosine_similarity(adjusted_video_embeddings, text_embeddings, dim=1)
+    task_similarities = defaultdict(list)
+    for i, cos_sim in enumerate(true_paired_cos_simi):
+        video_id = train_mappings["index_to_video_id"][i]
+        task_id = video_id.split('_')[0]
+        task_similarities[task_id].append(cos_sim.item())
+    average_task_similarities_for_chart = {task_id: np.mean(sims) for task_id, sims in task_similarities.items()}
+    average_task_similarities = [{"task_id": task_id, "average_cosine_similarity": np.mean(sims)}
+                                 for task_id, sims in task_similarities.items()]
+
     video_norm = th.mean(th.norm(adjusted_video_embeddings, dim=1))
     text_norm = th.mean(th.norm(text_embeddings, dim=1))
     milnce_loss = MILNCELoss()
     validation_loss = milnce_loss(adjusted_video_embeddings, text_embeddings)
 
-    wandb.log({
-        f'{Train_or_Validate}_epoch': epoch + 1,
-        f'{Train_or_Validate}_loss': validation_loss,
-        f'{Train_or_Validate}_accuracy_top_1': accuracies_original.get("Top 1", ""),
-        f'{Train_or_Validate}_accuracy_top_3': accuracies_original.get("Top 3", ""),
-        f'{Train_or_Validate}_accuracy_top_5': accuracies_original.get("Top 5", ""),
-        f'{Train_or_Validate}_accuracy_top_10': accuracies_original.get("Top 10", ""),
-        f'{Train_or_Validate}_mrr_top_1': mrr_original.get("Top 1", ""),
-        f'{Train_or_Validate}_mrr_top_3': mrr_original.get("Top 3", ""),
-        f'{Train_or_Validate}_mrr_top_5': mrr_original.get("Top 5", ""),
-        f'{Train_or_Validate}_mrr_top_10': mrr_original.get("Top 10", ""),
-        f'{Train_or_Validate}_video_norm': video_norm,
-        f'{Train_or_Validate}_text_norm': text_norm,
-        f'{Train_or_Validate}_similarity_score': simi_score.item(),
-        f'{Train_or_Validate}_cosine_similarity': cos_simi
-    })
+    wandb_log[f'{Train_or_Validate}_epoch'] = epoch + 1
+    wandb_log[f'{Train_or_Validate}_loss'] = validation_loss
+    wandb_log[f'{Train_or_Validate}_accuracy_top_1'] = accuracies_text.get("Top 1", "")
+    wandb_log[f'{Train_or_Validate}_accuracy_top_3'] = accuracies_text.get("Top 3", "")
+    wandb_log[f'{Train_or_Validate}_accuracy_top_5'] = accuracies_text.get("Top 5", "")
+    wandb_log[f'{Train_or_Validate}_accuracy_top_10'] = accuracies_text.get("Top 10", "")
+    wandb_log[f'{Train_or_Validate}_mrr_top_1'] = mrr_text.get("Top 1", "")
+    wandb_log[f'{Train_or_Validate}_mrr_top_3'] = mrr_text.get("Top 3", "")
+    wandb_log[f'{Train_or_Validate}_mrr_top_5'] = mrr_text.get("Top 5", "")
+    wandb_log[f'{Train_or_Validate}_mrr_top_10'] = mrr_text.get("Top 10", "")
+    wandb_log[f'{Train_or_Validate}_video_accuracy_top_1'] = accuracies_video.get("Top 15", "")
+    wandb_log[f'{Train_or_Validate}_video_accuracy_top_3'] = accuracies_video.get("Top 45", "")
+    wandb_log[f'{Train_or_Validate}_video_accuracy_top_5'] = accuracies_video.get("Top 75", "")
+    wandb_log[f'{Train_or_Validate}_video_mrr_top_1'] = mrr_video.get("Top 15", "")
+    wandb_log[f'{Train_or_Validate}_video_mrr_top_3'] = mrr_video.get("Top 45", "")
+    wandb_log[f'{Train_or_Validate}_video_mrr_top_5'] = mrr_video.get("Top 75", "")
+    wandb_log[f'{Train_or_Validate}_video_norm'] = video_norm
+    wandb_log[f'{Train_or_Validate}_text_norm'] = text_norm
+    wandb_log[f'{Train_or_Validate}_similarity_score'] = simi_score.item()
+    wandb_log[f'{Train_or_Validate}_cosine_similarity'] = true_paired_cos_simi.mean().item()
+    #wandb_log[f'{Train_or_Validate}_average_task_similarities_chart'] = average_task_similarities_for_chart
+    if epoch == 1999:
+        wandb_table = wandb.Table(columns=["task_id", "average_cosine_similarity"])
+        for entry in average_task_similarities:
+            wandb_table.add_data(entry["task_id"], entry["average_cosine_similarity"])
+        wandb_log[f'{Train_or_Validate}_table_average_task_similarities'] = wandb_table
+    # plot_line = wandb.plot.line(
+    #         wandb_table, "epoch", "average_cosine_similarity", title="Average Cosine Similarity per Task")
+    # wandb.log({
+    #     "average_task_similarities_chart": wandb.plot.line(
+    #         wandb_table, "epoch", "average_cosine_similarity", title="Average Cosine Similarity per Task")
+    # })
+
+    #wandb.log({f'{Train_or_Validate}_average_task_similarities' : wandb_table})
+    if Train_or_Validate == 'Validate':
+        plot_s3d(adjusted_video_embeddings.cpu(), text_embeddings.cpu(), val_task, train_mappings, wandb_log, 15)
+        wandb_log[f'{Train_or_Validate}_average_task_similarities_chart'] = average_task_similarities_for_chart
     return adjusted_video_embeddings, text_embeddings
 
 
@@ -288,24 +392,36 @@ def generate_augmented_dataset(dataset, num_augmented, augment_fn):
 
 
 def reduce_dimension(
-        embeddings, variance_threshold, train_size, embed_type, seed, strong, num, dimension=None, filter=False
+        embeddings, variance_threshold, train_size, embed_type, seed, strong, num, dimension=None, filter=False, pca_emb=None, kernel = 'linear', val_task_name=None
 ):
     if variance_threshold == 0:
         return None, embeddings.float()
-
-    if dimension:
-        pca = PCA(n_components=dimension)
+    if kernel =='linear':
+        if dimension:
+            pca = PCA(n_components=dimension)
+        else:
+            pca = PCA(n_components=variance_threshold)
     else:
-        pca = PCA(n_components=variance_threshold)
-    reduced_embeddings = pca.fit_transform(embeddings)
-    os.makedirs('saved_model/M/metaworld/pca_model', exist_ok=True)
+        if dimension:
+            pca = KernelPCA(n_components=dimension, kernel=kernel)
+        else:
+            pca = KernelPCA(n_components=variance_threshold, kernel=kernel)
+    if pca_emb != None:
+        pca.fit(pca_emb)
+        reduced_embeddings = pca.transform(embeddings)
+    else:
+        reduced_embeddings = pca.fit_transform(embeddings)
+    # os.makedirs('saved_model/M/metaworld/pca_model', exist_ok=True)
+    pca_save_path = (f"saved_model/M/metaworld_xclip/{val_task_name}_Seed_{seed}/"
+                     f"{variance_threshold}_Aug_{strong}_{train_size}_{kernel}")
+    os.makedirs(pca_save_path, exist_ok=True)
     if filter:
         model_filename = (
             f"saved_model/M/OpenX/droid/filter/pca_model_{embed_type}_{variance_threshold}_{train_size}.pkl"
         )
     else:
         model_filename = (
-            f"saved_model/M/metaworld/pca_model/pca_model_{embed_type}_{variance_threshold}_{train_size}_Seed{seed}_{strong}_{num}.pkl"
+            f"{pca_save_path}/pca_model_{embed_type}.pkl"
         )
     joblib.dump(pca, model_filename)
     print(f"PCA model for {embed_type} saved to {model_filename}")
@@ -313,21 +429,23 @@ def reduce_dimension(
 
 
 def normalize_and_pca(sampled_video_embeddings, sampled_text_embeddings, validate_video_embeddings_normalized, validate_text_embeddings_normalized, variance_threshold, 
-                      current_sample_size, seed, device, strong, pca_sample_size):
+                      current_sample_size, seed, device, strong, pca_sample_size, kernel = 'linear', val_task_name=None):
     train_video_embeddings_normalized = normalize_embeddings(
         sampled_video_embeddings
     ).clone().cpu()
     train_text_embeddings_normalized = normalize_embeddings(
         sampled_text_embeddings
     ).clone().cpu()
+    pca_train_alltext = th.cat((train_text_embeddings_normalized, validate_text_embeddings_normalized.cpu()), dim=0)
+    print(pca_train_alltext.shape)
     pca_text, reduced_train_text = reduce_dimension(train_text_embeddings_normalized, variance_threshold,
                                                     current_sample_size,
                                                     'text', seed=seed, strong=strong, num=pca_sample_size,
-                                                    filter=False)
+                                                    filter=False, kernel=kernel, val_task_name=val_task_name) #pca_emb=pca_train_alltext
     pca_video, reduced_train_video = reduce_dimension(train_video_embeddings_normalized, variance_threshold,
                                                       current_sample_size, 'video', filter=False,
                                                       dimension=reduced_train_text.shape[1],
-                                                      seed=seed, strong=strong, num=pca_sample_size,)  # 35，512
+                                                      seed=seed, strong=strong, num=pca_sample_size,kernel=kernel, val_task_name=val_task_name)  # 35，512
     if pca_text != None:
         reduced_validate_video = torch.from_numpy(
             pca_video.transform(validate_video_embeddings_normalized.cpu())).float().to(device)
@@ -338,6 +456,7 @@ def normalize_and_pca(sampled_video_embeddings, sampled_text_embeddings, validat
         reduced_validate_text = (validate_text_embeddings_normalized).float().to(device)
     reduced_train_text = reduced_train_text.to(device)
     reduced_train_video = reduced_train_video.to(device)
+    print(reduced_train_text.shape, reduced_train_video.shape)
     return reduced_train_video, reduced_train_text, reduced_validate_video, reduced_validate_text, pca_video, pca_text
 
 
@@ -423,3 +542,36 @@ def Test_Model_OpenX(adjusted_video_embeddings, text_embeddings, train_mappings,
     with open(csv_file_path, 'a', newline='') as file:
         writer = csv.writer(file)
         writer.writerow(data_to_write_original)
+
+
+def compute_similarity_sorted(video_embeddings, text_embeddings, task_names, video_sample_per_task):
+    '''
+    compute the similarity between video embeddings and text embeddings
+    '''
+    text_single_embeddings = text_embeddings[::video_sample_per_task]
+    similarity = np.dot(video_embeddings, text_single_embeddings.T)
+
+    # sort the similarity matrix, from high to low
+    similarity_sorted = np.argsort(similarity, axis=1)[:, ::-1][:, :5]
+
+    top1_accuracy = 0
+    top3_accuracy = 0
+    top5_accuracy = 0
+    GT_label = np.zeros(len(video_embeddings))
+    for i in range(len(task_names)):
+        GT_label[i * video_sample_per_task:(i + 1) * video_sample_per_task] = i
+
+    for i in range(len(GT_label)):
+        label = GT_label[i]
+        if label in similarity_sorted[i][:1]:
+            top1_accuracy += 1
+        if label in similarity_sorted[i][:3]:
+            top3_accuracy += 1
+        if label in similarity_sorted[i][:5]:
+            top5_accuracy += 1
+
+    top1_accuracy = top1_accuracy / len(GT_label)
+    top3_accuracy = top3_accuracy / len(GT_label)
+    top5_accuracy = top5_accuracy / len(GT_label)
+    print(top1_accuracy, top3_accuracy, top5_accuracy)
+    return top1_accuracy, top3_accuracy, top5_accuracy

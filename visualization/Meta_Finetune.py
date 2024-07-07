@@ -11,7 +11,7 @@ import joblib
 import torch.nn.functional as F
 from torch.utils.data import Subset
 from Wandb_utils import Test_Model, image_aug_fn, AugmentedDataset, normalize_and_pca, save_augmented_videos, \
-    reduce_with_pca, MetaDataset
+    reduce_with_pca, MetaDataset, plot_s3d
 import numpy as np
 import os
 from pca import plot_embeddings
@@ -168,7 +168,7 @@ if __name__ == "__main__":
     augmentation = False
     if args.augmentation:
         augmentation = True
-    variance_thresholds = [0.9, 0.95, 512]
+    variance_thresholds = [512]
     sample_sizes = [45*15]  # [1, 2, 4, 8, 16, 21]
     seeds = [42]
     pca_sample_size = [15]  # 600, 1000, 1500, 2000
@@ -181,11 +181,11 @@ if __name__ == "__main__":
 
     s3d = S3D("../s3d_dict.npy", 512)
     # s3d = th.compile(s3d)
-    s3d = s3d.cuda()
+    s3d = s3d.to(device)
     s3d.load_state_dict(torch.load("../s3d_howto100m.pth"))
     s3d.eval()
 
-    val_task_id = [4, 13, 19, 36, 48]
+    val_task_id = [23, 24, 25, 26, 40]  #[13, 15, 35, 37, 46]#[8, 24, 38, 41, 47] #[4, 13, 19, 36, 48] #[13, 14, 15, 16, 17]#[1, 18, 19, 48, 49] #[23, 24, 25, 26, 40] #[1, 18, 19, 48, 49] #[13, 14, 15, 16, 17] #[4, 13, 19, 36, 48]#[8, 24, 38, 41, 47]
     all_task_id = set(range(50))
     train_task_id = list(all_task_id - set(val_task_id))
     train_dataset = MetaDataset(
@@ -232,13 +232,13 @@ if __name__ == "__main__":
                                 "learning_rate": 0.0005,
                                 "model": "M from PCA computed",  # random ini, PCA computed, MLP ini
                                 "dataset": "metaworld",
-                                "epochs": 600,
+                                "epochs": 5000,
                                 "sample size": size_multiplier,
                                 "seed": seed,
                                 "variance threshold": variance_threshold,
                                 "Unique": True,
-                                "Augmentation": 'No Augmentation',
-                                "Unseen Scenes": 'Seen tasks 4 13 19 36 48',
+                                "Augmentation": 'no', #'Text Augmentation'
+                                "Unseen Scenes": 'Handle(23-26) + Soccer(40)', #'Handle(23-26) + Soccer(40)',#'Seen tasks 4 13 19 36 48', #'Seen tasks 13 15 35 37 46' drawer(18-19) + basketball(1) + window(48-49)
                                 "Sample size used for PCA Matrix": num_augmented_per_video,
                                 "Stronger augmentation": strong,
                             }
@@ -247,12 +247,12 @@ if __name__ == "__main__":
                             train_video_embeddings, train_text_embeddings, validate_video_embeddings_normalized,
                             validate_text_embeddings_normalized, variance_threshold, current_sample_size, seed, device,
                             strong, num_augmented_per_video)
-                        Test_Model(train_video_embeddings.float().to(device),
-                                   train_text_embeddings.float().to(device),
-                                   train_mappings, -1, None, 'Train')
+                        Test_Model(normalize_embeddings(train_video_embeddings).float().to(device),
+                                   normalize_embeddings(train_text_embeddings).float().to(device),
+                                   train_mappings, -1, None, val_task_id, 'Train')
                         Test_Model(validate_video_embeddings_normalized.float().to(device),
                                    validate_text_embeddings_normalized.float().to(device), validate_mappings, -1, None,
-                                   'Validate')
+                                   val_task_id, 'Validate')
 
                         model = nn.Linear(reduced_train_video.shape[1], reduced_train_text.shape[1], bias=False).to(
                             device)
@@ -270,7 +270,7 @@ if __name__ == "__main__":
                         os.makedirs(save_dir, exist_ok=True)
                         os.makedirs(checkpoint_dir, exist_ok=True)
                         final_model_path = f"{save_dir}/M_model_{variance_threshold}_{current_sample_size}_Seed{seed}_milnce.pth"
-                        for epoch in range(600):
+                        for epoch in range(5000):
                             print(
                                 f"Training with {size_multiplier} samples in Epoch {epoch}, PCA {variance_threshold}, Seed{seed}")
                             checkpoint_model_path = f"{checkpoint_dir}/M_model_{variance_threshold}_{current_sample_size}_Seed{seed}_Epoch{epoch + 1}_milnce.pth"
@@ -287,16 +287,17 @@ if __name__ == "__main__":
                             finetune_M_Random(model, optimizer, reduced_train_video, reduced_train_text,
                                               checkpoint_model_path,
                                               milnce_loss)
-                            adjusted_train_video_embeddings, _ = Test_Model(reduced_train_video, reduced_train_text, train_mappings, epoch, model,
-                                       'Train')
-                            adjusted_validate_video_embeddings, _ = Test_Model(reduced_validate_video, reduced_validate_text, validate_mappings, epoch, model,
-                                       'Validate')
+                            adjusted_train_video_embeddings, _ = Test_Model(reduced_train_video, reduced_train_text, 
+                                                    train_mappings, epoch, model, val_task_id, 'Train')
+                            adjusted_validate_video_embeddings, _ = Test_Model(reduced_validate_video, reduced_validate_text, 
+                                                validate_mappings, epoch, model, val_task_id,'Validate')
                         torch.save(model.state_dict(), final_model_path)
                         print(f"Final model saved to {final_model_path}")
-                        plot_embeddings(adjusted_validate_video_embeddings.cpu(),
-                                        reduced_validate_text.cpu(), validate_mappings, 'plots',
-                                        'meta_val.png')
-                        plot_embeddings(adjusted_train_video_embeddings.cpu(),
-                                        reduced_train_text.cpu(), validate_mappings, 'plots',
-                                        'meta_train.png')
+                        # plot_embeddings(adjusted_validate_video_embeddings.cpu(),
+                        #                 reduced_validate_text.cpu(), validate_mappings, 'plots',
+                        #                 'meta_val.png')
+                        # plot_embeddings(adjusted_train_video_embeddings.cpu(),
+                        #                 reduced_train_text.cpu(), validate_mappings, 'plots',
+                        #                 'meta_train.png')
+                        
                         wandb.finish()
