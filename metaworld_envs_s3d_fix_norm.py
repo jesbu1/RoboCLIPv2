@@ -86,7 +86,7 @@ def adjust_frames_s3d(frames, target_frame_count = 32):
         frames = frames[index]
     elif len(frames) < 32:
         last_frame = frames[-1]
-        last_frame = np.expand_dim(last_frame, axis = 0)
+        last_frame = np.expand_dims(last_frame, axis = 0)
         for _ in range(32 - len(frames)):
             frames = np.concatenate([frames, last_frame])
     frames = frames[:,240-125:240+125,320-125:320+125,:]
