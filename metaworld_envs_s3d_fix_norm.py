@@ -41,7 +41,7 @@ import metaworld
 from metaworld.envs import (ALL_V2_ENVIRONMENTS_GOAL_OBSERVABLE,
                             ALL_V2_ENVIRONMENTS_GOAL_HIDDEN)
 
-from kitchen_env_wrappers import readGif
+# from kitchen_env_wrappers import readGif
 from matplotlib import animation
 import matplotlib.pyplot as plt
 
@@ -86,6 +86,7 @@ def adjust_frames_s3d(frames, target_frame_count = 32):
         frames = frames[index]
     elif len(frames) < 32:
         last_frame = frames[-1]
+        last_frame = np.expand_dim(last_frame, axis = 0)
         for _ in range(32 - len(frames)):
             frames = np.concatenate([frames, last_frame])
     frames = frames[:,240-125:240+125,320-125:320+125,:]
@@ -479,7 +480,7 @@ def main():
     wandb.log({"text_string": table1, "env_id": table2})
 
 
-    log_dir = f"/scr/jzhang96/logs/{experiment_name}"
+    log_dir = f"/home/jzhang96/logs/{experiment_name}"
     if not os.path.exists(log_dir):
         os.makedirs(log_dir)
     if args.n_envs > 1:
