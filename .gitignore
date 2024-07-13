@@ -168,3 +168,4 @@ s3d_howto100m.pth
 metaworld
 # metaworld_generation
 kitchem_alt
+losses/wandb
