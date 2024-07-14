@@ -11,20 +11,14 @@
 
 # Run the srun command
 # origin roboclip
-env_id="window-close-v2-goal-hidden"
-text_string="closing window"
-seed=42
-target_gif_path="metaworld_generate_gifs"
-
-# srun python metaworld_envs_s3d_fix_norm.py --target_gif_path "$target_gif_path" --n_envs 1 --wandb --succ_end --train_orcale --time_100 --env_id "$env_id" --text_string "$text_string" --seed "$seed" &
+srun python metaworld_envs_s3d_fix_norm.py --n_envs 1 --wandb --succ_end --train_orcale --time_100 --env_id window-close-v2-goal-hidden --text_string "closing window"
 # no threshold
-# srun python metaworld_envs_s3d_fix_norm.py --target_gif_path "$target_gif_path" --n_envs 1 --wandb --succ_end --train_orcale --warm_up_runs 10 --succ_end --norm_input --norm_output --time_100 --env_id "$env_id" --text_string "$text_string" --seed "$seed" &
+srun python metaworld_envs_s3d_fix_norm.py --n_envs 1 --wandb --succ_end --train_orcale --warm_up_runs 10 --succ_end --norm_input --norm_output --time_100 --env_id window-close-v2-goal-hidden --text_string "closing window"
 # threshold 
-# srun python metaworld_envs_s3d_fix_norm.py --target_gif_path "$target_gif_path" --n_envs 1 --wandb --succ_end --train_orcale --warm_up_runs 10 --succ_end --norm_input --norm_output --time_100 --threshold_reward --env_id "$env_id" --text_string "$text_string" --seed "$seed" &
+srun python metaworld_envs_s3d_fix_norm.py --n_envs 1 --wandb --succ_end --train_orcale --warm_up_runs 10 --succ_end --norm_input --norm_output --time_100 --threshold_reward --env_id window-close-v2-goal-hidden --text_string "closing window"
 # threshold + project
-# srun python metaworld_envs_s3d_fix_norm.py --target_gif_path "$target_gif_path" --n_envs 1 --wandb --succ_end --train_orcale --warm_up_runs 10 --succ_end --project_reward --norm_input --norm_output --time_100 --threshold_reward --env_id "$env_id" --text_string "$text_string" --seed "$seed" &
- 
-# wait
+srun python metaworld_envs_s3d_fix_norm.py --n_envs 1 --wandb --succ_end --train_orcale --warm_up_runs 10 --succ_end --project_reward --norm_input --norm_output --time_100 --threshold_reward --env_id window-close-v2-goal-hidden --text_string "closing window"
+
 
 # echo "All commands have finished."
 

@@ -37,6 +37,7 @@ def adjust_frames_xclip(frames, target_frame_count = 32):
 
 total_sim = 0
 total_random_sim = 0
+count = 0
 with th.no_grad():
     for i in range (len(ALL_V2_ENVIRONMENTS_GOAL_HIDDEN)):
         # random int 0-49 0 and 49 are included
@@ -84,10 +85,11 @@ with th.no_grad():
         random_frames = random_frames.permute(3,0,1,2).float().unsqueeze(0).cuda()
         collect_frames = collect_frames.permute(3,0,1,2).float().unsqueeze(0).cuda()
 
-        # gt_frames = gt_frames/255.0
-        # random_frames = random_frames/255.0
-        # collect_frames = collect_frames/255.0
+        gt_frames = gt_frames/255.0
+        random_frames = random_frames/255.0
+        collect_frames = collect_frames/255.0
         frames = th.cat((gt_frames, random_frames, collect_frames), dim=0)
+        import pdb; pdb.set_trace()
         embeddings = model(frames)["video_embedding"]
         gt_embedding = embeddings[0:1]
         random_embedding = embeddings[1:2]
@@ -95,10 +97,17 @@ with th.no_grad():
         gt_embedding = torch.nn.functional.normalize(gt_embedding, p=2, dim=1)
         random_embedding = torch.nn.functional.normalize(random_embedding, p=2, dim=1)
         collect_embedding = torch.nn.functional.normalize(collect_embedding, p=2, dim=1)
-        sim = cosine_similarity(gt_embedding, random_embedding)
-        random_sim = cosine_similarity(gt_embedding, collect_embedding)
+        # sim = cosine_similarity(gt_embedding, random_embedding)
+        # random_sim = cosine_similarity(gt_embedding, collect_embedding)
+        # compute dot product
+        sim = torch.mm(gt_embedding, random_embedding.t())[0][0]
+        random_sim = torch.mm(gt_embedding, collect_embedding.t())[0][0]
+
+        if sim > random_sim:
+            count += 1
         print(key, sim, random_sim, i)
         total_sim += sim
         total_random_sim += random_sim
     print("Average similarity: ", total_sim/len(ALL_V2_ENVIRONMENTS_GOAL_HIDDEN), total_random_sim/len(ALL_V2_ENVIRONMENTS_GOAL_HIDDEN))
+    print("Count: ", count, count/len(ALL_V2_ENVIRONMENTS_GOAL_HIDDEN))
         # import pdb; pdb.set_trace()
