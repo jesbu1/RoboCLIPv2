@@ -1,10 +1,7 @@
-# srun -n 1 --cpus-per-task 1 --gres=gpu:1 
-# # python metaworld_envs_xclip_together.py --env_id window-close-v2-goal-hidden --text_string "closing window" --n_envs 1 --wandb --seed 42 --succ_end --random_reset
-
 
 from gym import Env, spaces
 import numpy as np
-from stable_baselines3 import PPO
+from stable_baselines3 import PPO, SAC
 import torch as th
 from s3dg import S3D
 from gym.wrappers.time_limit import TimeLimit
@@ -41,7 +38,7 @@ import metaworld
 from metaworld.envs import (ALL_V2_ENVIRONMENTS_GOAL_OBSERVABLE,
                             ALL_V2_ENVIRONMENTS_GOAL_HIDDEN)
 
-# from kitchen_env_wrappers import readGif
+from kitchen_env_wrappers import readGif
 from matplotlib import animation
 import matplotlib.pyplot as plt
 
@@ -55,7 +52,6 @@ import torch.nn.functional as F
 import h5py
 import json
 from s3dg import S3D
-
 
 
 
@@ -82,12 +78,14 @@ def adjust_frames_s3d(frames, target_frame_count = 32):
     Ensures same numbers of frames(32). 
     """
     frames = np.array(frames)
+    #print(frames.shape)
     if len(frames) > 32:
         index = np.linspace(0, len(frames)-1, 32, dtype=int)
         frames = frames[index]
     elif len(frames) < 32:
         last_frame = frames[-1]
-        last_frame = np.expand_dims(last_frame, axis = 0)
+        last_frame = np.expand_dims(last_frame, axis=0)
+        #print(last_frame.shape)
         for _ in range(32 - len(frames)):
             frames = np.concatenate([frames, last_frame])
     frames = frames[:,240-125:240+125,320-125:320+125,:]
@@ -97,18 +95,6 @@ def adjust_frames_s3d(frames, target_frame_count = 32):
     return frames
 
 
-class SingleLayerMLP(th.nn.Module):
-    def __init__(self, input_dim, output_dim, normalize=True):
-        super(SingleLayerMLP, self).__init__()
-        self.linear = th.nn.Linear(input_dim, output_dim)
-        self.normalize = normalize
-
-    def forward(self, x):
-        x = self.linear(x)
-        # Apply L2 normalization to each embedding
-        if self.normalize:
-            x = F.normalize(x, p=2, dim=1)
-        return x
 
 
 def normalize_embeddings(embeddings, return_tensor=True):
@@ -127,7 +113,7 @@ def get_args():
     parser.add_argument('--text_string', type=str, default='closing door')
     parser.add_argument('--dir_add', type=str, default='')
     parser.add_argument('--env_id', type=str, default='door-close-v2-goal-hidden')
-    parser.add_argument('--total_time_steps', type=int, default=300000)
+    parser.add_argument('--total_time_steps', type=int, default=500000)
     parser.add_argument('--n_envs', type=int, default=8)
     parser.add_argument('--n_steps', type=int, default=128)
     parser.add_argument('--pretrained', type=str, default=None)
@@ -150,7 +136,6 @@ def get_args():
     parser.add_argument('--norm_output', action="store_true")
     parser.add_argument('--time_100', action="store_true")
     parser.add_argument('--threshold_reward', action="store_true")
-    parser.add_argument('--transform_model_path', type=str, default="/scr/jzhang96/triplet_loss_models/s3d_model_2.pth")
 
     # parser.add_argument('--xclip_model', type=str, default='microsoft/xclip-base-patch16-zero-shot')
 
@@ -175,15 +160,10 @@ class MetaworldSparse(Env):
         self.action_space = self.env.action_space
         self.past_observations = []
 
-        
-
         with th.no_grad():
-            self.net = S3D('s3d_dict.npy', 512)
-            self.net.load_state_dict(th.load('s3d_howto100m.pth'))
+            self.net = S3D('../s3d_dict.npy', 512)
+            self.net.load_state_dict(th.load('../s3d_howto100m.pth'))
             self.net = self.net.eval().cuda()
-            self.transform_model = SingleLayerMLP(512, 512)
-            self.transform_model.load_state_dict(th.load("/home/jzhang96/triplet_loss_models/triplet_loss_42_s3d_TimeShuffle_TimeShort_Norm_LowerBound_DoorOverFit/169.pth"))
-            self.transform_model = self.transform_model.eval().cuda()
 
             self.target_embedding = None
 
@@ -216,7 +196,6 @@ class MetaworldSparse(Env):
                     self.target_embedding = video_embedding
                     if args.norm_output:
                         self.target_embedding = normalize_embeddings(self.target_embedding, return_tensor=True).float()
-                    self.target_embedding = self.transform_model(self.target_embedding)
 
             self.max_sim = None
             if args.warm_up_runs > 0:
@@ -224,7 +203,6 @@ class MetaworldSparse(Env):
                     embedding = self.warm_up_run()
                     if args.norm_output:
                         embedding = normalize_embeddings(embedding, return_tensor=True).float()
-                    embedding = self.transform_model(embedding)
                     sim = th.matmul(self.target_embedding, embedding.t())
                     if self.args.time_100:
                         sim = sim * 100
@@ -293,7 +271,6 @@ class MetaworldSparse(Env):
                 if self.args.norm_output:
                     video_embedding = normalize_embeddings(video_embedding, return_tensor=True).float()
                     self.target_embedding = normalize_embeddings(self.target_embedding, return_tensor=True).float()
-                video_embedding = self.transform_model(video_embedding)
                 similarity_matrix = th.matmul(self.target_embedding, video_embedding.t())
                 reward = similarity_matrix.detach().cpu().numpy()[0][0]
 
@@ -466,29 +443,25 @@ def main():
     WANDB_ENTITY_NAME = "clvr"
     WANDB_PROJECT_NAME = "roboclip-v2"
 
-    experiment_name = "debug_s3d_baseline_only_upperbound" + args.env_id + "_" + str(args.seed)
+    experiment_name = "debug_s3d_baseline_" + args.env_id + "_" + str(args.seed)
     if args.train_orcale:
-        experiment_name = experiment_name + "_TrainOracle"
+        experiment_name = experiment_name + "_train_oracle"
     if args.threshold_reward:
-        experiment_name = experiment_name + "_Threshold"
+        experiment_name = experiment_name + "_threshold"
     if args.project_reward:
-        experiment_name = experiment_name + "_ProjectReward"
+        experiment_name = experiment_name + "_project_reward"
     if args.norm_input:
-        experiment_name = experiment_name + "_NormInput"
+        experiment_name = experiment_name + "_norm_input"
     if args.norm_output:
-        experiment_name = experiment_name + "_NormOutput"
+        experiment_name = experiment_name + "_norm_output"
     if args.time_100:
-        experiment_name = experiment_name + "_Time100"
-    if args.time:
-        experiment_name = experiment_name + "_Time"
-    else:
-        experiment_name = experiment_name + "_NoTime"
+        experiment_name = experiment_name + "_time_100"
 
     if args.wandb:
         run = wandb.init(
             entity=WANDB_ENTITY_NAME,
             project=WANDB_PROJECT_NAME,
-            group="debug_s3d_baselines_run_transform" + args.env_id,
+            group="s3d_baselines_run" + args.env_id,
             config=args,
             name=experiment_name,
             monitor_gym=True,
@@ -506,9 +479,7 @@ def main():
     wandb.log({"text_string": table1, "env_id": table2})
 
 
-    log_dir = f"/home/jzhang96/logs/{experiment_name}"
-    # log_dir = f"/scr/jzhang96/logs/{experiment_name}"
-
+    log_dir = f"/scr/yusenluo/RoboCLIP/visualization/baseline_logs/{experiment_name}"
     if not os.path.exists(log_dir):
         os.makedirs(log_dir)
     if args.n_envs > 1:
@@ -516,10 +487,20 @@ def main():
     else:
         envs = DummyVecEnv([make_env(args, eval = False)])
 
-    if not args.pretrained:
-        model = PPO("MlpPolicy", envs, verbose=1, tensorboard_log=log_dir, n_steps=args.n_steps, batch_size=args.n_steps*args.n_envs, n_epochs=1, ent_coef=0.5)
+    if args.algo.lower() == 'ppo':
+        if not args.pretrained:
+            model = PPO("MlpPolicy", envs, verbose=1, tensorboard_log=log_dir, n_steps=args.n_steps,
+                        batch_size=args.n_steps * args.n_envs, n_epochs=1, ent_coef=0.5)
+        else:
+            model = PPO.load(args.pretrained, env=envs, tensorboard_log=log_dir)
+    elif args.algo.lower() == 'sac':
+        if not args.pretrained:
+            model = SAC("MlpPolicy", envs, verbose=1, tensorboard_log=log_dir, batch_size=args.n_steps * args.n_envs,
+                        ent_coef=0.5)
+        else:
+            model = SAC.load(args.pretrained, env=envs, tensorboard_log=log_dir)
     else:
-        model = PPO.load(args.pretrained, env=envs, tensorboard_log=log_dir)
+        raise ValueError("Unsupported algorithm. Choose either 'ppo' or 'sac'.")
 
     if args.n_envs > 1:
         eval_env = SubprocVecEnv([make_env("dense_original", args.env_id, i) for i in range(args.n_envs)])#KitchenEnvDenseOriginalReward(time=True)

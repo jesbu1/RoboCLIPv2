@@ -41,7 +41,7 @@ class GifDataset(Dataset):
         self.shorten_time = args.time_shorten
 
     def __len__(self):
-        return len(self.keys) * 20
+        return len(self.keys) * 120
 
 
     def __getitem__(self, idx):
@@ -172,7 +172,8 @@ class GifProgressDataset(GifDataset):
     def __init__(self, args):
         # init parent class first
         super(GifProgressDataset, self).__init__(args)
-        self.candidate_type = [1]
+        # self.candidate_type = [1]
+        self.candidate_type = []
         if args.time_shuffle:
             self.candidate_type.append(2)
         if args.time_shorten:

@@ -1,10 +1,8 @@
-# srun -n 1 --cpus-per-task 1 --gres=gpu:1 
-# # python metaworld_envs_xclip_together.py --env_id window-close-v2-goal-hidden --text_string "closing window" --n_envs 1 --wandb --seed 42 --succ_end --random_reset
 
 
 from gym import Env, spaces
 import numpy as np
-from stable_baselines3 import PPO
+from stable_baselines3 import PPO, SAC
 import torch as th
 from s3dg import S3D
 from gym.wrappers.time_limit import TimeLimit
@@ -178,11 +176,11 @@ class MetaworldSparse(Env):
         
 
         with th.no_grad():
-            self.net = S3D('s3d_dict.npy', 512)
-            self.net.load_state_dict(th.load('s3d_howto100m.pth'))
+            self.net = S3D('../s3d_dict.npy', 512)
+            self.net.load_state_dict(th.load('../s3d_howto100m.pth'))
             self.net = self.net.eval().cuda()
             self.transform_model = SingleLayerMLP(512, 512)
-            self.transform_model.load_state_dict(th.load("/home/jzhang96/triplet_loss_models/triplet_loss_42_s3d_TimeShuffle_TimeShort_Norm_LowerBound_DoorOverFit/169.pth"))
+            self.transform_model.load_state_dict(th.load("/scr/jzhang96/triplet_loss_models/s3d_norm_model_48.pth"))
             self.transform_model = self.transform_model.eval().cuda()
 
             self.target_embedding = None
@@ -466,7 +464,7 @@ def main():
     WANDB_ENTITY_NAME = "clvr"
     WANDB_PROJECT_NAME = "roboclip-v2"
 
-    experiment_name = "debug_s3d_baseline_only_upperbound" + args.env_id + "_" + str(args.seed)
+    experiment_name = "debug_s3d_baseline_" + args.env_id + "_" + str(args.seed)
     if args.train_orcale:
         experiment_name = experiment_name + "_TrainOracle"
     if args.threshold_reward:
@@ -506,8 +504,8 @@ def main():
     wandb.log({"text_string": table1, "env_id": table2})
 
 
-    log_dir = f"/home/jzhang96/logs/{experiment_name}"
-    # log_dir = f"/scr/jzhang96/logs/{experiment_name}"
+    # log_dir = f"/home/jzhang96/logs/{experiment_name}"
+    log_dir = f"/scr/yusenluo/RoboCLIP/visualization/baseline_logs/{experiment_name}"
 
     if not os.path.exists(log_dir):
         os.makedirs(log_dir)
@@ -516,10 +514,20 @@ def main():
     else:
         envs = DummyVecEnv([make_env(args, eval = False)])
 
-    if not args.pretrained:
-        model = PPO("MlpPolicy", envs, verbose=1, tensorboard_log=log_dir, n_steps=args.n_steps, batch_size=args.n_steps*args.n_envs, n_epochs=1, ent_coef=0.5)
+    if args.algo.lower() == 'ppo':
+        if not args.pretrained:
+            model = PPO("MlpPolicy", envs, verbose=1, tensorboard_log=log_dir, n_steps=args.n_steps,
+                        batch_size=args.n_steps * args.n_envs, n_epochs=1, ent_coef=0.5)
+        else:
+            model = PPO.load(args.pretrained, env=envs, tensorboard_log=log_dir)
+    elif args.algo.lower() == 'sac':
+        if not args.pretrained:
+            model = SAC("MlpPolicy", envs, verbose=1, tensorboard_log=log_dir, batch_size=args.n_steps * args.n_envs,
+                        ent_coef=0.5)
+        else:
+            model = SAC.load(args.pretrained, env=envs, tensorboard_log=log_dir)
     else:
-        model = PPO.load(args.pretrained, env=envs, tensorboard_log=log_dir)
+        raise ValueError("Unsupported algorithm. Choose either 'ppo' or 'sac'.")
 
     if args.n_envs > 1:
         eval_env = SubprocVecEnv([make_env("dense_original", args.env_id, i) for i in range(args.n_envs)])#KitchenEnvDenseOriginalReward(time=True)

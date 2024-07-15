@@ -203,13 +203,13 @@ def main(args):
         
         if epoch % 1 == 0:
             if args.model_name == "xclip":
-                if not os.path.exists(f"/scr/jzhang96/triplet_loss_models/{experiment_name}"):
-                    os.makedirs(f"/scr/jzhang96/triplet_loss_models/{experiment_name}")
-                th.save(transform_model.state_dict(), f"/scr/jzhang96/triplet_loss_models/{experiment_name}/{epoch}.pth")
+                if not os.path.exists(f"/home/jzhang96/triplet_loss_models/{experiment_name}"):
+                    os.makedirs(f"/home/jzhang96/triplet_loss_models/{experiment_name}")
+                th.save(transform_model.state_dict(), f"/home/jzhang96/triplet_loss_models/{experiment_name}/{epoch}.pth")
             else:
-                if not os.path.exists(f"/scr/jzhang96/triplet_loss_models/{experiment_name}"):
-                    os.makedirs(f"/scr/jzhang96/triplet_loss_models/{experiment_name}")
-                th.save(transform_model.state_dict(), f"/scr/jzhang96/triplet_loss_models/{experiment_name}/{epoch}.pth")
+                if not os.path.exists(f"/home/jzhang96/triplet_loss_models/{experiment_name}"):
+                    os.makedirs(f"/home/jzhang96/triplet_loss_models/{experiment_name}")
+                th.save(transform_model.state_dict(), f"/home/jzhang96/triplet_loss_models/{experiment_name}/{epoch}.pth")
             
 
             
@@ -222,7 +222,7 @@ if __name__ == '__main__':
     argparser = argparse.ArgumentParser()
     argparser.add_argument('--model_name', type=str, default='xclip', choices=['xclip', 's3d'])
     argparser.add_argument('--time_shuffle', action='store_true')
-    argparser.add_argument('--h5_path', type=str, default='/scr/jzhang96/metaworld_gifs_1.h5')
+    argparser.add_argument('--h5_path', type=str, default='/home/jzhang96/metaworld_gifs_1.h5')
     argparser.add_argument('--time_shorten', action='store_true')
     argparser.add_argument('--norm', action='store_true')
     argparser.add_argument('--seed', type=int, default=42)
