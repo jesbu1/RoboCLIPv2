@@ -498,8 +498,8 @@ def main():
             model = PPO.load(args.pretrained, env=envs, tensorboard_log=log_dir)
     elif args.algo.lower() == 'sac':
         if not args.pretrained:
-            model = SAC("MlpPolicy", envs, verbose=1, tensorboard_log=log_dir, batch_size=args.n_steps * args.n_envs,
-                        ent_coef=0.5)
+            model = SAC("MlpPolicy", envs, verbose=1, tensorboard_log=log_dir,
+                        ent_coef=0.2, buffer_size=args.total_time_steps, learning_starts=256)
         else:
             model = SAC.load(args.pretrained, env=envs, tensorboard_log=log_dir)
     else:
