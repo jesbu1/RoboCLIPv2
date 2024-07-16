@@ -185,7 +185,7 @@ class MetaworldSparse(Env):
             self.net.load_state_dict(th.load('./s3d_howto100m.pth'))
             self.net = self.net.eval().cuda()
             self.transform_model = SingleLayerMLP(512, 512)
-            self.transform_model.load_state_dict(th.load("/home/jzhang96/triplet_loss_models/triplet_loss_42_s3d_TimeShuffle_TimeShort_Norm_LowerBound_DoorOverFit/169.pth"))
+            self.transform_model.load_state_dict(th.load("/home/jzhang96/triplet_loss_models/triplet_loss_42_s3d_l1_TimeShuffle_TimeShort_Norm_LowerBound_DoorOverFit/999.pth"))
             self.transform_model = self.transform_model.eval().cuda()
 
             self.target_embedding = None
@@ -531,7 +531,7 @@ def main():
         if not args.pretrained:
             model = SAC("MlpPolicy", envs, verbose=1, tensorboard_log=log_dir, 
                         # batch_size=args.n_steps * args.n_envs,
-                        ent_coef=0.2 , buffer_size=args.total_time_steps, learning_starts=256)
+                        ent_coef=args.entropy_term , buffer_size=args.total_time_steps, learning_starts=256)
         else:
             model = SAC.load(args.pretrained, env=envs, tensorboard_log=log_dir)
     else:
