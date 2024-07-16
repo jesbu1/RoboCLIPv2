@@ -72,7 +72,11 @@ fix gpu, forward xclip with gpu Done
 
 id_task = json.load(open("id_task.json", "r"))
 
-
+def parse_entropy_term(value):
+    try:
+        return float(value)
+    except ValueError:
+        return value
 
 
 def adjust_frames_s3d(frames, target_frame_count = 32):
@@ -149,6 +153,7 @@ def get_args():
     parser.add_argument('--time_100', action="store_true")
     parser.add_argument('--threshold_reward', action="store_true")
     parser.add_argument('--transform_model_path', type=str, default="/scr/jzhang96/triplet_loss_models/s3d_model_2.pth")
+    parser.add_argument('--entropy_term', type=parse_entropy_term, default="auto")
 
     # parser.add_argument('--xclip_model', type=str, default='microsoft/xclip-base-patch16-zero-shot')
 
@@ -176,11 +181,11 @@ class MetaworldSparse(Env):
         
 
         with th.no_grad():
-            self.net = S3D('../s3d_dict.npy', 512)
-            self.net.load_state_dict(th.load('../s3d_howto100m.pth'))
+            self.net = S3D('./s3d_dict.npy', 512)
+            self.net.load_state_dict(th.load('./s3d_howto100m.pth'))
             self.net = self.net.eval().cuda()
             self.transform_model = SingleLayerMLP(512, 512)
-            self.transform_model.load_state_dict(th.load("/scr/jzhang96/triplet_loss_models/s3d_norm_model_48.pth"))
+            self.transform_model.load_state_dict(th.load("/home/jzhang96/triplet_loss_models/triplet_loss_42_s3d_TimeShuffle_TimeShort_Norm_LowerBound_DoorOverFit/169.pth"))
             self.transform_model = self.transform_model.eval().cuda()
 
             self.target_embedding = None
@@ -464,7 +469,7 @@ def main():
     WANDB_ENTITY_NAME = "clvr"
     WANDB_PROJECT_NAME = "roboclip-v2"
 
-    experiment_name = "debug_s3d_baseline_" + args.env_id + "_" + str(args.seed)
+    experiment_name = "debug_s3d_baseline_" + args.env_id + "_" + args.algo + "_" + str(args.seed)
     if args.train_orcale:
         experiment_name = experiment_name + "_TrainOracle"
     if args.threshold_reward:
@@ -481,12 +486,14 @@ def main():
         experiment_name = experiment_name + "_Time"
     else:
         experiment_name = experiment_name + "_NoTime"
-
+    if args.succ_end:
+        experiment_name = experiment_name + "_SuccEnd"
+    experiment_name = experiment_name + "_" + str(args.entropy_term)
     if args.wandb:
         run = wandb.init(
             entity=WANDB_ENTITY_NAME,
             project=WANDB_PROJECT_NAME,
-            group="debug_s3d_baselines_run_transform" + args.env_id,
+            group="debug_s3d_transform_run_transform" + args.env_id,
             config=args,
             name=experiment_name,
             monitor_gym=True,
@@ -504,8 +511,8 @@ def main():
     wandb.log({"text_string": table1, "env_id": table2})
 
 
-    # log_dir = f"/home/jzhang96/logs/{experiment_name}"
-    log_dir = f"/scr/yusenluo/RoboCLIP/visualization/baseline_logs/{experiment_name}"
+    log_dir = f"/home/jzhang96/logs/{experiment_name}"
+    # log_dir = f"/scr/yusenluo/RoboCLIP/visualization/baseline_logs/{experiment_name}"
 
     if not os.path.exists(log_dir):
         os.makedirs(log_dir)
@@ -522,8 +529,9 @@ def main():
             model = PPO.load(args.pretrained, env=envs, tensorboard_log=log_dir)
     elif args.algo.lower() == 'sac':
         if not args.pretrained:
-            model = SAC("MlpPolicy", envs, verbose=1, tensorboard_log=log_dir, batch_size=args.n_steps * args.n_envs,
-                        ent_coef=0.5)
+            model = SAC("MlpPolicy", envs, verbose=1, tensorboard_log=log_dir, 
+                        # batch_size=args.n_steps * args.n_envs,
+                        ent_coef=0.2 , buffer_size=args.total_time_steps, learning_starts=256)
         else:
             model = SAC.load(args.pretrained, env=envs, tensorboard_log=log_dir)
     else:

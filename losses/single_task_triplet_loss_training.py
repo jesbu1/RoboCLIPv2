@@ -77,21 +77,24 @@ def triplet_loss_lower_bound(gt, positive, negative, type, margin = (0.1, 0.2, 0
     mask_type_1 = (type == 1)
     loss[mask_type_1] = F.relu(margin[0] - pos_sim[mask_type_1] + neg_sim[mask_type_1])
 
-    # type2: semi-hard negative margin = 0.25
+    # type2: semi-hard negative margin = 0.2
     mask_type_2 = (type == 2)
     loss[mask_type_2] = F.relu(margin[1] - pos_sim[mask_type_2] + neg_sim[mask_type_2])
 
-    # type3: adaptive margin
+    # type3: adaptive margin # can change to L1 loss
     mask_type_3 = (type == 3)
     progress = progress[mask_type_3]
     # adaptive margin range from 0.3 to 0.9
-    adaptive_margin_upper_bound = (margin[2] + (margin[3] - margin[2]) * progress).cuda()
-    adaptive_margin_lower_bound = (margin[2] + (margin[3] - margin[2]) * progress - 0.1).cuda()
-    #make sure negative similarity - positive similarity is between upper and lower bound
-    simi_diff = neg_sim[mask_type_3] - pos_sim[mask_type_3]
-    loss_upper = F.relu(adaptive_margin_upper_bound - simi_diff)
-    loss_lower = F.relu(simi_diff - adaptive_margin_lower_bound)
-    loss[mask_type_3] = loss_upper + loss_lower
+    # adaptive_margin_upper_bound = (margin[2] + (margin[3] - margin[2]) * progress).cuda()
+    # adaptive_margin_lower_bound = (margin[2] + (margin[3] - margin[2]) * progress - 0.1).cuda()
+    # #make sure negative similarity - positive similarity is between upper and lower bound
+    # simi_diff = neg_sim[mask_type_3] - pos_sim[mask_type_3]
+    # loss_upper = F.relu(adaptive_margin_upper_bound - simi_diff)
+    # loss_lower = F.relu(simi_diff - adaptive_margin_lower_bound)
+    # loss[mask_type_3] = loss_upper + loss_lower
+    progress_range = ((margin[3] - margin[2]) * progress + margin[2]).cuda()
+    loss[mask_type_3] = F.l1_loss(neg_sim[mask_type_3] - pos_sim[mask_type_3], progress_range)
+
 
 
     return loss.mean()
@@ -123,7 +126,7 @@ def main(args):
     # experiment_name = args.experiment_name + "_" + wandb_eval_task_name + "_" + str(args.seed)
     # if args.mse:
     #     experiment_name = experiment_name + "_mse_" + str(args.mse_weight)
-    experiment_name = "triplet_loss" + "_" + str(args.seed) + "_" + args.model_name
+    experiment_name = "triplet_loss" + "_" + str(args.seed) + "_" + args.model_name + "_l1"
     if args.time_shuffle:
         experiment_name += "_TimeShuffle"
     if args.time_shorten:

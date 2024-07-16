@@ -74,7 +74,11 @@ fix gpu, forward xclip with gpu Done
 
 id_task = json.load(open("id_task.json", "r"))
 
-
+def parse_entropy_term(value):
+    try:
+        return float(value)
+    except ValueError:
+        return value
 
 
 def adjust_frames_s3d(frames, target_frame_count = 32):
@@ -151,6 +155,7 @@ def get_args():
     parser.add_argument('--time_100', action="store_true")
     parser.add_argument('--threshold_reward', action="store_true")
     parser.add_argument('--transform_model_path', type=str, default="/scr/jzhang96/triplet_loss_models/s3d_model_2.pth")
+    parser.add_argument('--entropy_term', type=parse_entropy_term, default="auto")
 
     # parser.add_argument('--xclip_model', type=str, default='microsoft/xclip-base-patch16-zero-shot')
 
@@ -483,6 +488,9 @@ def main():
         experiment_name = experiment_name + "_Time"
     else:
         experiment_name = experiment_name + "_NoTime"
+    if args.succ_end:
+        experiment_name = experiment_name + "_SuccEnd"
+    experiment_name = experiment_name + "_" + str(args.entropy_term)
 
     if args.wandb:
         run = wandb.init(
