@@ -154,6 +154,8 @@ def get_args():
     parser.add_argument('--threshold_reward', action="store_true")
     parser.add_argument('--transform_model_path', type=str, default="/scr/jzhang96/triplet_loss_models/s3d_model_2.pth")
     parser.add_argument('--entropy_term', type=parse_entropy_term, default="auto")
+    parser.add_argument('--time_penalty', type=float, default=0.0)
+    parser.add_argument('--succ_bonus', type=float, default=0.0)
 
     # parser.add_argument('--xclip_model', type=str, default='microsoft/xclip-base-patch16-zero-shot')
 
@@ -315,10 +317,13 @@ class MetaworldSparse(Env):
                     else:
                         raise ValueError("Please provide the max similarity score")
                 print("reward", reward)
+                if self.args.succ_bonus:
+                    if info['success']:
+                        reward += self.args.succ_bonus
 
-            return obs, reward, done, info
+            return obs, reward - args.time_penalty, done, info
         
-        return obs, 0.0, done, info
+        return obs, -args.time_penalty, done, info
 
     def reset(self):
         self.past_observations = []
@@ -488,7 +493,18 @@ def main():
         experiment_name = experiment_name + "_NoTime"
     if args.succ_end:
         experiment_name = experiment_name + "_SuccEnd"
+
+    if args.succ_bonus > 0:
+        experiment_name = experiment_name + "_SuccBonus" + str(args.succ_bonus)
+    if args.time_penalty > 0:
+        experiment_name = experiment_name + "_TimePenalty" + str(args.time_penalty)
     experiment_name = experiment_name + "_" + str(args.entropy_term)
+
+
+
+
+
+
     if args.wandb:
         run = wandb.init(
             entity=WANDB_ENTITY_NAME,

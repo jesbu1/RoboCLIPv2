@@ -94,7 +94,11 @@ def adjust_frames_s3d(frames, target_frame_count = 32):
 
     return frames
 
-
+def parse_entropy_term(value):
+    try:
+        return float(value)
+    except ValueError:
+        return value
 
 
 def normalize_embeddings(embeddings, return_tensor=True):
@@ -136,7 +140,9 @@ def get_args():
     parser.add_argument('--norm_output', action="store_true")
     parser.add_argument('--time_100', action="store_true")
     parser.add_argument('--threshold_reward', action="store_true")
-
+    parser.add_argument('--entropy_term', type=parse_entropy_term, default="auto")
+    parser.add_argument('--time_penalty', type=float, default=0.0)
+    parser.add_argument('--succ_bonus', type=float, default=0.0)
     # parser.add_argument('--xclip_model', type=str, default='microsoft/xclip-base-patch16-zero-shot')
 
 
@@ -161,8 +167,8 @@ class MetaworldSparse(Env):
         self.past_observations = []
 
         with th.no_grad():
-            self.net = S3D('../s3d_dict.npy', 512)
-            self.net.load_state_dict(th.load('../s3d_howto100m.pth'))
+            self.net = S3D('./s3d_dict.npy', 512)
+            self.net.load_state_dict(th.load('./s3d_howto100m.pth'))
             self.net = self.net.eval().cuda()
 
             self.target_embedding = None
@@ -289,10 +295,13 @@ class MetaworldSparse(Env):
                     else:
                         raise ValueError("Please provide the max similarity score")
                 print("reward", reward)
-
+                if self.args.succ_bonus > 0:
+                    if info['success']:
+                        reward += self.args.succ_bonus
+                reward -= self.args.time_penalty
             return obs, reward, done, info
         
-        return obs, 0.0, done, info
+        return obs, -self.args.time_penalty, done, info
 
     def reset(self):
         self.past_observations = []
@@ -443,25 +452,38 @@ def main():
     WANDB_ENTITY_NAME = "clvr"
     WANDB_PROJECT_NAME = "roboclip-v2"
 
-    experiment_name = "debug_s3d_baseline_" + args.env_id + "_" + str(args.seed)
+    experiment_name = "s3d_sac_baseline_" + args.env_id + "_" + args.algo + "_" + str(args.seed)
     if args.train_orcale:
-        experiment_name = experiment_name + "_train_oracle"
+        experiment_name = experiment_name + "_TrainOracle"
     if args.threshold_reward:
-        experiment_name = experiment_name + "_threshold"
+        experiment_name = experiment_name + "_Threshold"
     if args.project_reward:
-        experiment_name = experiment_name + "_project_reward"
+        experiment_name = experiment_name + "_ProjectReward"
     if args.norm_input:
-        experiment_name = experiment_name + "_norm_input"
+        experiment_name = experiment_name + "_NormInput"
     if args.norm_output:
-        experiment_name = experiment_name + "_norm_output"
+        experiment_name = experiment_name + "_NormOutput"
     if args.time_100:
-        experiment_name = experiment_name + "_time_100"
+        experiment_name = experiment_name + "_Time100"
+    if args.time:
+        experiment_name = experiment_name + "_Time"
+    else:
+        experiment_name = experiment_name + "_NoTime"
+    if args.succ_end:
+        experiment_name = experiment_name + "_SuccEnd"
+
+    if args.succ_bonus > 0:
+        experiment_name = experiment_name + "_SuccBonus" + str(args.succ_bonus)
+    if args.time_penalty > 0:
+        experiment_name = experiment_name + "_TimePenalty" + str(args.time_penalty)
+    if args.algo.lower() == 'sac':
+        experiment_name = experiment_name + "_Entropy" + str(args.entropy_term)
 
     if args.wandb:
         run = wandb.init(
             entity=WANDB_ENTITY_NAME,
             project=WANDB_PROJECT_NAME,
-            group="s3d_baselines_run" + args.env_id,
+            group="s3d_sac_baselines_run_fix" + args.env_id,
             config=args,
             name=experiment_name,
             monitor_gym=True,
@@ -479,7 +501,7 @@ def main():
     wandb.log({"text_string": table1, "env_id": table2})
 
 
-    log_dir = f"/scr/yusenluo/RoboCLIP/visualization/baseline_logs/{experiment_name}"
+    log_dir = f"/scr/jzhang96/logs/visualization/baseline_logs/{experiment_name}"
     if not os.path.exists(log_dir):
         os.makedirs(log_dir)
     if args.n_envs > 1:
@@ -495,8 +517,9 @@ def main():
             model = PPO.load(args.pretrained, env=envs, tensorboard_log=log_dir)
     elif args.algo.lower() == 'sac':
         if not args.pretrained:
-            model = SAC("MlpPolicy", envs, verbose=1, tensorboard_log=log_dir, batch_size=args.n_steps * args.n_envs,
-                        ent_coef=0.5)
+            model = SAC("MlpPolicy", envs, verbose=1, tensorboard_log=log_dir, 
+                        # batch_size=args.n_steps * args.n_envs,
+                        ent_coef=args.entropy_term , buffer_size=args.total_time_steps, learning_starts=256)
         else:
             model = SAC.load(args.pretrained, env=envs, tensorboard_log=log_dir)
     else:
