@@ -187,7 +187,7 @@ class MetaworldSparse(Env):
             self.net.load_state_dict(th.load('s3d_howto100m.pth'))
             self.net = self.net.eval().cuda()
             self.transform_model = SingleLayerMLP(512, 512)
-            self.transform_model.load_state_dict(th.load("/home/jzhang96/triplet_loss_models/triplet_loss_42_s3d_TimeShuffle_TimeShort_Norm_LowerBound_DoorOverFit/169.pth"))
+            self.transform_model.load_state_dict(th.load("/scr/jzhang96/triplet_loss_models/triplet_loss_42_s3d_TimeShuffle_TimeShort_Norm_575.pth"))
             self.transform_model = self.transform_model.eval().cuda()
 
             self.target_embedding = None
@@ -471,7 +471,7 @@ def main():
     WANDB_ENTITY_NAME = "clvr"
     WANDB_PROJECT_NAME = "roboclip-v2"
 
-    experiment_name = "debug_s3d_baseline_only_upperbound" + args.env_id + "_" + str(args.seed)
+    experiment_name = "s3d_ladder_only_" + args.env_id + "_" + str(args.seed)
     if args.train_orcale:
         experiment_name = experiment_name + "_TrainOracle"
     if args.threshold_reward:
@@ -496,7 +496,7 @@ def main():
         run = wandb.init(
             entity=WANDB_ENTITY_NAME,
             project=WANDB_PROJECT_NAME,
-            group="debug_s3d_baselines_run_transform" + args.env_id,
+            group="s3d_run_transform_ladder_" + args.env_id,
             config=args,
             name=experiment_name,
             monitor_gym=True,
@@ -514,7 +514,7 @@ def main():
     wandb.log({"text_string": table1, "env_id": table2})
 
 
-    log_dir = f"/home/jzhang96/logs/{experiment_name}"
+    log_dir = f"/scr/jzhang96/logs/{experiment_name}"
     # log_dir = f"/scr/jzhang96/logs/{experiment_name}"
 
     if not os.path.exists(log_dir):

@@ -20,7 +20,6 @@ PYTHON_SCRIPT_11="python metaworld_envs_xclip_sac_zeroshot.py --algo sac --n_env
 PYTHON_SCRIPT_12="python metaworld_envs_xclip_sac_zeroshot.py --algo sac --n_envs 1 --wandb --eval_freq 512 --video_freq 10240 --succ_end --time --train_orcale --seed 42 --warm_up_runs 10 --norm_output --time_100 --entropy_term 0.2 --succ_bonus 500 --total_time_steps 500000 --xclip_model "microsoft/xclip-base-patch16-kinetics-600-16-frames" --frame_length 16"
 
 
-
 $PYTHON_SCRIPT_1 &
 $PYTHON_SCRIPT_2 &
 $PYTHON_SCRIPT_3 &

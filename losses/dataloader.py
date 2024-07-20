@@ -27,7 +27,7 @@ class GifDataset(Dataset):
     def __init__(self, args):
         self.h5_file = h5py.File(args.h5_path, "r")
         self.keys = list(self.h5_file.keys())
-        self.keys = ['door-close-v2-goal-hidden']
+        # self.keys = ['door-close-v2-goal-hidden']
 
 
         self.vlm_name = args.model_name
@@ -126,8 +126,8 @@ class GifDataset(Dataset):
     def shorten_time_func(self, array):
         video_length = len(array)
         progress = 1
-        if len(array) > 34:
-            max_len = min(32, len(array) - 2)
+        if len(array) > 33:
+            max_len = min(32, len(array) - 1)
             # random choose end from 32, max_len
             end = random.randint(32, max_len)
             array = array[:end]
@@ -172,8 +172,8 @@ class GifProgressDataset(GifDataset):
     def __init__(self, args):
         # init parent class first
         super(GifProgressDataset, self).__init__(args)
-        # self.candidate_type = [1]
-        self.candidate_type = []
+        self.candidate_type = [1]
+        # self.candidate_type = []
         if args.time_shuffle:
             self.candidate_type.append(2)
         if args.time_shorten:
@@ -245,3 +245,89 @@ class GifProgressDataset(GifDataset):
         }
 
         return  output_dict
+
+
+class GifProgressTrainDataset(GifProgressDataset):
+    def __init__(self, args, eval_tasks = None):
+        # init parent class first
+        super(GifProgressTrainDataset, self).__init__(args)
+
+        for task in eval_tasks:
+            self.keys.remove(task)
+        # if args.random_noise:
+        #     self.candidate_type.append(4)
+
+
+        
+
+
+    def __getitem__(self, idx):
+        real_idx = idx % len(self.keys) # env name
+        key = self.keys[real_idx]
+        group = self.h5_file[key]
+        gif_names = list(group.keys())
+
+        # sample gt sample
+        gt_gif_name = random.choice(gif_names)
+        gt_array = group[gt_gif_name][()]
+
+        # sample positive sample
+        pos_gif_name = random.choice(gif_names)
+        pos_array = group[pos_gif_name][()]
+
+        
+        # sample negative sample
+        # type 1: other key 
+        # type 2: shuffle time 
+        # type 3: shorten time
+
+        neg_type = random.choice(self.candidate_type)
+        progress = 0
+        if neg_type == 1:
+            neg_array = self.sample_negative_func(key)
+        elif neg_type == 2:
+            neg_array = self.shuffle_time_func(gt_array.copy())
+        elif neg_type == 3:
+            neg_array, progress = self.shorten_time_func(gt_array.copy())
+        elif neg_type == 4:
+            neg_array = gt_array.copy()
+            noise = np.random.normal(0, 0.15, gt_array.shape)
+            neg_array = neg_array + noise
+            # neg_array = np.clip(neg_array, 0, 1)
+
+
+        # sample frames
+        gt_array = self.sample_frames(gt_array)
+        pos_array = self.sample_frames(pos_array)
+        neg_array = self.sample_frames(neg_array)
+
+        # preprocess
+        if self.vlm_name == "xclip":
+
+            gt_array = self.preprocess_xclip(gt_array)
+            pos_array = self.preprocess_xclip(pos_array)
+            neg_array = self.preprocess_xclip(neg_array)
+
+        else:
+            gt_array = gt_array/255
+            pos_array = pos_array/255
+            neg_array = neg_array/255
+
+            gt_array = gt_array.transpose(3, 0, 1, 2)
+            pos_array = pos_array.transpose(3, 0, 1, 2)
+            neg_array = neg_array.transpose(3, 0, 1, 2)
+
+            gt_array = th.from_numpy(gt_array).float()
+            pos_array = th.from_numpy(pos_array).float()
+            neg_array = th.from_numpy(neg_array).float()
+
+        output_dict = {
+            "gt_array": gt_array,
+            "pos_array": pos_array,
+            "neg_array": neg_array,
+            "type": neg_type,
+            "progress": progress
+        }
+
+        return  output_dict
+

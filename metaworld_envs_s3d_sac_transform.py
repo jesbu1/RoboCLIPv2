@@ -152,7 +152,7 @@ def get_args():
     parser.add_argument('--norm_output', action="store_true")
     parser.add_argument('--time_100', action="store_true")
     parser.add_argument('--threshold_reward', action="store_true")
-    parser.add_argument('--transform_model_path', type=str, default="/scr/jzhang96/triplet_loss_models/s3d_model_2.pth")
+    # parser.add_argument('--transform_model_path', type=str, default="/scr/jzhang96/triplet_loss_models/s3d_model_2.pth")
     parser.add_argument('--entropy_term', type=parse_entropy_term, default="auto")
     parser.add_argument('--time_penalty', type=float, default=0.0)
     parser.add_argument('--succ_bonus', type=float, default=0.0)
@@ -187,7 +187,7 @@ class MetaworldSparse(Env):
             self.net.load_state_dict(th.load('./s3d_howto100m.pth'))
             self.net = self.net.eval().cuda()
             self.transform_model = SingleLayerMLP(512, 512)
-            self.transform_model.load_state_dict(th.load("/home/jzhang96/triplet_loss_models/triplet_loss_42_s3d_l1_TimeShuffle_TimeShort_Norm_LowerBound_DoorOverFit/999.pth"))
+            self.transform_model.load_state_dict(th.load("/scr/jzhang96/triplet_loss_models/triplet_loss_42_s3d_TimeShuffle_TimeShort_Norm_575.pth"))
             self.transform_model = self.transform_model.eval().cuda()
 
             self.target_embedding = None
@@ -474,7 +474,7 @@ def main():
     WANDB_ENTITY_NAME = "clvr"
     WANDB_PROJECT_NAME = "roboclip-v2"
 
-    experiment_name = "debug_s3d_baseline_" + args.env_id + "_" + args.algo + "_" + str(args.seed)
+    experiment_name = "s3d_sac_transform_" + args.env_id + "_" + args.algo + "_" + str(args.seed)
     if args.train_orcale:
         experiment_name = experiment_name + "_TrainOracle"
     if args.threshold_reward:
@@ -509,7 +509,7 @@ def main():
         run = wandb.init(
             entity=WANDB_ENTITY_NAME,
             project=WANDB_PROJECT_NAME,
-            group="debug_s3d_transform_run_transform" + args.env_id,
+            group="s3d_sac_transform_ladder_ladder" + args.env_id,
             config=args,
             name=experiment_name,
             monitor_gym=True,
@@ -527,7 +527,7 @@ def main():
     wandb.log({"text_string": table1, "env_id": table2})
 
 
-    log_dir = f"/home/jzhang96/logs/{experiment_name}"
+    log_dir = f"/scr/jzhang96/logs/{experiment_name}"
     # log_dir = f"/scr/yusenluo/RoboCLIP/visualization/baseline_logs/{experiment_name}"
 
     if not os.path.exists(log_dir):
