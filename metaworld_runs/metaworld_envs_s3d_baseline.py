@@ -543,7 +543,7 @@ def main():
     wandb_callback = WandbCallback(verbose = 1)
     callback = CallbackList([eval_callback, wandb_callback])
     model.learn(total_timesteps=int(args.total_time_steps), callback=callback)
-    model.save(f"{log_dir}/trained")
+    model.save(f"{log_dir}/{experiment_name}")
 
 
 if __name__ == '__main__':
