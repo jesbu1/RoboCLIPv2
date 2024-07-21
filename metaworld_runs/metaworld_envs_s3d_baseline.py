@@ -508,7 +508,7 @@ def main():
     wandb.log({"text_string": table1, "env_id": table2})
 
 
-    log_dir = f"/scr/jzhang96/logs/visualization/baseline_logs/{experiment_name}"
+    log_dir = f"/scr/jzhang96/logs/baseline_logs/{experiment_name}"
     if not os.path.exists(log_dir):
         os.makedirs(log_dir)
     if args.n_envs > 1:
