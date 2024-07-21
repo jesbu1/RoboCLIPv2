@@ -233,7 +233,9 @@ class MetaworldSparse(Env):
     def warm_up_run(self):
         self.env.reset()
         images = []
-        for _ in range(32):
+        frame_number = random.randint(32, 128)
+
+        for _ in range(frame_number):
             action = self.env.action_space.sample()
             _, _, _, _ = self.env.step(action)
             images.append(self.env.render()[:,:,:3])
