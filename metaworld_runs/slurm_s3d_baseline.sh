@@ -1,5 +1,5 @@
 #!/bin/bash
-#SBATCH --job-name=sac_s3d_baselines       # Job name
+#SBATCH --job-name=ppo_s3d_baselines       # Job name
 #SBATCH --output=/scr/jzhang96/metaworld_log/s3d_transform.out   # Output file
 #SBATCH --error=/scr/jzhang96/metaworld_log/s3d_transform.err    # Error file
 #SBATCH --ntasks=3                      # Number of tasks (processes)
