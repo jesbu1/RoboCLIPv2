@@ -20,9 +20,9 @@ conda deactivate
 conda activate roboclip
 which python
 
-PYTHON_SCRIPT_1="python metaworld_envs_s3d_baseline.py --n_envs 8 --wandb --time --train_orcale --norm_input --norm_output --time_100 --entropy_term 0.5 --random_reset --eval_freq 1280 --video_freq 5120 --seed 42 --time_penalty 0.1 --succ_end"
-# PYTHON_SCRIPT_2="python metaworld_envs_s3d_baseline.py --n_envs 8 --wandb --time --train_orcale --norm_input --norm_output --time_100 --entropy_term 0.5 --random_reset --eval_freq 1280 --video_freq 5120 --seed 5 --time_penalty 0.1 --succ_end"
-# PYTHON_SCRIPT_3="python metaworld_envs_s3d_baseline.py --n_envs 8 --wandb --time --train_orcale --norm_input --norm_output --time_100 --entropy_term 0.5 --random_reset --eval_freq 1280 --video_freq 5120 --seed 32 --time_penalty 0.1 --succ_end" 
+PYTHON_SCRIPT_1="python metaworld_envs_s3d_baseline.py --n_envs 8 --wandb --time --train_orcale --norm_input --norm_output --time_100 --entropy_term "auto" --random_reset --eval_freq 1280 --video_freq 5120 --seed 42"
+# PYTHON_SCRIPT_2="python metaworld_envs_s3d_baseline.py --n_envs 8 --wandb --time --train_orcale --norm_input --norm_output --time_100 --entropy_term "auto" --random_reset --eval_freq 1280 --video_freq 5120 --seed 5"
+# PYTHON_SCRIPT_3="python metaworld_envs_s3d_baseline.py --n_envs 8 --wandb --time --train_orcale --norm_input --norm_output --time_100 --entropy_term "auto" --random_reset --eval_freq 1280 --video_freq 5120 --seed 32" 
 
 
 

@@ -128,7 +128,8 @@ def get_args():
     parser.add_argument('--succ_end', action="store_true")
     parser.add_argument('--video_path', type=str, default=None)
     parser.add_argument('--random_reset', action="store_true")
-    parser.add_argument('--target_gif_path', type=str, default="/scr/jzhang96/metaworld_generate_gifs/")
+    # parser.add_argument('--target_gif_path', type=str, default="/scr/jzhang96/metaworld_generate_gifs/")
+    parser.add_argument('--target_gif_path', type=str, default="/home/jzhang96/RoboCLIPv2/metaworld_generate_gifs/")
     parser.add_argument('--time', action="store_false")
     parser.add_argument('--frame_num', type=int, default=32)
     parser.add_argument('--train_orcale', action="store_true") # load latent from h5 file
@@ -507,8 +508,8 @@ def main():
     table2.add_data([args.env_id])  
     wandb.log({"text_string": table1, "env_id": table2})
 
-
-    log_dir = f"/scr/jzhang96/logs/baseline_logs/{experiment_name}"
+    log_dir = f"/home/jzhang96/logs/baseline_logs/{experiment_name}"
+    # log_dir = f"/scr/jzhang96/logs/baseline_logs/{experiment_name}"
     if not os.path.exists(log_dir):
         os.makedirs(log_dir)
     if args.n_envs > 1:
