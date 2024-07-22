@@ -457,17 +457,17 @@ def main():
     experiment_name = "s3d_baseline_" + args.algo + "_" + args.env_id 
     # experiment_name = "s3d_sac_baseline_" + args.env_id + "_" + args.algo + "_" + str(args.seed)
     if args.train_orcale:
-        experiment_name = experiment_name + "_TrainOracle"
+        experiment_name = experiment_name + "_Oracle"
     if args.threshold_reward:
         experiment_name = experiment_name + "_Threshold"
     if args.project_reward:
-        experiment_name = experiment_name + "_ProjectReward"
+        experiment_name = experiment_name + "_ProjReward"
     if args.norm_input:
-        experiment_name = experiment_name + "_NormInput"
+        experiment_name = experiment_name + "_NormIn"
     if args.norm_output:
-        experiment_name = experiment_name + "_NormOutput"
+        experiment_name = experiment_name + "_NormOut"
     if args.time_100:
-        experiment_name = experiment_name + "_Time100"
+        experiment_name = experiment_name + "_X100"
     if args.time:
         experiment_name = experiment_name + "_Time"
     else:
@@ -475,7 +475,7 @@ def main():
     if args.succ_end:
         experiment_name = experiment_name + "_SuccEnd"
     if args.random_reset:
-        experiment_name = experiment_name + "_RandomReset"
+        experiment_name = experiment_name + "_RandReset"
 
     if args.succ_bonus > 0:
         experiment_name = experiment_name + "_SuccBonus" + str(args.succ_bonus)
