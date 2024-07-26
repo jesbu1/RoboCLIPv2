@@ -42,6 +42,7 @@ class GifDataset(Dataset):
 
     def __len__(self):
         return len(self.keys) * 120
+        # return len(self.keys)
 
 
     def __getitem__(self, idx):
@@ -289,10 +290,10 @@ class GifProgressTrainDataset(GifProgressDataset):
             neg_array = self.shuffle_time_func(gt_array.copy())
         elif neg_type == 3:
             neg_array, progress = self.shorten_time_func(gt_array.copy())
-        elif neg_type == 4:
-            neg_array = gt_array.copy()
-            noise = np.random.normal(0, 0.15, gt_array.shape)
-            neg_array = neg_array + noise
+        # elif neg_type == 4:
+        #     neg_array = gt_array.copy()
+        #     noise = np.random.normal(0, 0.15, gt_array.shape)
+        #     neg_array = neg_array + noise
             # neg_array = np.clip(neg_array, 0, 1)
 
 
@@ -328,6 +329,5 @@ class GifProgressTrainDataset(GifProgressDataset):
             "type": neg_type,
             "progress": progress
         }
-
         return  output_dict
 

@@ -40,7 +40,7 @@ class SingleLayerMLP(nn.Module):
 def cosine_similarity(x1, x2):
     return F.cosine_similarity(x1, x2, dim=-1)
 
-def triplet_loss(gt, positive, negative, type, margin = (0.1, 0.25, 0.3, 0.9), progress = None): 
+def triplet_loss(gt, positive, negative, type, margin = (0.9, 0.75, 0.7, 0.1), progress = None): 
     # 
 
     pos_sim = cosine_similarity(gt, positive)
@@ -48,24 +48,24 @@ def triplet_loss(gt, positive, negative, type, margin = (0.1, 0.25, 0.3, 0.9), p
 
     loss = torch.zeros_like(pos_sim).cuda()
 
-    # type1: hard negative margin = 0.1
+    # type1: hard negative margin = 0.9
     mask_type_1 = (type == 1)
     loss[mask_type_1] = F.relu(margin[0] - pos_sim[mask_type_1] + neg_sim[mask_type_1])
 
-    # type2: semi-hard negative margin = 0.25
+    # type2: semi-hard negative margin = 0.75
     mask_type_2 = (type == 2)
     loss[mask_type_2] = F.relu(margin[1] - pos_sim[mask_type_2] + neg_sim[mask_type_2])
 
     # type3: adaptive margin
     mask_type_3 = (type == 3)
     progress = progress[mask_type_3]
-    # adaptive margin range from 0.3 to 0.8
+    # adaptive margin range from 0.7 to 0.1
     adaptive_margin = (margin[2] + (margin[3] - margin[2]) * progress).cuda()
     loss[mask_type_3] = F.relu(adaptive_margin - pos_sim[mask_type_3] + neg_sim[mask_type_3])
 
     return loss.mean()
 
-def triplet_loss_lower_bound(gt, positive, negative, type, margin = (0.1, 0.2, 0.3, 0.9), progress = None): # may need a lower bound for progress
+def triplet_loss_lower_bound(gt, positive, negative, type, margin = (0.9, 0.75, 0.7, 0.1), progress = None, progress_area = 0): # may need a lower bound for progress
     # for progress, we need to have an lower bound
 
     pos_sim = cosine_similarity(gt, positive)
@@ -73,29 +73,29 @@ def triplet_loss_lower_bound(gt, positive, negative, type, margin = (0.1, 0.2, 0
 
     loss = torch.zeros_like(pos_sim).cuda()
 
-    # type1: hard negative margin = 0.1
+    # type1: hard negative margin = 0.9
     mask_type_1 = (type == 1)
     loss[mask_type_1] = F.relu(margin[0] - pos_sim[mask_type_1] + neg_sim[mask_type_1])
 
-    # type2: semi-hard negative margin = 0.2
+    # type2: semi-hard negative margin = 0.75
     mask_type_2 = (type == 2)
     loss[mask_type_2] = F.relu(margin[1] - pos_sim[mask_type_2] + neg_sim[mask_type_2])
 
     # type3: adaptive margin # can change to L1 loss
     mask_type_3 = (type == 3)
     progress = progress[mask_type_3]
-    # adaptive margin range from 0.3 to 0.9
-    # adaptive_margin_upper_bound = (margin[2] + (margin[3] - margin[2]) * progress).cuda()
-    # adaptive_margin_lower_bound = (margin[2] + (margin[3] - margin[2]) * progress - 0.1).cuda()
-    # #make sure negative similarity - positive similarity is between upper and lower bound
-    # simi_diff = neg_sim[mask_type_3] - pos_sim[mask_type_3]
-    # loss_upper = F.relu(adaptive_margin_upper_bound - simi_diff)
-    # loss_lower = F.relu(simi_diff - adaptive_margin_lower_bound)
-    # loss[mask_type_3] = loss_upper + loss_lower
-    progress_range = ((margin[3] - margin[2]) * progress + margin[2]).cuda()
-    loss[mask_type_3] = F.l1_loss(neg_sim[mask_type_3] - pos_sim[mask_type_3], progress_range)
 
-
+    if progress_area == 0:
+        progress_range = ((margin[3] - margin[2]) * progress + margin[2]).cuda()
+        loss[mask_type_3] = F.l1_loss(neg_sim[mask_type_3] - pos_sim[mask_type_3], progress_range)
+    else:
+        adaptive_margin_upper_bound = (margin[2] + (margin[3] - margin[2]) * progress).cuda()
+        adaptive_margin_lower_bound = (margin[2] + (margin[3] - margin[2]) * progress - progress_area).cuda()
+        # #make sure negative similarity - positive similarity is between upper and lower bound
+        simi_diff = pos_sim[mask_type_3] - neg_sim[mask_type_3]
+        loss_upper = F.relu(simi_diff - adaptive_margin_upper_bound)
+        loss_lower = F.relu(adaptive_margin_lower_bound - simi_diff)
+        loss[mask_type_3] = loss_upper + loss_lower
 
     return loss.mean()
 
@@ -126,7 +126,7 @@ def main(args):
     # experiment_name = args.experiment_name + "_" + wandb_eval_task_name + "_" + str(args.seed)
     # if args.mse:
     #     experiment_name = experiment_name + "_mse_" + str(args.mse_weight)
-    experiment_name = "triplet_loss" + "_" + str(args.seed) + "_" + args.model_name + "_l1"
+    experiment_name = "triplet_loss" + "_" + str(args.seed) + "_" + args.model_name
     if args.time_shuffle:
         experiment_name += "_TimeShuffle"
     if args.time_shorten:
@@ -135,6 +135,8 @@ def main(args):
         experiment_name += "_Norm"
     if args.add_lower_bound:
         experiment_name += "_LowerBound"
+    if args.progress_area:
+        experiment_name += "_ProgressArea" + str(args.progress_area)
 
     experiment_name += "_DoorOverFit"
     
@@ -206,13 +208,13 @@ def main(args):
         
         if epoch % 1 == 0:
             if args.model_name == "xclip":
-                if not os.path.exists(f"/home/jzhang96/triplet_loss_models/{experiment_name}"):
-                    os.makedirs(f"/home/jzhang96/triplet_loss_models/{experiment_name}")
+                if not os.path.exists(f"/scr/jzhang96/triplet_loss_models/{experiment_name}"):
+                    os.makedirs(f"/scr/jzhang96/triplet_loss_models/{experiment_name}")
                 th.save(transform_model.state_dict(), f"/home/jzhang96/triplet_loss_models/{experiment_name}/{epoch}.pth")
             else:
-                if not os.path.exists(f"/home/jzhang96/triplet_loss_models/{experiment_name}"):
-                    os.makedirs(f"/home/jzhang96/triplet_loss_models/{experiment_name}")
-                th.save(transform_model.state_dict(), f"/home/jzhang96/triplet_loss_models/{experiment_name}/{epoch}.pth")
+                if not os.path.exists(f"/scr/jzhang96/triplet_loss_models/{experiment_name}"):
+                    os.makedirs(f"/scr/jzhang96/triplet_loss_models/{experiment_name}")
+                th.save(transform_model.state_dict(), f"/scr/jzhang96/triplet_loss_models/{experiment_name}/{epoch}.pth")
             
 
             
@@ -233,5 +235,6 @@ if __name__ == '__main__':
     argparser.add_argument('--num_workers', type=int, default=16)
     argparser.add_argument('--epochs', type=int, default=50)
     argparser.add_argument('--add_lower_bound', action='store_true')
+    argparse.add_argument('--progress_area', type=float, default=0)
     args = argparser.parse_args()
     main(args)
