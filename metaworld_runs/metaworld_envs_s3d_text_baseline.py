@@ -167,39 +167,19 @@ class MetaworldSparse(Env):
         with th.no_grad():
             self.net = S3D('../s3d_dict.npy', 512)
             self.net.load_state_dict(th.load('../s3d_howto100m.pth'))
-            self.net = self.net.eval().cuda()
-
+            # self.net = self.net.eval().cuda()
+            self.net = self.net.eval()
             self.target_embedding = None
 
             if args.text_string:
                 for _ in range (3):
                     print("text_string", args.text_string)
-                # text_string = args.text_string
-                # text_output = self.net.text_module([text_string])
-                # self.target_embedding = text_output['text_embedding']
-
-            if args.train_orcale:
-                if not args.target_gif_path:
-                    raise ValueError("Please provide the path to the target h5 file")
-                else:
-                    id_string = id_task[args.env_id]
-                    folder_path = os.path.join(args.target_gif_path, id_string)
-                    gifs = os.listdir(folder_path)
-                    random_gif = random.choice(gifs)
-                    random_gif_path = os.path.join(folder_path, random_gif)
-                    gif = imageio.get_reader(random_gif_path)
-                    # get all frames
-                    frames = [frame[:,:,:3] for frame in gif]
-                    frames = adjust_frames_s3d(frames)
-
-                    if args.norm_input:
-                        frames = frames/255
-                    video = th.from_numpy(frames).float().cuda()
-                    video_output = self.net(video.float())
-                    video_embedding = video_output['video_embedding']   
-                    self.target_embedding = video_embedding
-                    if args.norm_output:
-                        self.target_embedding = normalize_embeddings(self.target_embedding, return_tensor=True).float()
+                text_string = args.text_string
+                text_output = self.net.text_module([text_string])
+                self.target_embedding = text_output['text_embedding'].cuda()
+                self.net = self.net.eval().cuda()
+                if args.norm_output:
+                    self.target_embedding = normalize_embeddings(self.target_embedding, return_tensor=True).float()
 
 
             self.max_sim = None
@@ -278,6 +258,8 @@ class MetaworldSparse(Env):
                 if self.args.norm_output:
                     video_embedding = normalize_embeddings(video_embedding, return_tensor=True).float()
                     self.target_embedding = normalize_embeddings(self.target_embedding, return_tensor=True).float()
+
+
                 similarity_matrix = th.matmul(self.target_embedding, video_embedding.t())
                 reward = similarity_matrix.detach().cpu().numpy()[0][0]
 
@@ -454,12 +436,12 @@ def main():
 
     WANDB_ENTITY_NAME = "clvr"
     WANDB_PROJECT_NAME = "roboclip-v2"
-    experiment_name = "s3d_baseline_" + args.algo + "_" + args.env_id 
+    experiment_name = "s3d_textBL_" + args.algo + "_" + args.env_id 
     # experiment_name = "s3d_sac_baseline_" + args.env_id + "_" + args.algo + "_" + str(args.seed)
     if args.train_orcale:
         experiment_name = experiment_name + "_Oracle"
     if args.threshold_reward:
-        experiment_name = experiment_name + "_Threshold"
+        experiment_name = experiment_name + "_Thld"
     if args.project_reward:
         experiment_name = experiment_name + "_ProjReward"
     if args.norm_input:
