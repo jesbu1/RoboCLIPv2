@@ -484,7 +484,7 @@ def main():
         experiment_name = experiment_name + "_TimePenalty" + str(args.time_penalty)
     # if args.algo.lower() == 'sac':
     experiment_name = experiment_name + "_Entropy" + str(args.entropy_term)
-    run_group = experiment_name
+    run_group = experiment_name + "_WRONGTEXT"
     experiment_name = experiment_name + "_" + str(args.seed)
 
     if args.wandb:

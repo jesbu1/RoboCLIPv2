@@ -466,8 +466,8 @@ def main():
         experiment_name = experiment_name + "_TimePenalty" + str(args.time_penalty)
     # if args.algo.lower() == 'sac':
     experiment_name = experiment_name + "_Entropy" + str(args.entropy_term)
-    run_group = experiment_name + "WRONGTEXT"
-    experiment_name = experiment_name + "_" + str(args.seed) + "WRONGTEXT"
+    run_group = experiment_name + "testcluster"
+    experiment_name = experiment_name + "_" + str(args.seed) + "testcluster"
 
     if args.wandb:
         run = wandb.init(
