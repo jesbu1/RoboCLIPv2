@@ -113,10 +113,10 @@ def normalize_embeddings(embeddings, return_tensor=True):
 
 def get_args():
     parser = argparse.ArgumentParser(description='RL')
-    parser.add_argument('--algo', type=str, default='ppo', choices=['ppo', 'sac'])
-    parser.add_argument('--text_string', type=str, default='closing door')
+    parser.add_argument('--algo', type=str, default='sac', choices=['ppo', 'sac'])
+    parser.add_argument('--text_string', type=str, default='opening door')
     parser.add_argument('--dir_add', type=str, default='')
-    parser.add_argument('--env_id', type=str, default='door-close-v2-goal-hidden')
+    parser.add_argument('--env_id', type=str, default='window-open-v2-goal-hidden')
     parser.add_argument('--total_time_steps', type=int, default=1000000)
     parser.add_argument('--n_envs', type=int, default=8)
     parser.add_argument('--n_steps', type=int, default=128)
@@ -466,8 +466,8 @@ def main():
         experiment_name = experiment_name + "_TimePenalty" + str(args.time_penalty)
     # if args.algo.lower() == 'sac':
     experiment_name = experiment_name + "_Entropy" + str(args.entropy_term)
-    run_group = experiment_name
-    experiment_name = experiment_name + "_" + str(args.seed)
+    run_group = experiment_name + "WRONGTEXT"
+    experiment_name = experiment_name + "_" + str(args.seed) + "WRONGTEXT"
 
     if args.wandb:
         run = wandb.init(
@@ -491,8 +491,8 @@ def main():
     wandb.log({"text_string": table1, "env_id": table2})
 
 
-    # log_dir = f"/scr/jzhang96/logs/baseline_logs/{experiment_name}"
-    log_dir = f"/home/jzhang96/logs/baseline_logs/{experiment_name}"
+    log_dir = f"/scr/jzhang96/logs/baseline_logs/{experiment_name}"
+    # log_dir = f"/home/jzhang96/logs/baseline_logs/{experiment_name}"
 
     if not os.path.exists(log_dir):
         os.makedirs(log_dir)
