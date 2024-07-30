@@ -36,7 +36,7 @@ class MILNCELoss(th.nn.Module):
         denominator = th.logsumexp(denominator, dim=1)
         return th.mean(denominator - nominator)
 
-def plot_s3d(video_embeddings, text_embeddings, choose_task, mappings, wandb_log, video_sample_per_task=15):
+def plot_s3d(video_embeddings, text_embeddings, choose_task, mappings, wandb_log, Train_or_Validate ,video_sample_per_task=15):
     if isinstance(video_embeddings, torch.Tensor):
         video_embeddings = video_embeddings.numpy()
     if isinstance(text_embeddings, torch.Tensor):
@@ -64,14 +64,14 @@ def plot_s3d(video_embeddings, text_embeddings, choose_task, mappings, wandb_log
 
         plt.scatter(x_video, y_video, color=colors[i], label=label)
 
-        # Plot text embeddings (每10个视频抽取一个文本)
+        # Plot text embeddings
         text_index = len(video_embeddings) + i * video_sample_per_task
         if text_index < len(reduced_embeddings):
             text_x = reduced_embeddings[text_index, 0]
             text_y = reduced_embeddings[text_index, 1]
             plt.scatter(text_x, text_y, color=colors[i], marker='+')
 
-    plt.title('Different Scenes PCA Visualization')
+    plt.title(f'Different Scenes {Train_or_Validate} PCA Visualization')
     plt.xlabel('x-dim')
     plt.ylabel('y-dim')
 
@@ -80,7 +80,7 @@ def plot_s3d(video_embeddings, text_embeddings, choose_task, mappings, wandb_log
 
     # 将图像上传到 WandB
     #wandb.log({"PCA Visualization": wandb.Image(plt)})
-    wandb_log["PCA Visualization"] = wandb.Image(plt)
+    wandb_log[f"{Train_or_Validate} PCA Visualization"] = wandb.Image(plt)
 
 
 
@@ -247,14 +247,15 @@ def Test_Model(video_embeddings, text_embeddings, train_mappings, epoch, model, 
     #video_1, video_3, _ = compute_similarity_sorted(adjusted_video_embeddings, text_embeddings, val_task, 15)
     simi_score = th.mean(th.diag(th.matmul(adjusted_video_embeddings.cpu().float(), text_embeddings.cpu().float().t())))
     true_paired_cos_simi = F.cosine_similarity(adjusted_video_embeddings, text_embeddings, dim=1)
-    task_similarities = defaultdict(list)
-    for i, cos_sim in enumerate(true_paired_cos_simi):
-        video_id = train_mappings["index_to_video_id"][i]
-        task_id = video_id.split('_')[0]
-        task_similarities[task_id].append(cos_sim.item())
-    average_task_similarities_for_chart = {task_id: np.mean(sims) for task_id, sims in task_similarities.items()}
-    average_task_similarities = [{"task_id": task_id, "average_cosine_similarity": np.mean(sims)}
-                                 for task_id, sims in task_similarities.items()]
+
+    # task_similarities = defaultdict(list)
+    # for i, cos_sim in enumerate(true_paired_cos_simi):
+    #     video_id = train_mappings["index_to_video_id"][i]
+    #     task_id = video_id.split('_')[0]
+    #     task_similarities[task_id].append(cos_sim.item())
+    # average_task_similarities_for_chart = {task_id: np.mean(sims) for task_id, sims in task_similarities.items()}
+    # average_task_similarities = [{"task_id": task_id, "average_cosine_similarity": np.mean(sims)}
+    #                              for task_id, sims in task_similarities.items()]
 
     video_norm = th.mean(th.norm(adjusted_video_embeddings, dim=1))
     text_norm = th.mean(th.norm(text_embeddings, dim=1))
@@ -282,22 +283,17 @@ def Test_Model(video_embeddings, text_embeddings, train_mappings, epoch, model, 
     wandb_log[f'{Train_or_Validate}_similarity_score'] = simi_score.item()
     wandb_log[f'{Train_or_Validate}_cosine_similarity'] = true_paired_cos_simi.mean().item()
     #wandb_log[f'{Train_or_Validate}_average_task_similarities_chart'] = average_task_similarities_for_chart
-    if epoch == 1999:
-        wandb_table = wandb.Table(columns=["task_id", "average_cosine_similarity"])
-        for entry in average_task_similarities:
-            wandb_table.add_data(entry["task_id"], entry["average_cosine_similarity"])
-        wandb_log[f'{Train_or_Validate}_table_average_task_similarities'] = wandb_table
-    # plot_line = wandb.plot.line(
-    #         wandb_table, "epoch", "average_cosine_similarity", title="Average Cosine Similarity per Task")
-    # wandb.log({
-    #     "average_task_similarities_chart": wandb.plot.line(
-    #         wandb_table, "epoch", "average_cosine_similarity", title="Average Cosine Similarity per Task")
-    # })
 
-    #wandb.log({f'{Train_or_Validate}_average_task_similarities' : wandb_table})
-    if Train_or_Validate == 'Validate':
-        plot_s3d(adjusted_video_embeddings.cpu(), text_embeddings.cpu(), val_task, train_mappings, wandb_log, 15)
-        wandb_log[f'{Train_or_Validate}_average_task_similarities_chart'] = average_task_similarities_for_chart
+    # if epoch == 999:
+    #     wandb_table = wandb.Table(columns=["task_id", "average_cosine_similarity"])
+    #     for entry in average_task_similarities:
+    #         wandb_table.add_data(entry["task_id"], entry["average_cosine_similarity"])
+    #     wandb_log[f'{Train_or_Validate}_table_average_task_similarities'] = wandb_table
+
+    #if Train_or_Validate == 'Validate':
+    plot_s3d(adjusted_video_embeddings.cpu(), text_embeddings.cpu(),
+             val_task, train_mappings, wandb_log, Train_or_Validate, 15)
+        #wandb_log[f'{Train_or_Validate}_average_task_similarities_chart'] = average_task_similarities_for_chart
     return adjusted_video_embeddings, text_embeddings
 
 
@@ -412,7 +408,7 @@ def reduce_dimension(
     else:
         reduced_embeddings = pca.fit_transform(embeddings)
     # os.makedirs('saved_model/M/metaworld/pca_model', exist_ok=True)
-    pca_save_path = (f"saved_model/M/metaworld_xclip/{val_task_name}_Seed_{seed}/"
+    pca_save_path = (f"/scr/yusenluo/RoboCLIP/visualization/saved_model/pca_loss_models/{val_task_name}_Seed_{seed}/"
                      f"{variance_threshold}_Aug_{strong}_{train_size}_{kernel}")
     os.makedirs(pca_save_path, exist_ok=True)
     if filter:

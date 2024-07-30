@@ -1,3 +1,5 @@
+import random
+
 import torch
 import torch.nn as nn
 from Dataload import VideoTextDataset, list_webm_files, Embedding, filter_top_embeddings, SthDataset, OpenXDataset, \
@@ -143,7 +145,7 @@ def cos_similarity_score(adjust_video_embeddings, text_embeddings_pca):
     return sim_scores
 
 
-def finetune_M_Random(model, optimizer, reduced_video, reduced_text, path, milnce_loss):
+def finetune_M_Random(model, optimizer, reduced_video, reduced_text, path, milnce_loss, epoch):
     adjusted_video_embeddings = model(reduced_video)
     loss = milnce_loss(adjusted_video_embeddings, reduced_text)
     optimizer.zero_grad()
@@ -158,21 +160,18 @@ def finetune_M_Random(model, optimizer, reduced_video, reduced_text, path, milnc
     print(f"Checkpoint model saved to {path}")
 
 
-if __name__ == "__main__":
-    #mp.set_start_method('spawn', force=True)
+def main(args):
+    torch.manual_seed(args.seed)
+    np.random.seed(args.seed)
+    random.seed(args.seed)
     wandb.login(key="894302be844229c43f7c4f673f3f715efc55c3fd")
     device = th.device("cuda" if th.cuda.is_available() else "cpu")
     parser = argparse.ArgumentParser()
     parser.add_argument("--augmentation", type=bool, default=False)
-    args = parser.parse_args()
-    augmentation = False
-    if args.augmentation:
-        augmentation = True
-    variance_thresholds = [512]
-    sample_sizes = [45*15]  # [1, 2, 4, 8, 16, 21]
-    seeds = [42]
-    pca_sample_size = [15]  # 600, 1000, 1500, 2000
-    strong_augmented = ['no']  # 'weak', 'strong' , 'weak', 'normal'
+    variance_threshold = args.pca_variance
+    sample_sizes = [45 * 15]  # [1, 2, 4, 8, 16, 21]
+    current_sample_size = 675
+    seed = args.seed
     if torch.cuda.is_available():
         print("CUDA is available! Training on GPU.")
     else:
@@ -185,14 +184,14 @@ if __name__ == "__main__":
     s3d.load_state_dict(torch.load("../s3d_howto100m.pth"))
     s3d.eval()
 
-    val_task_id = [23, 24, 25, 26, 40]  #[13, 15, 35, 37, 46]#[8, 24, 38, 41, 47] #[4, 13, 19, 36, 48] #[13, 14, 15, 16, 17]#[1, 18, 19, 48, 49] #[23, 24, 25, 26, 40] #[1, 18, 19, 48, 49] #[13, 14, 15, 16, 17] #[4, 13, 19, 36, 48]#[8, 24, 38, 41, 47]
+    val_task_id = args.val_task_ids
     all_task_id = set(range(50))
     train_task_id = list(all_task_id - set(val_task_id))
     train_dataset = MetaDataset(
-        "/scr/yusenluo/RoboCLIP/metaworld_generate_gifs", train_task_id, num_samples=15, seed=42
+        "/scr/yusenluo/RoboCLIP/metaworld_generate_gifs", train_task_id, num_samples=15, seed=args.seed
     )
     val_dataset = MetaDataset(
-        "/scr/yusenluo/RoboCLIP/metaworld_generate_gifs", val_task_id, num_samples=15, seed=42
+        "/scr/yusenluo/RoboCLIP/metaworld_generate_gifs", val_task_id, num_samples=15, seed=args.seed
     )
 
     train_data_loader = DataLoader(
@@ -216,88 +215,99 @@ if __name__ == "__main__":
         validate_text_embeddings
     ).clone()
     # print("uni", len(unique_indices))
-    for size_multiplier in sample_sizes:
-        current_sample_size = size_multiplier
-        for seed in seeds:
-            for strong in strong_augmented:
-                for num_augmented_per_video in pca_sample_size:
-                    for variance_threshold in variance_thresholds:
-                        print(
-                            f"Training with variance threshold {variance_threshold} and sample size {current_sample_size}."
-                        )
-                        wandb.init(
-                            project="p-roboclip-v2",
-                            name=f"PCA-{variance_threshold}_sample-{current_sample_size}_seed-{seed}_Computed_Ini_Vid_Aug_{strong}_{num_augmented_per_video}",
-                            config={
-                                "learning_rate": 0.0005,
-                                "model": "M from PCA computed",  # random ini, PCA computed, MLP ini
-                                "dataset": "metaworld",
-                                "epochs": 5000,
-                                "sample size": size_multiplier,
-                                "seed": seed,
-                                "variance threshold": variance_threshold,
-                                "Unique": True,
-                                "Augmentation": 'no', #'Text Augmentation'
-                                "Unseen Scenes": 'Handle(23-26) + Soccer(40)', #'Handle(23-26) + Soccer(40)',#'Seen tasks 4 13 19 36 48', #'Seen tasks 13 15 35 37 46' drawer(18-19) + basketball(1) + window(48-49)
-                                "Sample size used for PCA Matrix": num_augmented_per_video,
-                                "Stronger augmentation": strong,
-                            }
-                        )
-                        reduced_train_video, reduced_train_text, reduced_validate_video, reduced_validate_text, pca_video, pca_text = normalize_and_pca(
-                            train_video_embeddings, train_text_embeddings, validate_video_embeddings_normalized,
-                            validate_text_embeddings_normalized, variance_threshold, current_sample_size, seed, device,
-                            strong, num_augmented_per_video)
-                        Test_Model(normalize_embeddings(train_video_embeddings).float().to(device),
-                                   normalize_embeddings(train_text_embeddings).float().to(device),
-                                   train_mappings, -1, None, val_task_id, 'Train')
-                        Test_Model(validate_video_embeddings_normalized.float().to(device),
-                                   validate_text_embeddings_normalized.float().to(device), validate_mappings, -1, None,
-                                   val_task_id, 'Validate')
+    print(
+        f"Training with variance threshold {variance_threshold} and sample size {current_sample_size}."
+    )
+    WANDB_ENTITY_NAME = "clvr"
+    WANDB_PROJECT_NAME = "p-roboclip-v2"
+    eval_task_name = "_".join([str(i) for i in val_task_id])
+    experiment_name = ("milnce_loss" + "_" + str(args.seed) + "_" + args.model_name + f"_PCA_{args.pca_variance}"
+                       "_norm" + f"_text_{eval_task_name}")
+    wandb_log = {}
+    wandb.init(
+        entity=WANDB_ENTITY_NAME,
+        project=WANDB_PROJECT_NAME,
+        group="milnce_loss_training",
+        config=args,
+        name=experiment_name,
+    )
+    reduced_train_video, reduced_train_text, reduced_validate_video, reduced_validate_text, pca_video, pca_text = normalize_and_pca(
+        train_video_embeddings, train_text_embeddings, validate_video_embeddings_normalized,
+        validate_text_embeddings_normalized, variance_threshold, current_sample_size, seed, device,
+        strong='no', pca_sample_size=15, kernel='linear', val_task_name=val_task_id)
+    Test_Model(normalize_embeddings(train_video_embeddings).float().to(device),
+               normalize_embeddings(train_text_embeddings).float().to(device),
+               train_mappings, -1, None, val_task_id, 'Train', wandb_log)
+    Test_Model(validate_video_embeddings_normalized.float().to(device),
+               validate_text_embeddings_normalized.float().to(device), validate_mappings, -1, None,
+               val_task_id, 'Validate', wandb_log)
+    wandb.log(wandb_log)
 
-                        model = nn.Linear(reduced_train_video.shape[1], reduced_train_text.shape[1], bias=False).to(
-                            device)
-                        # model = SimpleMLP(reduced_train_video.shape[1], reduced_train_text.shape[1]).to(device)
+    model = nn.Linear(reduced_train_video.shape[1], reduced_train_text.shape[1], bias=False).to(
+        device)
+    # model = SimpleMLP(reduced_train_video.shape[1], reduced_train_text.shape[1]).to(device)
+    if variance_threshold != 0:
+        pretrained_matrix = compute_M(pca_video.components_, pca_text.components_, variance_threshold,
+                                  current_sample_size, seed, filter=False)
+        print(pretrained_matrix.shape)
+        model.weight.data = pretrained_matrix.T.to(device)
 
-                        pretrained_matrix = compute_M(pca_video.components_, pca_text.components_, variance_threshold,
-                                                      current_sample_size, seed, filter=False)
-                        print(pretrained_matrix.shape)
-                        model.weight.data = pretrained_matrix.T.to(device)
+    milnce_loss = MILNCELoss()
+    optimizer = torch.optim.Adam(model.parameters(), lr=0.0005)
+    save_dir = f'/scr/yusenluo/RoboCLIP/visualization/saved_model/milnce_loss_models/{experiment_name}'
+    checkpoint_dir = f'{save_dir}/checkpoint'
+    os.makedirs(save_dir, exist_ok=True)
+    os.makedirs(checkpoint_dir, exist_ok=True)
+    final_model_path = f"{save_dir}/{experiment_name}_Final_model.pth"
+    for epoch in range(args.epochs):
+        print(
+            f"Training with {current_sample_size} samples in Epoch {epoch}, PCA {variance_threshold}, Seed{seed}")
+        checkpoint_model_path = f"{checkpoint_dir}/M_model_{variance_threshold}_{current_sample_size}_Seed{seed}_Epoch{epoch + 1}_milnce.pth"
+        wandb_log = {}
+        # sampled_data_loader = DataLoader(
+        #     train_dataset, batch_size=32, shuffle=True, num_workers=5, pin_memory=True
+        # )
+        # augmented_video_embeddings, augmented_text_embeddings, _, augmented_mappings = Embedding_gpu(
+        #     s3d, sampled_data_loader
+        # )
+        # reduced_train_video, reduced_train_text, reduced_validate_video, reduced_validate_text = reduce_with_pca(
+        #     augmented_video_embeddings, augmented_text_embeddings,
+        #     validate_video_embeddings_normalized,
+        #     validate_text_embeddings_normalized, pca_video, pca_text, device)
+        finetune_M_Random(model, optimizer, reduced_train_video, reduced_train_text,
+                          checkpoint_model_path,
+                          milnce_loss, epoch)
+        adjusted_train_video_embeddings, _ = Test_Model(reduced_train_video, reduced_train_text,
+                                                        train_mappings, epoch, model, val_task_id,
+                                                        'Train', wandb_log)
+        adjusted_validate_video_embeddings, _ = Test_Model(reduced_validate_video,
+                                                           reduced_validate_text,
+                                                           validate_mappings, epoch, model,
+                                                           val_task_id, 'Validate', wandb_log)
+        wandb.log(wandb_log)
+    torch.save(model.state_dict(), final_model_path)
+    print(f"Final model saved to {final_model_path}")
+    # plot_embeddings(adjusted_validate_video_embeddings.cpu(),
+    #                 reduced_validate_text.cpu(), validate_mappings, 'plots',
+    #                 'meta_val.png')
+    # plot_embeddings(adjusted_train_video_embeddings.cpu(),
+    #                 reduced_train_text.cpu(), validate_mappings, 'plots',
+    #                 'meta_train.png')
 
-                        milnce_loss = MILNCELoss()
-                        optimizer = torch.optim.Adam(model.parameters(), lr=0.0005)
-                        save_dir = f'/scr/yusenluo/RoboCLIP/visualization/saved_model/M/metaworld/video_aug_finetune_M_{strong}_pca_matrix_{num_augmented_per_video}'
-                        checkpoint_dir = f'{save_dir}/checkpoint_{seed}'
-                        os.makedirs(save_dir, exist_ok=True)
-                        os.makedirs(checkpoint_dir, exist_ok=True)
-                        final_model_path = f"{save_dir}/M_model_{variance_threshold}_{current_sample_size}_Seed{seed}_milnce.pth"
-                        for epoch in range(5000):
-                            print(
-                                f"Training with {size_multiplier} samples in Epoch {epoch}, PCA {variance_threshold}, Seed{seed}")
-                            checkpoint_model_path = f"{checkpoint_dir}/M_model_{variance_threshold}_{current_sample_size}_Seed{seed}_Epoch{epoch + 1}_milnce.pth"
-                            # sampled_data_loader = DataLoader(
-                            #     train_dataset, batch_size=32, shuffle=True, num_workers=5, pin_memory=True
-                            # )
-                            # augmented_video_embeddings, augmented_text_embeddings, _, augmented_mappings = Embedding_gpu(
-                            #     s3d, sampled_data_loader
-                            # )
-                            # reduced_train_video, reduced_train_text, reduced_validate_video, reduced_validate_text = reduce_with_pca(
-                            #     augmented_video_embeddings, augmented_text_embeddings,
-                            #     validate_video_embeddings_normalized,
-                            #     validate_text_embeddings_normalized, pca_video, pca_text, device)
-                            finetune_M_Random(model, optimizer, reduced_train_video, reduced_train_text,
-                                              checkpoint_model_path,
-                                              milnce_loss)
-                            adjusted_train_video_embeddings, _ = Test_Model(reduced_train_video, reduced_train_text, 
-                                                    train_mappings, epoch, model, val_task_id, 'Train')
-                            adjusted_validate_video_embeddings, _ = Test_Model(reduced_validate_video, reduced_validate_text, 
-                                                validate_mappings, epoch, model, val_task_id,'Validate')
-                        torch.save(model.state_dict(), final_model_path)
-                        print(f"Final model saved to {final_model_path}")
-                        # plot_embeddings(adjusted_validate_video_embeddings.cpu(),
-                        #                 reduced_validate_text.cpu(), validate_mappings, 'plots',
-                        #                 'meta_val.png')
-                        # plot_embeddings(adjusted_train_video_embeddings.cpu(),
-                        #                 reduced_train_text.cpu(), validate_mappings, 'plots',
-                        #                 'meta_train.png')
-                        
-                        wandb.finish()
+    wandb.finish()
+
+
+if __name__ == "__main__":
+    argparser = argparse.ArgumentParser()
+    argparser.add_argument('--model_name', type=str, default='xclip', choices=['xclip', 's3d'])
+    argparser.add_argument('--seed', type=int, default=42)
+    argparser.add_argument('--batch_size', type=int, default=64)
+    argparser.add_argument('--num_workers', type=int, default=16)
+    argparser.add_argument('--epochs', type=int, default=1000)
+    argparser.add_argument('--pca_variance', type=int, default=512)
+    argparser.add_argument('--val_task_ids', type=int, nargs='+', default=[4, 13, 19, 36, 48],
+                           help="List of task IDs for validation")
+    args = argparser.parse_args()
+    main(args)
+    #mp.set_start_method('spawn', force=True)
+
