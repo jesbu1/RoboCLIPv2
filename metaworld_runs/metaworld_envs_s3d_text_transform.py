@@ -222,6 +222,8 @@ class MetaworldSparse(Env):
                     if args.norm_output:
                         embedding = normalize_embeddings(embedding, return_tensor=True).float()
                     embedding = self.transform_model(embedding)
+                    embedding = normalize_embeddings(embedding, return_tensor=True).float()
+
                     sim = th.matmul(self.target_embedding, embedding.t())
                     if self.args.time_reward != 1.0:
                         sim = sim * self.args.time_reward
@@ -293,6 +295,7 @@ class MetaworldSparse(Env):
                     video_embedding = normalize_embeddings(video_embedding, return_tensor=True).float()
                     self.target_embedding = normalize_embeddings(self.target_embedding, return_tensor=True).float()
                 video_embedding = self.transform_model(video_embedding)
+                video_embedding = normalize_embeddings(video_embedding, return_tensor=True).float()
 
 
                 similarity_matrix = th.matmul(self.target_embedding, video_embedding.t())

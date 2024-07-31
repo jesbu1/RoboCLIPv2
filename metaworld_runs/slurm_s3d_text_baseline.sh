@@ -9,11 +9,11 @@
 
 
 
-python metaworld_envs_s3d_text_baseline.py --n_envs 8 --wandb --time --norm_input --norm_output --time_reward 100 --entropy_term "auto" --random_reset --eval_freq 1280 --video_freq 5120 --seed 42 --algo "sac" --env_id 'door-close-v2-goal-hidden' --text_string 'closing door' &
-python metaworld_envs_s3d_text_baseline.py --n_envs 8 --wandb --time --norm_input --norm_output --time_reward 100 --entropy_term "auto" --random_reset --eval_freq 1280 --video_freq 5120 --seed 5 --algo "sac" --env_id 'door-close-v2-goal-hidden' --text_string 'closing door' &
-python metaworld_envs_s3d_text_baseline.py --n_envs 8 --wandb --time --norm_input --norm_output --time_reward 100 --entropy_term "auto" --random_reset --eval_freq 1280 --video_freq 5120 --seed 32 --algo "sac" --env_id 'door-close-v2-goal-hidden' --text_string 'closing door' &
-python metaworld_envs_s3d_text_baseline.py --n_envs 8 --wandb --time --norm_input --norm_output --time_reward 100 --entropy_term "auto" --random_reset --eval_freq 1280 --video_freq 5120 --seed 0 --algo "sac" --env_id 'door-close-v2-goal-hidden' --text_string 'closing door' & 
-python metaworld_envs_s3d_text_baseline.py --n_envs 8 --wandb --time --norm_input --norm_output --time_reward 100 --entropy_term "auto" --random_reset --eval_freq 1280 --video_freq 5120 --seed 1 --algo "sac" --env_id 'door-close-v2-goal-hidden' --text_string 'closing door' & 
+python metaworld_envs_s3d_text_baseline.py --n_envs 8 --wandb --time --norm_input --norm_output --time_reward 100 --entropy_term "auto" --random_reset --eval_freq 1280 --video_freq 5120 --seed 42 --algo "sac" --env_id 'door-open-v2-goal-hidden' --text_string 'opening door' &
+python metaworld_envs_s3d_text_baseline.py --n_envs 8 --wandb --time --norm_input --norm_output --time_reward 100 --entropy_term "auto" --random_reset --eval_freq 1280 --video_freq 5120 --seed 5 --algo "sac" --env_id 'door-open-v2-goal-hidden' --text_string 'opening door' &
+python metaworld_envs_s3d_text_baseline.py --n_envs 8 --wandb --time --norm_input --norm_output --time_reward 100 --entropy_term "auto" --random_reset --eval_freq 1280 --video_freq 5120 --seed 32 --algo "sac" --env_id 'door-open-v2-goal-hidden' --text_string 'opening door' &
+python metaworld_envs_s3d_text_baseline.py --n_envs 8 --wandb --time --norm_input --norm_output --time_reward 100 --entropy_term "auto" --random_reset --eval_freq 1280 --video_freq 5120 --seed 0 --algo "sac" --env_id 'door-open-v2-goal-hidden' --text_string 'opening door' & 
+python metaworld_envs_s3d_text_baseline.py --n_envs 8 --wandb --time --norm_input --norm_output --time_reward 100 --entropy_term "auto" --random_reset --eval_freq 1280 --video_freq 5120 --seed 1 --algo "sac" --env_id 'door-open-v2-goal-hidden' --text_string 'opening door' & 
 
 
 # Wait for all background jobs to finish
