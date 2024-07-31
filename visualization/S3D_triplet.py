@@ -447,10 +447,10 @@ def main(args):
 
 
     train_dataset = MetaDataset(
-        "/scr/yusenluo/RoboCLIP/metaworld_generate_gifs", train_task_id, num_samples=15, seed=42
+        "/scr/yusenluo/RoboCLIP/metaworld_generate_gifs", train_task_id, num_samples=15, seed=args.seed
     )
     val_dataset = MetaDataset(
-        "/scr/yusenluo/RoboCLIP/metaworld_generate_gifs", val_task_id, num_samples=15, seed=42
+        "/scr/yusenluo/RoboCLIP/metaworld_generate_gifs", val_task_id, num_samples=15, seed=args.seed
     )
 
     train_data_loader = DataLoader(
