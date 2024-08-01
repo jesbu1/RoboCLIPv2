@@ -147,7 +147,12 @@ def cos_similarity_score(adjust_video_embeddings, text_embeddings_pca):
 
 def finetune_M_Random(model, optimizer, reduced_video, reduced_text, path, milnce_loss, epoch):
     adjusted_video_embeddings = model(reduced_video)
-    loss = milnce_loss(adjusted_video_embeddings, reduced_text)
+    video_norm = th.mean(th.norm(adjusted_video_embeddings, dim=1))
+    text_norm = th.mean(th.norm(reduced_text, dim=1))
+    print(f"adjusted_video_embeddings 的范数是 : {video_norm}")
+    print(f"reduced_text 的范数是 : {text_norm}")
+    #loss = milnce_loss(adjusted_video_embeddings, reduced_text)
+    loss = milnce_loss(reduced_text, adjusted_video_embeddings)
     optimizer.zero_grad()
     loss.backward()
     optimizer.step()
@@ -158,6 +163,27 @@ def finetune_M_Random(model, optimizer, reduced_video, reduced_text, path, milnc
     }
     torch.save(checkpoint, path)
     print(f"Checkpoint model saved to {path}")
+
+
+class SingleLayerMLP(nn.Module):
+    def __init__(self, input_dim, output_dim, normalize=True):
+        super(SingleLayerMLP, self).__init__()
+        self.linear = nn.Linear(input_dim, output_dim)
+        self.normalize = normalize
+
+        # self.linear_2 = nn.Linear(output_dim, output_dim)
+        # self.linear_3 = nn.Linear(output_dim, output_dim)
+
+    def forward(self, x):
+        x = self.linear(x)
+        # x = F.relu(x)
+        # x = self.linear_2(x)
+        # x = F.relu(x)
+        # x = self.linear_3(x)
+        # Apply L2 normalization to each embedding
+        if self.normalize:
+            x = F.normalize(x, p=2, dim=1)
+        return x
 
 
 def main(args):
@@ -186,7 +212,8 @@ def main(args):
 
     val_task_id = args.val_task_ids
     all_task_id = set(range(50))
-    train_task_id = list(all_task_id - set(val_task_id))
+    # train_task_id = list(all_task_id - set(val_task_id))
+    train_task_id = all_task_id
     train_dataset = MetaDataset(
         "/scr/yusenluo/RoboCLIP/metaworld_generate_gifs", train_task_id, num_samples=15, seed=args.seed
     )
@@ -195,10 +222,10 @@ def main(args):
     )
 
     train_data_loader = DataLoader(
-        train_dataset, batch_size=15, shuffle=False, num_workers=5
+        train_dataset, batch_size=16, shuffle=False, num_workers=2
     )
     validate_data_loader = DataLoader(
-        val_dataset, batch_size=15, shuffle=False, num_workers=5
+        val_dataset, batch_size=16, shuffle=False, num_workers=2
     )
     print(len(train_dataset))
     print(len(val_dataset))
@@ -222,7 +249,7 @@ def main(args):
     WANDB_PROJECT_NAME = "p-roboclip-v2"
     eval_task_name = "_".join([str(i) for i in val_task_id])
     experiment_name = ("milnce_loss" + "_" + str(args.seed) + "_" + args.model_name + f"_PCA_{args.pca_variance}"
-                       "_norm" + f"_text_{eval_task_name}")
+                       "_norm" + f"_text_{eval_task_name}" + "_supervised")
     wandb_log = {}
     wandb.init(
         entity=WANDB_ENTITY_NAME,
@@ -243,8 +270,9 @@ def main(args):
                val_task_id, 'Validate', wandb_log)
     wandb.log(wandb_log)
 
-    model = nn.Linear(reduced_train_video.shape[1], reduced_train_text.shape[1], bias=False).to(
-        device)
+    # model = nn.Linear(reduced_train_video.shape[1], reduced_train_text.shape[1], bias=False).to(
+    #     device)
+    model = SingleLayerMLP(reduced_train_video.shape[1], reduced_train_text.shape[1], normalize=args.norm).to(device)
     # model = SimpleMLP(reduced_train_video.shape[1], reduced_train_text.shape[1]).to(device)
     if variance_threshold != 0:
         pretrained_matrix = compute_M(pca_video.components_, pca_text.components_, variance_threshold,
@@ -300,6 +328,7 @@ def main(args):
 if __name__ == "__main__":
     argparser = argparse.ArgumentParser()
     argparser.add_argument('--model_name', type=str, default='xclip', choices=['xclip', 's3d'])
+    argparser.add_argument('--norm', action='store_true')
     argparser.add_argument('--seed', type=int, default=42)
     argparser.add_argument('--batch_size', type=int, default=64)
     argparser.add_argument('--num_workers', type=int, default=16)

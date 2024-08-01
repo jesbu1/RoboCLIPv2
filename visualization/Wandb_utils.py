@@ -228,8 +228,8 @@ def Test_Model(video_embeddings, text_embeddings, train_mappings, epoch, model, 
     else:
         adjusted_video_embeddings = video_embeddings
     
-    adjusted_video_embeddings = normalize_embeddings(adjusted_video_embeddings)
-    text_embeddings = normalize_embeddings(text_embeddings)
+    # adjusted_video_embeddings = normalize_embeddings(adjusted_video_embeddings)
+    # text_embeddings = normalize_embeddings(text_embeddings)
     
     accuracies_text, mrr_text = check_pairs(
         adjusted_video_embeddings.cpu().numpy(),
@@ -260,7 +260,8 @@ def Test_Model(video_embeddings, text_embeddings, train_mappings, epoch, model, 
     video_norm = th.mean(th.norm(adjusted_video_embeddings, dim=1))
     text_norm = th.mean(th.norm(text_embeddings, dim=1))
     milnce_loss = MILNCELoss()
-    validation_loss = milnce_loss(adjusted_video_embeddings, text_embeddings)
+    # validation_loss = milnce_loss(adjusted_video_embeddings, text_embeddings)
+    validation_loss = milnce_loss(text_embeddings, adjusted_video_embeddings)
 
     wandb_log[f'{Train_or_Validate}_epoch'] = epoch + 1
     wandb_log[f'{Train_or_Validate}_loss'] = validation_loss
@@ -450,7 +451,7 @@ def normalize_and_pca(sampled_video_embeddings, sampled_text_embeddings, validat
     else:
         reduced_validate_video = (validate_video_embeddings_normalized).float().to(device)
         reduced_validate_text = (validate_text_embeddings_normalized).float().to(device)
-    reduced_train_text = reduced_train_text.to(device)
+    reduced_train_text = normalize_embeddings(reduced_train_text).to(device)
     reduced_train_video = reduced_train_video.to(device)
     print(reduced_train_text.shape, reduced_train_video.shape)
     return reduced_train_video, reduced_train_text, reduced_validate_video, reduced_validate_text, pca_video, pca_text
