@@ -198,7 +198,7 @@ class MetaworldSparse(Env):
 
             # self.transform_model = SingleLayerMLP(512, 512, normalize=True).cuda()
             # self.transform_model.load_state_dict(th.load("/scr/jzhang96/triplet_loss_models/triplet_loss_45_42_s3d_0.0_TimeShuffle_TimeShort_Norm/49.pth"))
-            self.transform_model = SimpleWeightVector(512).cuda()
+            self.transform_model = SingleLayerMLP(512, 512, normalize=True)
             self.transform_model.load_state_dict(th.load("milnce_loss_42_s3d_PCA_0_norm_text_4_13_19_36_48_supervised_Final_model.pth"))
             self.transform_model = self.transform_model.eval().cuda()
 
