@@ -242,7 +242,7 @@ class Text_Cond_Dataset(Dataset):
         if args.time_shorten:
             self.candidate_type.append(3)
     def __len__(self):
-        return len(self.keys) * 30
+        return len(self.keys) * 10 * (len(self.candidate_type) + 1)
 
     def __getitem__(self, idx):
         real_idx = idx % len(self.keys)  # env name
@@ -454,10 +454,10 @@ def main(args):
     )
 
     train_data_loader = DataLoader(
-        train_dataset, batch_size=15, shuffle=False, num_workers=5
+        train_dataset, batch_size=16, shuffle=False, num_workers=5
     )
     validate_data_loader = DataLoader(
-        val_dataset, batch_size=15, shuffle=False, num_workers=5
+        val_dataset, batch_size=16, shuffle=False, num_workers=5
     )
     train_video_embeddings, train_text_embeddings, _, train_mappings = Embedding_gpu(
         s3d_model, train_data_loader
@@ -501,7 +501,7 @@ def main(args):
     # type 2 and 3:
     if args.time_shuffle or args.time_shorten:
         ProgressDataset = Text_Cond_Dataset(args, train_task_id)
-        progress_dataloader = DataLoader(ProgressDataset, batch_size=2 * args.batch_size, shuffle=True, num_workers=args.num_workers)
+        progress_dataloader = DataLoader(ProgressDataset, batch_size=(args.time_shuffle + args.time_shorten) * args.batch_size, shuffle=True, num_workers=args.num_workers)
         progress_iter = iter(progress_dataloader)
 
     # loss_func = nn.TripletMarginLoss(margin=0.5, p=1)
@@ -574,7 +574,7 @@ def main(args):
                     (gt_features[j], pos_features[j], neg_features[j], torch.tensor(type[j], dtype=torch.int32),  # Ensure type is Tensor
                 torch.tensor(progress[j], dtype=torch.float32)))
             print(len(triplet_dataset))
-            triplet_loader = DataLoader(triplet_dataset, batch_size=3 * args.batch_size, shuffle=True)
+            triplet_loader = DataLoader(triplet_dataset, batch_size=(1 + args.time_shuffle + args.time_shorten) * args.batch_size, shuffle=True)
 
             for triplet_batch in triplet_loader:
                 wandb_log = {}
