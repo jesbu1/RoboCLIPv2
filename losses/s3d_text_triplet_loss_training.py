@@ -17,6 +17,7 @@ import random
 import matplotlib.pyplot as plt
 import copy
 from dataloader_text import GifTextDataset
+from sklearn.decomposition import PCA
 
 
 
@@ -110,12 +111,56 @@ def plot_progress(array, s3d_model, transform_model):
     plt.xlabel("Length")
     plt.ylabel("Cosine Similarity")
     plt.title("Cosine Similarity of GT embedding with progress embedding")
-    # return picture
 
     return figure_1
 
 
+def plot_distribution(transform_model, evaluate_run_embeddings, total_evaluate_embeddings, evaluate_tasks, total_evaluate_tasks, eval_text_embedding):
 
+    total_video_embedding = transform_model(total_evaluate_embeddings).detach().cpu().numpy()
+    run_video_embedding = transform_model(evaluate_run_embeddings).detach().cpu().numpy()
+    total_embedding = np.concatenate([total_video_embedding, eval_text_embedding], axis=0)
+    pca = PCA(n_components=2)
+    pca_model = pca.fit(total_embedding)
+    total_video_embedding = pca_model.transform(total_video_embedding)
+    run_video_embedding = pca_model.transform(run_video_embedding)
+    eval_text_embedding = pca_model.transform(eval_text_embedding)
+
+    figure_1 = plt.figure()
+    colors = plt.cm.tab10(np.linspace(0, 1, len(total_evaluate_tasks)))  
+    for i in range(len(total_evaluate_tasks)):
+        group_data = total_video_embedding[i*10:(i+1)*10]
+        x = group_data[:, 0]
+        y = group_data[:, 1]
+        text_name = total_evaluate_tasks[i]
+        plt.scatter(x, y, color=colors[i], label=text_name)
+    
+    plt.title('2D PCA for Metaworld Total Videos')
+    plt.xlabel('x-dim')
+    plt.ylabel('y-dim')
+    # plt.legend(loc='upper left', ncol=4)
+    plt.tight_layout(rect=[0, 0, 1, 1]) # adjust the plot to the right (to fit the legend)
+    
+
+    figure_2 = plt.figure()
+    colors = plt.cm.tab10(np.linspace(0, 1, len(evaluate_tasks)))
+    for i in range(len(evaluate_tasks)):
+        group_data = run_video_embedding[i*10:(i+1)*10]
+        x = group_data[:, 0]
+        y = group_data[:, 1]
+        text_name = evaluate_tasks[i]
+        text_embedding = eval_text_embedding[i]
+        plt.scatter(x, y, color=colors[i], label=text_name, marker='o', s=100, zorder=2)
+        # put "x" above the point
+        plt.scatter(text_embedding[0], text_embedding[1], color=colors[i], marker='x', s=100, zorder=3)
+
+    plt.title('2D PCA for Metaworld Evaluate Videos')
+    plt.xlabel('x-dim')
+    plt.ylabel('y-dim')
+    plt.legend(loc='upper left', ncol=1)
+    plt.tight_layout(rect=[0, 0, 0.8, 1]) # adjust the plot to the right (to fit the legend)
+
+    return figure_1, figure_2
 
 
     
@@ -145,7 +190,7 @@ def main(args):
         experiment_name += "_Norm"
 
     if args.random_noise:
-        experiment_name += "_RandomNoise"
+        experiment_name += "_RandomNoise" 
 
 
     h5_dataset_file = h5py.File(args.h5_path, "r")
@@ -154,11 +199,46 @@ def main(args):
 
     key = 'door-open-v2-goal-hidden'
     seen_array = np.array(h5_dataset_file[key]['output_gif_18.gif'])
+    evaluate_h5 = h5py.File("metaworld_s3d_embedding.h5", "r")
+    evaluate_task = ["door-close-v2-goal-hidden", "door-open-v2-goal-hidden", "drawer-close-v2-goal-hidden", "button-press-v2-goal-hidden", "button-press-topdown-v2-goal-hidden"]
+    total_evaluate_tasks = list(evaluate_h5.keys())
+    total_evaluate_embeddings = None
+    evaluate_run_embeddings = None
+    for keys in evaluate_h5.keys():
+        task_data = np.asarray(evaluate_h5[keys])
+        # random choose 10
+        choose_index = np.random.choice(task_data.shape[0], 10, replace=False)
+        task_data = task_data[choose_index]
+        if total_evaluate_embeddings is None:
+            total_evaluate_embeddings = task_data
+        else:
+            total_evaluate_embeddings = np.concatenate([total_evaluate_embeddings, task_data], axis=0)
+
+        if keys in evaluate_task:
+            if evaluate_run_embeddings is None:
+                evaluate_run_embeddings = task_data
+            else:
+                evaluate_run_embeddings = np.concatenate([evaluate_run_embeddings, task_data], axis=0)
+
+    total_evaluate_embeddings = torch.tensor(total_evaluate_embeddings).cuda()
+    evaluate_run_embeddings = torch.tensor(evaluate_run_embeddings).cuda()
+    evaluate_h5.close()
+
+    text_h5 = h5py.File("metaworld_s3d_text.h5", "r")
+    eval_text_embedding = []
+    for keys in evaluate_task:
+        embedding = np.asarray(text_h5[keys]["embedding"])
+        embedding = np.expand_dims(embedding, axis=0)
+        eval_text_embedding.append(embedding)
+    text_h5.close()
+    eval_text_embedding = np.concatenate(eval_text_embedding, axis=0)
+    eval_text_embedding = normalize_embeddings(eval_text_embedding)
+
 
     run = wandb.init(
         entity=WANDB_ENTITY_NAME,
         project=WANDB_PROJECT_NAME,
-        group="text_adaptive_triplet_loss_training",
+        group="text_adaptive_triplet",
         config=args,
         name=experiment_name,
     )
@@ -186,8 +266,9 @@ def main(args):
             pos_array = batch["pos_array"].cuda()
             neg_array = batch["neg_array"].cuda()
             batch_size = neg_array.shape[0]
+            gt_features = normalize_embeddings(gt_features)
             samples = torch.cat([pos_array, neg_array]).cuda()
-            type = batch["type"]
+            types = batch["type"]
             progress = batch["progress"].float().cuda()
             
             with th.no_grad():
@@ -204,7 +285,7 @@ def main(args):
             neg_features = video_features[batch_size:2*batch_size]
             if not args.rand_neg:
                 # choose the hardest negative
-                type_1_mask = (type == 1)
+                type_1_mask = (types == 1)
                 type_1_gt_features = gt_features[type_1_mask]
                 cosine_similarity_matrix = torch.mm(type_1_gt_features, pos_features.t())
                 true_indices = np.where(type_1_mask)[0]
@@ -213,7 +294,7 @@ def main(args):
                 hardest_neg_indices = torch.argmax(cosine_similarity_matrix, dim=1)
                 neg_features[type_1_mask] = pos_features[hardest_neg_indices].clone()
                 
-            loss = triplet_loss(gt_features, pos_features, neg_features, type, progress=progress)
+            loss = triplet_loss(gt_features, pos_features, neg_features, types, progress=progress)
 
             optimizer.zero_grad()
             loss.backward()
@@ -221,23 +302,38 @@ def main(args):
 
             wandb_log = {"loss": loss.item()}
             # print(wandb_log)
-            # wandb.log(wandb_log)
-        
-        # if epoch % 5 == 4:
-        #     if args.model_name == "xclip":
-        #         if not os.path.exists(f"/scr/jzhang96/triplet_loss_models/{experiment_name}"):
-        #             os.makedirs(f"/scr/jzhang96/triplet_loss_models/{experiment_name}")
-        #         th.save(transform_model.state_dict(), f"/scr/jzhang96/triplet_loss_models/{experiment_name}/{epoch}.pth")
-        #     else:
-        #         if not os.path.exists(f"/scr/jzhang96/triplet_loss_models/{experiment_name}"):
-        #             os.makedirs(f"/scr/jzhang96/triplet_loss_models/{experiment_name}")
-        #         th.save(transform_model.state_dict(), f"/scr/jzhang96/triplet_loss_models/{experiment_name}/{epoch}.pth")
+            wandb.log(wandb_log)
+
+        total_figure, single_figure = plot_distribution(transform_model, 
+                                                        evaluate_run_embeddings, 
+                                                        total_evaluate_embeddings, 
+                                                        evaluate_task, 
+                                                        total_evaluate_tasks,
+                                                        eval_text_embedding)
+        wandb.log({"total_total_distribution": wandb.Image(total_figure)})
+        wandb.log({"eval_task_distribution": wandb.Image(single_figure)})
+        plt.close(total_figure)
+        plt.close(single_figure)
 
 
-        #     seen_plt = plot_progress(seen_array, s3d_model, transform_model)
-        #     unseen_plt = plot_progress(unseen_array, s3d_model, transform_model)
-        #     wandb.log({"progress/seen": wandb.Image(seen_plt)})
-        #     wandb.log({"progress/unseen": wandb.Image(unseen_plt)})
+
+
+
+        if epoch % 5 == 0:
+            if args.model_name == "xclip":
+                if not os.path.exists(f"/scr/jzhang96/triplet_text_loss_models/{experiment_name}"):
+                    os.makedirs(f"/scr/jzhang96/triplet_text_loss_models/{experiment_name}")
+                th.save(transform_model.state_dict(), f"/scr/jzhang96/triplet_text_loss_models/{experiment_name}/{epoch}.pth")
+            else:
+                if not os.path.exists(f"/scr/jzhang96/triplet_text_loss_models/{experiment_name}"):
+                    os.makedirs(f"/scr/jzhang96/triplet_text_loss_models/{experiment_name}")
+                th.save(transform_model.state_dict(), f"/scr/jzhang96/triplet_text_loss_models/{experiment_name}/{epoch}.pth")
+
+
+            seen_plt = plot_progress(seen_array, s3d_model, transform_model)
+            unseen_plt = plot_progress(unseen_array, s3d_model, transform_model)
+            wandb.log({"progress/seen": wandb.Image(seen_plt)})
+            wandb.log({"progress/unseen": wandb.Image(unseen_plt)})
 
 
 
