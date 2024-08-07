@@ -281,6 +281,7 @@ def main(args):
 
     # loss_func = nn.TripletMarginLoss(margin=0.5, p=1)
     optimizer = th.optim.Adam(transform_model.parameters(), lr=1e-4)
+    # optimizer = th.optim.Adam(transform_model.parameters(), lr=1e-3)
 
     if args.loss_type == "MILNCE":
         loss_func = MILNCELoss()
@@ -336,22 +337,30 @@ def main(args):
             with torch.no_grad():
                 pos_cos_avg = F.cosine_similarity(gt_features, pos_features, dim=1).mean().item()
                 neg_cos_avg = F.cosine_similarity(gt_features, neg_features, dim=1).mean().item()
-                pos_org_avg = F.cosine_similarity(gt_features, pos_org_feature, dim=1).mean().item()
-                neg_org_avg = F.cosine_similarity(gt_features, neg_org_feature, dim=1).mean().item()
+                # pos_org_avg = F.cosine_similarity(gt_features, pos_org_feature, dim=1).mean().item()
+                # neg_org_avg = F.cosine_similarity(gt_features, neg_org_feature, dim=1).mean().item()
                 pos_l2_dis = torch.norm(gt_features - pos_features, p=2, dim=1).mean().item()
                 neg_l2_dis = torch.norm(gt_features - neg_features, p=2, dim=1).mean().item()
-                pos_org_dis = torch.norm(gt_features - pos_org_feature, p=2, dim=1).mean().item()
-                neg_org_dis = torch.norm(gt_features - neg_org_feature, p=2, dim=1).mean().item()
+                # pos_org_dis = torch.norm(gt_features - pos_org_feature, p=2, dim=1).mean().item()
+                # neg_org_dis = torch.norm(gt_features - neg_org_feature, p=2, dim=1).mean().item()
+
+                # gt_norm = torch.norm(gt_features, p=2, dim=1).mean().item()
+                # pos_norm = torch.norm(pos_features, p=2, dim=1).mean().item()
+                # neg_norm = torch.norm(neg_features, p=2, dim=1).mean().item()
+
 
             wandb_log = {"loss": loss.item(),
                          "cos/pos_cos_avg": pos_cos_avg,
                          "cos/neg_cos_avg": neg_cos_avg,
-                         "cos/pos_org_avg": pos_org_avg,
-                         "cos/neg_org_avg": neg_org_avg, 
+                        #  "cos/pos_org_avg": pos_org_avg,
+                        #  "cos/neg_org_avg": neg_org_avg, 
                          "l2dis/pos_l2_dis": pos_l2_dis,
                          "l2dis/neg_l2_dis": neg_l2_dis,
-                         "l2dis/pos_org_dis": pos_org_dis,
-                         "l2dis/neg_org_avg": neg_org_dis,
+                        #  "l2dis/pos_org_dis": pos_org_dis,
+                        #  "l2dis/neg_org_avg": neg_org_dis,
+                        #  "norm/gt_norm": gt_norm,
+                        #  "norm/pos_norm": pos_norm,
+                        #  "norm/neg_norm": neg_norm,
                         }
 
             # print(wandb_log)
