@@ -36,7 +36,7 @@ class SingleLayerMLP(nn.Module):
 def cosine_similarity(x1, x2):
     return F.cosine_similarity(x1, x2, dim=-1)
 
-def triplet_loss(gt, positive, negative, type, margin = (1.5, 1.2, 1.0, 0.0), progress = None): 
+def triplet_loss(gt, positive, negative, type, margin = (1.5, 1.0, 1.0, 0.0), progress = None): 
 
     pos_sim = cosine_similarity(gt, positive)
     neg_sim = cosine_similarity(gt, negative)
@@ -68,7 +68,7 @@ def normalize_embeddings(embeddings, return_tensor=True):
     if return_tensor:
         return normalized_embeddings
     else:
-        return normalized_embeddings.detach().numpy()
+        return normalized_embeddings.detach().cpu().numpy()
 
 
 def plot_progress(array, s3d_model, transform_model):
@@ -117,13 +117,18 @@ def plot_progress(array, s3d_model, transform_model):
 
 def plot_distribution(transform_model, evaluate_run_embeddings, total_evaluate_embeddings, evaluate_tasks, total_evaluate_tasks, eval_text_embedding):
 
-    total_video_embedding = transform_model(total_evaluate_embeddings).detach().cpu().numpy()
-    run_video_embedding = transform_model(evaluate_run_embeddings).detach().cpu().numpy()
-    total_embedding = np.concatenate([total_video_embedding, eval_text_embedding], axis=0)
+    total_evaluate_embeddings = transform_model(total_evaluate_embeddings.clone()).detach().cpu().numpy()
+    evaluate_run_embeddings = transform_model(evaluate_run_embeddings.clone()).detach().cpu().numpy()
+    eval_text_embedding = normalize_embeddings(eval_text_embedding, False)
+    evaluate_run_embeddings = normalize_embeddings(evaluate_run_embeddings, False)
+    total_evaluate_embeddings = normalize_embeddings(total_evaluate_embeddings, False)
+
+
+    total_embedding = np.concatenate([total_evaluate_embeddings, eval_text_embedding], axis=0)
     pca = PCA(n_components=2)
     pca_model = pca.fit(total_embedding)
-    total_video_embedding = pca_model.transform(total_video_embedding)
-    run_video_embedding = pca_model.transform(run_video_embedding)
+    total_video_embedding = pca_model.transform(total_evaluate_embeddings)
+    run_video_embedding = pca_model.transform(evaluate_run_embeddings)
     eval_text_embedding = pca_model.transform(eval_text_embedding)
 
     figure_1 = plt.figure()
@@ -163,6 +168,21 @@ def plot_distribution(transform_model, evaluate_run_embeddings, total_evaluate_e
     return figure_1, figure_2
 
 
+class MILNCELoss(th.nn.Module):
+    def __init__(self):
+        super(MILNCELoss, self).__init__()
+
+    def forward(self, video_embd, text_embd):
+        x = th.matmul(video_embd, text_embd.t())
+        x = x.view(video_embd.shape[0], video_embd.shape[0], -1)
+        nominator = x * th.eye(x.shape[0])[:,:,None].cuda()
+        nominator = nominator.sum(dim=1)
+        nominator = th.logsumexp(nominator, dim=1)
+        denominator = th.cat((x, x.permute(1,0,2)), dim=1).view(x.shape[0], -1)
+        denominator = th.logsumexp(denominator, dim=1)
+        return th.mean(denominator - nominator)
+
+
     
 def main(args):
     # set seed
@@ -191,7 +211,10 @@ def main(args):
 
     if args.random_noise:
         experiment_name += "_RandomNoise" 
-
+    if args.rand_neg:
+        experiment_name += "_RandNeg"
+    experiment_name += args.loss_type
+    
 
     h5_dataset_file = h5py.File(args.h5_path, "r")
     key = 'door-close-v2-goal-hidden'
@@ -230,10 +253,10 @@ def main(args):
         embedding = np.asarray(text_h5[keys]["embedding"])
         embedding = np.expand_dims(embedding, axis=0)
         eval_text_embedding.append(embedding)
-    text_h5.close()
     eval_text_embedding = np.concatenate(eval_text_embedding, axis=0)
     eval_text_embedding = normalize_embeddings(eval_text_embedding)
-
+    
+    text_h5.close()
 
     run = wandb.init(
         entity=WANDB_ENTITY_NAME,
@@ -254,14 +277,16 @@ def main(args):
         s3d_model.eval().cuda()
     transform_model = SingleLayerMLP(512, 512, normalize=True).cuda()
     dataset = GifTextDataset(args)
-    dataloader = DataLoader(dataset, batch_size=args.batch_size, shuffle=True, num_workers=args.num_workers)
+    dataloader = DataLoader(dataset, batch_size=args.batch_size, shuffle=True, num_workers=args.num_workers, drop_last=True)
 
     # loss_func = nn.TripletMarginLoss(margin=0.5, p=1)
     optimizer = th.optim.Adam(transform_model.parameters(), lr=1e-4)
 
+    if args.loss_type == "MILNCE":
+        loss_func = MILNCELoss()
+
     for epoch in range(args.epochs):
         for i, batch in enumerate(tqdm(dataloader)):
-            
             gt_features = batch["gt_array"].cuda()
             pos_array = batch["pos_array"].cuda()
             neg_array = batch["neg_array"].cuda()
@@ -279,45 +304,73 @@ def main(args):
                 else:
                     video_features = s3d_model(samples)["video_embedding"]
             video_features = normalize_embeddings(video_features)
-            video_features = transform_model(video_features) # normalization already done in the model
+            pos_org_feature = video_features[:batch_size].clone()
+            neg_org_feature = video_features[batch_size:2*batch_size].clone()
 
+            video_features = transform_model(video_features) # normalization already done in the model
             pos_features = video_features[:batch_size]
             neg_features = video_features[batch_size:2*batch_size]
-            if not args.rand_neg:
-                # choose the hardest negative
-                type_1_mask = (types == 1)
-                type_1_gt_features = gt_features[type_1_mask]
-                cosine_similarity_matrix = torch.mm(type_1_gt_features, pos_features.t())
-                true_indices = np.where(type_1_mask)[0]
-                for i, true_index in enumerate(true_indices):
-                    cosine_similarity_matrix[i, true_index] = -1.0
-                hardest_neg_indices = torch.argmax(cosine_similarity_matrix, dim=1)
-                neg_features[type_1_mask] = pos_features[hardest_neg_indices].clone()
-                
-            loss = triplet_loss(gt_features, pos_features, neg_features, types, progress=progress)
+
+            if args.loss_type == "triplet":
+                if not args.rand_neg:
+                    # choose the hardest negative
+                    type_1_mask = (types == 1)
+                    type_1_gt_features = gt_features[type_1_mask]
+                    cosine_similarity_matrix = torch.mm(type_1_gt_features, pos_features.t())
+                    true_indices = np.where(type_1_mask)[0]
+                    for i, true_index in enumerate(true_indices):
+                        cosine_similarity_matrix[i, true_index] = -1.0
+                    hardest_neg_indices = torch.argmax(cosine_similarity_matrix, dim=1)
+                    neg_features[type_1_mask] = pos_features[hardest_neg_indices].clone()
+                    
+                loss = triplet_loss(gt_features, pos_features, neg_features, types, progress=progress)
+            
+            else:
+                loss = loss_func(gt_features, pos_features)
+
 
             optimizer.zero_grad()
             loss.backward()
             optimizer.step()
 
-            wandb_log = {"loss": loss.item()}
+            with torch.no_grad():
+                pos_cos_avg = F.cosine_similarity(gt_features, pos_features, dim=1).mean().item()
+                neg_cos_avg = F.cosine_similarity(gt_features, neg_features, dim=1).mean().item()
+                pos_org_avg = F.cosine_similarity(gt_features, pos_org_feature, dim=1).mean().item()
+                neg_org_avg = F.cosine_similarity(gt_features, neg_org_feature, dim=1).mean().item()
+                pos_l2_dis = torch.norm(gt_features - pos_features, p=2, dim=1).mean().item()
+                neg_l2_dis = torch.norm(gt_features - neg_features, p=2, dim=1).mean().item()
+                pos_org_dis = torch.norm(gt_features - pos_org_feature, p=2, dim=1).mean().item()
+                neg_org_dis = torch.norm(gt_features - neg_org_feature, p=2, dim=1).mean().item()
+
+            wandb_log = {"loss": loss.item(),
+                         "cos/pos_cos_avg": pos_cos_avg,
+                         "cos/neg_cos_avg": neg_cos_avg,
+                         "cos/pos_org_avg": pos_org_avg,
+                         "cos/neg_org_avg": neg_org_avg, 
+                         "l2dis/pos_l2_dis": pos_l2_dis,
+                         "l2dis/neg_l2_dis": neg_l2_dis,
+                         "l2dis/pos_org_dis": pos_org_dis,
+                         "l2dis/neg_org_avg": neg_org_dis,
+                        }
+
             # print(wandb_log)
             wandb.log(wandb_log)
+        transform_model.eval()
+        with torch.no_grad():
+            total_figure, single_figure = plot_distribution(transform_model, 
+                                                            evaluate_run_embeddings, 
+                                                            total_evaluate_embeddings, 
+                                                            evaluate_task, 
+                                                            total_evaluate_tasks,
+                                                            eval_text_embedding,
+                                                            )
+            wandb.log({"total_total_distribution": wandb.Image(total_figure)})
+            wandb.log({"eval_task_distribution": wandb.Image(single_figure)})
+            plt.close(total_figure)
+            plt.close(single_figure)
 
-        total_figure, single_figure = plot_distribution(transform_model, 
-                                                        evaluate_run_embeddings, 
-                                                        total_evaluate_embeddings, 
-                                                        evaluate_task, 
-                                                        total_evaluate_tasks,
-                                                        eval_text_embedding)
-        wandb.log({"total_total_distribution": wandb.Image(total_figure)})
-        wandb.log({"eval_task_distribution": wandb.Image(single_figure)})
-        plt.close(total_figure)
-        plt.close(single_figure)
-
-
-
-
+        transform_model.train()
 
         if epoch % 5 == 0:
             if args.model_name == "xclip":
@@ -334,6 +387,8 @@ def main(args):
             unseen_plt = plot_progress(unseen_array, s3d_model, transform_model)
             wandb.log({"progress/seen": wandb.Image(seen_plt)})
             wandb.log({"progress/unseen": wandb.Image(unseen_plt)})
+            plt.close(seen_plt)
+            plt.close(unseen_plt)
 
 
 
@@ -352,5 +407,6 @@ if __name__ == '__main__':
     argparser.add_argument('--random_noise', action='store_true')
     argparser.add_argument('--progress_area', type=float, default=0)
     argparser.add_argument('--rand_neg', action='store_true')
+    argparser.add_argument('--loss_type', type=str, default='triplet', choices=['triplet', 'MILNCE'])
     args = argparser.parse_args()
     main(args)
