@@ -162,8 +162,8 @@ def plot_distribution(transform_model, evaluate_run_embeddings, total_evaluate_e
     plt.title('2D PCA for Metaworld Evaluate Videos')
     plt.xlabel('x-dim')
     plt.ylabel('y-dim')
-    plt.legend(loc='upper left', ncol=1)
-    plt.tight_layout(rect=[0, 0, 0.8, 1]) # adjust the plot to the right (to fit the legend)
+    plt.legend(loc='upper left', ncol=1, bbox_to_anchor=(1, 1))
+    plt.tight_layout() # adjust the plot to the right (to fit the legend)
 
     return figure_1, figure_2
 
@@ -247,7 +247,7 @@ def main(args):
     evaluate_run_embeddings = torch.tensor(evaluate_run_embeddings).cuda()
     evaluate_h5.close()
 
-    text_h5 = h5py.File("metaworld_s3d_text.h5", "r")
+    text_h5 = h5py.File("/scr/jzhang96/metaworld_s3d_text.h5", "r")
     eval_text_embedding = []
     for keys in evaluate_task:
         embedding = np.asarray(text_h5[keys]["embedding"])
