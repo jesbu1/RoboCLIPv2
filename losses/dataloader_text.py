@@ -27,8 +27,29 @@ class GifTextDataset(Dataset):
     def __init__(self, args):
         self.h5_file = h5py.File(args.h5_path, "r")
         self.h5_text_file = h5py.File("metaworld_s3d_text.h5", "r")
-        self.keys = list(self.h5_file.keys())
-        # self.keys = ['door-close-v2-goal-hidden']
+        # self.keys = list(self.h5_file.keys())
+        self.keys = ["door-lock-v2-goal-hidden",
+                    "button-press-wall-v2-goal-hidden",
+                    "drawer-open-v2-goal-hidden",
+                    "window-open-v2-goal-hidden",
+                    "sweep-v2-goal-hidden",
+                    "coffee-button-v2-goal-hidden",
+                    "box-close-v2-goal-hidden",
+                    "pick-out-of-hole-v2-goal-hidden",
+                    "hand-insert-v2-goal-hidden",
+                    "handle-press-v2-goal-hidden"]
+
+
+
+
+
+    # evaluate_task = ["door-close-v2-goal-hidden", 
+    #                 "door-open-v2-goal-hidden", 
+    #                 "drawer-close-v2-goal-hidden", 
+    #                 "button-press-v2-goal-hidden", 
+    #                 "button-press-topdown-v2-goal-hidden"]
+
+
 
 
         self.vlm_name = args.model_name
