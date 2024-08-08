@@ -1,0 +1,1 @@
+docker build --network host -t roboclipv2 -f docker/Dockerfile .

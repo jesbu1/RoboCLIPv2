@@ -5,6 +5,10 @@ This repository contains the implementation for the NeurIPS 2023 paper, [RoboCLI
 
 We recommend using conda for installation and provide a `.yml` file for installation. 
 
+TODO: S3D: YOU GOTTA MV S3DG.PY FROM S3D_HOWTO100M.
+
+
+
 ```sh
 git clone https://github.com/sumedh7/RoboCLIP.git --recursive
 cd RoboCLIP
