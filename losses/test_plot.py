@@ -105,7 +105,7 @@ if __name__ == '__main__':
     evaluate_tasks = ["door-close-v2-goal-hidden", "door-open-v2-goal-hidden", "drawer-close-v2-goal-hidden", "button-press-v2-goal-hidden", "button-press-topdown-v2-goal-hidden"]
     total_evaluate_tasks = list(evaluate_h5.keys())
     total_evaluate_embeddings = None
-    evaluate_run_embeddings = None
+    evaluate_run_embeddings = []
     for keys in evaluate_h5.keys():
         task_data = np.asarray(evaluate_h5[keys])
         # random choose 10
@@ -116,11 +116,13 @@ if __name__ == '__main__':
         else:
             total_evaluate_embeddings = np.concatenate([total_evaluate_embeddings, task_data], axis=0)
 
-        if keys in evaluate_tasks:
-            if evaluate_run_embeddings is None:
-                evaluate_run_embeddings = task_data
-            else:
-                evaluate_run_embeddings = np.concatenate([evaluate_run_embeddings, task_data], axis=0)
+    for keys in evaluate_tasks:
+        task_data = np.asarray(evaluate_h5[keys])
+        # random choose 10
+        choose_index = np.random.choice(task_data.shape[0], 10, replace=False)
+        task_data = task_data[choose_index]
+        evaluate_run_embeddings.append(task_data)
+    evaluate_run_embeddings = np.concatenate(evaluate_run_embeddings, axis = 0)
 
     total_evaluate_embeddings = torch.tensor(total_evaluate_embeddings).cuda()
     evaluate_run_embeddings = torch.tensor(evaluate_run_embeddings).cuda()
