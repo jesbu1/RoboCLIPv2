@@ -692,6 +692,6 @@ if __name__ == "__main__":
     transform_model.load_state_dict(checkpoint)
     #现在是测的training sample的mrr，如果要validate就需要修改为validate
     mrr_1, mrr_3, mrr_5, mrr_10 = eval_mrr(model=transform_model, evaluate_task=val_task_id,
-                                           video_embeddings=train_video_embeddings_normalized,
-                                           text_embeddings=train_text_embeddings_normalized, mappings=train_mappings)
+                                           video_embeddings=train_video_embeddings_normalized.to(device),
+                                           text_embeddings=train_text_embeddings_normalized.to(device), mappings=train_mappings)
     print(mrr_1, mrr_3, mrr_5, mrr_10)
