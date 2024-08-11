@@ -166,6 +166,10 @@ def get_args():
     parser.add_argument('--entropy_term', type=parse_entropy_term, default="auto")
     parser.add_argument('--time_penalty', type=float, default=0.0)
     parser.add_argument('--succ_bonus', type=float, default=0.0)
+    parser.add_argument('--transform_base_path', type=str, default="/scr/jzhang96/triplet_text_loss_models")
+    parser.add_argument('--transform_model_path', type=str, default="triplet_loss_50_42_s3d_Normtriplet/1650.pth")
+    parser.add_argument("--exp_name_end", type=str, default="triplet_hard_neg")
+
     # parser.add_argument('--xclip_model', type=str, default='microsoft/xclip-base-patch16-zero-shot')
 
 
@@ -199,7 +203,8 @@ class MetaworldSparse(Env):
             # self.transform_model = SingleLayerMLP(512, 512, normalize=True).cuda()
             # self.transform_model.load_state_dict(th.load("/scr/jzhang96/triplet_loss_models/triplet_loss_45_42_s3d_0.0_TimeShuffle_TimeShort_Norm/49.pth"))
             self.transform_model = SingleLayerMLP(512, 512, normalize=True)
-            self.transform_model.load_state_dict(th.load("milnce_loss_42_s3d_PCA_0_norm_text_4_13_19_36_48_supervised_Final_model.pth"))
+            transform_model_path = os.path.join(args.transform_base_path, args.transform_model_path)
+            self.transform_model.load_state_dict(th.load(transform_model_path))
             self.transform_model = self.transform_model.eval().cuda()
 
 
@@ -474,36 +479,27 @@ def main():
 
     WANDB_ENTITY_NAME = "clvr"
     WANDB_PROJECT_NAME = "roboclip-v2"
-    experiment_name = "s3d_textTrans_" + args.algo + "_" + args.env_id 
-    # experiment_name = "s3d_sac_baseline_" + args.env_id + "_" + args.algo + "_" + str(args.seed)
-    if args.train_orcale:
-        experiment_name = experiment_name + "_Oracle"
+    experiment_name = "s3d_textTrans_TRIPLET" + args.algo + "_" + args.env_id 
+
     if args.threshold_reward:
         experiment_name = experiment_name + "_Thld"
     if args.project_reward:
         experiment_name = experiment_name + "_ProjReward"
-    if args.norm_input:
-        experiment_name = experiment_name + "_NormIn"
-    if args.norm_output:
-        experiment_name = experiment_name + "_NormOut"
-    if args.time_reward != 1.0:
-        experiment_name = experiment_name + "_XReward" + str(args.time_reward)
-    if args.time:
-        experiment_name = experiment_name + "_Time"
-    else:
-        experiment_name = experiment_name + "_NoTime"
-    if args.succ_end:
-        experiment_name = experiment_name + "_SuccEnd"
-    if args.random_reset:
-        experiment_name = experiment_name + "_RandReset"
+    # if args.norm_input:
+    #     experiment_name = experiment_name + "_NormIn"
+    # if args.norm_output:
+    #     experiment_name = experiment_name + "_NormOut"
+    # if args.time_reward != 1.0:
+    #     experiment_name = experiment_name + "_XReward" + str(args.time_reward)
+    # if args.time:
+    #     experiment_name = experiment_name + "_Time"
+    # else:
+    #     experiment_name = experiment_name + "_NoTime"
 
-    if args.succ_bonus > 0:
-        experiment_name = experiment_name + "_SuccBonus" + str(args.succ_bonus)
-    if args.time_penalty > 0:
-        experiment_name = experiment_name + "_TimePenalty" + str(args.time_penalty)
+
     # if args.algo.lower() == 'sac':
-    experiment_name = experiment_name + "_Entropy" + str(args.entropy_term)
-    run_group = experiment_name + "NEWMILNCE"
+    experiment_name = experiment_name + "_" + args.exp_name_end
+    run_group = experiment_name 
     experiment_name = experiment_name + "_" + str(args.seed) + "NEW"
 
     if args.wandb:
