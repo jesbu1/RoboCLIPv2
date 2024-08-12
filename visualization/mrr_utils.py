@@ -4,6 +4,7 @@ import joblib
 from sklearn.decomposition import PCA
 import matplotlib.pyplot as plt
 import torch as th
+import h5py
 import json
 from torch.utils.data import Dataset, DataLoader
 import numpy as np
@@ -282,9 +283,14 @@ class MetaDataset(Dataset):
         return np.stack(frames)
 
 
-def normalize_embeddings(embeddings):
+def normalize_embeddings(embeddings, return_tensor=True):
+    if isinstance(embeddings, np.ndarray):
+        embeddings = th.tensor(embeddings)
     normalized_embeddings = F.normalize(embeddings, p=2, dim=1)
-    return normalized_embeddings
+    if return_tensor:
+        return normalized_embeddings
+    else:
+        return normalized_embeddings.detach().cpu().numpy()
 
 
 def get_s3d_embeddings(train_task_id, val_task_id, s3d, seed):
@@ -383,6 +389,50 @@ def get_xclip_embeddings(task_id, h5_file):
     text_features = normalize_embeddings(th.from_numpy(text_features))
 
     return video_features, text_features, mappings
+
+
+def get_s3d_embeddings_h5(val_task_id):
+    evaluate_h5 = h5py.File("/scr/jzhang96/RoboCLIPv2/losses/metaworld_s3d_embedding.h5", "r")
+    text_h5 = h5py.File("/scr/jzhang96/metaworld_s3d_text.h5", "r")
+    with open('id_task.json', 'r') as f:
+        task_mapping = json.load(f)
+    matching_tasks = [task for task, id_str in task_mapping.items() if int(id_str) in val_task_id]
+
+    video_ids = []
+    text_labels = []
+    evaluate_video_embeddings = []
+    evaluate_text_embeddings = []
+    for keys in matching_tasks:
+        task_data = np.asarray(evaluate_h5[keys])
+        # random choose 10
+        choose_index = np.random.choice(task_data.shape[0], 10, replace=False)
+
+        video_id = [f"{keys}_{index}" for index in choose_index]
+        print(video_id)
+        video_ids.append(video_id)
+        text_label = [task_ann.get(keys, "Unknown task") for index in choose_index]
+        print(text_label)
+        text_labels.append(text_label)
+
+        task_data = task_data[choose_index]
+        evaluate_video_embeddings.append(task_data)
+
+        text_embedding = [np.asarray(text_h5[keys]["embedding"]) for index in choose_index]
+        evaluate_text_embeddings.append(text_embedding)
+
+    evaluate_video_embeddings = np.concatenate(evaluate_video_embeddings, axis=0)
+    evaluate_video_embeddings = normalize_embeddings(evaluate_video_embeddings)
+    evaluate_video_embeddings = th.tensor(evaluate_video_embeddings).cuda()
+    eval_text_embedding = np.concatenate(evaluate_text_embeddings, axis=0)
+    eval_text_embedding = normalize_embeddings(eval_text_embedding)
+    mappings = {
+        "video_id_to_text_label": dict(zip(video_ids, text_labels)),
+        "index_to_video_id": {i: vid for i, vid in enumerate(video_ids)},
+        "index_to_text_label": {i: lbl for i, lbl in enumerate(text_labels)}
+    }
+    evaluate_h5.close()
+    text_h5.close()
+    return evaluate_video_embeddings, eval_text_embedding, mappings
 
 
 #以下是pca 加 subspace alignment baseline 的三个函数
@@ -676,20 +726,23 @@ def eval_mrr(model, evaluate_task, video_embeddings, text_embeddings, mappings):
 if __name__ == "__main__":
     #假设val_task_id 是这些
     val_task_id = [4, 13, 19, 36, 48]
-    eval_task_name = "_".join([str(i) for i in val_task_id])
-    all_task_id = set(range(50))
-    train_task_id = list(all_task_id - set(val_task_id))
-    s3d_model = S3D("../s3d_dict.npy", 512)
-    # s3d = th.compile(s3d)
-    s3d_model = s3d_model.to(device)
-    s3d_model.load_state_dict(th.load("../s3d_howto100m.pth"))
-    s3d_model.eval()
-    (train_video_embeddings_normalized, train_text_embeddings_normalized, validate_video_embeddings_normalized,
-     validate_text_embeddings_normalized, train_mappings, validate_mappings) = get_s3d_embeddings(train_task_id=train_task_id, val_task_id=val_task_id, s3d=s3d_model, seed=42)
-    transform_model = SimpleMLP(512, 512).to(device)
-    checkpoint_path = '/scr/jzhang96/triplet_text_loss_models/triplet_loss_50_42_s3d_Normtriplet/1650.pth'
-    checkpoint = th.load(checkpoint_path)
-    transform_model.load_state_dict(checkpoint)
+    # eval_task_name = "_".join([str(i) for i in val_task_id])
+    # all_task_id = set(range(50))
+    # train_task_id = list(all_task_id - set(val_task_id))
+    # s3d_model = S3D("../s3d_dict.npy", 512)
+    # # s3d = th.compile(s3d)
+    # s3d_model = s3d_model.to(device)
+    # s3d_model.load_state_dict(th.load("../s3d_howto100m.pth"))
+    # s3d_model.eval()
+    # (train_video_embeddings_normalized, train_text_embeddings_normalized, validate_video_embeddings_normalized,
+    #  validate_text_embeddings_normalized, train_mappings, validate_mappings) = get_s3d_embeddings(train_task_id=train_task_id, val_task_id=val_task_id, s3d=s3d_model, seed=42)
+    # transform_model = SimpleMLP(512, 512).to(device)
+    # checkpoint_path = '/scr/jzhang96/triplet_text_loss_models/triplet_loss_50_42_s3d_Normtriplet/1650.pth'
+    # checkpoint = th.load(checkpoint_path)
+    # transform_model.load_state_dict(checkpoint)
+    video_features, text_features, mappings = get_s3d_embeddings_h5(val_task_id)
+    print(video_features.shape, text_features.shape())
+    exit(0)
     #现在是测的training sample的mrr，如果要validate就需要修改为validate
     mrr_1, mrr_3, mrr_5, mrr_10 = eval_mrr(model=transform_model, evaluate_task=val_task_id,
                                            video_embeddings=train_video_embeddings_normalized.to(device),
