@@ -385,6 +385,7 @@ class MetaworldDense(Env):
         if args.succ_end:
             if info['success']:
                 done = True
+                reward += 100
 
         return obs, reward, done, info
         
@@ -495,6 +496,8 @@ def main():
     #     experiment_name = experiment_name + "_Time"
     # else:
     #     experiment_name = experiment_name + "_NoTime"
+    if args.succ_end:
+        experiment_name = experiment_name + "_SuccEnd"
 
 
     # if args.algo.lower() == 'sac':
