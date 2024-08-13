@@ -451,7 +451,9 @@ class CustomEvalCallback(EvalCallback):
             frame = frame[::3, ::3, :3]
             frames.append(frame)
             action, _ = self.model.predict(obs, deterministic=self.deterministic)
-            obs, _, _, _ = self.eval_env.step(action)
+            obs, _, _, info = self.eval_env.step(action)
+            if info['success']:
+                break
 
         video_buffer = io.BytesIO()
 
