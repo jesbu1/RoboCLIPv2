@@ -26,7 +26,9 @@ def load_model(model_name):
 class GifTextDataset(Dataset):
     def __init__(self, args):
         self.h5_file = h5py.File(args.h5_path, "r")
+        # if args.model_name == "xclip":
         self.h5_text_file = h5py.File("metaworld_xclip_text.h5", "r")
+        # else:
         self.keys = list(self.h5_file.keys())
         # self.keys = ["door-lock-v2-goal-hidden",
         #             "button-press-wall-v2-goal-hidden",
