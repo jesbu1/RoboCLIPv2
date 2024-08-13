@@ -26,22 +26,18 @@ def load_model(model_name):
 class GifTextDataset(Dataset):
     def __init__(self, args):
         self.h5_file = h5py.File(args.h5_path, "r")
-        self.h5_text_file = h5py.File("metaworld_s3d_text.h5", "r")
-        # self.keys = list(self.h5_file.keys())
-        self.keys = ["door-lock-v2-goal-hidden",
-                    "button-press-wall-v2-goal-hidden",
-                    "drawer-open-v2-goal-hidden",
-                    "window-open-v2-goal-hidden",
-                    "sweep-v2-goal-hidden",
-                    "coffee-button-v2-goal-hidden",
-                    "box-close-v2-goal-hidden",
-                    "pick-out-of-hole-v2-goal-hidden",
-                    "hand-insert-v2-goal-hidden",
-                    "handle-press-v2-goal-hidden"]
-
-
-
-
+        self.h5_text_file = h5py.File("metaworld_xclip_text.h5", "r")
+        self.keys = list(self.h5_file.keys())
+        # self.keys = ["door-lock-v2-goal-hidden",
+        #             "button-press-wall-v2-goal-hidden",
+        #             "drawer-open-v2-goal-hidden",
+        #             "window-open-v2-goal-hidden",
+        #             "sweep-v2-goal-hidden",
+        #             "coffee-button-v2-goal-hidden",
+        #             "box-close-v2-goal-hidden",
+        #             "pick-out-of-hole-v2-goal-hidden",
+        #             "hand-insert-v2-goal-hidden",
+        #             "handle-press-v2-goal-hidden"]
 
     # evaluate_task = ["door-close-v2-goal-hidden", 
     #                 "door-open-v2-goal-hidden", 
@@ -49,12 +45,9 @@ class GifTextDataset(Dataset):
     #                 "button-press-v2-goal-hidden", 
     #                 "button-press-topdown-v2-goal-hidden"]
 
-
-
-
         self.vlm_name = args.model_name
-        # if self.vlm_name == "xclip":
-            # self.processor = AutoProcessor.from_pretrained("microsoft/xclip-base-patch16-zero-shot")
+        if self.vlm_name == "xclip":
+            self.processor = AutoProcessor.from_pretrained("microsoft/xclip-base-patch16-zero-shot")
             # self.model = AutoModel.from_pretrained("microsoft/xclip-base-patch16-zero-shot").cuda()
         # else:
         # self.s3d_model = load_model("s3d")  
@@ -79,7 +72,7 @@ class GifTextDataset(Dataset):
         group = self.h5_file[key]
         gif_names = list(group.keys())
         # sample gt sample
-        gt_array = np.asarray(self.h5_text_file[key]["embedding"])
+        gt_array = np.asarray(self.h5_text_file[key])
 
         # sample positive sample
         pos_gif_name = random.choice(gif_names)
@@ -109,7 +102,6 @@ class GifTextDataset(Dataset):
         # preprocess
         if self.vlm_name == "xclip":
 
-            # gt_array = self.preprocess_xclip(gt_array)
             pos_array = self.preprocess_xclip(pos_array)
             neg_array = self.preprocess_xclip(neg_array)
 

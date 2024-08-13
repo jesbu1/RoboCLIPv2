@@ -113,17 +113,6 @@ class SingleLayerMLP(th.nn.Module):
             x = F.normalize(x, p=2, dim=1)
         return x
 
-class SimpleWeightVector(th.nn.Module):
-    def __init__(self, dim):
-        super(SimpleWeightVector, self).__init__()
-        self.weight = th.nn.Parameter(th.randn(dim, dim))
-
-    def forward(self, x):
-        # x: (batch_size, dim)
-        # self.weight: (1, dim)
-        # output: (batch_size, dim)
-        return x * self.weight
-
 
 def normalize_embeddings(embeddings, return_tensor=True):
     if isinstance(embeddings, np.ndarray):
@@ -137,10 +126,10 @@ def normalize_embeddings(embeddings, return_tensor=True):
 
 def get_args():
     parser = argparse.ArgumentParser(description='RL')
-    parser.add_argument('--algo', type=str, default='sac', choices=['ppo', 'sac'])
-    parser.add_argument('--text_string', type=str, default='opening door')
+    parser.add_argument('--algo', type=str, default='ppo', choices=['ppo', 'sac'])
+    parser.add_argument('--text_string', type=str, default='closing door')
     parser.add_argument('--dir_add', type=str, default='')
-    parser.add_argument('--env_id', type=str, default='window-open-v2-goal-hidden')
+    parser.add_argument('--env_id', type=str, default='door-close-v2-goal-hidden')
     parser.add_argument('--total_time_steps', type=int, default=1000000)
     parser.add_argument('--n_envs', type=int, default=8)
     parser.add_argument('--n_steps', type=int, default=128)
@@ -152,8 +141,7 @@ def get_args():
     parser.add_argument('--succ_end', action="store_true")
     parser.add_argument('--video_path', type=str, default=None)
     parser.add_argument('--random_reset', action="store_true")
-    # parser.add_argument('--target_gif_path', type=str, default="/scr/jzhang96/metaworld_generate_gifs/")
-    parser.add_argument('--target_gif_path', type=str, default="/home/jzhang96/RoboCLIPv2/metaworld_generate_gifs/")
+    parser.add_argument('--target_gif_path', type=str, default="/scr/jzhang96/metaworld_generate_gifs/")
     parser.add_argument('--time', action="store_false")
     parser.add_argument('--frame_num', type=int, default=32)
     parser.add_argument('--train_orcale', action="store_true") # load latent from h5 file
@@ -166,10 +154,6 @@ def get_args():
     parser.add_argument('--entropy_term', type=parse_entropy_term, default="auto")
     parser.add_argument('--time_penalty', type=float, default=0.0)
     parser.add_argument('--succ_bonus', type=float, default=0.0)
-    parser.add_argument('--transform_base_path', type=str, default="/scr/jzhang96/triplet_text_loss_models")
-    parser.add_argument('--transform_model_path', type=str, default="triplet_loss_50_42_s3d_Normtriplet/1650.pth")
-    parser.add_argument("--exp_name_end", type=str, default="triplet_hard_neg")
-
     # parser.add_argument('--xclip_model', type=str, default='microsoft/xclip-base-patch16-zero-shot')
 
 
@@ -196,42 +180,60 @@ class MetaworldSparse(Env):
         with th.no_grad():
             self.net = S3D('../s3d_dict.npy', 512)
             self.net.load_state_dict(th.load('../s3d_howto100m.pth'))
-            # self.net = self.net.eval().cuda()
-            self.net = self.net.eval()
-            self.target_embedding = None
+            self.net = self.net.eval().cuda()
 
-            # self.transform_model = SingleLayerMLP(512, 512, normalize=True).cuda()
-            # self.transform_model.load_state_dict(th.load("/scr/jzhang96/triplet_loss_models/triplet_loss_45_42_s3d_0.0_TimeShuffle_TimeShort_Norm/49.pth"))
-            self.transform_model = SingleLayerMLP(512, 512, normalize=True)
-            transform_model_path = os.path.join(args.transform_base_path, args.transform_model_path)
-            self.transform_model.load_state_dict(th.load(transform_model_path))
+            self.transform_model = SingleLayerMLP(512, 512, normalize=True).cuda()
+            self.transform_model.load_state_dict(th.load("/scr/jzhang96/triplet_loss_models/triplet_loss_45_42_s3d_0.0_TimeShuffle_TimeShort_Norm/49.pth"))
             self.transform_model = self.transform_model.eval().cuda()
 
+
+            self.target_embedding = None
 
             if args.text_string:
                 for _ in range (3):
                     print("text_string", args.text_string)
-                text_string = args.text_string
-                text_output = self.net.text_module([text_string])
-                self.target_embedding = text_output['text_embedding'].cuda()
-                self.net = self.net.eval().cuda()
-                if args.norm_output:
-                    self.target_embedding = normalize_embeddings(self.target_embedding, return_tensor=True).float()
+                # text_string = args.text_string
+                # text_output = self.net.text_module([text_string])
+                # self.target_embedding = text_output['text_embedding']
 
+            if args.train_orcale:
+                if not args.target_gif_path:
+                    raise ValueError("Please provide the path to the target h5 file")
+                else:
+                    id_string = id_task[args.env_id]
+                    folder_path = os.path.join(args.target_gif_path, id_string)
+                    gifs = os.listdir(folder_path)
+                    random_gif = random.choice(gifs)
+                    random_gif_path = os.path.join(folder_path, random_gif)
+                    gif = imageio.get_reader(random_gif_path)
+                    # get all frames
+                    frames = [frame[:,:,:3] for frame in gif]
+                    frames = adjust_frames_s3d(frames)
+
+                    if args.norm_input:
+                        frames = frames/255
+                    video = th.from_numpy(frames).float().cuda()
+                    video_output = self.net(video.float())
+                    video_embedding = video_output['video_embedding']   
+                    self.target_embedding = video_embedding
+                    if args.norm_output:
+                        self.target_embedding = normalize_embeddings(self.target_embedding, return_tensor=True).float()
+                    self.target_embedding = self.transform_model(self.target_embedding)
 
             self.max_sim = None
             if args.warm_up_runs > 0:
+                max_sim_list = []
                 for _ in range(args.warm_up_runs):
                     embedding = self.warm_up_run()
-
                     if args.norm_output:
                         embedding = normalize_embeddings(embedding, return_tensor=True).float()
+
                     embedding = self.transform_model(embedding)
-                    embedding = normalize_embeddings(embedding, return_tensor=True).float()
 
                     sim = th.matmul(self.target_embedding, embedding.t())
                     if self.args.time_reward != 1.0:
                         sim = sim * self.args.time_reward
+                    max_sim_list.append(sim.detach().cpu().numpy()[0][0])
                     if self.max_sim is None:
                         sim_reward = sim.detach().cpu().numpy()[0][0]
                         self.max_sim = sim_reward
@@ -243,7 +245,8 @@ class MetaworldSparse(Env):
                 print("max_sim", self.max_sim)
 
                 # only input text or demo videos for now
-
+                self.max_sim = np.min(max_sim_list)
+            print("max_sim", self.max_sim)
             self.counter = 0
 
     def get_obs(self):
@@ -254,7 +257,7 @@ class MetaworldSparse(Env):
     def warm_up_run(self):
         self.env.reset()
         images = []
-        frame_number = random.randint(32, 128)
+        frame_number = random.randint(32, 48)
 
         for _ in range(frame_number):
             action = self.env.action_space.sample()
@@ -298,10 +301,8 @@ class MetaworldSparse(Env):
                 # used to test the model with norm embeddings
                 if self.args.norm_output:
                     video_embedding = normalize_embeddings(video_embedding, return_tensor=True).float()
-                    self.target_embedding = normalize_embeddings(self.target_embedding, return_tensor=True).float()
+                    # self.target_embedding = normalize_embeddings(self.target_embedding, return_tensor=True).float()
                 video_embedding = self.transform_model(video_embedding)
-                video_embedding = normalize_embeddings(video_embedding, return_tensor=True).float()
-
 
                 similarity_matrix = th.matmul(self.target_embedding, video_embedding.t())
                 reward = similarity_matrix.detach().cpu().numpy()[0][0]
@@ -479,28 +480,37 @@ def main():
 
     WANDB_ENTITY_NAME = "clvr"
     WANDB_PROJECT_NAME = "roboclip-v2"
-    experiment_name = "s3d_textTrans_TRIPLET" + args.algo + "_" + args.env_id 
-
+    experiment_name = "s3d_trans_" + args.algo + "_" + args.env_id 
+    # experiment_name = "s3d_sac_baseline_" + args.env_id + "_" + args.algo + "_" + str(args.seed)
+    if args.train_orcale:
+        experiment_name = experiment_name + "_Oracle"
     if args.threshold_reward:
-        experiment_name = experiment_name + "_Thld"
+        experiment_name = experiment_name + "_ThreH"
     if args.project_reward:
-        experiment_name = experiment_name + "_ProjReward"
-    # if args.norm_input:
-    #     experiment_name = experiment_name + "_NormIn"
-    # if args.norm_output:
-    #     experiment_name = experiment_name + "_NormOut"
-    # if args.time_reward != 1.0:
-    #     experiment_name = experiment_name + "_XReward" + str(args.time_reward)
-    # if args.time:
-    #     experiment_name = experiment_name + "_Time"
-    # else:
-    #     experiment_name = experiment_name + "_NoTime"
+        experiment_name = experiment_name + "_ProjRD"
+    if args.norm_input:
+        experiment_name = experiment_name + "_NormIn"
+    if args.norm_output:
+        experiment_name = experiment_name + "_NormOut"
+    if args.time_reward != 1.0:
+        experiment_name = experiment_name + "_XRD" + str(args.time_reward)
+    if args.time:
+        experiment_name = experiment_name + "_Time"
+    else:
+        experiment_name = experiment_name + "_NoTime"
+    if args.succ_end:
+        experiment_name = experiment_name + "_SuccEnd"
+    if args.random_reset:
+        experiment_name = experiment_name + "_RandReset"
 
-
+    if args.succ_bonus > 0:
+        experiment_name = experiment_name + "_SuccBonus" + str(args.succ_bonus)
+    if args.time_penalty > 0:
+        experiment_name = experiment_name + "_TimePenalty" + str(args.time_penalty)
     # if args.algo.lower() == 'sac':
-    experiment_name = experiment_name + "_" + args.exp_name_end
-    run_group = experiment_name 
-    experiment_name = experiment_name + "_" + str(args.seed) + "NEW"
+    experiment_name = experiment_name + "_Entropy" + str(args.entropy_term) 
+    run_group = experiment_name + "min"
+    experiment_name = experiment_name + "_" + str(args.seed)
 
     if args.wandb:
         run = wandb.init(
@@ -525,8 +535,6 @@ def main():
 
 
     log_dir = f"/scr/jzhang96/logs/baseline_logs/{experiment_name}"
-    # log_dir = f"/home/jzhang96/logs/baseline_logs/{experiment_name}"
-
     if not os.path.exists(log_dir):
         os.makedirs(log_dir)
     if args.n_envs > 1:
