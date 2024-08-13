@@ -198,13 +198,17 @@ def mrr_score(similarities, ground_truth_labels, index_to_text_label, k_list=[1,
     return mrr_scores
 
 
-class SimpleMLP(nn.Module):
-    def __init__(self, input_dim, output_dim):
-        super(SimpleMLP, self).__init__()
-        self.fc = nn.Linear(input_dim, output_dim)
+class SingleLayerMLP(th.nn.Module):
+    def __init__(self, input_dim, output_dim, normalize=True):
+        super(SingleLayerMLP, self).__init__()
+        self.linear = th.nn.Linear(input_dim, output_dim)
+        self.normalize = normalize
 
     def forward(self, x):
-        x = self.fc(x)
+        x = self.linear(x)
+        # Apply L2 normalization to each embedding
+        if self.normalize:
+            x = F.normalize(x, p=2, dim=1)
         return x
 
 
@@ -392,7 +396,7 @@ def get_xclip_embeddings(task_id, h5_file):
 
 
 def get_s3d_embeddings_h5(val_task_id):
-    evaluate_h5 = h5py.File("/scr/jzhang96/RoboCLIPv2/losses/metaworld_s3d_embedding.h5", "r")
+    evaluate_h5 = h5py.File("/home/jzhang96/RoboCLIPv2/losses/metaworld_s3d_embedding.h5", "r")
     text_h5 = h5py.File("/scr/jzhang96/metaworld_s3d_text.h5", "r")
     with open('id_task.json', 'r') as f:
         task_mapping = json.load(f)
@@ -408,18 +412,18 @@ def get_s3d_embeddings_h5(val_task_id):
         choose_index = np.random.choice(task_data.shape[0], 10, replace=False)
 
         video_id = [f"{keys}_{index}" for index in choose_index]
-        print(video_id)
-        video_ids.append(video_id)
+        #print(video_id)
+        video_ids.extend(video_id)
         text_label = [task_ann.get(keys, "Unknown task") for index in choose_index]
-        print(text_label)
-        text_labels.append(text_label)
+        #print(text_label)
+        text_labels.extend(text_label)
 
         task_data = task_data[choose_index]
         evaluate_video_embeddings.append(task_data)
 
         text_embedding = [np.asarray(text_h5[keys]["embedding"]) for index in choose_index]
         evaluate_text_embeddings.append(text_embedding)
-
+    #print(video_ids)
     evaluate_video_embeddings = np.concatenate(evaluate_video_embeddings, axis=0)
     evaluate_video_embeddings = normalize_embeddings(evaluate_video_embeddings)
     evaluate_video_embeddings = th.tensor(evaluate_video_embeddings).cuda()
@@ -727,7 +731,7 @@ if __name__ == "__main__":
     #假设val_task_id 是这些
     val_task_id = [4, 13, 19, 36, 48]
     # eval_task_name = "_".join([str(i) for i in val_task_id])
-    # all_task_id = set(range(50))
+    all_task_id = set(range(50))
     # train_task_id = list(all_task_id - set(val_task_id))
     # s3d_model = S3D("../s3d_dict.npy", 512)
     # # s3d = th.compile(s3d)
@@ -736,15 +740,14 @@ if __name__ == "__main__":
     # s3d_model.eval()
     # (train_video_embeddings_normalized, train_text_embeddings_normalized, validate_video_embeddings_normalized,
     #  validate_text_embeddings_normalized, train_mappings, validate_mappings) = get_s3d_embeddings(train_task_id=train_task_id, val_task_id=val_task_id, s3d=s3d_model, seed=42)
-    # transform_model = SimpleMLP(512, 512).to(device)
-    # checkpoint_path = '/scr/jzhang96/triplet_text_loss_models/triplet_loss_50_42_s3d_Normtriplet/1650.pth'
-    # checkpoint = th.load(checkpoint_path)
-    # transform_model.load_state_dict(checkpoint)
-    video_features, text_features, mappings = get_s3d_embeddings_h5(val_task_id)
-    print(video_features.shape, text_features.shape())
-    exit(0)
-    #现在是测的training sample的mrr，如果要validate就需要修改为validate
-    mrr_1, mrr_3, mrr_5, mrr_10 = eval_mrr(model=transform_model, evaluate_task=val_task_id,
-                                           video_embeddings=train_video_embeddings_normalized.to(device),
-                                           text_embeddings=train_text_embeddings_normalized.to(device), mappings=train_mappings)
+    transform_model = SingleLayerMLP(512, 512).to(device)
+    checkpoint_path = '/scr/jzhang96/triplet_text_loss_models/triplet_loss_50_42_s3d_Normtriplet/1650.pth'
+    checkpoint = th.load(checkpoint_path)
+    transform_model.load_state_dict(checkpoint)
+    video_features, text_features, mappings = get_s3d_embeddings_h5(all_task_id)
+    print(video_features.shape, text_features.shape)
+
+    mrr_1, mrr_3, mrr_5, mrr_10 = eval_mrr(model=transform_model, evaluate_task=all_task_id,
+                                           video_embeddings=video_features.to(device),
+                                           text_embeddings=text_features.to(device), mappings=mappings)
     print(mrr_1, mrr_3, mrr_5, mrr_10)
