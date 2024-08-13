@@ -435,9 +435,10 @@ class CustomEvalCallback(EvalCallback):
         result = super(CustomEvalCallback, self)._on_step()
 
         if self.video_freq > 0 and self.n_calls % self.video_freq == 0:
-            video_buffer = self.record_video()
+            video_buffer, success = self.record_video()
             # wandb.log({f"evaluation_video": wandb.Video(video_buffer, fps=20, format="mp4")}, commit=False)
-            wandb.log({f"evaluation_video": wandb.Video(video_buffer, fps=20, format="mp4")}, step = self.n_calls)
+            wandb.log({f"eval/evaluation_video": wandb.Video(video_buffer, fps=20, format="mp4")}, step = self.n_calls)
+            wandb.log({f"eval/evaluate_succ": success}, step = self.n_calls)
             print("video logged")
 
         return result
@@ -445,6 +446,7 @@ class CustomEvalCallback(EvalCallback):
     def record_video(self):
         frames = []
         obs = self.eval_env.reset()
+        success = 0
         for _ in range(128):  # You can adjust the number of steps for recording
             frame = self.eval_env.render(mode='rgb_array')
             # downsample frame
@@ -453,6 +455,7 @@ class CustomEvalCallback(EvalCallback):
             action, _ = self.model.predict(obs, deterministic=self.deterministic)
             obs, _, _, info = self.eval_env.step(action)
             if info['success']:
+                success = 1 
                 break
 
         video_buffer = io.BytesIO()
@@ -462,7 +465,7 @@ class CustomEvalCallback(EvalCallback):
                 writer.append_data(frame)
 
         video_buffer.seek(0)
-        return video_buffer
+        return video_buffer, success
 
 
 
