@@ -64,8 +64,8 @@ class GifTextDataset(Dataset):
             self.candidate_type.append(3)
 
     def __len__(self):
-        # return len(self.keys) * 50
-        return len(self.keys)
+        return len(self.keys) * 50
+        # return len(self.keys)
 
 
     def __getitem__(self, idx):
