@@ -18,6 +18,7 @@ import matplotlib.pyplot as plt
 import copy
 from dataloader_text import GifTextDataset
 from sklearn.decomposition import PCA
+from mrr_utils import get_xclip_embeddings, reduce_dimension, compute_M
 
 # model_name = "microsoft/xclip-base-patch16-zero-shot"
 # xclip_tokenizer = AutoTokenizer.from_pretrained(model_name)
@@ -244,7 +245,7 @@ def main(args):
     WANDB_PROJECT_NAME = "roboclip-v2"
 
     training_num = str(50 - len(eval_tasks))
-    experiment_name = "triplet_loss_" + training_num + "_" + str(args.seed) + "_" + args.model_name
+    experiment_name = "triplet_loss_" + "PCA_" training_num + "_" + str(args.seed) + "_" + args.model_name + 
 
     if args.time_shuffle:
         experiment_name += "_TimeShuffle"
@@ -336,11 +337,28 @@ def main(args):
         xclip_net.eval()
         # pixel_values = self.processor(videos = list(array), return_tensors="pt").pixel_values.squeeze(0)
         xclip_processor = AutoProcessor.from_pretrained("microsoft/xclip-base-patch16-zero-shot")
+        # h5_xclip_embedding_file = h5py.File("/scr/jzhang96/metaworld_25_generated_xclip_embeddings.h5", "r")
+        train_xclip_video, train_xclip_text, train_xclip_mappings = get_xclip_embeddings(task_id=set(range(50)))
+
+        pca_text, reduced_train_text = reduce_dimension(train_xclip_text.cpu(), variance_threshold=args.variance_threshold,
+                                                        embed_type='text', seed=args.seed, kernel='linear',
+                                                        val_task_name='Fully_supervised')  # pca_emb=pca_train_alltext
+        pca_video, reduced_train_video = reduce_dimension(train_xclip_video.cpu(), variance_threshold=args.variance_threshold,
+                                                          embed_type='video', dimension=reduced_train_text.shape[1],
+                                                          seed=args.seed, kernel='linear',
+                                                          val_task_name='Fully_supervised')  # 35，512
+        computed_matrix = compute_M(pca_video.components_, pca_text.components_,
+                                    variance_threshold=args.variance_threshold, seed=args.seed)
+
     else:
         s3d_model = S3D('../s3d_dict.npy', 512)
         s3d_model.load_state_dict(th.load('../s3d_howto100m.pth'))
         s3d_model.eval().cuda()
-    transform_model = SingleLayerMLP(512, 512, normalize=True).cuda()
+
+    transform_model = SingleLayerMLP(reduced_train_text.shape[1], reduced_train_video.shape[1], normalize=True).cuda()
+    with th.no_grad():
+        transform_model.linear.weight = nn.Parameter(computed_matrix.T.cuda().float())
+        transform_model.linear.bias = nn.Parameter(th.zeros(reduced_train_text.shape[1]).cuda())
     dataset = GifTextDataset(args)
     dataloader = DataLoader(dataset, batch_size=args.batch_size, shuffle=True, num_workers=args.num_workers, drop_last=True)
 
@@ -353,10 +371,12 @@ def main(args):
 
     for epoch in range(args.epochs):
         for i, batch in enumerate(tqdm(dataloader)):
-            gt_features = batch["gt_array"].cuda()
+            gt_features = batch["gt_array"]
             pos_array = batch["pos_array"].cuda()
             neg_array = batch["neg_array"].cuda()
             batch_size = neg_array.shape[0]
+            gt_features = normalize_embeddings(gt_features)
+            gt_features = torch.from_numpy(pca_text.transform(gt_features)).cuda().float()
             gt_features = normalize_embeddings(gt_features)
             samples = torch.cat([pos_array, neg_array]).cuda()
             types = batch["type"]
@@ -369,7 +389,9 @@ def main(args):
 
                 else:
                     video_features = s3d_model(samples)["video_embedding"]
+
             video_features = normalize_embeddings(video_features)
+            video_features = torch.from_numpy(pca_video.transform(video_features.cpu())).cuda().float()
             pos_org_feature = video_features[:batch_size].clone()
             neg_org_feature = video_features[batch_size:2*batch_size].clone()
 
@@ -464,6 +486,7 @@ if __name__ == '__main__':
     argparser.add_argument('--add_lower_bound', action='store_true')
     argparser.add_argument('--random_noise', action='store_true')
     argparser.add_argument('--progress_area', type=float, default=0)
+    argparser.add_argument('--variance_threshold', type=float, default=512)
     argparser.add_argument('--rand_neg', action='store_true')
     argparser.add_argument('--loss_type', type=str, default='triplet', choices=['triplet', 'MILNCE'])
     args = argparser.parse_args()
