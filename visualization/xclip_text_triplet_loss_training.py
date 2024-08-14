@@ -339,11 +339,12 @@ def main(args):
         xclip_processor = AutoProcessor.from_pretrained("microsoft/xclip-base-patch16-zero-shot")
 
         train_xclip_video, train_xclip_text, train_xclip_mappings = get_xclip_embeddings(task_id=set(range(50)))
+
         pca_text, reduced_train_text = reduce_dimension(train_xclip_text.cpu(), variance_threshold=args.variance_threshold,
                                                         embed_type='text', seed=args.seed, kernel='linear',
                                                         val_task_name='Fully_supervised')  # pca_emb=pca_train_alltext
         pca_video, reduced_train_video = reduce_dimension(train_xclip_video.cpu(), variance_threshold=args.variance_threshold,
-                                                          embed_type='video',dimension=reduced_train_text.shape[1],
+                                                          embed_type='video', dimension=reduced_train_text.shape[1],
                                                           seed=args.seed, kernel='linear',
                                                           val_task_name='Fully_supervised')  # 35，512
         computed_matrix = compute_M(pca_video.components_, pca_text.components_,
@@ -374,6 +375,7 @@ def main(args):
             pos_array = batch["pos_array"].cuda()
             neg_array = batch["neg_array"].cuda()
             batch_size = neg_array.shape[0]
+            gt_features = normalize_embeddings(gt_features)
             gt_features = torch.from_numpy(pca_text.transform(gt_features)).cuda()
             gt_features = normalize_embeddings(gt_features)
             samples = torch.cat([pos_array, neg_array]).cuda()
