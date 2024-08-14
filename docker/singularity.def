@@ -23,8 +23,8 @@ From: nvcr.io/nvidia/pytorch:21.09-py3
     DEBIAN_FRONTEND=noninteractive add-apt-repository --yes ppa:deadsnakes/ppa
     apt-get update
 
-    mkdir -p /home/root/RoboCLIPv2
-    cd /home/root/RoboCLIPv2
+    mkdir -p /opt/RoboCLIPv2
+    cd /opt/RoboCLIPv2
 
     # MuJoCo setup
     curl -o mjkey.txt https://www.roboti.us/file/mjkey.txt
@@ -35,7 +35,7 @@ From: nvcr.io/nvidia/pytorch:21.09-py3
     rm mujoco210-linux-x86_64.tar.gz
 
     # Copy conda environment file
-    cp /home/root/RoboCLIPv2/roboclipv2.yml /roboclipv2.yml
+    cp /opt/RoboCLIPv2/roboclipv2.yml /roboclipv2.yml
 
     # Create conda environment
     . /opt/conda/etc/profile.d/conda.sh
@@ -45,19 +45,40 @@ From: nvcr.io/nvidia/pytorch:21.09-py3
     conda activate roboclip
     pip install mujoco==2.2.1 mujoco-py==2.1.2.14
 
+    # Clone and install the required repositories
+    git clone https://github.com/sumedh7/kitchen_alt.git
+    git clone https://github.com/sumedh7/Metaworld.git
+    git clone https://github.com/aravindr93/mjrl.git
+
+    pip install -e mjrl
+    pip install -e Metaworld
+    pip install -e kitchen_alt
+    pip install -e kitchen_alt/kitchen/envs
+
     # Clean up
     conda clean --all --yes
+
+    # Create a writable directory for additional packages
+    mkdir -p /opt/conda/envs/roboclip/local
+    chmod 777 /opt/conda/envs/roboclip/local
+
+    # Create and set permissions for singularity_entrypoint script
+    mkdir -p /opt/scripts
+    mv /opt/RoboCLIPv2/singularity_entrypoint.sh /opt/scripts/singularity_entrypoint.sh
+    chmod +x /opt/scripts/singularity_entrypoint.sh
 
 %environment
     export LD_LIBRARY_PATH=/root/.mujoco/mujoco210/bin:${LD_LIBRARY_PATH}
     export LD_LIBRARY_PATH=/usr/local/nvidia/lib64:${LD_LIBRARY_PATH}
     export MUJOCO_GL=egl
+    export PYTHONPATH=/opt/conda/envs/roboclip/local:${PYTHONPATH}
+    unset LD_PRELOAD
 
 %files
-    ./roboclipv2.yml /home/root/RoboCLIPv2/roboclipv2.yml
-    ./docker/entrypoint.sh /home/root/RoboCLIPv2/docker/entrypoint.sh
+    ./roboclipv2.yml /opt/RoboCLIPv2/roboclipv2.yml
+    ./docker/singularity_entrypoint.sh /opt/RoboCLIPv2/singularity_entrypoint.sh
 
 %runscript
     . /opt/conda/etc/profile.d/conda.sh
     conda activate roboclip
-    exec /home/root/RoboCLIPv2/docker/entrypoint.sh "$@"
+    exec /opt/scripts/singularity_entrypoint.sh "$@"
