@@ -1,0 +1,63 @@
+Bootstrap: docker
+From: nvcr.io/nvidia/pytorch:21.09-py3
+
+%post
+    apt-get update -q
+    DEBIAN_FRONTEND=noninteractive apt-get install -y \
+        curl \
+        git \
+        libgl1-mesa-dev \
+        libgl1-mesa-glx \
+        libglew-dev \
+        libosmesa6-dev \
+        software-properties-common \
+        net-tools \
+        vim \
+        virtualenv \
+        wget \
+        xpra \
+        xserver-xorg-dev
+    apt-get clean
+    rm -rf /var/lib/apt/lists/*
+
+    DEBIAN_FRONTEND=noninteractive add-apt-repository --yes ppa:deadsnakes/ppa
+    apt-get update
+
+    mkdir -p /home/root/RoboCLIPv2
+    cd /home/root/RoboCLIPv2
+
+    # MuJoCo setup
+    curl -o mjkey.txt https://www.roboti.us/file/mjkey.txt
+    mkdir -p /root/.mujoco
+    mv mjkey.txt /root/.mujoco/mjkey.txt
+    wget https://mujoco.org/download/mujoco210-linux-x86_64.tar.gz
+    tar -xvzf mujoco210-linux-x86_64.tar.gz -C /root/.mujoco
+    rm mujoco210-linux-x86_64.tar.gz
+
+    # Copy conda environment file
+    cp /home/root/RoboCLIPv2/roboclipv2.yml /roboclipv2.yml
+
+    # Create conda environment
+    . /opt/conda/etc/profile.d/conda.sh
+    conda env create -f /roboclipv2.yml
+
+    # Activate conda environment and install additional packages
+    conda activate roboclip
+    pip install mujoco==2.2.1 mujoco-py==2.1.2.14
+
+    # Clean up
+    conda clean --all --yes
+
+%environment
+    export LD_LIBRARY_PATH=/root/.mujoco/mujoco210/bin:${LD_LIBRARY_PATH}
+    export LD_LIBRARY_PATH=/usr/local/nvidia/lib64:${LD_LIBRARY_PATH}
+    export MUJOCO_GL=egl
+
+%files
+    ./roboclipv2.yml /home/root/RoboCLIPv2/roboclipv2.yml
+    ./docker/entrypoint.sh /home/root/RoboCLIPv2/docker/entrypoint.sh
+
+%runscript
+    . /opt/conda/etc/profile.d/conda.sh
+    conda activate roboclip
+    exec /home/root/RoboCLIPv2/docker/entrypoint.sh "$@"
