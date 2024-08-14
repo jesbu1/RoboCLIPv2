@@ -350,7 +350,7 @@ def main(args):
 
     if model_name == "xclip":
         xclip_net = AutoModel.from_pretrained("microsoft/xclip-base-patch16-zero-shot")
-        xclip_net = torch.compile(xclip_net)
+        # xclip_net = torch.compile(xclip_net)
         xclip_net.eval().cuda()
         # pixel_values = self.processor(videos = list(array), return_tensors="pt").pixel_values.squeeze(0)
         xclip_processor = AutoProcessor.from_pretrained("microsoft/xclip-base-patch16-zero-shot")
