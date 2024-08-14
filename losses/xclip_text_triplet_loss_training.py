@@ -122,9 +122,12 @@ def plot_progress(array, s3d_model, transform_model):
 
 
 
-def plot_progress_xclip(array, xclip_processor, xclip_net, transform_model, text_array):
+def plot_progress_xclip(array, xclip_processor, xclip_net, transform_model, text_array, pca_text, pca_video):
     # text_array already tensor
-    text_array = normalize_embeddings(text_array)
+    text_array = normalize_embeddings(text_array.clone())
+    text_array = pca_text.transform(text_array.cpu())
+    text_array = normalize_embeddings(text_array).float().cuda()
+
     array_length = array.shape[0]
     similarities = []
     with th.no_grad():
@@ -142,6 +145,9 @@ def plot_progress_xclip(array, xclip_processor, xclip_net, transform_model, text
             copy_array = xclip_processor(videos = list(copy_array), return_tensors="pt").pixel_values.cuda()
             copy_array = xclip_net.get_video_features(copy_array)
             copy_array = normalize_embeddings(copy_array)
+            copy_array = pca_video.transform(copy_array.cpu())
+            copy_array = normalize_embeddings(copy_array).float().cuda()
+
             copy_array = transform_model(copy_array)
             similarity = cosine_similarity(text_array, copy_array)
 
@@ -160,10 +166,20 @@ def plot_progress_xclip(array, xclip_processor, xclip_net, transform_model, text
 
 
 
-def plot_distribution(transform_model, evaluate_run_embeddings, total_evaluate_embeddings, evaluate_tasks, total_evaluate_tasks, eval_text_embedding):
+def plot_distribution(transform_model, evaluate_run_embeddings, total_evaluate_embeddings, evaluate_tasks, total_evaluate_tasks, eval_text_embedding, pca_text, pca_video):
 
-    total_evaluate_embeddings = transform_model(total_evaluate_embeddings.clone()).detach().cpu().numpy()
-    evaluate_run_embeddings = transform_model(evaluate_run_embeddings.clone()).detach().cpu().numpy()
+
+
+
+    eval_text_embedding = pca_text.transform(eval_text_embedding.clone())
+    evaluate_run_embeddings = pca_video.transform(evaluate_run_embeddings.cpu().clone())
+    total_evaluate_embeddings = pca_video.transform(total_evaluate_embeddings.cpu().clone())
+    evaluate_run_embeddings = normalize_embeddings(evaluate_run_embeddings, True)
+    total_evaluate_embeddings = normalize_embeddings(total_evaluate_embeddings, True)
+
+
+    total_evaluate_embeddings = transform_model(total_evaluate_embeddings.cuda().float()).detach().cpu().numpy()
+    evaluate_run_embeddings = transform_model(evaluate_run_embeddings.cuda().float()).detach().cpu().numpy()
     eval_text_embedding = normalize_embeddings(eval_text_embedding, False)
     evaluate_run_embeddings = normalize_embeddings(evaluate_run_embeddings, False)
     total_evaluate_embeddings = normalize_embeddings(total_evaluate_embeddings, False)
@@ -445,6 +461,8 @@ def main(args):
                                                             evaluate_task, 
                                                             total_evaluate_tasks,
                                                             eval_text_embedding,
+                                                            pca_text,
+                                                            pca_video
                                                             )
             wandb.log({"total_total_distribution": wandb.Image(total_figure)})
             wandb.log({"eval_task_distribution": wandb.Image(single_figure)})
@@ -464,8 +482,8 @@ def main(args):
                 th.save(transform_model.state_dict(), f"/scr/jzhang96/triplet_text_loss_models/{experiment_name}/{epoch}.pth")
 
 
-            seen_plt = plot_progress_xclip(seen_array, xclip_processor, xclip_net, transform_model, seen_text_embedding)
-            unseen_plt = plot_progress_xclip(unseen_array, xclip_processor, xclip_net, transform_model, unseen_text_embedding)
+            seen_plt = plot_progress_xclip(seen_array, xclip_processor, xclip_net, transform_model, seen_text_embedding, pca_text, pca_video)
+            unseen_plt = plot_progress_xclip(unseen_array, xclip_processor, xclip_net, transform_model, unseen_text_embedding, pca_text, pca_video)
             wandb.log({"progress/seen": wandb.Image(seen_plt)})
             wandb.log({"progress/unseen": wandb.Image(unseen_plt)})
             plt.close(seen_plt)
