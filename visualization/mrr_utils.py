@@ -339,7 +339,7 @@ def get_s3d_embeddings(train_task_id, val_task_id, s3d, seed):
             validate_text_embeddings_normalized, train_mappings, validate_mappings)
 
 
-def get_xclip_embeddings(task_id, h5_file):
+def get_xclip_embeddings(task_id):
     """
     之前用的从你给我的h5文件得到xclip embeddings 和mapping 的方法
     """
@@ -348,7 +348,8 @@ def get_xclip_embeddings(task_id, h5_file):
     text_features = []
     video_ids = []
     text_labels = []
-
+    h5_file_path = "/scr/jzhang96/metaworld_25_generated_xclip_embeddings.h5"
+    h5_file = h5py.File(h5_file_path, 'r')
     for task in task_id:
         single_task = str(task)
         data_group = h5_file[single_task]
@@ -409,7 +410,7 @@ def get_s3d_embeddings_h5(val_task_id):
     for keys in matching_tasks:
         task_data = np.asarray(evaluate_h5[keys])
         # random choose 10
-        choose_index = np.random.choice(task_data.shape[0], 10, replace=False)
+        choose_index = np.random.choice(task_data.shape[0], 15, replace=False)
 
         video_id = [f"{keys}_{index}" for index in choose_index]
         #print(video_id)
@@ -441,7 +442,7 @@ def get_s3d_embeddings_h5(val_task_id):
 
 #以下是pca 加 subspace alignment baseline 的三个函数
 def reduce_dimension(
-        embeddings, variance_threshold, train_size, embed_type, seed, strong, num, dimension=None, filter=False, pca_emb=None, kernel = 'linear', val_task_name=None
+        embeddings, variance_threshold, embed_type, seed, dimension=None, pca_emb=None, kernel='linear', val_task_name=None
 ):
     if variance_threshold == 0:
         return None, embeddings.float()
@@ -462,23 +463,19 @@ def reduce_dimension(
         reduced_embeddings = pca.fit_transform(embeddings)
     # os.makedirs('saved_model/M/metaworld/pca_model', exist_ok=True)
     pca_save_path = (f"/scr/yusenluo/RoboCLIP/visualization/saved_model/pca_loss_models/{val_task_name}_Seed_{seed}/"
-                     f"{variance_threshold}_Aug_{strong}_{train_size}_{kernel}")
+                     f"{variance_threshold}_{kernel}")
     os.makedirs(pca_save_path, exist_ok=True)
-    if filter:
-        model_filename = (
-            f"saved_model/M/OpenX/droid/filter/pca_model_{embed_type}_{variance_threshold}_{train_size}.pkl"
-        )
-    else:
-        model_filename = (
-            f"{pca_save_path}/pca_model_{embed_type}.pkl"
-        )
+    model_filename = (
+        f"{pca_save_path}/pca_model_{embed_type}.pkl"
+    )
+
     joblib.dump(pca, model_filename)
     print(f"PCA model for {embed_type} saved to {model_filename}")
     return pca, th.from_numpy(reduced_embeddings).float()
 
 
 def normalize_and_pca(sampled_video_embeddings, sampled_text_embeddings, validate_video_embeddings_normalized, validate_text_embeddings_normalized, variance_threshold,
-                      current_sample_size, seed, device, strong, pca_sample_size, kernel = 'linear', val_task_name=None):
+                      seed, device, kernel='linear', val_task_name=None):
     train_video_embeddings_normalized = normalize_embeddings(
         sampled_video_embeddings
     ).clone().cpu()
@@ -488,13 +485,11 @@ def normalize_and_pca(sampled_video_embeddings, sampled_text_embeddings, validat
     pca_train_alltext = th.cat((train_text_embeddings_normalized, validate_text_embeddings_normalized.cpu()), dim=0)
     print(pca_train_alltext.shape)
     pca_text, reduced_train_text = reduce_dimension(train_text_embeddings_normalized, variance_threshold,
-                                                    current_sample_size,
-                                                    'text', seed=seed, strong=strong, num=pca_sample_size,
+                                                    'text', seed=seed,
                                                     filter=False, kernel=kernel, val_task_name=val_task_name) #pca_emb=pca_train_alltext
-    pca_video, reduced_train_video = reduce_dimension(train_video_embeddings_normalized, variance_threshold,
-                                                      current_sample_size, 'video', filter=False,
-                                                      dimension=reduced_train_text.shape[1],
-                                                      seed=seed, strong=strong, num=pca_sample_size,kernel=kernel, val_task_name=val_task_name)  # 35，512
+    pca_video, reduced_train_video = reduce_dimension(train_video_embeddings_normalized, variance_threshold, 'video', filter=False,
+                                                      dimension=reduced_train_text.shape[1], seed=seed,
+                                                      kernel=kernel, val_task_name=val_task_name)  # 35，512
     if pca_text != None:
         reduced_validate_video = th.from_numpy(
             pca_video.transform(validate_video_embeddings_normalized.cpu())).float().to(device)
@@ -509,15 +504,15 @@ def normalize_and_pca(sampled_video_embeddings, sampled_text_embeddings, validat
     return reduced_train_video, reduced_train_text, reduced_validate_video, reduced_validate_text, pca_video, pca_text
 
 
-def compute_M(X_S, X_T, variance_threshold, train_size, seed, filter):
+def compute_M(X_S, X_T, variance_threshold, seed, filter=False):
     M = np.dot(X_S, X_T.T)  # 35 35
     M_tensor = th.from_numpy(M).float()
     if filter:
         save_dir = "/scr/yusenluo/RoboCLIP/visualization/saved_model/M/OpenX/droid/filter"
     else:
-        save_dir = "/scr/yusenluo/RoboCLIP/visualization/saved_model/M/OpenX/droid/alignXtoX_vid_aug"
+        save_dir = "/scr/yusenluo/RoboCLIP/visualization/saved_model/pca_matrix_models"
     os.makedirs(save_dir, exist_ok=True)
-    M_model_path = f"{save_dir}/M_model_{variance_threshold}_{train_size}_Seed{seed}.pth"
+    M_model_path = f"{save_dir}/M_model_{variance_threshold}_Seed{seed}.pth"
     th.save(M_tensor, M_model_path)
     print(f'M model saved to {M_model_path}')
     return M_tensor
@@ -702,7 +697,7 @@ def eval_mrr(model, evaluate_task, video_embeddings, text_embeddings, mappings):
         adjusted_video_embeddings = video_embeddings
 
     # adjusted_video_embeddings = normalize_embeddings(adjusted_video_embeddings)
-    # text_embeddings = normalize_embeddings(text_embeddings)
+    text_embeddings = normalize_embeddings(text_embeddings)
 
     # text当user
     accuracies_text, mrr_text = check_pairs(
@@ -732,6 +727,9 @@ if __name__ == "__main__":
     val_task_id = [4, 13, 19, 36, 48]
     # eval_task_name = "_".join([str(i) for i in val_task_id])
     all_task_id = set(range(50))
+    th.manual_seed(42)
+    np.random.seed(42)
+    random.seed(42)
     # train_task_id = list(all_task_id - set(val_task_id))
     # s3d_model = S3D("../s3d_dict.npy", 512)
     # # s3d = th.compile(s3d)
@@ -741,13 +739,32 @@ if __name__ == "__main__":
     # (train_video_embeddings_normalized, train_text_embeddings_normalized, validate_video_embeddings_normalized,
     #  validate_text_embeddings_normalized, train_mappings, validate_mappings) = get_s3d_embeddings(train_task_id=train_task_id, val_task_id=val_task_id, s3d=s3d_model, seed=42)
     transform_model = SingleLayerMLP(512, 512).to(device)
-    checkpoint_path = '/scr/jzhang96/triplet_text_loss_models/triplet_loss_50_42_s3d_Normtriplet/1650.pth'
-    checkpoint = th.load(checkpoint_path)
-    transform_model.load_state_dict(checkpoint)
+    #checkpoint_path = '/scr/jzhang96/triplet_text_loss_models/triplet_loss_50_42_s3d_Normtriplet/1650.pth'
+    #checkpoint = th.load(checkpoint_path)
+    #transform_model.load_state_dict(checkpoint)
     video_features, text_features, mappings = get_s3d_embeddings_h5(all_task_id)
     print(video_features.shape, text_features.shape)
 
+    # mrr_1, mrr_3, mrr_5, mrr_10 = eval_mrr(model=transform_model, evaluate_task=all_task_id,
+    #                                        video_embeddings=video_features.to(device),
+    #                                        text_embeddings=text_features.to(device), mappings=mappings)
+    # print(mrr_1, mrr_3, mrr_5, mrr_10)
+
+    variance_threshold = 512
+    pca_text, reduced_train_text = reduce_dimension(text_features.cpu(), variance_threshold,
+                                                    'text', seed=42, kernel='linear',
+                                                    val_task_name=val_task_id)  # pca_emb=pca_train_alltext
+    pca_video, reduced_train_video = reduce_dimension(video_features.cpu(), variance_threshold, 'video',
+                                                      dimension=reduced_train_text.shape[1],
+                                                      seed=42, kernel='linear',
+                                                      val_task_name=val_task_id)  # 35，512
+    computed_matrix = compute_M(pca_video.components_, pca_text.components_, variance_threshold, seed=42)
+    with th.no_grad():
+        transform_model.linear.weight = nn.Parameter(computed_matrix.T.to(device))
+        transform_model.linear.bias = nn.Parameter(th.zeros(512).to(device))
+
+    print(th.allclose(transform_model(reduced_train_video.to(device)), normalize_embeddings(th.matmul(reduced_train_video.to(device), computed_matrix.to(device)))))
     mrr_1, mrr_3, mrr_5, mrr_10 = eval_mrr(model=transform_model, evaluate_task=all_task_id,
-                                           video_embeddings=video_features.to(device),
-                                           text_embeddings=text_features.to(device), mappings=mappings)
+                                           video_embeddings=reduced_train_video.to(device),
+                                           text_embeddings=reduced_train_text.to(device), mappings=mappings)
     print(mrr_1, mrr_3, mrr_5, mrr_10)
