@@ -343,7 +343,7 @@ def main(args):
     run = wandb.init(
         entity=WANDB_ENTITY_NAME,
         project=WANDB_PROJECT_NAME,
-        group="text_adaptive_triplet_xclip",
+        group="text_adaptive_triplet_xclip_rerun",
         config=args,
         name=experiment_name,
     )

@@ -348,7 +348,7 @@ def get_xclip_embeddings(task_id):
     text_features = []
     video_ids = []
     text_labels = []
-    h5_file_path = "/scr/jzhang96/metaworld_25_generated_xclip_embeddings.h5"
+    h5_file_path = "metaworld_25_generated_xclip_embeddings.h5"
     h5_file = h5py.File(h5_file_path, 'r')
     for task in task_id:
         single_task = str(task)
