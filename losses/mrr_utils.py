@@ -442,7 +442,7 @@ def get_s3d_embeddings_h5(val_task_id):
 
 #以下是pca 加 subspace alignment baseline 的三个函数
 def reduce_dimension(
-        embeddings, variance_threshold, embed_type, seed, dimension=None, pca_emb=None, kernel='linear', val_task_name=None, exp_name
+        embeddings, variance_threshold, embed_type, seed, dimension=None, pca_emb=None, kernel='linear', val_task_name=None, exp_name = None
 ):
     if variance_threshold == 0:
         return None, embeddings.float()

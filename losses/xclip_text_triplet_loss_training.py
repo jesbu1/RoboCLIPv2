@@ -260,7 +260,8 @@ def main(args):
     WANDB_ENTITY_NAME = "clvr"
     WANDB_PROJECT_NAME = "roboclip-v2"
 
-    training_num = str(50 - len(eval_tasks))
+    # training_num = str(50 - len(eval_tasks))
+    training_num = str(10)
     experiment_name = "triplet_loss_" + "PCA_" + training_num + "_" + str(args.seed) + "_" + args.model_name
 
     if args.time_shuffle:
@@ -355,15 +356,16 @@ def main(args):
         # pixel_values = self.processor(videos = list(array), return_tensors="pt").pixel_values.squeeze(0)
         xclip_processor = AutoProcessor.from_pretrained("microsoft/xclip-base-patch16-zero-shot")
         # h5_xclip_embedding_file = h5py.File("/scr/jzhang96/metaworld_25_generated_xclip_embeddings.h5", "r")
-        train_xclip_video, train_xclip_text, train_xclip_mappings = get_xclip_embeddings(task_id=set(range(50)))
+        # train_xclip_video, train_xclip_text, train_xclip_mappings = get_xclip_embeddings(task_id=set(range(50)))
+        train_xclip_video, train_xclip_text, train_xclip_mappings = get_xclip_embeddings(task_id=set(4,7,19,48,47,8,5,30,17,24))
 
         pca_text, reduced_train_text = reduce_dimension(train_xclip_text.cpu(), variance_threshold=args.variance_threshold,
                                                         embed_type='text', seed=args.seed, kernel='linear',
-                                                        val_task_name='Fully_supervised')  # pca_emb=pca_train_alltext
+                                                        val_task_name='Fully_supervised', exp_name = experiment_name)  # pca_emb=pca_train_alltext
         pca_video, reduced_train_video = reduce_dimension(train_xclip_video.cpu(), variance_threshold=args.variance_threshold,
                                                           embed_type='video', dimension=reduced_train_text.shape[1],
                                                           seed=args.seed, kernel='linear',
-                                                          val_task_name='Fully_supervised')  # 35，512
+                                                          val_task_name='Fully_supervised', exp_name = experiment_name)  # 35，512
         computed_matrix = compute_M(pca_video.components_, pca_text.components_,
                                     variance_threshold=args.variance_threshold, seed=args.seed)
 
@@ -453,6 +455,10 @@ def main(args):
                         }
 
             wandb.log(wandb_log)
+
+
+
+
         transform_model.eval()
         with torch.no_grad():
             total_figure, single_figure = plot_distribution(transform_model, 
@@ -501,7 +507,7 @@ if __name__ == '__main__':
     argparser.add_argument('--seed', type=int, default=42)
     argparser.add_argument('--batch_size', type=int, default=16)
     argparser.add_argument('--num_workers', type=int, default=16)
-    argparser.add_argument('--epochs', type=int, default=50)
+    argparser.add_argument('--epochs', type=int, default=500)
     argparser.add_argument('--add_lower_bound', action='store_true')
     argparser.add_argument('--random_noise', action='store_true')
     argparser.add_argument('--progress_area', type=float, default=0)

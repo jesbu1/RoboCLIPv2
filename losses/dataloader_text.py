@@ -30,16 +30,16 @@ class GifTextDataset(Dataset):
         self.h5_text_file = h5py.File("metaworld_xclip_text.h5", "r")
         # else:
         self.keys = list(self.h5_file.keys())
-        # self.keys = ["door-lock-v2-goal-hidden",
-        #             "button-press-wall-v2-goal-hidden",
-        #             "drawer-open-v2-goal-hidden",
-        #             "window-open-v2-goal-hidden",
-        #             "sweep-v2-goal-hidden",
-        #             "coffee-button-v2-goal-hidden",
-        #             "box-close-v2-goal-hidden",
-        #             "pick-out-of-hole-v2-goal-hidden",
-        #             "hand-insert-v2-goal-hidden",
-        #             "handle-press-v2-goal-hidden"]
+        self.keys = ["door-lock-v2-goal-hidden", # 14
+                    "button-press-wall-v2-goal-hidden", # 7 
+                    "drawer-open-v2-goal-hidden", # 19 
+                    "window-open-v2-goal-hidden", # 48 
+                    "sweep-v2-goal-hidden", # 47 
+                    "coffee-button-v2-goal-hidden", # 8 
+                    "button-press-topdown-wall-v2-goal-hidden", # 5 
+                    "pick-out-of-hole-v2-goal-hidden", # 30
+                    "hand-insert-v2-goal-hidden", # 17
+                    "handle-press-v2-goal-hidden" ] # 24
 
     # evaluate_task = ["door-close-v2-goal-hidden", 
     #                 "door-open-v2-goal-hidden", 
