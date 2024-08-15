@@ -436,7 +436,7 @@ def main(args):
                     os.makedirs(f"/scr/jzhang96/triplet_text_loss_models/{experiment_name}")
                 th.save(
                     {'model_state_dict': transform_model.state_dict(), 
-                    'optimizer_state_dict': optimizer.state_dict()}
+                    'optimizer_state_dict': optimizer.state_dict()},
                     f"/scr/jzhang96/triplet_text_loss_models/{experiment_name}/{epoch}.pth")
             else:
                 if not os.path.exists(f"/scr/jzhang96/triplet_text_loss_models/{experiment_name}"):
