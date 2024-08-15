@@ -444,6 +444,10 @@ def get_s3d_embeddings_h5(val_task_id):
 def reduce_dimension(
         embeddings, variance_threshold, embed_type, seed, dimension=None, pca_emb=None, kernel='linear', val_task_name=None, exp_name = None
 ):
+    embeddings_shape = embeddings.shape[0]
+    for i in range (5):
+        embeddings = torch.cat([embeddings,embeddings], dim = 0)
+
     if variance_threshold == 0:
         return None, embeddings.float()
     if kernel =='linear':
@@ -470,7 +474,9 @@ def reduce_dimension(
 
     joblib.dump(pca, model_filename)
     print(f"PCA model for {embed_type} saved to {model_filename}")
-    return pca, th.from_numpy(reduced_embeddings).float()
+    # return pca, th.from_numpy(reduced_embeddings).float()
+    return pca, th.from_numpy(reduced_embeddings).float()[:embeddings_shape]
+
 
 
 def normalize_and_pca(sampled_video_embeddings, sampled_text_embeddings, validate_video_embeddings_normalized, validate_text_embeddings_normalized, variance_threshold,

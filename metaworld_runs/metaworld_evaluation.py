@@ -273,7 +273,7 @@ def main():
     # seed_num = ["42"]
     total_sr = 0
     for seed_str in seed_num:
-        model = SAC.load(f"/scr/jzhang96/logs/baseline_logs/s3d_textTrans_TRIPLETsac_button-press-v2-goal-hidden_SuccEnd_Triplet_ours_RE_{seed_str}NEW/best_model.zip")
+        model = SAC.load(f"/scr/jzhang96/logs/baseline_logs/s3d_textTrans_TRIPLETsac_door-open-v2-goal-hidden_SuccEnd_Triplet_ours_RE_{seed_str}NEW/best_model.zip")
     # model = PPO.load(f"/scr/jzhang96/logs/baseline_logs/s3d_baseline_ppo_door-close-v2-goal-hidden_Oracle_NormIn_XReward100.0_NoTime_RandReset_Entropyauto_5/best_model.zip")
         succ_count = 0
         total_count = 0
