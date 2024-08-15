@@ -18,7 +18,6 @@ import matplotlib.pyplot as plt
 import copy
 from dataloader_text import GifTextDataset
 from sklearn.decomposition import PCA
-from mrr_utils import get_xclip_embeddings, reduce_dimension, compute_M
 
 # model_name = "microsoft/xclip-base-patch16-zero-shot"
 # xclip_tokenizer = AutoTokenizer.from_pretrained(model_name)
@@ -122,12 +121,9 @@ def plot_progress(array, s3d_model, transform_model):
 
 
 
-def plot_progress_xclip(array, xclip_processor, xclip_net, transform_model, text_array, pca_text, pca_video):
+def plot_progress_xclip(array, xclip_processor, xclip_net, transform_model, text_array):
     # text_array already tensor
-    text_array = normalize_embeddings(text_array.clone())
-    text_array = pca_text.transform(text_array.cpu())
-    text_array = normalize_embeddings(text_array).float().cuda()
-
+    text_array = normalize_embeddings(text_array)
     array_length = array.shape[0]
     similarities = []
     with th.no_grad():
@@ -145,9 +141,6 @@ def plot_progress_xclip(array, xclip_processor, xclip_net, transform_model, text
             copy_array = xclip_processor(videos = list(copy_array), return_tensors="pt").pixel_values.cuda()
             copy_array = xclip_net.get_video_features(copy_array)
             copy_array = normalize_embeddings(copy_array)
-            copy_array = pca_video.transform(copy_array.cpu())
-            copy_array = normalize_embeddings(copy_array).float().cuda()
-
             copy_array = transform_model(copy_array)
             similarity = cosine_similarity(text_array, copy_array)
 
@@ -166,20 +159,10 @@ def plot_progress_xclip(array, xclip_processor, xclip_net, transform_model, text
 
 
 
-def plot_distribution(transform_model, evaluate_run_embeddings, total_evaluate_embeddings, evaluate_tasks, total_evaluate_tasks, eval_text_embedding, pca_text, pca_video):
+def plot_distribution(transform_model, evaluate_run_embeddings, total_evaluate_embeddings, evaluate_tasks, total_evaluate_tasks, eval_text_embedding):
 
-
-
-
-    eval_text_embedding = pca_text.transform(eval_text_embedding.clone())
-    evaluate_run_embeddings = pca_video.transform(evaluate_run_embeddings.cpu().clone())
-    total_evaluate_embeddings = pca_video.transform(total_evaluate_embeddings.cpu().clone())
-    evaluate_run_embeddings = normalize_embeddings(evaluate_run_embeddings, True)
-    total_evaluate_embeddings = normalize_embeddings(total_evaluate_embeddings, True)
-
-
-    total_evaluate_embeddings = transform_model(total_evaluate_embeddings.cuda().float()).detach().cpu().numpy()
-    evaluate_run_embeddings = transform_model(evaluate_run_embeddings.cuda().float()).detach().cpu().numpy()
+    total_evaluate_embeddings = transform_model(total_evaluate_embeddings.clone()).detach().cpu().numpy()
+    evaluate_run_embeddings = transform_model(evaluate_run_embeddings.clone()).detach().cpu().numpy()
     eval_text_embedding = normalize_embeddings(eval_text_embedding, False)
     evaluate_run_embeddings = normalize_embeddings(evaluate_run_embeddings, False)
     total_evaluate_embeddings = normalize_embeddings(total_evaluate_embeddings, False)
@@ -260,9 +243,8 @@ def main(args):
     WANDB_ENTITY_NAME = "clvr"
     WANDB_PROJECT_NAME = "roboclip-v2"
 
-    # training_num = str(50 - len(eval_tasks))
-    training_num = str(10)
-    experiment_name = "triplet_loss_" + "PCA_" + training_num + "_" + str(args.seed) + "_" + args.model_name
+    training_num = str(50 - len(eval_tasks))
+    experiment_name = "triplet_loss_" + training_num + "_" + str(args.seed) + "_" + args.model_name
 
     if args.time_shuffle:
         experiment_name += "_TimeShuffle"
@@ -344,40 +326,21 @@ def main(args):
     run = wandb.init(
         entity=WANDB_ENTITY_NAME,
         project=WANDB_PROJECT_NAME,
-        group="text_adaptive_triplet_xclip_rerun",
+        group="text_adaptive_triplet_xclip",
         config=args,
         name=experiment_name,
     )
 
     if model_name == "xclip":
-        xclip_net = AutoModel.from_pretrained("microsoft/xclip-base-patch16-zero-shot")
-        # xclip_net = torch.compile(xclip_net)
-        xclip_net.eval().cuda()
+        xclip_net = AutoModel.from_pretrained("microsoft/xclip-base-patch16-zero-shot").cuda()
+        xclip_net.eval()
         # pixel_values = self.processor(videos = list(array), return_tensors="pt").pixel_values.squeeze(0)
         xclip_processor = AutoProcessor.from_pretrained("microsoft/xclip-base-patch16-zero-shot")
-        # h5_xclip_embedding_file = h5py.File("/scr/jzhang96/metaworld_25_generated_xclip_embeddings.h5", "r")
-        # train_xclip_video, train_xclip_text, train_xclip_mappings = get_xclip_embeddings(task_id=set(range(50)))
-        train_xclip_video, train_xclip_text, train_xclip_mappings = get_xclip_embeddings(task_id=set(4,7,19,48,47,8,5,30,17,24))
-
-        pca_text, reduced_train_text = reduce_dimension(train_xclip_text.cpu(), variance_threshold=args.variance_threshold,
-                                                        embed_type='text', seed=args.seed, kernel='linear',
-                                                        val_task_name='Fully_supervised', exp_name = experiment_name)  # pca_emb=pca_train_alltext
-        pca_video, reduced_train_video = reduce_dimension(train_xclip_video.cpu(), variance_threshold=args.variance_threshold,
-                                                          embed_type='video', dimension=reduced_train_text.shape[1],
-                                                          seed=args.seed, kernel='linear',
-                                                          val_task_name='Fully_supervised', exp_name = experiment_name)  # 35，512
-        computed_matrix = compute_M(pca_video.components_, pca_text.components_,
-                                    variance_threshold=args.variance_threshold, seed=args.seed)
-
     else:
         s3d_model = S3D('../s3d_dict.npy', 512)
         s3d_model.load_state_dict(th.load('../s3d_howto100m.pth'))
         s3d_model.eval().cuda()
-
-    transform_model = SingleLayerMLP(reduced_train_text.shape[1], reduced_train_video.shape[1], normalize=True).cuda()
-    with th.no_grad():
-        transform_model.linear.weight = nn.Parameter(computed_matrix.T.cuda().float())
-        transform_model.linear.bias = nn.Parameter(th.zeros(reduced_train_text.shape[1]).cuda())
+    transform_model = SingleLayerMLP(512, 512, normalize=True).cuda()
     dataset = GifTextDataset(args)
     dataloader = DataLoader(dataset, batch_size=args.batch_size, shuffle=True, num_workers=args.num_workers, drop_last=True)
 
@@ -390,12 +353,10 @@ def main(args):
 
     for epoch in range(args.epochs):
         for i, batch in enumerate(tqdm(dataloader)):
-            gt_features = batch["gt_array"]
+            gt_features = batch["gt_array"].cuda()
             pos_array = batch["pos_array"].cuda()
             neg_array = batch["neg_array"].cuda()
             batch_size = neg_array.shape[0]
-            gt_features = normalize_embeddings(gt_features)
-            gt_features = torch.from_numpy(pca_text.transform(gt_features)).cuda().float()
             gt_features = normalize_embeddings(gt_features)
             samples = torch.cat([pos_array, neg_array]).cuda()
             types = batch["type"]
@@ -408,9 +369,7 @@ def main(args):
 
                 else:
                     video_features = s3d_model(samples)["video_embedding"]
-
             video_features = normalize_embeddings(video_features)
-            video_features = torch.from_numpy(pca_video.transform(video_features.cpu())).cuda().float()
             pos_org_feature = video_features[:batch_size].clone()
             neg_org_feature = video_features[batch_size:2*batch_size].clone()
 
@@ -455,10 +414,6 @@ def main(args):
                         }
 
             wandb.log(wandb_log)
-
-
-
-
         transform_model.eval()
         with torch.no_grad():
             total_figure, single_figure = plot_distribution(transform_model, 
@@ -467,8 +422,6 @@ def main(args):
                                                             evaluate_task, 
                                                             total_evaluate_tasks,
                                                             eval_text_embedding,
-                                                            pca_text,
-                                                            pca_video
                                                             )
             wandb.log({"total_total_distribution": wandb.Image(total_figure)})
             wandb.log({"eval_task_distribution": wandb.Image(single_figure)})
@@ -481,15 +434,18 @@ def main(args):
             if args.model_name == "xclip":
                 if not os.path.exists(f"/scr/jzhang96/triplet_text_loss_models/{experiment_name}"):
                     os.makedirs(f"/scr/jzhang96/triplet_text_loss_models/{experiment_name}")
-                th.save(transform_model.state_dict(), f"/scr/jzhang96/triplet_text_loss_models/{experiment_name}/{epoch}.pth")
+                th.save(
+                    {'model_state_dict': transform_model.state_dict(), 
+                    'optimizer_state_dict': optimizer.state_dict()}
+                    f"/scr/jzhang96/triplet_text_loss_models/{experiment_name}/{epoch}.pth")
             else:
                 if not os.path.exists(f"/scr/jzhang96/triplet_text_loss_models/{experiment_name}"):
                     os.makedirs(f"/scr/jzhang96/triplet_text_loss_models/{experiment_name}")
                 th.save(transform_model.state_dict(), f"/scr/jzhang96/triplet_text_loss_models/{experiment_name}/{epoch}.pth")
 
 
-            seen_plt = plot_progress_xclip(seen_array, xclip_processor, xclip_net, transform_model, seen_text_embedding, pca_text, pca_video)
-            unseen_plt = plot_progress_xclip(unseen_array, xclip_processor, xclip_net, transform_model, unseen_text_embedding, pca_text, pca_video)
+            seen_plt = plot_progress_xclip(seen_array, xclip_processor, xclip_net, transform_model, seen_text_embedding)
+            unseen_plt = plot_progress_xclip(unseen_array, xclip_processor, xclip_net, transform_model, unseen_text_embedding)
             wandb.log({"progress/seen": wandb.Image(seen_plt)})
             wandb.log({"progress/unseen": wandb.Image(unseen_plt)})
             plt.close(seen_plt)
@@ -507,11 +463,10 @@ if __name__ == '__main__':
     argparser.add_argument('--seed', type=int, default=42)
     argparser.add_argument('--batch_size', type=int, default=16)
     argparser.add_argument('--num_workers', type=int, default=16)
-    argparser.add_argument('--epochs', type=int, default=500)
+    argparser.add_argument('--epochs', type=int, default=50)
     argparser.add_argument('--add_lower_bound', action='store_true')
     argparser.add_argument('--random_noise', action='store_true')
     argparser.add_argument('--progress_area', type=float, default=0)
-    argparser.add_argument('--variance_threshold', type=float, default=512)
     argparser.add_argument('--rand_neg', action='store_true')
     argparser.add_argument('--loss_type', type=str, default='triplet', choices=['triplet', 'MILNCE'])
     args = argparser.parse_args()
