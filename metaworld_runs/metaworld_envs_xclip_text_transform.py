@@ -157,6 +157,9 @@ def get_args():
     parser.add_argument('--xclip_model', type=str, default='microsoft/xclip-base-patch16-zero-shot')
     parser.add_argument('--frame_length', type=int, default=32)
     parser.add_argument("--exp_name_end", type=str, default="triplet_hard_neg")
+    parser.add_argument('--transform_model_path', type=str, default=None)
+    parser.add_argument('--transform_base_path', type=str, default="/scr/jzhang96/triplet_text_loss_models")
+
 
     args = parser.parse_args()
     return args
@@ -188,9 +191,9 @@ class MetaworldSparse(Env):
             self.net = self.net.eval()
 
             self.transform_model = SingleLayerMLP(512, 512, normalize=True)
-            # transform_model_path = os.path.join(args.transform_base_path, args.transform_model_path)
-            # self.transform_model.load_state_dict(th.load(transform_model_path))
-            self.transform_model.load_state_dict(th.load("/scr/jzhang96/triplet_text_loss_models/triplet_loss_50_42_xclip_TimeShort_Normtriplet/55.pth"))
+            transform_model_path = os.path.join(args.transform_base_path, args.transform_model_path)
+            self.transform_model.load_state_dict(th.load(transform_model_path))
+            # self.transform_model.load_state_dict(th.load("/scr/jzhang96/triplet_text_loss_models/triplet_loss_50_42_xclip_TimeShort_Normtriplet/55.pth"))
 
             self.transform_model = self.transform_model.eval().cuda()
             
