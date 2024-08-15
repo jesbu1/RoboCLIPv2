@@ -156,6 +156,7 @@ def get_args():
     parser.add_argument('--succ_bonus', type=float, default=0.0)
     parser.add_argument('--xclip_model', type=str, default='microsoft/xclip-base-patch16-zero-shot')
     parser.add_argument('--frame_length', type=int, default=32)
+    parser.add_argument("--exp_name_end", type=str, default="triplet_hard_neg")
 
     args = parser.parse_args()
     return args
@@ -476,16 +477,16 @@ def main():
     WANDB_ENTITY_NAME = "clvr"
     WANDB_PROJECT_NAME = "roboclip-v2"
     experiment_name = "xclip_textTRANS_" + args.algo + "_" + args.env_id 
-    if args.train_orcale:
-        experiment_name = experiment_name + "_Oracle"
+    # if args.train_orcale:
+    #     experiment_name = experiment_name + "_Oracle"
     if args.threshold_reward:
         experiment_name = experiment_name + "_Thld"
     if args.project_reward:
         experiment_name = experiment_name + "_ProjReward"
-    if args.norm_input:
-        experiment_name = experiment_name + "_NormIn"
-    if args.norm_output:
-        experiment_name = experiment_name + "_NormOut"
+    # if args.norm_input:
+    #     experiment_name = experiment_name + "_NormIn"
+    # if args.norm_output:
+    #     experiment_name = experiment_name + "_NormOut"
     # if args.time_reward != 1.0:
     #     experiment_name = experiment_name + "_XReward" + str(args.time_reward)
     # if args.time:
@@ -494,16 +495,17 @@ def main():
     #     experiment_name = experiment_name + "_NoTime"
     if args.succ_end:
         experiment_name = experiment_name + "_SuccEnd"
-    if args.random_reset:
-        experiment_name = experiment_name + "_RandReset"
+    # if args.random_reset:
+    #     experiment_name = experiment_name + "_RandReset"
 
-    if args.succ_bonus > 0:
-        experiment_name = experiment_name + "_SuccBonus" + str(args.succ_bonus)
-    if args.time_penalty > 0:
-        experiment_name = experiment_name + "_TimePenalty" + str(args.time_penalty)
+    # if args.succ_bonus > 0:
+    #     experiment_name = experiment_name + "_SuccBonus" + str(args.succ_bonus)
+    # if args.time_penalty > 0:
+    #     experiment_name = experiment_name + "_TimePenalty" + str(args.time_penalty)
     # if args.algo.lower() == 'sac':
-    experiment_name = experiment_name + "_Entropy" + str(args.entropy_term)
-    run_group = "DEBUG" + experiment_name + "NEW" 
+    # experiment_name = experiment_name + "_Entropy" + str(args.entropy_term)
+    experiment_name = experiment_name + args.exp_name_end
+    run_group = experiment_name 
     experiment_name = experiment_name + "_" + str(args.seed) + "NEW"
 
     if args.wandb:
