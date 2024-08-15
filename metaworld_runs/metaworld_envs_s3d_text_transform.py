@@ -385,7 +385,8 @@ class MetaworldDense(Env):
         if args.succ_end:
             if info['success']:
                 done = True
-                reward += 100
+        if info['success']
+            reward += 100
 
         return obs, reward, done, info
         
