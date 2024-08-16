@@ -27,12 +27,11 @@ From: nvcr.io/nvidia/pytorch:21.09-py3
     cd /opt/RoboCLIPv2
 
     # MuJoCo setup
-    curl -o mjkey.txt https://www.roboti.us/file/mjkey.txt
-    mkdir -p /root/.mujoco
-    mv mjkey.txt /root/.mujoco/mjkey.txt
-    wget https://mujoco.org/download/mujoco210-linux-x86_64.tar.gz
-    tar -xvzf mujoco210-linux-x86_64.tar.gz -C /root/.mujoco
-    rm mujoco210-linux-x86_64.tar.gz
+    mkdir -p /opt/mujoco
+    curl -o /opt/mujoco/mjkey.txt https://www.roboti.us/file/mjkey.txt
+    wget -O /opt/mujoco/mujoco210-linux-x86_64.tar.gz https://mujoco.org/download/mujoco210-linux-x86_64.tar.gz
+    tar -xvzf /opt/mujoco/mujoco210-linux-x86_64.tar.gz -C /opt/mujoco
+    rm /opt/mujoco/mujoco210-linux-x86_64.tar.gz
 
     # Copy conda environment file
     cp /opt/RoboCLIPv2/roboclipv2.yml /roboclipv2.yml
@@ -44,6 +43,15 @@ From: nvcr.io/nvidia/pytorch:21.09-py3
     # Activate conda environment and install additional packages
     conda activate roboclip
     pip install mujoco==2.2.1 mujoco-py==2.1.2.14
+
+    # Create the build directory if it doesn't exist
+    mkdir -p /tmp/mujoco_build
+    export LD_LIBRARY_PATH=/opt/mujoco/mujoco210/bin:${LD_LIBRARY_PATH}
+    export LD_LIBRARY_PATH=/usr/local/nvidia/lib64:${LD_LIBRARY_PATH}
+    export MUJOCO_GL=egl
+    export PYTHONPATH=/opt/conda/envs/roboclip/local:${PYTHONPATH}
+    export MUJOCO_PY_BUILD_DIR=/tmp/mujoco_build
+    python -c "import mujoco_py"
 
     # Clone and install the required repositories
     git clone https://github.com/sumedh7/kitchen_alt.git
@@ -68,10 +76,11 @@ From: nvcr.io/nvidia/pytorch:21.09-py3
     chmod +x /opt/scripts/singularity_entrypoint.sh
 
 %environment
-    export LD_LIBRARY_PATH=/root/.mujoco/mujoco210/bin:${LD_LIBRARY_PATH}
+    export LD_LIBRARY_PATH=/opt/mujoco/mujoco210/bin:${LD_LIBRARY_PATH}
     export LD_LIBRARY_PATH=/usr/local/nvidia/lib64:${LD_LIBRARY_PATH}
     export MUJOCO_GL=egl
     export PYTHONPATH=/opt/conda/envs/roboclip/local:${PYTHONPATH}
+    export MUJOCO_PY_BUILD_DIR=/tmp/mujoco_build
     unset LD_PRELOAD
 
 %files
