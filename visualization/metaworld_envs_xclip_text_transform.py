@@ -141,6 +141,8 @@ def get_args():
     parser.add_argument('--succ_end', action="store_true")
     parser.add_argument('--video_path', type=str, default=None)
     parser.add_argument('--pca_path', type=str, default=None)
+    parser.add_argument('--transform_base_path', type=str, default=None)
+    parser.add_argument('--transform_model_path', type=str, default=None)
     parser.add_argument('--random_reset', action="store_true")
     parser.add_argument('--target_gif_path', type=str, default="/scr/jzhang96/metaworld_generate_gifs/")
     #parser.add_argument('--target_gif_path', type=str, default="/home/jzhang96/RoboCLIPv2/metaworld_generate_gifs/")
@@ -180,9 +182,7 @@ class MetaworldSparse(Env):
             pca_video_model = joblib.load(pca_video_path)
             self.pca_text_model = pca_text_model
             self.pca_video_model = pca_video_model
-            self.computed_matrix_0 = th.load('/scr/yusenluo/RoboCLIP/visualization/saved_model/pca_matrix_models/M_model_512_Seed42.pth')
-            self.computed_matrix = th.from_numpy(np.dot(self.pca_video_model.components_, self.pca_text_model.components_.T)).float()
-            #print(th.allclose(self.computed_matrix, self.computed_matrix_0))
+            # self.computed_matrix = th.from_numpy(np.dot(self.pca_video_model.components_, self.pca_text_model.components_.T)).float()
 
         if not self.time:
             self.observation_space = self.env.observation_space
@@ -201,8 +201,10 @@ class MetaworldSparse(Env):
             self.net = self.net.eval()
 
             self.transform_model = SingleLayerMLP(512, 512, normalize=True)
-            # transform_model_path = os.path.join(args.transform_base_path, args.transform_model_path)
-            # self.transform_model.load_state_dict(th.load(transform_model_path))
+
+            transform_model_path = os.path.join(args.transform_base_path, args.transform_model_path)
+            self.transform_model.load_state_dict(th.load(transform_model_path))
+            self.transform_model = self.transform_model.eval().cuda()
             #self.transform_model.load_state_dict(th.load("/scr/jzhang96/triplet_text_loss_models/triplet_loss_50_42_xclip_TimeShort_Normtriplet/55.pth"))
 
             
@@ -218,13 +220,13 @@ class MetaworldSparse(Env):
                 self.target_embedding = normalize_embeddings(self.target_embedding)
                 if args.pca_path != None:
                     self.target_embedding = th.from_numpy(self.pca_text_model.transform(self.target_embedding.cpu())).cuda()
-                with th.no_grad():
-                    if args.pca_path != None:
-                        self.transform_model.linear.weight = nn.Parameter(
-                            self.computed_matrix.T.to(dtype=th.float32).cuda())
-                        self.transform_model.linear.bias = nn.Parameter(
-                            th.zeros(self.target_embedding.shape[1], dtype=th.float32).cuda())
-                    self.transform_model = self.transform_model.eval().cuda()
+                # with th.no_grad():
+                #     if args.pca_path != None:
+                #         self.transform_model.linear.weight = nn.Parameter(
+                #             self.computed_matrix.T.to(dtype=th.float32).cuda())
+                #         self.transform_model.linear.bias = nn.Parameter(
+                #             th.zeros(self.target_embedding.shape[1], dtype=th.float32).cuda())
+                #     self.transform_model = self.transform_model.eval().cuda()
 
             self.max_sim = None
             if args.warm_up_runs > 0:
