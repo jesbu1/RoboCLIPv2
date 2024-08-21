@@ -62,6 +62,8 @@ def main(args):
     if args.augmentation:
         # augmentation_method = AugmentationPipeline(device = "cuda", strength='normal')
         augmentation_method = AugmentationPipeline(device = "cuda", strength='weak')
+        experiment_name += "_Aug"
+    
 
 
     
