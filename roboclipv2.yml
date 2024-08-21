@@ -113,7 +113,7 @@ dependencies:
       - numpy-quaternion==2022.4.2
       - mujoco==2.2.1
       #- mujoco-py==2.1.2.14
-      - mujoco-py==2.0.2.5
+      #- mujoco-py==2.0.2.5
       - munch==2.5.0
       - nvidia-cublas-cu11==11.10.3.66
       - nvidia-cuda-nvrtc-cu11==11.7.99

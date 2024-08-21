@@ -50,6 +50,9 @@ From: nvcr.io/nvidia/pytorch:21.09-py3
     export LD_LIBRARY_PATH=/usr/local/nvidia/lib64:${LD_LIBRARY_PATH}
     export MUJOCO_GL=egl
     export PYTHONPATH=/opt/conda/envs/roboclip/local:${PYTHONPATH}
+    export MUJOCO_PY_MUJOCO_PATH=/opt/mujoco/mujoco210
+    export MUJOCO_PY_MJKEY_PATH=/opt/mujoco/mjkey.txt
+    export MUJOCO_PY_MJPRO_PATH=/opt/mujoco/mujoco210
     export MUJOCO_PY_BUILD_DIR=/tmp/mujoco_build
     python -c "import mujoco_py"
 

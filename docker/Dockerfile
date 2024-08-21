@@ -22,24 +22,28 @@ RUN apt-get update -q \
 
 RUN DEBIAN_FRONTEND=noninteractive add-apt-repository --yes ppa:deadsnakes/ppa && apt-get update
 
-WORKDIR /home/root/RoboCLIPv2
+ENV HOME=/workdir
+WORKDIR $HOME/RoboCLIPv2
 
 COPY ./roboclipv2.yml ./roboclipv2.yml 
 
 # mujoco
 RUN curl -o mjkey.txt https://www.roboti.us/file/mjkey.txt
-RUN mkdir -p ~/.mujoco
-RUN mv mjkey.txt ~/.mujoco/mjkey.txt
-RUN wget https://mujoco.org/download/mujoco210-linux-x86_64.tar.gz
-RUN tar -xvzf mujoco210-linux-x86_64.tar.gz -C ~/.mujoco
+RUN mkdir -p $HOME/.mujoco
 #RUN unzip mujoco210_linux.zip -d ~/.mujoco/mujoco210
 #RUN rm mujoco210_linux.zip
-RUN rm mujoco210-linux-x86_64.tar.gz
 
 RUN conda env create -f roboclipv2.yml
+RUN mv mjkey.txt $HOME/.mujoco/mjkey.txt
+RUN wget -c https://www.roboti.us/download/mujoco200_linux.zip -O mujoco200.zip
+RUN unzip mujoco200.zip -d $HOME/.mujoco/
+RUN rm mujoco200.zip
+RUN mv $HOME/.mujoco/mujoco200_linux $HOME/.mujoco/mujoco200
+RUN cd $HOME && git clone https://github.com/avirupdas55/mujoco-py.git && cd mujoco-py && git switch v2.0.2.8-local_update 
+
 
 # export the LD library path in the bashrc
-ENV LD_LIBRARY_PATH /root/.mujoco/mujoco210/bin:${LD_LIBRARY_PATH}
+ENV LD_LIBRARY_PATH $HOME/.mujoco/mujoco200/bin:${LD_LIBRARY_PATH}
 ENV LD_LIBRARY_PATH /usr/local/nvidia/lib64:${LD_LIBRARY_PATH}
 #RUN echo "export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/usr/lib/nvidia" >> ~/.bashrc
 #RUN echo "export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/usr/local/cuda/lib64" >> ~/.bashrc
@@ -52,8 +56,22 @@ ENV LD_LIBRARY_PATH /usr/local/nvidia/lib64:${LD_LIBRARY_PATH}
 SHELL ["conda", "run", "-n", "roboclip", "/bin/bash", "-c"]
 RUN conda init bash
 
-COPY ./docker/entrypoint.sh ./docker/entrypoint.sh 
-ENTRYPOINT ["docker/entrypoint.sh"]
+ENV D4RL_SUPPRESS_IMPORT_ERROR=1
+RUN pip install -U Cython==3.0.0a10
+RUN cd $HOME && pip install -e mujoco-py
+RUN python -c "import mujoco_py"
+RUN git clone https://github.com/sumedh7/kitchen_alt.git
+RUN git clone https://github.com/sumedh7/Metaworld.git
+RUN git clone https://github.com/aravindr93/mjrl.git
+
+RUN pip install -e mjrl
+RUN pip install -e Metaworld
+RUN pip install -e kitchen_alt
+RUN pip install -e kitchen_alt/kitchen/envs
+
+# COPY ./docker/entrypoint.sh ./docker/entrypoint.sh 
+# RUN chmod +x ./docker/entrypoint.sh
+# ENTRYPOINT ["docker/entrypoint.sh"]
 
 
 # RUN curl -o /usr/local/bin/patchelf https://s3-us-west-2.amazonaws.com/openai-sci-artifacts/manual-builds/patchelf_0.9_amd64.elf \
