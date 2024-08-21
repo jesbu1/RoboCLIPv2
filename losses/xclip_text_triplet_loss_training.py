@@ -370,8 +370,8 @@ def main(args):
                 else:
                     video_features = s3d_model(samples)["video_embedding"]
             video_features = normalize_embeddings(video_features)
-            pos_org_feature = video_features[:batch_size].clone()
-            neg_org_feature = video_features[batch_size:2*batch_size].clone()
+            # pos_org_feature = video_features[:batch_size].clone()
+            # neg_org_feature = video_features[batch_size:2*batch_size].clone()
 
             video_features = transform_model(video_features) # normalization already done in the model
             pos_features = video_features[:batch_size]

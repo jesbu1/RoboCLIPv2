@@ -29,17 +29,19 @@ class GifTextDataset(Dataset):
         # if args.model_name == "xclip":
         self.h5_text_file = h5py.File("metaworld_xclip_text.h5", "r")
         # else:
-        self.keys = list(self.h5_file.keys())
-        # self.keys = ["door-lock-v2-goal-hidden", # 14
-        #             "button-press-wall-v2-goal-hidden", # 7 
-        #             "drawer-open-v2-goal-hidden", # 19 
-        #             "window-open-v2-goal-hidden", # 48 
-        #             "sweep-v2-goal-hidden", # 47 
-        #             "coffee-button-v2-goal-hidden", # 8 
-        #             "button-press-topdown-wall-v2-goal-hidden", # 5 
-        #             "pick-out-of-hole-v2-goal-hidden", # 30
-        #             "hand-insert-v2-goal-hidden", # 17
-        #             "handle-press-v2-goal-hidden" ] # 24
+        if args.task_nums == 50:
+            self.keys = list(self.h5_file.keys())
+        else:
+            self.keys = ["door-lock-v2-goal-hidden", # 14
+                        "button-press-wall-v2-goal-hidden", # 7 
+                        "drawer-open-v2-goal-hidden", # 19 
+                        "window-open-v2-goal-hidden", # 48 
+                        "sweep-v2-goal-hidden", # 47 
+                        "coffee-button-v2-goal-hidden", # 8 
+                        "button-press-topdown-wall-v2-goal-hidden", # 5 
+                        "pick-out-of-hole-v2-goal-hidden", # 30
+                        "hand-insert-v2-goal-hidden", # 17
+                        "handle-press-v2-goal-hidden" ] # 24
 
     # evaluate_task = ["door-close-v2-goal-hidden", 
     #                 "door-open-v2-goal-hidden", 
@@ -57,11 +59,13 @@ class GifTextDataset(Dataset):
         self.shorten_time = args.time_shorten
         self.random_sample_neg = args.rand_neg
 
-        self.candidate_type = [1]
+        self.candidate_type = [1] # 1: hard negative
         if args.time_shuffle:
             self.candidate_type.append(2)
         if args.time_shorten:
             self.candidate_type.append(3)
+        if args.random_noise:
+            self.candidate_type.append(4)
 
     def __len__(self):
         return len(self.keys) * 50
@@ -94,10 +98,12 @@ class GifTextDataset(Dataset):
             if self.random_sample_neg:
                 neg_array = self.sample_negative_func(key)
             else:
-                neg_array = copy.deepcopy(pos_array)
+                neg_array = np.random.randint(0, 255, size=(32, pos_array.shape[1], pos_array.shape[2], pos_array.shape[3]), dtype=np.uint8) # just provide random frame, won't use
+        elif neg_type == 4:
+            # random noise
+            neg_array = np.random.randint(0, 255, size=(32, pos_array.shape[1], pos_array.shape[2], pos_array.shape[3]), dtype=np.uint8) # just provide random frame, won't use
 
         # sample frames
-        # gt_array = self.sample_frames(gt_array)
         pos_array = self.sample_frames(pos_array)
         neg_array = self.sample_frames(neg_array)
 
@@ -108,11 +114,9 @@ class GifTextDataset(Dataset):
             neg_array = self.preprocess_xclip(neg_array)
 
         else:
-            # gt_array = gt_array/255
             pos_array = pos_array/255
             neg_array = neg_array/255
 
-            # gt_array = gt_array.transpose(3, 0, 1, 2)
             pos_array = pos_array.transpose(3, 0, 1, 2)
             neg_array = neg_array.transpose(3, 0, 1, 2)
 

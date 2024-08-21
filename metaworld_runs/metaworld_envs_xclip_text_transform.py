@@ -192,7 +192,7 @@ class MetaworldSparse(Env):
 
             self.transform_model = SingleLayerMLP(512, 512, normalize=True)
             transform_model_path = os.path.join(args.transform_base_path, args.transform_model_path)
-            self.transform_model.load_state_dict(th.load(transform_model_path))
+            self.transform_model.load_state_dict(th.load(transform_model_path)["model_state_dict"])
             # self.transform_model.load_state_dict(th.load("/scr/jzhang96/triplet_text_loss_models/triplet_loss_50_42_xclip_TimeShort_Normtriplet/55.pth"))
 
             self.transform_model = self.transform_model.eval().cuda()
@@ -377,7 +377,7 @@ class MetaworldDense(Env):
             if info['success']:
                 done = True
         if info["success"]:
-            reward += 100
+            reward += 1000
 
         return obs, reward, done, info
         
@@ -428,10 +428,9 @@ class CustomEvalCallback(EvalCallback):
         result = super(CustomEvalCallback, self)._on_step()
 
         if self.video_freq > 0 and self.n_calls % self.video_freq == 0:
-            video_buffer, success = self.record_video()
+            video_buffer = self.record_video()
             # wandb.log({f"evaluation_video": wandb.Video(video_buffer, fps=20, format="mp4")}, commit=False)
             wandb.log({f"eval/evaluation_video": wandb.Video(video_buffer, fps=20, format="mp4")}, step = self.n_calls)
-            wandb.log({f"eval/evaluate_succ": success}, step = self.n_calls)
             print("video logged")
 
         return result
@@ -439,7 +438,7 @@ class CustomEvalCallback(EvalCallback):
     def record_video(self):
         frames = []
         obs = self.eval_env.reset()
-        success = 0
+        
         for _ in range(128):  # You can adjust the number of steps for recording
             frame = self.eval_env.render(mode='rgb_array')
             # downsample frame
@@ -447,9 +446,7 @@ class CustomEvalCallback(EvalCallback):
             frames.append(frame)
             action, _ = self.model.predict(obs, deterministic=self.deterministic)
             obs, _, _, info = self.eval_env.step(action)
-            if info['success']:
-                success = 1 
-                break
+
 
         video_buffer = io.BytesIO()
 
@@ -458,7 +455,7 @@ class CustomEvalCallback(EvalCallback):
                 writer.append_data(frame)
 
         video_buffer.seek(0)
-        return video_buffer, success
+        return video_buffer
 
 
 
@@ -471,7 +468,7 @@ def main():
     global args
     global log_dir
     args = get_args()
-
+    th.backends.cudnn.deterministic = True
     # set seed
     th.manual_seed(args.seed)
     np.random.seed(args.seed)
@@ -492,8 +489,8 @@ def main():
     #     experiment_name = experiment_name + "_NormIn"
     # if args.norm_output:
     #     experiment_name = experiment_name + "_NormOut"
-    # if args.time_reward != 1.0:
-    #     experiment_name = experiment_name + "_XReward" + str(args.time_reward)
+    if args.time_reward != 1.0:
+        experiment_name = experiment_name + "_XReward" + str(args.time_reward)
     # if args.time:
     #     experiment_name = experiment_name + "_Time"
     # else:
