@@ -18,214 +18,15 @@ import matplotlib.pyplot as plt
 import copy
 from dataloader_text import GifTextDataset
 from sklearn.decomposition import PCA
-
-# model_name = "microsoft/xclip-base-patch16-zero-shot"
-# xclip_tokenizer = AutoTokenizer.from_pretrained(model_name)
-# xclip_net = AutoModel.from_pretrained(model_name).cuda()
-# xclip_processor = AutoProcessor.from_pretrained(model_name)
-# xclip_net.eval()
-
-
-class SingleLayerMLP(nn.Module):
-    def __init__(self, input_dim, output_dim, normalize=True):
-        super(SingleLayerMLP, self).__init__()
-        self.linear = nn.Linear(input_dim, output_dim)
-        self.normalize = normalize
-
-    def forward(self, x):
-        x = self.linear(x)
-        if self.normalize:
-            x = F.normalize(x, p=2, dim=1)
-        return x
-
-def cosine_similarity(x1, x2):
-    return F.cosine_similarity(x1, x2, dim=-1)
-
-def triplet_loss(gt, positive, negative, type, margin = (1.0, 1.0, 1.0, 0.0), progress = None): 
-
-    pos_sim = cosine_similarity(gt, positive)
-    neg_sim = cosine_similarity(gt, negative)
-
-    loss = torch.zeros_like(pos_sim).cuda()
-
-    # type1: hard negative margin = 1.5
-    mask_type_1 = (type == 1)
-    loss[mask_type_1] = F.relu(margin[0] - pos_sim[mask_type_1] + neg_sim[mask_type_1])
-
-    # type2: semi-hard negative margin = 1.2
-    mask_type_2 = (type == 2)
-    loss[mask_type_2] = F.relu(margin[1] - pos_sim[mask_type_2] + neg_sim[mask_type_2])
-
-    # type3: adaptive margin
-    mask_type_3 = (type == 3)
-    progress = progress[mask_type_3]
-    # adaptive margin range from 1.0 to 0.0
-    adaptive_margin = (margin[2] + (margin[3] - margin[2]) * progress).cuda()
-    loss[mask_type_3] = F.relu(adaptive_margin - pos_sim[mask_type_3] + neg_sim[mask_type_3])
-
-    return loss.mean()
-
-
-def normalize_embeddings(embeddings, return_tensor=True):
-    if isinstance(embeddings, np.ndarray):
-        embeddings = th.tensor(embeddings)
-    normalized_embeddings = F.normalize(embeddings, p=2, dim=1)
-    if return_tensor:
-        return normalized_embeddings
-    else:
-        return normalized_embeddings.detach().cpu().numpy()
-
-
-def plot_progress(array, s3d_model, transform_model):
-
-    array_length = array.shape[0]
-    similarities = []
-    with th.no_grad():
-        s3d_model.eval()
-        transform_model.eval()
-
-        copy_array = copy.deepcopy(array)
-        indices = np.linspace(0, len(copy_array) - 1, 32).astype(int)
-        copy_array = copy_array[indices]
-        copy_array = th.tensor(copy_array).cuda()
-        copy_array = copy_array.float().permute(3, 0, 1, 2).unsqueeze(0)
-        copy_array = copy_array / 255.0
-        copy_array = s3d_model(copy_array)["video_embedding"]
-        GT_embedding = normalize_embeddings(copy_array)
-        GT_embedding = transform_model(GT_embedding)
-
-        for i in range(32, array_length + 1):
-            copy_array = copy.deepcopy(array)
-            copy_array = copy_array[:i]
-            progress = i / array_length
-            indices = np.linspace(0, i - 1, 32).astype(int)
-            copy_array = copy_array[indices]
-            copy_array = th.tensor(copy_array).cuda()
-            copy_array = copy_array.float().permute(3, 0, 1, 2).unsqueeze(0)
-            copy_array = copy_array / 255.0
-            copy_array = s3d_model(copy_array)["video_embedding"]
-            progress_embedding = normalize_embeddings(copy_array)
-            progress_embedding = transform_model(progress_embedding)
-            similarity = cosine_similarity(GT_embedding, progress_embedding)
-
-            similarities.append((i, similarity.item()))
-
-    transform_model.train()
-    figure_1 = plt.figure()
-    plt.plot([i[0] for i in similarities], [i[1] for i in similarities])
-    plt.xlabel("Length")
-    plt.ylabel("Cosine Similarity")
-    plt.title("Cosine Similarity of GT embedding with progress embedding")
-
-    return figure_1
+from triplet_utils import AugmentationPipeline, SingleLayerMLP, normalize_embeddings, triplet_loss, MILNCELoss
+from plot_utils import plot_distribution, plot_progress_xclip, save_tensor_as_gif, log_tensor_as_gif
 
 
 
-def plot_progress_xclip(array, xclip_processor, xclip_net, transform_model, text_array):
-    # text_array already tensor
-    text_array = normalize_embeddings(text_array)
-    array_length = array.shape[0]
-    similarities = []
-    with th.no_grad():
-        # s3d_model.eval()
-        transform_model.eval()
-
-
-        for i in range(32, array_length + 1):
-            copy_array = copy.deepcopy(array)
-            copy_array = copy_array[:i]
-            progress = i / array_length
-            indices = np.linspace(0, i - 1, 32).astype(int)
-            copy_array = copy_array[indices]
-            copy_array = copy_array[:, 13:237, 13:237, :]
-            copy_array = xclip_processor(videos = list(copy_array), return_tensors="pt").pixel_values.cuda()
-            copy_array = xclip_net.get_video_features(copy_array)
-            copy_array = normalize_embeddings(copy_array)
-            copy_array = transform_model(copy_array)
-            similarity = cosine_similarity(text_array, copy_array)
-
-            similarities.append((i, similarity.item()))
-
-    transform_model.train()
-    figure_1 = plt.figure()
-    plt.plot([i[0] for i in similarities], [i[1] for i in similarities])
-    plt.xlabel("Length")
-    plt.ylabel("Cosine Similarity")
-    plt.title("Cosine Similarity of GT embedding with progress embedding")
-
-    return figure_1
-
-
-
-
-
-def plot_distribution(transform_model, evaluate_run_embeddings, total_evaluate_embeddings, evaluate_tasks, total_evaluate_tasks, eval_text_embedding):
-
-    total_evaluate_embeddings = transform_model(total_evaluate_embeddings.clone()).detach().cpu().numpy()
-    evaluate_run_embeddings = transform_model(evaluate_run_embeddings.clone()).detach().cpu().numpy()
-    eval_text_embedding = normalize_embeddings(eval_text_embedding, False)
-    evaluate_run_embeddings = normalize_embeddings(evaluate_run_embeddings, False)
-    total_evaluate_embeddings = normalize_embeddings(total_evaluate_embeddings, False)
-
-
-    total_embedding = np.concatenate([total_evaluate_embeddings, eval_text_embedding], axis=0)
-    pca = PCA(n_components=2)
-    pca_model = pca.fit(total_embedding)
-    total_video_embedding = pca_model.transform(total_evaluate_embeddings)
-    run_video_embedding = pca_model.transform(evaluate_run_embeddings)
-    eval_text_embedding = pca_model.transform(eval_text_embedding)
-
-    figure_1 = plt.figure()
-    colors = plt.cm.tab10(np.linspace(0, 1, len(total_evaluate_tasks)))  
-    for i in range(len(total_evaluate_tasks)):
-        group_data = total_video_embedding[i*10:(i+1)*10]
-        x = group_data[:, 0]
-        y = group_data[:, 1]
-        text_name = total_evaluate_tasks[i]
-        plt.scatter(x, y, color=colors[i], label=text_name)
-    
-    plt.title('2D PCA for Metaworld Total Videos')
-    plt.xlabel('x-dim')
-    plt.ylabel('y-dim')
-    # plt.legend(loc='upper left', ncol=4)
-    plt.tight_layout(rect=[0, 0, 1, 1]) # adjust the plot to the right (to fit the legend)
-    
-
-    figure_2 = plt.figure()
-    colors = plt.cm.tab10(np.linspace(0, 1, len(evaluate_tasks)))
-    for i in range(len(evaluate_tasks)):
-        group_data = run_video_embedding[i*10:(i+1)*10]
-        x = group_data[:, 0]
-        y = group_data[:, 1]
-        text_name = evaluate_tasks[i].split("-v2")[0]
-        text_embedding = eval_text_embedding[i]
-        plt.scatter(x, y, color=colors[i], label=text_name, marker='o', s=100, zorder=2)
-        # put "x" above the point
-        plt.scatter(text_embedding[0], text_embedding[1], color=colors[i], marker='x', s=100, zorder=3)
-
-    plt.title('2D PCA for Metaworld Evaluate Videos')
-    plt.xlabel('x-dim')
-    plt.ylabel('y-dim')
-    plt.legend(loc='upper left', ncol=1, bbox_to_anchor=(1, 1))
-    plt.tight_layout() # adjust the plot to the right (to fit the legend)
-
-    return figure_1, figure_2
-
-
-class MILNCELoss(th.nn.Module):
-    def __init__(self):
-        super(MILNCELoss, self).__init__()
-
-    def forward(self, video_embd, text_embd):
-        x = th.matmul(video_embd, text_embd.t())
-        x = x.view(video_embd.shape[0], video_embd.shape[0], -1)
-        nominator = x * th.eye(x.shape[0])[:,:,None].cuda()
-        nominator = nominator.sum(dim=1)
-        nominator = th.logsumexp(nominator, dim=1)
-        denominator = th.cat((x, x.permute(1,0,2)), dim=1).view(x.shape[0], -1)
-        denominator = th.logsumexp(denominator, dim=1)
-        return th.mean(denominator - nominator)
-
+# this file will add everything
+# 1. loss type: MILNCE, Triplet, Ours, also add random noise to the embedding, random noise will add at the output of the VLM
+# 2. model: xclip
+# 3. augmentation
 
     
 def main(args):
@@ -233,18 +34,17 @@ def main(args):
     torch.manual_seed(args.seed)
     np.random.seed(args.seed)
     random.seed(args.seed)
-
+    torch.backends.cudnn.deterministic = True
 
     eval_tasks = []
 
-    h5_file = h5py.File(args.h5_path, "r")
     model_name = args.model_name
 
     WANDB_ENTITY_NAME = "clvr"
     WANDB_PROJECT_NAME = "roboclip-v2"
 
-    training_num = str(50 - len(eval_tasks))
-    experiment_name = "triplet_loss_" + training_num + "_" + str(args.seed) + "_" + args.model_name
+    # training_num = str(50 - len(eval_tasks))
+    experiment_name = "triplet_loss_" + str(args.task_nums) + "_" + str(args.seed) + "_" + args.model_name
 
     if args.time_shuffle:
         experiment_name += "_TimeShuffle"
@@ -258,6 +58,12 @@ def main(args):
     if args.rand_neg:
         experiment_name += "_RandNeg"
     experiment_name += args.loss_type
+
+    if args.augmentation:
+        # augmentation_method = AugmentationPipeline(device = "cuda", strength='normal')
+        augmentation_method = AugmentationPipeline(device = "cuda", strength='weak')
+
+
     
 
     h5_dataset_file = h5py.File(args.h5_path, "r")
@@ -326,7 +132,7 @@ def main(args):
     run = wandb.init(
         entity=WANDB_ENTITY_NAME,
         project=WANDB_PROJECT_NAME,
-        group="text_adaptive_triplet_xclip",
+        group="text_adaptive_triplet_xclip_debug",
         config=args,
         name=experiment_name,
     )
@@ -361,7 +167,30 @@ def main(args):
             samples = torch.cat([pos_array, neg_array]).cuda()
             types = batch["type"]
             progress = batch["progress"].float().cuda()
-            
+
+            augmentation = False
+            if args.augmentation:
+                random_value = np.random.rand()
+                threshold = 1/3  # 33.3% chance (1 out of 3)
+                if random_value < threshold:
+                    augmentation = False  # Do the action
+                else:
+                    augmentation = True  # Don't do the action
+
+            if augmentation:
+                samples = augmentation_method(samples)
+
+
+
+
+            # video1 = samples[0]
+            # video2 = samples[1]
+            # log_tensor_as_gif(video1, f"video1_{i}")
+            # log_tensor_as_gif(video2, f"video2_{i}")
+            # import pdb ; pdb.set_trace()
+
+
+
             with th.no_grad():
                 if model_name == "xclip":
                     # pixel_values = xclip_processor.processor(videos = list(array), return_tensors="pt").pixel_values.squeeze(0)
@@ -377,6 +206,8 @@ def main(args):
             pos_features = video_features[:batch_size]
             neg_features = video_features[batch_size:2*batch_size]
 
+
+
             if args.loss_type == "triplet":
                 if not args.rand_neg:
                     # choose the hardest negative
@@ -388,6 +219,15 @@ def main(args):
                         cosine_similarity_matrix[i, true_index] = -1.0
                     hardest_neg_indices = torch.argmax(cosine_similarity_matrix, dim=1)
                     neg_features[type_1_mask] = pos_features[hardest_neg_indices].clone()
+
+                    if args.random_noise:
+                        type_4_mask = (types == 4)
+                        type_4_pos_features = pos_features[type_4_mask].clone()
+                        std = 0.2
+                        noise = std * torch.randn_like(type_4_pos_features)
+                        noisy_type_4_pos_features = type_4_pos_features + noise
+                        noisy_type_4_pos_features = normalize_embeddings(noisy_type_4_pos_features)
+                        neg_features[type_4_mask] = noisy_type_4_pos_features
                     
                 loss = triplet_loss(gt_features, pos_features, neg_features, types, progress=progress)
             
@@ -459,15 +299,16 @@ if __name__ == '__main__':
     argparser.add_argument('--time_shuffle', action='store_true')
     argparser.add_argument('--h5_path', type=str, default='/scr/jzhang96/metaworld_gifs_1.h5')
     argparser.add_argument('--time_shorten', action='store_true')
+    argparser.add_argument('--random_noise', action='store_true')
     argparser.add_argument('--norm', action='store_true')
     argparser.add_argument('--seed', type=int, default=42)
     argparser.add_argument('--batch_size', type=int, default=16)
     argparser.add_argument('--num_workers', type=int, default=16)
     argparser.add_argument('--epochs', type=int, default=50)
-    argparser.add_argument('--add_lower_bound', action='store_true')
-    argparser.add_argument('--random_noise', action='store_true')
-    argparser.add_argument('--progress_area', type=float, default=0)
     argparser.add_argument('--rand_neg', action='store_true')
     argparser.add_argument('--loss_type', type=str, default='triplet', choices=['triplet', 'MILNCE'])
+    argparser.add_argument('--task_nums', type=int, default=50)
+    argparser.add_argument('--augmentation', action='store_true')
+
     args = argparser.parse_args()
     main(args)

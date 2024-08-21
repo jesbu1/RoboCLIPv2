@@ -377,7 +377,7 @@ class MetaworldDense(Env):
             if info['success']:
                 done = True
         if info["success"]:
-            reward += 100
+            reward += 1000
 
         return obs, reward, done, info
         
@@ -468,7 +468,7 @@ def main():
     global args
     global log_dir
     args = get_args()
-
+    th.backends.cudnn.deterministic = True
     # set seed
     th.manual_seed(args.seed)
     np.random.seed(args.seed)
@@ -489,8 +489,8 @@ def main():
     #     experiment_name = experiment_name + "_NormIn"
     # if args.norm_output:
     #     experiment_name = experiment_name + "_NormOut"
-    # if args.time_reward != 1.0:
-    #     experiment_name = experiment_name + "_XReward" + str(args.time_reward)
+    if args.time_reward != 1.0:
+        experiment_name = experiment_name + "_XReward" + str(args.time_reward)
     # if args.time:
     #     experiment_name = experiment_name + "_Time"
     # else:

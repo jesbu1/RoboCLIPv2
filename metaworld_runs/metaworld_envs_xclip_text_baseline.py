@@ -341,6 +341,7 @@ class MetaworldDense(Env):
         if args.succ_end:
             if info['success']:
                 done = True
+                reward += 1000
 
         return obs, reward, done, info
         
@@ -425,7 +426,7 @@ def main():
     global args
     global log_dir
     args = get_args()
-
+    th.backends.cudnn.deterministic = True
     # set seed
     th.manual_seed(args.seed)
     np.random.seed(args.seed)
@@ -436,8 +437,8 @@ def main():
     WANDB_ENTITY_NAME = "clvr"
     WANDB_PROJECT_NAME = "roboclip-v2"
     experiment_name = "xclip_textBL_" + args.algo + "_" + args.env_id 
-    if args.train_orcale:
-        experiment_name = experiment_name + "_Oracle"
+    # if args.train_orcale:
+    #     experiment_name = experiment_name + "_Oracle"
     if args.threshold_reward:
         experiment_name = experiment_name + "_Thld"
     if args.project_reward:
@@ -448,14 +449,14 @@ def main():
         experiment_name = experiment_name + "_NormOut"
     if args.time_reward != 1.0:
         experiment_name = experiment_name + "_XReward" + str(args.time_reward)
-    if args.time:
-        experiment_name = experiment_name + "_Time"
-    else:
-        experiment_name = experiment_name + "_NoTime"
+    # if args.time:
+    #     experiment_name = experiment_name + "_Time"
+    # else:
+    #     experiment_name = experiment_name + "_NoTime"
     if args.succ_end:
         experiment_name = experiment_name + "_SuccEnd"
-    if args.random_reset:
-        experiment_name = experiment_name + "_RandReset"
+    # if args.random_reset:
+    #     experiment_name = experiment_name + "_RandReset"
 
     if args.succ_bonus > 0:
         experiment_name = experiment_name + "_SuccBonus" + str(args.succ_bonus)
