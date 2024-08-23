@@ -22,32 +22,34 @@ RUN apt-get update -q \
 
 RUN DEBIAN_FRONTEND=noninteractive add-apt-repository --yes ppa:deadsnakes/ppa && apt-get update
 
-ENV HOME=/workdir
-WORKDIR $HOME/RoboCLIPv2
+ENV WORKDIR=/workdir
+WORKDIR $WORKDIR/RoboCLIPv2
 
 COPY ./roboclipv2.yml ./roboclipv2.yml 
 
 # mujoco
 RUN curl -o mjkey.txt https://www.roboti.us/file/mjkey.txt
-RUN mkdir -p $HOME/.mujoco
+RUN mkdir -p $WORKDIR/.mujoco
 #RUN unzip mujoco210_linux.zip -d ~/.mujoco/mujoco210
 #RUN rm mujoco210_linux.zip
 
 RUN conda env create -f roboclipv2.yml
-RUN mv mjkey.txt $HOME/.mujoco/mjkey.txt
+RUN mv mjkey.txt $WORKDIR/.mujoco/mjkey.txt
 RUN wget -c https://www.roboti.us/download/mujoco200_linux.zip -O mujoco200.zip
-RUN unzip mujoco200.zip -d $HOME/.mujoco/
+RUN unzip mujoco200.zip -d $WORKDIR/.mujoco/
 RUN rm mujoco200.zip
-RUN mv $HOME/.mujoco/mujoco200_linux $HOME/.mujoco/mujoco200
-RUN cd $HOME && git clone https://github.com/avirupdas55/mujoco-py.git && cd mujoco-py && git switch v2.0.2.8-local_update 
+RUN mv $WORKDIR/.mujoco/mujoco200_linux $WORKDIR/.mujoco/mujoco200
+RUN cd $WORKDIR && git clone https://github.com/avirupdas55/mujoco-py.git && cd mujoco-py && git switch v2.0.2.8-local_update 
 
 
 # export the LD library path in the bashrc
-ENV LD_LIBRARY_PATH $HOME/.mujoco/mujoco200/bin:${LD_LIBRARY_PATH}
+ENV LD_LIBRARY_PATH $WORKDIR/.mujoco/mujoco200/bin:${LD_LIBRARY_PATH}
 ENV LD_LIBRARY_PATH /usr/local/nvidia/lib64:${LD_LIBRARY_PATH}
+ENV MUJOCO_PY_MUJOCO_PATH ${WORKDIR}/.mujoco/mujoco200
+ENV MUJOCO_PY_MJKEY_PATH ${WORKDIR}/.mujoco/mjkey.txt
 #RUN echo "export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/usr/lib/nvidia" >> ~/.bashrc
 #RUN echo "export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/usr/local/cuda/lib64" >> ~/.bashrc
-#RUN echo "export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:${HOME}/.mujoco/mujoco200/bin" >> ~/.bashrc
+#RUN echo "export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:${WORKDIR}/.mujoco/mujoco200/bin" >> ~/.bashrc
 #RUN echo "export MUJOCO_GL=egl" >> ~/.bashrc
 
 # temp
@@ -58,8 +60,6 @@ RUN conda init bash
 
 ENV D4RL_SUPPRESS_IMPORT_ERROR=1
 RUN pip install -U Cython==3.0.0a10
-RUN cd $HOME && pip install -e mujoco-py
-RUN python -c "import mujoco_py"
 RUN git clone https://github.com/sumedh7/kitchen_alt.git
 RUN git clone https://github.com/sumedh7/Metaworld.git
 RUN git clone https://github.com/aravindr93/mjrl.git
@@ -68,6 +68,11 @@ RUN pip install -e mjrl
 RUN pip install -e Metaworld
 RUN pip install -e kitchen_alt
 RUN pip install -e kitchen_alt/kitchen/envs
+
+RUN cd $WORKDIR && pip install -e mujoco-py
+RUN python -c "import mujoco_py"
+RUN apt-get install libc6 -y
+RUN pip install opencv-python-headless
 
 # COPY ./docker/entrypoint.sh ./docker/entrypoint.sh 
 # RUN chmod +x ./docker/entrypoint.sh

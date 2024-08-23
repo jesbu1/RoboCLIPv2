@@ -8,6 +8,6 @@ singularity \
         --cleanenv \
         --pid \
         --bind \
-	$BASEDIR:/workdir/RoboCLIPv2 \
-	docker:jesbu1/roboclipv2 \
+	$BASEDIR:/workdir/RoboCLIPv2,./tmp:/root \
+	roboclip.sif \
 	/bin/bash
