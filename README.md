@@ -1,6 +1,23 @@
 # Pytorch + StableBaselines3 Implementation of RoboCLIP
 This repository contains the implementation for the NeurIPS 2023 paper, [RoboCLIP: One Demonstration is Enough to Learn Robot Policies](https://arxiv.org/abs/2310.07899).
 
+## RUNNING SINGULARITY
+1. `gdown 1EzNLSeziabyA1cOHSvQt4mna1GeWbMek`
+2. Make a `tmp` folder in `RoboCLIPv2`.
+3. Just fill in `PYTHON_SCRIPT` and `ACCT`, and possibly change anything else as needed. You can maybe run multiple jobs srun to save resources and time by just using `&` in your `PYTHON_SCRIPT`. Note: you need to have the single quotes around `'PYTHON_SCRIPT'`. We added `k40` as it's the cheapest GPU but change this if needed.
+```
+srun \ 
+    --time=2-00:00:00 \ 
+    --ntasks=1 \ 
+    --partition=gpu  \
+    --cpus-per-task=16 \
+    --mem=64G \
+    --account=ACCT \
+    --gres=gpu:k40:1 \
+    bash docker/run_singularity_slurm_script.sh 'PYTHON_SCRIPT'
+```
+
+
 ## Setting up the env
 
 We recommend using conda for installation and provide a `.yml` file for installation. 

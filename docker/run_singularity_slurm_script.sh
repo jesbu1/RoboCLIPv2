@@ -10,6 +10,6 @@ singularity \
         --cleanenv \
         --pid \
         --bind \
-	$BASEDIR:$ROBOCLIP_LOC,./tmp:/root, \
+	$BASEDIR:$ROBOCLIP_LOC,./tmp:/$HOME, \
 	roboclip.sif \
         /bin/bash -c "cd $ROBOCLIP_LOC && conda init bash && source ~/.bashrc && conda activate roboclip && $SCRIPT"

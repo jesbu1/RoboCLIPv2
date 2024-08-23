@@ -8,6 +8,6 @@ singularity \
         --cleanenv \
         --pid \
         --bind \
-	$BASEDIR:/workdir/RoboCLIPv2,./tmp:/root \
+	$BASEDIR:/workdir/RoboCLIPv2,./tmp:$HOME \
 	roboclip.sif \
 	/bin/bash
