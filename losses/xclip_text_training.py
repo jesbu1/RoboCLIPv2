@@ -1,5 +1,5 @@
 import torch    
-from s3dg import S3D
+# from s3dg import S3D
 import torch.nn.functional as F
 import numpy as np
 from transformers import AutoTokenizer, AutoModel, AutoProcessor
@@ -138,7 +138,7 @@ def main(args):
     run = wandb.init(
         entity=WANDB_ENTITY_NAME,
         project=WANDB_PROJECT_NAME,
-        group="aug_text_adaptive_triplet_xclip",
+        group="aug_text_adaptive_triplet_xclip_WOnormVLM",
         config=args,
         name=experiment_name,
     )
@@ -264,16 +264,16 @@ def main(args):
 
         if epoch % 10 == 0:
             if args.model_name == "xclip":
-                if not os.path.exists(f"/home/jzhang96/triplet_text_loss_models/{experiment_name}"):
-                    os.makedirs(f"/home/jzhang96/triplet_text_loss_models/{experiment_name}")
+                if not os.path.exists(f"/home1/jzhang96/triplet_text_loss_models/{experiment_name}"):
+                    os.makedirs(f"/home1/jzhang96/triplet_text_loss_models/{experiment_name}")
                 th.save(
                     {'model_state_dict': transform_model.state_dict(), 
                     'optimizer_state_dict': optimizer.state_dict()},
-                    f"/home/jzhang96/triplet_text_loss_models/{experiment_name}/{epoch}.pth")
+                    f"/home1/jzhang96/triplet_text_loss_models/{experiment_name}/{epoch}.pth")
             else:
-                if not os.path.exists(f"/home/jzhang96/triplet_text_loss_models/{experiment_name}"):
-                    os.makedirs(f"/home/jzhang96/triplet_text_loss_models/{experiment_name}")
-                th.save(transform_model.state_dict(), f"/home/jzhang96/triplet_text_loss_models/{experiment_name}/{epoch}.pth")
+                if not os.path.exists(f"/home1/jzhang96/triplet_text_loss_models/{experiment_name}"):
+                    os.makedirs(f"/home1/jzhang96/triplet_text_loss_models/{experiment_name}")
+                th.save(transform_model.state_dict(), f"/home1/jzhang96/triplet_text_loss_models/{experiment_name}/{epoch}.pth")
 
             transform_model.eval()
             with torch.no_grad():

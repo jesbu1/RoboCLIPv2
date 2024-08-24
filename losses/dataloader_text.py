@@ -2,7 +2,7 @@
 from torch.utils.data import Dataset, DataLoader
 import h5py
 from transformers import AutoTokenizer, AutoModel, AutoProcessor
-from s3dg import S3D
+# from s3dg import S3D
 import torch as th
 import random
 import numpy as np

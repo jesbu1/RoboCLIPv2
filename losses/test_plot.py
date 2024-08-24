@@ -1,5 +1,5 @@
 import torch    
-from s3dg import S3D
+# from s3dg import S3D
 import torch.nn.functional as F
 import numpy as np
 from transformers import AutoTokenizer, AutoModel, AutoProcessor
