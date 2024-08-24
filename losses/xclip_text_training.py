@@ -52,6 +52,8 @@ def main(args):
         experiment_name += "_TimeShort"
     if args.norm:
         experiment_name += "_Norm"
+    if args.norm_vlm:
+        experiment_name += "_NormVLM"
 
     if args.random_noise:
         experiment_name += "_RandomNoise" 
@@ -200,9 +202,9 @@ def main(args):
 
                 else:
                     video_features = s3d_model(samples)["video_embedding"]
-            video_features = normalize_embeddings(video_features)
-            # pos_org_feature = video_features[:batch_size].clone()
-            # neg_org_feature = video_features[batch_size:2*batch_size].clone()
+            if args.norm_vlm:
+                video_features = normalize_embeddings(video_features)
+
 
             video_features = transform_model(video_features) # normalization already done in the model
             pos_features = video_features[:batch_size]
@@ -312,6 +314,7 @@ if __name__ == '__main__':
     argparser.add_argument('--loss_type', type=str, default='triplet', choices=['triplet', 'MILNCE'])
     argparser.add_argument('--task_nums', type=int, default=50)
     argparser.add_argument('--augmentation', action='store_true')
+    argparser.add_argument('--norm_vlm', action='store_true')
 
     args = argparser.parse_args()
     main(args)
