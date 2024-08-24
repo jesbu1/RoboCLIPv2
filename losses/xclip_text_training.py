@@ -54,6 +54,8 @@ def main(args):
         experiment_name += "_Norm"
     if args.norm_vlm:
         experiment_name += "_NormVLM"
+    else:
+        experiment_name += "_NoNormVLM
 
     if args.random_noise:
         experiment_name += "_RandomNoise" 
