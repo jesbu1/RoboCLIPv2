@@ -134,7 +134,7 @@ def main(args):
     run = wandb.init(
         entity=WANDB_ENTITY_NAME,
         project=WANDB_PROJECT_NAME,
-        group="text_adaptive_triplet_xclip_debug",
+        group="aug_text_adaptive_triplet_xclip",
         config=args,
         name=experiment_name,
     )
@@ -153,7 +153,7 @@ def main(args):
     dataloader = DataLoader(dataset, batch_size=args.batch_size, shuffle=True, num_workers=args.num_workers, drop_last=True)
 
     # loss_func = nn.TripletMarginLoss(margin=0.5, p=1)
-    optimizer = th.optim.Adam(transform_model.parameters(), lr=1e-4)
+    optimizer = th.optim.Adam(transform_model.parameters(), lr=2e-4)
     # optimizer = th.optim.Adam(transform_model.parameters(), lr=1e-3)
 
     if args.loss_type == "MILNCE":
@@ -175,9 +175,9 @@ def main(args):
                 random_value = np.random.rand()
                 threshold = 1/3  # 33.3% chance (1 out of 3)
                 if random_value < threshold:
-                    augmentation = False  # Do the action
+                    augmentation = False  
                 else:
-                    augmentation = True  # Don't do the action
+                    augmentation = True  
 
             if augmentation:
                 samples = augmentation_method(samples)
@@ -256,42 +256,43 @@ def main(args):
                         }
 
             wandb.log(wandb_log)
-        transform_model.eval()
-        with torch.no_grad():
-            total_figure, single_figure = plot_distribution(transform_model, 
-                                                            evaluate_run_embeddings, 
-                                                            total_evaluate_embeddings, 
-                                                            evaluate_task, 
-                                                            total_evaluate_tasks,
-                                                            eval_text_embedding,
-                                                            )
-            wandb.log({"total_total_distribution": wandb.Image(total_figure)})
-            wandb.log({"eval_task_distribution": wandb.Image(single_figure)})
-            plt.close(total_figure)
-            plt.close(single_figure)
 
-        transform_model.train()
 
-        if epoch % 5 == 0:
+        if epoch % 10 == 0:
             if args.model_name == "xclip":
-                if not os.path.exists(f"/scr/jzhang96/triplet_text_loss_models/{experiment_name}"):
-                    os.makedirs(f"/scr/jzhang96/triplet_text_loss_models/{experiment_name}")
+                if not os.path.exists(f"/home/jzhang96/triplet_text_loss_models/{experiment_name}"):
+                    os.makedirs(f"/home/jzhang96/triplet_text_loss_models/{experiment_name}")
                 th.save(
                     {'model_state_dict': transform_model.state_dict(), 
                     'optimizer_state_dict': optimizer.state_dict()},
-                    f"/scr/jzhang96/triplet_text_loss_models/{experiment_name}/{epoch}.pth")
+                    f"/home/jzhang96/triplet_text_loss_models/{experiment_name}/{epoch}.pth")
             else:
-                if not os.path.exists(f"/scr/jzhang96/triplet_text_loss_models/{experiment_name}"):
-                    os.makedirs(f"/scr/jzhang96/triplet_text_loss_models/{experiment_name}")
-                th.save(transform_model.state_dict(), f"/scr/jzhang96/triplet_text_loss_models/{experiment_name}/{epoch}.pth")
+                if not os.path.exists(f"/home/jzhang96/triplet_text_loss_models/{experiment_name}"):
+                    os.makedirs(f"/home/jzhang96/triplet_text_loss_models/{experiment_name}")
+                th.save(transform_model.state_dict(), f"/home/jzhang96/triplet_text_loss_models/{experiment_name}/{epoch}.pth")
 
+            transform_model.eval()
+            with torch.no_grad():
+                total_figure, single_figure = plot_distribution(transform_model, 
+                                                                evaluate_run_embeddings, 
+                                                                total_evaluate_embeddings, 
+                                                                evaluate_task, 
+                                                                total_evaluate_tasks,
+                                                                eval_text_embedding,
+                                                                )
+                wandb.log({"total_total_distribution": wandb.Image(total_figure)})
+                wandb.log({"eval_task_distribution": wandb.Image(single_figure)})
+                plt.close(total_figure)
+                plt.close(single_figure)
 
-            seen_plt = plot_progress_xclip(seen_array, xclip_processor, xclip_net, transform_model, seen_text_embedding)
-            unseen_plt = plot_progress_xclip(unseen_array, xclip_processor, xclip_net, transform_model, unseen_text_embedding)
+                seen_plt = plot_progress_xclip(seen_array, xclip_processor, xclip_net, transform_model, seen_text_embedding)
+                unseen_plt = plot_progress_xclip(unseen_array, xclip_processor, xclip_net, transform_model, unseen_text_embedding)
             wandb.log({"progress/seen": wandb.Image(seen_plt)})
             wandb.log({"progress/unseen": wandb.Image(unseen_plt)})
             plt.close(seen_plt)
             plt.close(unseen_plt)
+
+            transform_model.train()
 
 
 

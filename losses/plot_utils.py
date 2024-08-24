@@ -6,6 +6,9 @@ import copy
 import imageio
 import wandb
 import io
+import os
+from sklearn.decomposition import PCA
+from triplet_utils import cosine_similarity
 
 
 def normalize_embeddings(embeddings, return_tensor=True):
