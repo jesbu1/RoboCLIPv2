@@ -67,7 +67,7 @@ def plot_progress(array, s3d_model, transform_model):
 
 
 
-def plot_progress_xclip(array, xclip_processor, xclip_net, transform_model, text_array):
+def plot_progress_xclip(array, xclip_processor, xclip_net, transform_model, text_array, norm_vlm=False):
     # text_array already tensor
     text_array = normalize_embeddings(text_array)
     array_length = array.shape[0]
@@ -86,7 +86,9 @@ def plot_progress_xclip(array, xclip_processor, xclip_net, transform_model, text
             copy_array = copy_array[:, 13:237, 13:237, :]
             copy_array = xclip_processor(videos = list(copy_array), return_tensors="pt").pixel_values.cuda()
             copy_array = xclip_net.get_video_features(copy_array)
-            copy_array = normalize_embeddings(copy_array)
+            if norm_vlm:
+                copy_array = normalize_embeddings(copy_array)
+            # copy_array = normalize_embeddings(copy_array)
             copy_array = transform_model(copy_array)
             similarity = cosine_similarity(text_array, copy_array)
 

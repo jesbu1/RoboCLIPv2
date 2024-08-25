@@ -69,15 +69,15 @@ def main(args):
         experiment_name += "_Aug"
     
 
-
-    
-
     h5_dataset_file = h5py.File(args.h5_path, "r")
 
     if args.model_name == "s3d":
         evaluate_h5 = h5py.File("metaworld_s3d_embedding.h5", "r")
     else:
-        evaluate_h5 = h5py.File("metaworld_xclip_video_embedding.h5", "r")
+        if args.norm_vlm:
+            evaluate_h5 = h5py.File("metaworld_xclip_video_embedding.h5", "r")
+        else:
+            evaluate_h5 = h5py.File("metaworld_xclip_video_embedding_wo_norm.h5", "r")
 
     evaluate_task = ["door-close-v2-goal-hidden", "door-open-v2-goal-hidden", "drawer-close-v2-goal-hidden", "button-press-v2-goal-hidden", "button-press-topdown-v2-goal-hidden"]
     total_evaluate_tasks = list(evaluate_h5.keys())
@@ -317,6 +317,7 @@ if __name__ == '__main__':
     argparser.add_argument('--task_nums', type=int, default=50)
     argparser.add_argument('--augmentation', action='store_true')
     argparser.add_argument('--norm_vlm', action='store_true')
+    argparser.add_argument('--load_model_path', type=str, default=None)
 
     args = argparser.parse_args()
     main(args)

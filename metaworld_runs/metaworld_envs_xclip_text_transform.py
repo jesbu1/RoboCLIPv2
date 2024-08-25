@@ -245,7 +245,7 @@ class MetaworldSparse(Env):
         images = []
         frame_number = random.randint(32, 128)
 
-        for _ in range(frame_num):
+        for _ in range(frame_number):
             action = self.env.action_space.sample()
             _, _, _, _ = self.env.step(action)
             images.append(self.env.render()[:,:,:3])
