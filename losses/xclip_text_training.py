@@ -153,11 +153,20 @@ def main(args):
         s3d_model.load_state_dict(th.load('../s3d_howto100m.pth'))
         s3d_model.eval().cuda()
     transform_model = SingleLayerMLP(512, 512, normalize=True).cuda()
+    optimizer = th.optim.Adam(transform_model.parameters(), lr=2e-4)
+    if args.load_model_path is not None:
+        model_state_dict = th.load(args.load_model_path)["model_state_dict"]
+        transform_model.load_state_dict(model_state_dict)
+        optimizer_state_dict = th.load(args.load_model_path)["optimizer_state_dict"]
+        optimizer.load_state_dict(optimizer_state_dict)
+        
+
+
     dataset = GifTextDataset(args)
     dataloader = DataLoader(dataset, batch_size=args.batch_size, shuffle=True, num_workers=args.num_workers, drop_last=True)
 
     # loss_func = nn.TripletMarginLoss(margin=0.5, p=1)
-    optimizer = th.optim.Adam(transform_model.parameters(), lr=2e-4)
+    # optimizer = th.optim.Adam(transform_model.parameters(), lr=2e-4)
     # optimizer = th.optim.Adam(transform_model.parameters(), lr=1e-3)
 
     if args.loss_type == "MILNCE":
