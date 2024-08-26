@@ -13,9 +13,14 @@ def check_pairs(
         reduced_text_embeddings: np.array,
         mappings,
         small_scale=False,
+        user='text'
 ):
-
-    similarities = reduced_text_embeddings @ reduced_video_embeddings.T
+    if user == 'text':
+        similarities = reduced_text_embeddings @ reduced_video_embeddings.T
+        k_list = [1, 3, 5, 10]
+    else:
+        similarities = reduced_video_embeddings @ reduced_text_embeddings.T
+        k_list = [15, 45, 75]
     sorted_video_indices = np.argsort(-similarities, axis=1)
 
     video_id_to_text_label = mappings["video_id_to_text_label"]
@@ -26,7 +31,7 @@ def check_pairs(
 
     ground_truth_labels = [video_id_to_text_label[index_to_video_id[i]] for i in range(len(reduced_video_embeddings))]
 
-    mrr_k = mrr_score(similarities, ground_truth_labels, index_to_text_label, k_list=[1, 3, 5, 10])
+    mrr_k = mrr_score(similarities, ground_truth_labels, index_to_text_label, k_list=k_list)
     print("MRR Scores:", mrr_k)
 
     if small_scale:
@@ -61,7 +66,7 @@ def check_pairs(
     else:
         correct_pairs_info = []
 
-        for n in [1, 3, 5, 10]:
+        for n in k_list: #[1, 3, 5, 10]
             correct_pairs = []
             for i, indices in enumerate(sorted_video_indices):
                 sorted_video_labels = [index_to_text_label[j] for j in indices[:n]]

@@ -24,8 +24,10 @@ if __name__ == "__main__":
         with open(csv_file_path, 'a', newline='') as file:
             writer = csv.writer(file)
             writer.writerow(
-                ["Sample Category", "Sample Size for Test", "Variance Threshold", "Sample Size for Training",
-                 "Model Name", "Dimensions", "Top 1 Accuracy", "Top 3 Accuracy", "Top 5 Accuracy", "Top 10 Accuracy"])
+                ["Sample Category", "Filter", "Sample Size for Test", "Variance Threshold", "Sample Size for Training",
+                 "Model Name", "Dimensions", "Top 1 Accuracy", "Top 3 Accuracy", "Top 5 Accuracy", "Top 10 Accuracy",
+                 "Top 1 Mrr", "Top 3 Mrr", "Top 5 Mrr", "Top 10 Mrr", "Mean Simi Score", "Cos Simi"])
+
     parser = argparse.ArgumentParser()
     parser.add_argument("--validation", type=bool, default=False)
     args = parser.parse_args()

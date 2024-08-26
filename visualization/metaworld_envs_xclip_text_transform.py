@@ -160,6 +160,8 @@ def get_args():
     parser.add_argument('--succ_bonus', type=float, default=0.0)
     parser.add_argument('--xclip_model', type=str, default='microsoft/xclip-base-patch16-zero-shot')
     parser.add_argument('--frame_length', type=int, default=32)
+    parser.add_argument("--exp_name_end", type=str, default="triplet_hard_neg")
+
 
     args = parser.parse_args()
     return args
@@ -203,7 +205,12 @@ class MetaworldSparse(Env):
             self.transform_model = SingleLayerMLP(512, 512, normalize=True)
 
             transform_model_path = os.path.join(args.transform_base_path, args.transform_model_path)
-            self.transform_model.load_state_dict(th.load(transform_model_path))
+            dict = th.load(transform_model_path)
+            if 'model_state_dict' in dict.keys():
+                self.transform_model.load_state_dict(dict["model_state_dict"])
+            else:
+                self.transform_model.load_state_dict(dict)
+
             self.transform_model = self.transform_model.eval().cuda()
             #self.transform_model.load_state_dict(th.load("/scr/jzhang96/triplet_text_loss_models/triplet_loss_50_42_xclip_TimeShort_Normtriplet/55.pth"))
 
@@ -401,6 +408,8 @@ class MetaworldDense(Env):
         if args.succ_end:
             if info['success']:
                 done = True
+        if info["success"]:
+            reward += 1000
 
         return obs, reward, done, info
         
@@ -506,17 +515,17 @@ def main():
 
     WANDB_ENTITY_NAME = "clvr"
     WANDB_PROJECT_NAME = "roboclip-v2"
-    experiment_name = "xclip_textTRANS_" + args.algo + "_" + args.env_id 
+    experiment_name = "xclip_textTRANS_" + args.algo + "_" + args.env_id
     if args.train_orcale:
         experiment_name = experiment_name + "_Oracle"
     if args.threshold_reward:
         experiment_name = experiment_name + "_Thld"
     if args.project_reward:
         experiment_name = experiment_name + "_ProjReward"
-    if args.norm_input:
-        experiment_name = experiment_name + "_NormIn"
-    if args.norm_output:
-        experiment_name = experiment_name + "_NormOut"
+    # if args.norm_input:
+    #     experiment_name = experiment_name + "_NormIn"
+    # if args.norm_output:
+    #     experiment_name = experiment_name + "_NormOut"
     experiment_name = experiment_name + '_PCA_512'
     # if args.time_reward != 1.0:
     #     experiment_name = experiment_name + "_XReward" + str(args.time_reward)
@@ -526,15 +535,16 @@ def main():
     #     experiment_name = experiment_name + "_NoTime"
     if args.succ_end:
         experiment_name = experiment_name + "_SuccEnd"
-    if args.random_reset:
-        experiment_name = experiment_name + "_RandReset"
+    # if args.random_reset:
+    #     experiment_name = experiment_name + "_RandReset"
 
-    if args.succ_bonus > 0:
-        experiment_name = experiment_name + "_SuccBonus" + str(args.succ_bonus)
-    if args.time_penalty > 0:
-        experiment_name = experiment_name + "_TimePenalty" + str(args.time_penalty)
+    # if args.succ_bonus > 0:
+    #     experiment_name = experiment_name + "_SuccBonus" + str(args.succ_bonus)
+    # if args.time_penalty > 0:
+    #     experiment_name = experiment_name + "_TimePenalty" + str(args.time_penalty)
     # if args.algo.lower() == 'sac':
-    experiment_name = experiment_name + "_Entropy" + str(args.entropy_term)
+    # experiment_name = experiment_name + "_Entropy" + str(args.entropy_term)
+    experiment_name = experiment_name + args.exp_name_end
     run_group = "PCA_Ini" + experiment_name + "NEW"
     experiment_name = experiment_name + "_" + str(args.seed) + "NEW"
 

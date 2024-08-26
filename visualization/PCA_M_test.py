@@ -11,7 +11,7 @@ import joblib
 import torch.nn.functional as F
 from torch.utils.data import Subset
 from Wandb_utils import Test_Model, image_aug_fn, AugmentedDataset, normalize_and_pca, save_augmented_videos, \
-    reduce_with_pca, Augmented_Batched_Dataset
+    reduce_with_pca, MetaDataset
 import numpy as np
 import os
 os.environ['CUDA_LAUNCH_BLOCKING'] = '1'
@@ -136,78 +136,10 @@ def compute_M(X_S, X_T, variance_threshold, train_size, seed, filter):
     return M_tensor
 
 
-def eval_M(video_embeddings_pca, M_path):
-    device = th.device("cuda" if th.cuda.is_available() else "cpu")
-
-    M_model = nn.Linear(video_embeddings_pca.shape[1], video_embeddings_pca.shape[1], bias=False).to(device)
-    M_model.load_state_dict(torch.load(M_path))
-    M_model.eval()
-    # Matrix = torch.load(M_path).to(device)
-    with torch.no_grad():
-        # adjust_video_embeddings = torch.matmul(video_embeddings_pca, Matrix)
-        adjust_video_embeddings = M_model(video_embeddings_pca)
-    return adjust_video_embeddings
-
-
-def eval_MLP(video_embeddings, M_path):
-    device = th.device("cuda" if th.cuda.is_available() else "cpu")
-    model = SimpleMLP(video_embeddings.shape[1], video_embeddings.shape[1]).to(device)
-    model.load_state_dict(torch.load(M_path))
-    with torch.no_grad():
-        adjust_video_embeddings = model(video_embeddings)
-    return adjust_video_embeddings
-
 
 def cos_similarity_score(adjust_video_embeddings, text_embeddings_pca):
     sim_scores = F.cosine_similarity(adjust_video_embeddings, text_embeddings_pca, dim=1)
     return sim_scores
-
-
-def finetune_M(model, optimizer, reduced_video, reduced_text, path, milnce_loss):
-    adjusted_video_embeddings = model(reduced_video)
-    loss = milnce_loss(adjusted_video_embeddings, reduced_text)
-    optimizer.zero_grad()
-    loss.backward()
-    optimizer.step()
-    checkpoint = {
-        'epoch': epoch + 1,
-        'state_dict': model.state_dict(),
-        'optimizer': optimizer.state_dict(),
-    }
-    torch.save(checkpoint, path)
-    print(f"Checkpoint model saved to {path}")
-
-
-def finetune_MLP(num_epochs, video_embeddings, text_embeddings, variance_threshold, current_sample_size):
-    video_embeddings = normalize_embeddings(video_embeddings)
-    text_embeddings = normalize_embeddings(text_embeddings)
-    save_dir = '/scr/yusenluo/RoboCLIP/visualization/saved_model/OpenX/droid/mlp_model'
-    milnce_loss = MILNCELoss()
-
-    X_T, reduced_text = reduce_dimension_trained(text_embeddings, variance_threshold, current_sample_size, 'text',
-                                                 filter=filter)
-    X_S, reduced_video = reduce_dimension_trained(video_embeddings, variance_threshold,
-                                                  current_sample_size, 'video', filter=filter)
-    model = SimpleMLP(reduced_video.shape[1], reduced_text.shape[1]).to(device)
-    reduced_text = reduced_text.to(device)
-    reduced_video = reduced_video.to(device)
-    optimizer = torch.optim.Adam(model.parameters(), lr=0.0005)
-    for epoch in range(num_epochs):
-        adjusted_video_embeddings = model(reduced_video)
-        # similarity_matrix = reduced_text @ adjusted_video_embeddings.T
-        # diagonal_similarities = torch.diag(similarity_matrix)
-        # loss = -torch.mean(diagonal_similarities)
-        loss = milnce_loss(adjusted_video_embeddings, reduced_text)
-        optimizer.zero_grad()
-        loss.backward()
-        optimizer.step()
-
-        if (epoch + 1) % 100 == 0:
-            print(f"Epoch [{epoch + 1}/{num_epochs}], Loss: {loss.item()}")
-
-    final_model_path = f"{save_dir}/MLP_model_{variance_threshold}_{current_sample_size}_milnce.pth"
-    torch.save(model.state_dict(), final_model_path)
-    print(f"Final model saved to {final_model_path}")
 
 
 def finetune_M_Random(model, optimizer, reduced_video, reduced_text, path, milnce_loss):
@@ -237,40 +169,45 @@ if __name__ == "__main__":
         augmentation = True
     variance_thresholds = [512]
     sample_sizes = [10]  # [1, 2, 4, 8, 16, 21]
-    seeds = [4]
+    seeds = [1]
     pca_sample_size = [59, 99, 199] #600, 1000, 1500, 2000
-    strong_augmented = ['strong'] #'weak', 'strong' , 'weak', 'normal'
+    strong_augmented = ['weak'] #'weak', 'strong' , 'weak', 'normal'
     if torch.cuda.is_available():
         print("CUDA is available! Training on GPU.")
     else:
         print("CUDA is not available. Training on CPU.")
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-    video_paths = list_webm_files(
-        "../20bn-something-something-v2/train"
-    )  # '../20bn-something-something-v2'
-    # print(len(video_paths))
     s3d = S3D("../s3d_dict.npy", 512)
     # s3d = th.compile(s3d)
     s3d = s3d.cuda()
     s3d.load_state_dict(torch.load("../s3d_howto100m.pth"))
     s3d.eval()
 
-    video_text_dataset = OpenXDataset(
-        '/scr/yusenluo/RoboCLIP/OpenX/droid', random_samples=False, dataset_name='droid'
+    # video_text_dataset = OpenXDataset(
+    #     '/scr/yusenluo/RoboCLIP/OpenX/droid', random_samples=False, dataset_name='droid'
+    # )
+    # seen_labels = set()
+    # unique_indices = []
+    # for idx in range(len(video_text_dataset)):
+    #     item = video_text_dataset[idx]
+    #     text_label = item['text']
+    #     if text_label not in seen_labels:
+    #         seen_labels.add(text_label)
+    #         unique_indices.append(idx)
+    # 
+    # unique_dataset = Subset(video_text_dataset, unique_indices)
+    # train_dataset, val_dataset = train_test_split(unique_dataset, test_size=0.2, random_state=42)
+    # print(len(train_dataset))
+    
+    task_id = [4, 6, 7]
+    train_dataset = MetaDataset(
+        "/scr/yusenluo/RoboCLIP/metaworld_generate_gifs", task_id, num_samples=15, seed=10
     )
-    seen_labels = set()
-    unique_indices = []
-    for idx in range(len(video_text_dataset)):
-        item = video_text_dataset[idx]
-        text_label = item['text']
-        if text_label not in seen_labels:
-            seen_labels.add(text_label)
-            unique_indices.append(idx)
-
-    unique_dataset = Subset(video_text_dataset, unique_indices)
-    train_dataset, val_dataset = train_test_split(unique_dataset, test_size=0.2, random_state=42)
-    print(len(train_dataset))
+    val_dataset = MetaDataset(
+        "/scr/yusenluo/RoboCLIP/metaworld_generate_gifs", task_id, num_samples=15, seed=10
+    )
+    
     train_data_loader = DataLoader(
         train_dataset, batch_size=50, shuffle=False, num_workers=5
     )

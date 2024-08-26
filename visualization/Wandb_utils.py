@@ -52,7 +52,7 @@ def plot_s3d(video_embeddings, text_embeddings, choose_task, mappings, wandb_log
 
     # Plot the reduced embeddings
     colors = plt.cm.tab10(np.linspace(0, 1, len(choose_task)))  # 28 groups
-    plt.figure(figsize=(10, 8))  # 创建一个新的图像
+    plt.figure(figsize=(10, 8))
 
     for i in range(len(choose_task)):
         # Plot video embeddings
