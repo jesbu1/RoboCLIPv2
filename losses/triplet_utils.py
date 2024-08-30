@@ -6,6 +6,22 @@ import kornia.augmentation as K
 import torch.nn.functional as F
 import numpy as np
 import torch
+from transformers import AutoTokenizer, AutoModel, AutoProcessor
+
+
+def load_model(model_name):
+    if model_name == "xclip":
+        model_name = "microsoft/xclip-base-patch16-zero-shot"
+        xclip_tokenizer = AutoTokenizer.from_pretrained(model_name)
+        xclip_net = AutoModel.from_pretrained(model_name)
+        xclip_processor = AutoProcessor.from_pretrained(model_name)
+        return xclip_tokenizer, xclip_net, xclip_processor
+    elif model_name == "s3d":
+        s3d_model = S3D()
+        s3d_model.load_state_dict(th.load('s3d_howto100m.pth'))
+        return s3d_model
+    else:
+        raise ValueError("Model name not found")
 
 
 class AttrDict(dict):

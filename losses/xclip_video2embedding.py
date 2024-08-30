@@ -60,7 +60,7 @@ def shuffle_time_func(array):
 
 
 
-h5_embedding_file = h5py.File("/scr/jzhang96/metaworld_xclip_all_embedding.h5", "w")
+h5_embedding_file = h5py.File("/scr/jzhang96/metaworld_xclip_all_embedding_15.h5", "r+")
 
 keys = list(task_ann.keys())
 env_names = [task_ann[key] for key in keys]
@@ -69,107 +69,169 @@ model_name = "microsoft/xclip-base-patch16-zero-shot"
 xclip_tokenizer = AutoTokenizer.from_pretrained(model_name)
 xclip_net = AutoModel.from_pretrained(model_name).cuda()
 xclip_processor = AutoProcessor.from_pretrained(model_name)
+xclip_net.eval()
 
 h5_video_file = "/scr/jzhang96/metaworld_gifs_1.h5"
 video_h5 = h5py.File(h5_video_file, "r")
 augumentation_pipeline = AugmentationPipeline(device="cuda", strength='normal')
 print("keys", keys)
 
-print("phase 1 embedding GT videos")
+# print("phase 1 embedding GT videos")
 
-# create group name GT_videos
+# # create group name GT_videos
 
-group_name = "GT_Videos"
-h5_embedding_file.create_group(group_name)
-for i in range (len(keys)):
-    print(i)
-    key = keys[i]
-    video_group = video_h5[key]
-    videos = []
-    for gif_name in tqdm(video_group.keys()):
-        video_data = video_group[gif_name]
-        video_data = np.asarray(video_data)
-        video_data = sample_frames(video_data)
-        video_data = video_data[:, 13:237, 13:237, :]
-        video_data = xclip_processor(videos = list(video_data), return_tensors="np").pixel_values
-        videos.append(video_data)
-    videos = np.concatenate(videos, axis=0)
+# group_name = "GT_Videos"
+# h5_embedding_file.create_group(group_name)
+# for i in range (len(keys)):
+#     print(i)
+#     key = keys[i]
+#     video_group = video_h5[key]
+#     videos = []
+#     for gif_name in tqdm(list(video_group.keys())[:15]):
+#         video_data = video_group[gif_name]
+#         video_data = np.asarray(video_data)
+#         video_data = sample_frames(video_data)
+#         video_data = video_data[:, 13:237, 13:237, :]
+#         video_data = xclip_processor(videos = list(video_data), return_tensors="np").pixel_values
+#         videos.append(video_data)
+#     videos = np.concatenate(videos, axis=0)
     
-    videos = th.tensor(videos).cuda()
-    with th.no_grad():
-        video_embeddings = xclip_net.get_video_features(videos)
-    video_embeddings = video_embeddings.cpu().numpy()
-    h5_embedding_file[group_name].create_dataset(key, data=video_embeddings)
+#     videos = th.tensor(videos).cuda()
+#     with th.no_grad():
+#         video_embeddings = xclip_net.get_video_features(videos)
+#     video_embeddings = video_embeddings.cpu().numpy()
+#     h5_embedding_file[group_name].create_dataset(key, data=video_embeddings)
 
-print("phase 2 embedding Time Shuffle Videos") # each video create 30 time shuffle videos
-group_name = "Time_Shuffle_Videos"
-h5_embedding_file.create_group(group_name)
-for i in range (len(keys)):
-    print(i)
-    key = keys[i]
-    video_group = video_h5[key]
-    certain_video_embeddings = []
-    for gif_name in tqdm(video_group.keys()):
-        video_data = video_group[gif_name]
-        video_data = np.asarray(video_data)
-        video_data = video_data[:, 13:237, 13:237, :]
-        videos = []
-        for _ in range(50):
-            curr_video_data = shuffle_time_func(copy.deepcopy(video_data))
-            curr_video_data = sample_frames(curr_video_data)
-            curr_video_data = xclip_processor(videos = list(curr_video_data), return_tensors="np").pixel_values
+# print("phase 2 embedding Time Shuffle Videos") # each video create 50 time shuffle videos
+# group_name = "Time_Shuffle_Videos"
+# h5_embedding_file.create_group(group_name)
+# for i in range (len(keys)):
+#     key = keys[i]
+#     video_group = video_h5[key]
+#     certain_video_embeddings = []
+#     for gif_name in tqdm(list(video_group.keys())[:15]):
+#         video_data = video_group[gif_name]
+#         video_data = np.asarray(video_data)
+#         video_data = video_data[:, 13:237, 13:237, :]
+#         videos = []
+#         for _ in range(50):
+#             curr_video_data = shuffle_time_func(copy.deepcopy(video_data))
+#             curr_video_data = sample_frames(curr_video_data)
+#             curr_video_data = xclip_processor(videos = list(curr_video_data), return_tensors="np").pixel_values
 
-            videos.append(curr_video_data)
-        videos = np.concatenate(videos, axis=0)
-        videos = th.tensor(videos).cuda()
-        with th.no_grad():
-            video_embeddings = xclip_net.get_video_features(videos)
-        video_embeddings = video_embeddings.cpu().numpy()
-        certain_video_embeddings.append(video_embeddings)
-    certain_video_embeddings = np.concatenate(certain_video_embeddings, axis=0)
-    h5_embedding_file[group_name].create_dataset(key, data=certain_video_embeddings)
+#             videos.append(curr_video_data)
+#         videos = np.concatenate(videos, axis=0)
+#         videos = th.tensor(videos).cuda()
+#         with th.no_grad():
+#             video_embeddings = xclip_net.get_video_features(videos)
+#         video_embeddings = video_embeddings.cpu().numpy()
+#         certain_video_embeddings.append(video_embeddings)
+#     certain_video_embeddings = np.concatenate(certain_video_embeddings, axis=0)
+#     h5_embedding_file[group_name].create_dataset(key, data=certain_video_embeddings)
 
 print("phase 3 embedding Time Shortened Videos") # each video create embedding and progress
 group_name = "Time_Shortened_Videos"
-h5_embedding_file.create_group(group_name)
+if group_name not in list(h5_embedding_file.keys()):
+    h5_embedding_file.create_group(group_name)
 
 for i in range (len(keys)):
     print(i)
     key = keys[i]
-    video_group = video_h5[key]
-    certain_video_embeddings = []
-    certain_progress = []
-    for gif_name in tqdm(video_group.keys()):
-        video_data = video_group[gif_name]
-        video_data = np.asarray(video_data)
-        video_data = video_data[:, 13:237, 13:237, :]
-        videos = []
-        progress =[]
+    print(key)
+    if key not in list(h5_embedding_file[group_name].keys()):
+        
+        video_group = video_h5[key]
+        certain_video_embeddings = []
+        certain_progress = []
+        for gif_name in tqdm(list(video_group.keys())[:15]):
+            video_data = video_group[gif_name]
+            video_data = np.asarray(video_data)
+            video_data = video_data[:, 13:237, 13:237, :]
+            videos = []
+            progress =[]
 
-        video_length = len(video_data)
-        no_use_length = [1, video_length - 2, video_length - 3]
-        for i in range (1, video_length):
-            if i in no_use_length:
-                continue
-            curr_video_data = video_data[:i]
-            curr_video_data = sample_frames_front(curr_video_data)
-            curr_video_data = xclip_processor(videos = list(curr_video_data), return_tensors="np").pixel_values
-            videos.append(curr_video_data)
-            progress.append(i/(video_length-1))
-        videos = np.concatenate(videos, axis=0)
-        videos = th.tensor(videos).cuda()
-        with th.no_grad():
-            if videos.shape[0] >= 40:
-                video_embeddings = th.cat([xclip_net.get_video_features(videos[:32]), xclip_net.get_video_features(videos[32:])], dim=0)
-            else:
-                video_embeddings = xclip_net.get_video_features(videos)
-        video_embeddings = video_embeddings.cpu().numpy()
-        certain_video_embeddings.append(video_embeddings)
-        certain_progress.append(progress)
-    certain_video_embeddings = np.concatenate(certain_video_embeddings, axis=0)
-    certain_progress = np.concatenate(certain_progress, axis=0)
-    h5_embedding_file[group_name].create_dataset(key, data=certain_video_embeddings)
-    h5_embedding_file[group_name].create_dataset(key+"_progress", data=certain_progress)
+            video_length = len(video_data)
+            no_use_length = [1, video_length - 2, video_length - 3]
+            for i in range (1, video_length):
+                if i in no_use_length:
+                    continue
+                curr_video_data = video_data[:i]
+                curr_video_data = sample_frames_front(curr_video_data)
+                curr_video_data = xclip_processor(videos = list(curr_video_data), return_tensors="np").pixel_values
+                videos.append(curr_video_data)
+                progress.append(i/(video_length-1))
+            videos = np.concatenate(videos, axis=0)
+            videos = th.tensor(videos).cuda()
+            print("videos shape", videos.shape)
+            with th.no_grad():
+                if videos.shape[0] > 40 and videos.shape[0] <= 80:
+                    embedding_1 = xclip_net.get_video_features(videos[:40]).cpu().detach().numpy()
+                    embedding_2 = xclip_net.get_video_features(videos[40:]).cpu().detach().numpy()
+                    video_embeddings = np.concatenate([embedding_1, embedding_2], axis=0)
+                elif videos.shape[0] >= 80 and videos.shape[0] <= 120:
+                    embedding_1 = xclip_net.get_video_features(videos[:40]).cpu().detach().numpy()
+                    embedding_2 = xclip_net.get_video_features(videos[40:80]).cpu().detach().numpy()
+                    embedding_3 = xclip_net.get_video_features(videos[80:]).cpu().detach().numpy()
+                    video_embeddings = np.concatenate([embedding_1, embedding_2, embedding_3], axis=0)
+                elif videos.shape[0] > 120 and videos.shape[0] <= 160:
+                    embedding_1 = xclip_net.get_video_features(videos[:40]).cpu().detach().numpy()
+                    embedding_2 = xclip_net.get_video_features(videos[40:80]).cpu().detach().numpy()
+                    embedding_3 = xclip_net.get_video_features(videos[80:120]).cpu().detach().numpy()
+                    embedding_4 = xclip_net.get_video_features(videos[120:]).cpu().detach().numpy()
+                    video_embeddings = np.concatenate([embedding_1, embedding_2, embedding_3, embedding_4], axis=0)
+                elif videos.shape[0] > 160 and videos.shape[0] <= 200:
+                    embedding_1 = xclip_net.get_video_features(videos[:40]).cpu().detach().numpy()
+                    embedding_2 = xclip_net.get_video_features(videos[40:80]).cpu().detach().numpy()
+                    embedding_3 = xclip_net.get_video_features(videos[80:120]).cpu().detach().numpy()
+                    embedding_4 = xclip_net.get_video_features(videos[120:160]).cpu().detach().numpy()
+                    embedding_5 = xclip_net.get_video_features(videos[160:]).cpu().detach().numpy()
+                    video_embeddings = np.concatenate([embedding_1, embedding_2, embedding_3, embedding_4, embedding_5], axis=0)
+                elif videos.shape[0] > 200 and videos.shape[0] <= 240:
+                    embedding_1 = xclip_net.get_video_features(videos[:40]).cpu().detach().numpy()
+                    embedding_2 = xclip_net.get_video_features(videos[40:80]).cpu().detach().numpy()
+                    embedding_3 = xclip_net.get_video_features(videos[80:120]).cpu().detach().numpy()
+                    embedding_4 = xclip_net.get_video_features(videos[120:160]).cpu().detach().numpy()
+                    embedding_5 = xclip_net.get_video_features(videos[160:200]).cpu().detach().numpy()
+                    embedding_6 = xclip_net.get_video_features(videos[200:]).cpu().detach().numpy()
+                    video_embeddings = np.concatenate([embedding_1, embedding_2, embedding_3, embedding_4, embedding_5, embedding_6], axis=0)
+                elif videos.shape[0] > 240 and videos.shape[0] <= 280:
+                    embedding_1 = xclip_net.get_video_features(videos[:40]).cpu().detach().numpy()
+                    embedding_2 = xclip_net.get_video_features(videos[40:80]).cpu().detach().numpy()
+                    embedding_3 = xclip_net.get_video_features(videos[80:120]).cpu().detach().numpy()
+                    embedding_4 = xclip_net.get_video_features(videos[120:160]).cpu().detach().numpy()
+                    embedding_5 = xclip_net.get_video_features(videos[160:200]).cpu().detach().numpy()
+                    embedding_6 = xclip_net.get_video_features(videos[200:240]).cpu().detach().numpy()
+                    embedding_7 = xclip_net.get_video_features(videos[240:]).cpu().detach().numpy()
+                    video_embeddings = np.concatenate([embedding_1, embedding_2, embedding_3, embedding_4, embedding_5, embedding_6, embedding_7], axis=0)
+                elif videos.shape[0] > 280 and videos.shape[0] <= 320:
+                    embedding_1 = xclip_net.get_video_features(videos[:40]).cpu().detach().numpy()
+                    embedding_2 = xclip_net.get_video_features(videos[40:80]).cpu().detach().numpy()
+                    embedding_3 = xclip_net.get_video_features(videos[80:120]).cpu().detach().numpy()
+                    embedding_4 = xclip_net.get_video_features(videos[120:160]).cpu().detach().numpy()
+                    embedding_5 = xclip_net.get_video_features(videos[160:200]).cpu().detach().numpy()
+                    embedding_6 = xclip_net.get_video_features(videos[200:240]).cpu().detach().numpy()
+                    embedding_7 = xclip_net.get_video_features(videos[240:280]).cpu().detach().numpy()
+                    embedding_8 = xclip_net.get_video_features(videos[280:]).cpu().detach().numpy()
+                    video_embeddings = np.concatenate([embedding_1, embedding_2, embedding_3, embedding_4, embedding_5, embedding_6, embedding_7, embedding_8], axis=0)
+                elif videos.shape[0] > 320 and videos.shape[0] <= 360:
+                    embedding_1 = xclip_net.get_video_features(videos[:40]).cpu().detach().numpy()
+                    embedding_2 = xclip_net.get_video_features(videos[40:80]).cpu().detach().numpy()
+                    embedding_3 = xclip_net.get_video_features(videos[80:120]).cpu().detach().numpy()
+                    embedding_4 = xclip_net.get_video_features(videos[120:160]).cpu().detach().numpy()
+                    embedding_5 = xclip_net.get_video_features(videos[160:200]).cpu().detach().numpy()
+                    embedding_6 = xclip_net.get_video_features(videos[200:240]).cpu().detach().numpy()
+                    embedding_7 = xclip_net.get_video_features(videos[240:280]).cpu().detach().numpy()
+                    embedding_8 = xclip_net.get_video_features(videos[280:320]).cpu().detach().numpy()
+                    embedding_9 = xclip_net.get_video_features(videos[320:]).cpu().detach().numpy()
+                else:
+                    video_embeddings = xclip_net.get_video_features(videos)
+                    video_embeddings = video_embeddings.cpu().numpy()
+            certain_video_embeddings.append(video_embeddings)
+            certain_progress.append(progress)
+        certain_video_embeddings = np.concatenate(certain_video_embeddings, axis=0)
+        certain_progress = np.concatenate(certain_progress, axis=0)
+        h5_embedding_file[group_name].create_dataset(key, data=certain_video_embeddings)
+        h5_embedding_file[group_name].create_dataset(key+"_progress", data=certain_progress)
 
 print("phase 4 embedding Augmentation Videos") # each video create 80 augmentation videos
 group_name = "Augmentation_Videos"
@@ -180,7 +242,7 @@ for i in range (len(keys)):
     key = keys[i]
     video_group = video_h5[key]
     certain_video_embeddings = []
-    for gif_name in tqdm(video_group.keys()):
+    for gif_name in tqdm(list(video_group.keys())[:15]):
         video_data = video_group[gif_name]
         video_data = np.asarray(video_data)
         video_data = video_data[:, 13:237, 13:237, :]
@@ -204,11 +266,13 @@ for i in range (len(keys)):
         videos = np.concatenate(videos, axis=0)
         videos = th.tensor(videos).cuda()
         with th.no_grad():
-            if videos.shape[0] >= 40:
-                video_embeddings = th.cat([xclip_net.get_video_features(videos[:40]), xclip_net.get_video_features(videos[40:])], dim=0)
+            if videos.shape[0] > 40:
+                embedding_1 = xclip_net.get_video_features(videos[:40]).cpu().numpy()
+                embedding_2 = xclip_net.get_video_features(videos[40:]).cpu().numpy()
+                video_embeddings = np.concatenate([embedding_1, embedding_2], axis=0)
             else:
                 video_embeddings = xclip_net.get_video_features(videos)
-        video_embeddings = video_embeddings.cpu().numpy()
+                video_embeddings = video_embeddings.cpu().numpy()
         certain_video_embeddings.append(video_embeddings)
     certain_video_embeddings = np.concatenate(certain_video_embeddings, axis=0)
     h5_embedding_file[group_name].create_dataset(key, data=certain_video_embeddings)

@@ -103,14 +103,64 @@ def plot_progress_xclip(array, xclip_processor, xclip_net, transform_model, text
 
     return figure_1
 
+def xclip_get_progress_embedding(args, array, xclip_processor, xclip_net):
+    array_length = array.shape[0]
+    embeddings = []
+    with th.no_grad():
+        for i in range(32, array_length + 1):
+            copy_array = copy.deepcopy(array)
+            copy_array = copy_array[:i]
+            indices = np.linspace(0, i - 1, 32).astype(int)
+            copy_array = copy_array[indices]
+            copy_array = copy_array[:, 13:237, 13:237, :]
+            copy_array = xclip_processor(videos = list(copy_array), return_tensors="pt").pixel_values.cuda()
+            copy_array = xclip_net.get_video_features(copy_array)
+            embeddings.append(copy_array)
+        embeddings = th.stack(embeddings).squeeze()
+        if args.norm_vlm:
+            embeddings = normalize_embeddings(embeddings)
+
+    return embeddings
+
+    
+def plot_progress_embedding(embedding, transform_model, text_embedding):
+    # text_array already tensor
+    text_embedding = normalize_embeddings(text_embedding).clone()
+    embedding_length = embedding.shape[0]
+    text_array = text_embedding.repeat(embedding_length, 1).cuda()
+    
+    # similarities = []
+    use_embedding = embedding.clone()
+    transform_model.eval()
+    with th.no_grad():
+        # s3d_model.eval()
+        
+        use_embedding = transform_model(use_embedding)
+        similarity = cosine_similarity(text_array, use_embedding)
+        similarities = [(i + 32, similarity[i].item()) for i in range(embedding_length)]
+    transform_model.train()
+    figure_1 = plt.figure()
+    plt.plot([i[0] for i in similarities], [i[1] for i in similarities])
+    plt.xlabel("Length")
+    plt.ylabel("Cosine Similarity")
+    plt.title("Cosine Similarity of GT embedding with progress embedding")
+    plt.tight_layout()
+    del text_array
+    del use_embedding
+    return figure_1
+
+
+
+
+
 
 def plot_distribution(transform_model, evaluate_run_embeddings, total_evaluate_embeddings, evaluate_tasks, total_evaluate_tasks, eval_text_embedding):
 
-    total_evaluate_embeddings = transform_model(total_evaluate_embeddings.clone()).detach().cpu().numpy()
-    evaluate_run_embeddings = transform_model(evaluate_run_embeddings.clone()).detach().cpu().numpy()
+    total_evaluate_embeddings = transform_model(th.tensor(total_evaluate_embeddings.copy()).cuda()).detach().cpu().numpy()
+    evaluate_run_embeddings = transform_model(th.tensor(evaluate_run_embeddings.copy()).cuda()).detach().cpu().numpy()
     eval_text_embedding = normalize_embeddings(eval_text_embedding, False)
-    evaluate_run_embeddings = normalize_embeddings(evaluate_run_embeddings, False)
-    total_evaluate_embeddings = normalize_embeddings(total_evaluate_embeddings, False)
+    # evaluate_run_embeddings = normalize_embeddings(evaluate_run_embeddings, False)
+    # total_evaluate_embeddings = normalize_embeddings(total_evaluate_embeddings, False)
 
 
     total_embedding = np.concatenate([total_evaluate_embeddings, eval_text_embedding], axis=0)

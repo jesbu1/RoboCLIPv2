@@ -161,6 +161,7 @@ def get_args():
     parser.add_argument('--xclip_model', type=str, default='microsoft/xclip-base-patch16-zero-shot')
     parser.add_argument('--frame_length', type=int, default=32)
     parser.add_argument("--exp_name_end", type=str, default="triplet_hard_neg")
+    parser.add_argument("--sparse_only", action="store_true")
 
 
     args = parser.parse_args()
@@ -264,31 +265,6 @@ class MetaworldSparse(Env):
     def get_obs(self):
         return self.baseEnv._get_obs(self.baseEnv.prev_time_step)
     
-
-
-    def warm_up_run(self):
-        self.env.reset()
-        images = []
-        frame_number = random.randint(32, 128)
-
-        for _ in range(frame_num):
-            action = self.env.action_space.sample()
-            _, _, _, _ = self.env.step(action)
-            images.append(self.env.render()[:,:,:3])
-        images = np.array(images)
-
-        with th.no_grad():
-            frames = adjust_frames_xclip(images, target_frame_count = self.args.frame_length, processor=self.processor).cuda()
-            frames = self.net.get_video_features(frames)
-            video_embedding = normalize_embeddings(video_embedding, return_tensor=True).float()
-            self.target_embedding = normalize_embeddings(self.target_embedding, return_tensor=True).float()
-            video_embedding = self.transform_model(video_embedding)
-            video_embedding = normalize_embeddings(video_embedding, return_tensor=True).float()            
-
-        return frames
-    
-
-
     def render(self):
         frame = self.env.render()
         return frame
@@ -302,54 +278,61 @@ class MetaworldSparse(Env):
         if self.time:
             obs = np.concatenate([obs, np.array([t])])
         
-        if args.succ_end:
+        if self.args.succ_end:
             if info['success']:
                 done = True
 
         if done:
-            with th.no_grad():
-                frames = adjust_frames_xclip(self.past_observations, target_frame_count = self.args.frame_length, processor=self.processor).cuda()
-                video_embedding = self.net.get_video_features(frames)
-                # used to test the model with norm embeddings
-                if self.args.norm_output:
-                    video_embedding = normalize_embeddings(video_embedding, return_tensor=True).float()
-                    self.target_embedding = normalize_embeddings(self.target_embedding, return_tensor=True).float()
+            if self.args.sparse_only:
+                if info['success']:
+                    reward = 1.0 * self.args.time_reward
+                else:
+                    reward = 0.0
 
-                if args.pca_path != None:
-                    video_embedding = th.from_numpy(self.pca_video_model.transform(video_embedding.cpu())).float().cuda()
+            else:
+                with th.no_grad():
+                    frames = adjust_frames_xclip(self.past_observations, target_frame_count = self.args.frame_length, processor=self.processor).cuda()
+                    video_embedding = self.net.get_video_features(frames)
+                    # used to test the model with norm embeddings
+                    if self.args.norm_output:
+                        video_embedding = normalize_embeddings(video_embedding, return_tensor=True).float()
+                        self.target_embedding = normalize_embeddings(self.target_embedding, return_tensor=True).float()
 
-                # print(f"video_embedding dtype: {video_embedding.dtype}")
-                # print(f"transform_model.linear.weight dtype: {self.transform_model.linear.weight.dtype}")
+                    if args.pca_path != None:
+                        video_embedding = th.from_numpy(self.pca_video_model.transform(video_embedding.cpu())).float().cuda()
 
-                video_embedding = self.transform_model(video_embedding)
-                video_embedding = normalize_embeddings(video_embedding, return_tensor=True).float() 
+                    # print(f"video_embedding dtype: {video_embedding.dtype}")
+                    # print(f"transform_model.linear.weight dtype: {self.transform_model.linear.weight.dtype}")
+
+                    video_embedding = self.transform_model(video_embedding)
+                    video_embedding = normalize_embeddings(video_embedding, return_tensor=True).float() 
 
 
 
-                similarity_matrix = th.matmul(self.target_embedding, video_embedding.t())
-                reward = similarity_matrix.detach().cpu().numpy()[0][0]
+                    similarity_matrix = th.matmul(self.target_embedding, video_embedding.t())
+                    reward = similarity_matrix.detach().cpu().numpy()[0][0]
 
-                if self.args.time_reward != 1.0:
-                    reward = reward * self.args.time_reward    
-                print("sim reward", reward)
-                if self.args.threshold_reward:
-                    if self.max_sim is not None:
-                        if reward < self.max_sim:
-                            reward = 0.0
+                    if self.args.time_reward != 1.0:
+                        reward = reward * self.args.time_reward    
+                    print("sim reward", reward)
+                    if self.args.threshold_reward:
+                        if self.max_sim is not None:
+                            if reward < self.max_sim:
+                                reward = 0.0
+                            else:
+                                if self.args.project_reward:
+                                    total_max = 100
+                                    # project from max_sim to 100
+                                    reward = (reward - self.max_sim) / (total_max - self.max_sim) * 100
                         else:
-                            if self.args.project_reward:
-                                total_max = 100
-                                # project from max_sim to 100
-                                reward = (reward - self.max_sim) / (total_max - self.max_sim) * 100
-                    else:
-                        raise ValueError("Please provide the max similarity score")
-                print("reward", reward)
-                if self.args.succ_bonus > 0:
-                    if info['success']:
-                        reward += self.args.succ_bonus
-                reward -= self.args.time_penalty
-            return obs, reward, done, info
-        
+                            raise ValueError("Please provide the max similarity score")
+                    print("reward", reward)
+                    if self.args.succ_bonus > 0:
+                        if info['success']:
+                            reward += self.args.succ_bonus
+                    reward -= self.args.time_penalty
+                return obs, reward, done, info
+            
         return obs, -self.args.time_penalty, done, info
 
     def reset(self):
@@ -397,15 +380,16 @@ class MetaworldDense(Env):
 
 
     def step(self, action):
-        obs, reward, done, info = self.env.step(action)
+        obs, _, done, info = self.env.step(action)
         self.counter += 1
         self.counter_total += 1
         t = self.counter/128
         if self.time:
             obs = np.concatenate([obs, np.array([t])])
 
+        reward = 0.0
 
-        if args.succ_end:
+        if self.args.succ_end:
             if info['success']:
                 done = True
         if info["success"]:
