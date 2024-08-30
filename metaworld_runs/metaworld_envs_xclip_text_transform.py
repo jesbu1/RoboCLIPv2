@@ -52,6 +52,7 @@ import torch.nn.functional as F
 import h5py
 import json
 from transformers import AutoTokenizer, AutoModel, AutoProcessor 
+from eval_utils import eval_policys
 
 
 
@@ -68,7 +69,7 @@ fix gpu, forward xclip with gpu Done
 
 '''
 
-id_task = json.load(open("id_task.json", "r"))
+id_task = json.load(open("../id_task.json", "r"))
 
 class SingleLayerMLP(th.nn.Module):
     def __init__(self, input_dim, output_dim, normalize=True):
@@ -196,67 +197,69 @@ class MetaworldSparse(Env):
 
         self.frame_length = args.frame_length
 
-        with th.no_grad():
-            model_name = args.xclip_model
-            self.tokenizer = AutoTokenizer.from_pretrained(model_name)
-            self.net = AutoModel.from_pretrained(model_name).cuda()
-            self.processor = AutoProcessor.from_pretrained(model_name)
-            self.net = self.net.eval()
+        if not args.sparse_only:
 
-            self.transform_model = SingleLayerMLP(512, 512, normalize=True)
+            with th.no_grad():
+                model_name = args.xclip_model
+                self.tokenizer = AutoTokenizer.from_pretrained(model_name)
+                self.net = AutoModel.from_pretrained(model_name).cuda()
+                self.processor = AutoProcessor.from_pretrained(model_name)
+                self.net = self.net.eval()
 
-            transform_model_path = os.path.join(args.transform_base_path, args.transform_model_path)
-            dict = th.load(transform_model_path)
-            if 'model_state_dict' in dict.keys():
-                self.transform_model.load_state_dict(dict["model_state_dict"])
-            else:
-                self.transform_model.load_state_dict(dict)
+                self.transform_model = SingleLayerMLP(512, 512, normalize=True)
 
-            self.transform_model = self.transform_model.eval().cuda()
-            #self.transform_model.load_state_dict(th.load("/scr/jzhang96/triplet_text_loss_models/triplet_loss_50_42_xclip_TimeShort_Normtriplet/55.pth"))
+                transform_model_path = os.path.join(args.transform_base_path, args.transform_model_path)
+                dict = th.load(transform_model_path)
+                if 'model_state_dict' in dict.keys():
+                    self.transform_model.load_state_dict(dict["model_state_dict"])
+                else:
+                    self.transform_model.load_state_dict(dict)
 
-            
-            self.target_embedding = None
+                self.transform_model = self.transform_model.eval().cuda()
+                #self.transform_model.load_state_dict(th.load("/scr/jzhang96/triplet_text_loss_models/triplet_loss_50_42_xclip_TimeShort_Normtriplet/55.pth"))
 
-            if args.text_string:
-                for _ in range (3):
-                    print("text_string", args.text_string)
-                text_tokens = self.tokenizer([args.text_string], return_tensors="pt")
-                for key in text_tokens:
-                    text_tokens[key] = text_tokens[key].cuda()
-                self.target_embedding = self.net.get_text_features(**text_tokens)
-                self.target_embedding = normalize_embeddings(self.target_embedding)
-                if args.pca_path != None:
-                    self.target_embedding = th.from_numpy(self.pca_text_model.transform(self.target_embedding.cpu())).cuda()
-                # with th.no_grad():
-                #     if args.pca_path != None:
-                #         self.transform_model.linear.weight = nn.Parameter(
-                #             self.computed_matrix.T.to(dtype=th.float32).cuda())
-                #         self.transform_model.linear.bias = nn.Parameter(
-                #             th.zeros(self.target_embedding.shape[1], dtype=th.float32).cuda())
-                #     self.transform_model = self.transform_model.eval().cuda()
+                
+                self.target_embedding = None
 
-            self.max_sim = None
-            if args.warm_up_runs > 0:
-                for _ in range(args.warm_up_runs):
-                    embedding = self.warm_up_run()
-                    if args.norm_output:
+                if args.text_string:
+                    for _ in range (3):
+                        print("text_string", args.text_string)
+                    text_tokens = self.tokenizer([args.text_string], return_tensors="pt")
+                    for key in text_tokens:
+                        text_tokens[key] = text_tokens[key].cuda()
+                    self.target_embedding = self.net.get_text_features(**text_tokens)
+                    self.target_embedding = normalize_embeddings(self.target_embedding)
+                    if args.pca_path != None:
+                        self.target_embedding = th.from_numpy(self.pca_text_model.transform(self.target_embedding.cpu())).cuda()
+                    # with th.no_grad():
+                    #     if args.pca_path != None:
+                    #         self.transform_model.linear.weight = nn.Parameter(
+                    #             self.computed_matrix.T.to(dtype=th.float32).cuda())
+                    #         self.transform_model.linear.bias = nn.Parameter(
+                    #             th.zeros(self.target_embedding.shape[1], dtype=th.float32).cuda())
+                    #     self.transform_model = self.transform_model.eval().cuda()
+
+                self.max_sim = None
+                if args.warm_up_runs > 0:
+                    for _ in range(args.warm_up_runs):
+                        embedding = self.warm_up_run()
+                        if args.norm_output:
+                            embedding = normalize_embeddings(embedding, return_tensor=True).float()
+                        embedding = self.transform_model(embedding)
                         embedding = normalize_embeddings(embedding, return_tensor=True).float()
-                    embedding = self.transform_model(embedding)
-                    embedding = normalize_embeddings(embedding, return_tensor=True).float()
 
-                    sim = th.matmul(self.target_embedding, embedding.t())
-                    if self.args.time_reward != 1.0:
-                        sim = sim * self.args.time_reward
-                    if self.max_sim is None:
-                        sim_reward = sim.detach().cpu().numpy()[0][0]
-                        self.max_sim = sim_reward
-                    else:
-                        sim_reward = sim.detach().cpu().numpy()[0][0]
-                        if sim_reward > self.max_sim:
+                        sim = th.matmul(self.target_embedding, embedding.t())
+                        if self.args.time_reward != 1.0:
+                            sim = sim * self.args.time_reward
+                        if self.max_sim is None:
+                            sim_reward = sim.detach().cpu().numpy()[0][0]
                             self.max_sim = sim_reward
-                    print("sim_reward", sim_reward, self.max_sim)
-                print("max_sim", self.max_sim)
+                        else:
+                            sim_reward = sim.detach().cpu().numpy()[0][0]
+                            if sim_reward > self.max_sim:
+                                self.max_sim = sim_reward
+                        print("sim_reward", sim_reward, self.max_sim)
+                    print("max_sim", self.max_sim)
 
                 # only input text or demo videos for now
 
@@ -554,7 +557,7 @@ def main():
     wandb.log({"text_string": table1, "env_id": table2})
 
 
-    log_dir = f"/scr/yusenluo/RoboCLIP/visualization/xclip_text_transform_logs/{experiment_name}"
+    log_dir = f"/scr/jzhang96/logs/baseline_logs/{experiment_name}"
     # log_dir = f"/home/jzhang96/logs/baseline_logs/{experiment_name}"
 
     if not os.path.exists(log_dir):
@@ -594,6 +597,10 @@ def main():
     callback = CallbackList([eval_callback, wandb_callback])
     model.learn(total_timesteps=int(args.total_time_steps), callback=callback)
     model.save(f"{log_dir}/{experiment_name}")
+
+    # Evaluate the agent
+    success_rate = eval_policys(args, MetaworldDense, model)
+    wandb.log({"eval/evaluate_succ": success_rate})
 
 
 if __name__ == '__main__':
