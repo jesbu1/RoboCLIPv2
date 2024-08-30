@@ -1,5 +1,6 @@
-
+import joblib
 from gym import Env, spaces
+import torch.nn as nn
 import numpy as np
 from stable_baselines3 import PPO, SAC
 import torch as th
@@ -67,7 +68,7 @@ fix gpu, forward xclip with gpu Done
 
 '''
 
-id_task = json.load(open("../id_task.json", "r"))
+id_task = json.load(open("id_task.json", "r"))
 
 class SingleLayerMLP(th.nn.Module):
     def __init__(self, input_dim, output_dim, normalize=True):
@@ -139,9 +140,12 @@ def get_args():
     parser.add_argument('--video_freq', type=int, default=5120)
     parser.add_argument('--succ_end', action="store_true")
     parser.add_argument('--video_path', type=str, default=None)
+    parser.add_argument('--pca_path', type=str, default=None)
+    parser.add_argument('--transform_base_path', type=str, default=None)
+    parser.add_argument('--transform_model_path', type=str, default=None)
     parser.add_argument('--random_reset', action="store_true")
-    # parser.add_argument('--target_gif_path', type=str, default="/scr/jzhang96/metaworld_generate_gifs/")
-    parser.add_argument('--target_gif_path', type=str, default="/home/jzhang96/RoboCLIPv2/metaworld_generate_gifs/")
+    parser.add_argument('--target_gif_path', type=str, default="/scr/jzhang96/metaworld_generate_gifs/")
+    #parser.add_argument('--target_gif_path', type=str, default="/home/jzhang96/RoboCLIPv2/metaworld_generate_gifs/")
     parser.add_argument('--time', action="store_false")
     parser.add_argument('--frame_num', type=int, default=32)
     parser.add_argument('--train_orcale', action="store_true") # load latent from h5 file
@@ -157,8 +161,6 @@ def get_args():
     parser.add_argument('--xclip_model', type=str, default='microsoft/xclip-base-patch16-zero-shot')
     parser.add_argument('--frame_length', type=int, default=32)
     parser.add_argument("--exp_name_end", type=str, default="triplet_hard_neg")
-    parser.add_argument('--transform_model_path', type=str, default=None)
-    parser.add_argument('--transform_base_path', type=str, default="/scr/jzhang96/triplet_text_loss_models")
 
 
     args = parser.parse_args()
@@ -174,6 +176,16 @@ class MetaworldSparse(Env):
         self.baseEnv = self.door_open_goal_hidden_cls(seed=self.rank)
         self.env = TimeLimit(self.baseEnv, max_episode_steps=128)
         self.time = args.time
+        if args.pca_path != None:
+            pca_text_path = os.path.join(args.pca_path, 'pca_model_text.pkl') #'/scr/yusenluo/RoboCLIP/visualization/saved_model/pca_loss_models/[4, 13, 19, 36, 48]_Seed_42/512_linear/pca_model_text.pkl'
+            pca_video_path = os.path.join(args.pca_path, 'pca_model_video.pkl') #'/scr/yusenluo/RoboCLIP/visualization/saved_model/pca_loss_models/[4, 13, 19, 36, 48]_Seed_42/512_linear/pca_model_video.pkl'
+            #print(pca_video_path)
+            pca_text_model = joblib.load(pca_text_path)
+            pca_video_model = joblib.load(pca_video_path)
+            self.pca_text_model = pca_text_model
+            self.pca_video_model = pca_video_model
+            # self.computed_matrix = th.from_numpy(np.dot(self.pca_video_model.components_, self.pca_text_model.components_.T)).float()
+
         if not self.time:
             self.observation_space = self.env.observation_space
         else:
@@ -191,11 +203,17 @@ class MetaworldSparse(Env):
             self.net = self.net.eval()
 
             self.transform_model = SingleLayerMLP(512, 512, normalize=True)
+
             transform_model_path = os.path.join(args.transform_base_path, args.transform_model_path)
-            self.transform_model.load_state_dict(th.load(transform_model_path)["model_state_dict"])
-            # self.transform_model.load_state_dict(th.load("/scr/jzhang96/triplet_text_loss_models/triplet_loss_50_42_xclip_TimeShort_Normtriplet/55.pth"))
+            dict = th.load(transform_model_path)
+            if 'model_state_dict' in dict.keys():
+                self.transform_model.load_state_dict(dict["model_state_dict"])
+            else:
+                self.transform_model.load_state_dict(dict)
 
             self.transform_model = self.transform_model.eval().cuda()
+            #self.transform_model.load_state_dict(th.load("/scr/jzhang96/triplet_text_loss_models/triplet_loss_50_42_xclip_TimeShort_Normtriplet/55.pth"))
+
             
             self.target_embedding = None
 
@@ -206,8 +224,16 @@ class MetaworldSparse(Env):
                 for key in text_tokens:
                     text_tokens[key] = text_tokens[key].cuda()
                 self.target_embedding = self.net.get_text_features(**text_tokens)
-
-
+                self.target_embedding = normalize_embeddings(self.target_embedding)
+                if args.pca_path != None:
+                    self.target_embedding = th.from_numpy(self.pca_text_model.transform(self.target_embedding.cpu())).cuda()
+                # with th.no_grad():
+                #     if args.pca_path != None:
+                #         self.transform_model.linear.weight = nn.Parameter(
+                #             self.computed_matrix.T.to(dtype=th.float32).cuda())
+                #         self.transform_model.linear.bias = nn.Parameter(
+                #             th.zeros(self.target_embedding.shape[1], dtype=th.float32).cuda())
+                #     self.transform_model = self.transform_model.eval().cuda()
 
             self.max_sim = None
             if args.warm_up_runs > 0:
@@ -245,7 +271,7 @@ class MetaworldSparse(Env):
         images = []
         frame_number = random.randint(32, 128)
 
-        for _ in range(frame_number):
+        for _ in range(frame_num):
             action = self.env.action_space.sample()
             _, _, _, _ = self.env.step(action)
             images.append(self.env.render()[:,:,:3])
@@ -288,6 +314,12 @@ class MetaworldSparse(Env):
                 if self.args.norm_output:
                     video_embedding = normalize_embeddings(video_embedding, return_tensor=True).float()
                     self.target_embedding = normalize_embeddings(self.target_embedding, return_tensor=True).float()
+
+                if args.pca_path != None:
+                    video_embedding = th.from_numpy(self.pca_video_model.transform(video_embedding.cpu())).float().cuda()
+
+                # print(f"video_embedding dtype: {video_embedding.dtype}")
+                # print(f"transform_model.linear.weight dtype: {self.transform_model.linear.weight.dtype}")
 
                 video_embedding = self.transform_model(video_embedding)
                 video_embedding = normalize_embeddings(video_embedding, return_tensor=True).float() 
@@ -431,6 +463,7 @@ class CustomEvalCallback(EvalCallback):
             video_buffer = self.record_video()
             # wandb.log({f"evaluation_video": wandb.Video(video_buffer, fps=20, format="mp4")}, commit=False)
             wandb.log({f"eval/evaluation_video": wandb.Video(video_buffer, fps=20, format="mp4")}, step = self.n_calls)
+            #wandb.log({f"eval/evaluate_succ": success}, step = self.n_calls)
             print("video logged")
 
         return result
@@ -438,7 +471,7 @@ class CustomEvalCallback(EvalCallback):
     def record_video(self):
         frames = []
         obs = self.eval_env.reset()
-        
+        #success = 0
         for _ in range(128):  # You can adjust the number of steps for recording
             frame = self.eval_env.render(mode='rgb_array')
             # downsample frame
@@ -446,7 +479,11 @@ class CustomEvalCallback(EvalCallback):
             frames.append(frame)
             action, _ = self.model.predict(obs, deterministic=self.deterministic)
             obs, _, _, info = self.eval_env.step(action)
-
+            # print(type(info))
+            # print(info)
+            # if info['success']:
+            #     success = 1
+            #     break
 
         video_buffer = io.BytesIO()
 
@@ -468,7 +505,7 @@ def main():
     global args
     global log_dir
     args = get_args()
-    th.backends.cudnn.deterministic = True
+
     # set seed
     th.manual_seed(args.seed)
     np.random.seed(args.seed)
@@ -478,9 +515,9 @@ def main():
 
     WANDB_ENTITY_NAME = "clvr"
     WANDB_PROJECT_NAME = "roboclip-v2"
-    experiment_name = "xclip_textTRANS_" + args.algo + "_" + args.env_id 
-    # if args.train_orcale:
-    #     experiment_name = experiment_name + "_Oracle"
+    experiment_name = "xclip_textTRANS_" + args.algo + "_" + args.env_id
+    if args.train_orcale:
+        experiment_name = experiment_name + "_Oracle"
     if args.threshold_reward:
         experiment_name = experiment_name + "_Thld"
     if args.project_reward:
@@ -489,8 +526,9 @@ def main():
     #     experiment_name = experiment_name + "_NormIn"
     # if args.norm_output:
     #     experiment_name = experiment_name + "_NormOut"
-    if args.time_reward != 1.0:
-        experiment_name = experiment_name + "_XReward" + str(args.time_reward)
+    experiment_name = experiment_name + '_PCA_512'
+    # if args.time_reward != 1.0:
+    #     experiment_name = experiment_name + "_XReward" + str(args.time_reward)
     # if args.time:
     #     experiment_name = experiment_name + "_Time"
     # else:
@@ -507,7 +545,7 @@ def main():
     # if args.algo.lower() == 'sac':
     # experiment_name = experiment_name + "_Entropy" + str(args.entropy_term)
     experiment_name = experiment_name + args.exp_name_end
-    run_group = experiment_name 
+    run_group = "PCA_Ini" + experiment_name + "NEW"
     experiment_name = experiment_name + "_" + str(args.seed) + "NEW"
 
     if args.wandb:
@@ -532,8 +570,8 @@ def main():
     wandb.log({"text_string": table1, "env_id": table2})
 
 
-    # log_dir = f"/scr/jzhang96/logs/baseline_logs/{experiment_name}"
-    log_dir = f"/home/jzhang96/logs/baseline_logs/{experiment_name}"
+    log_dir = f"/scr/yusenluo/RoboCLIP/visualization/xclip_text_transform_logs/{experiment_name}"
+    # log_dir = f"/home/jzhang96/logs/baseline_logs/{experiment_name}"
 
     if not os.path.exists(log_dir):
         os.makedirs(log_dir)
