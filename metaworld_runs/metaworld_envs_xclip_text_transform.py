@@ -411,6 +411,16 @@ class MetaworldDense(Env):
         if not self.time:
             return self.env.reset()
         return np.concatenate([self.env.reset(), np.array([0.0])])
+    
+    def reset_seed(self, seed):
+        self.counter = 0
+        
+        self.rank = seed
+        self.baseEnv = self.door_open_goal_hidden_cls(seed=self.rank)
+        self.env = TimeLimit(self.baseEnv, max_episode_steps=128)
+        if not self.time:
+            return self.env.reset()
+        return np.concatenate([self.env.reset(), np.array([0.0])])
 
 
 
@@ -502,7 +512,10 @@ def main():
 
     WANDB_ENTITY_NAME = "clvr"
     WANDB_PROJECT_NAME = "roboclip-v2"
-    experiment_name = "xclip_textTRANS_" + args.algo + "_" + args.env_id
+    if args.pca_path != None:
+        experiment_name = "PCA_" + "xclip_textTRANS_" + args.algo + "_" + args.env_id
+    else:
+        experiment_name = "NOPCA_" +"xclip_textTRANS_" + args.algo + "_" + args.env_id
     if args.train_orcale:
         experiment_name = experiment_name + "_Oracle"
     if args.threshold_reward:

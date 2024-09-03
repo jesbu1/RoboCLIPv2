@@ -51,8 +51,8 @@ def eval_policys(args, env, policy):
     succ_count = 0
     total_count = 0
     for seed in range(400, 500):
-        eval_env = env(args, seed=seed)
-        obs = eval_env.reset()
+        eval_env = env(args)
+        obs = eval_env.reset_seed(seed)
         img_buffer = []
         for i in range(128):
             action, _states = policy.predict(obs)

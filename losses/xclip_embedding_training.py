@@ -20,7 +20,8 @@ from dataloader_embedding_text import GifTextEmbeddingDataset
 from sklearn.decomposition import PCA
 from triplet_utils import SingleLayerMLP, normalize_embeddings, triplet_loss, MILNCELoss, load_model
 from plot_utils import plot_distribution, xclip_get_progress_embedding, plot_progress_embedding
-
+from triplet_utils import compute_M
+import joblib
 # this file will add everything
 # 1. loss type: MILNCE, Triplet, Ours, also add random noise to the embedding, random noise will add at the output of the VLM
 # 2. model: xclip
@@ -35,7 +36,7 @@ def main(args):
 
     WANDB_ENTITY_NAME = "clvr"
     WANDB_PROJECT_NAME = "roboclip-v2"
-    experiment_name = "triplet_loss_" + str(args.task_nums) + "_" + str(args.seed) 
+    experiment_name = "triplet_loss_" + str(args.task_nums) + "_" + str(args.seed) + "_fix"
 
 
 
@@ -87,7 +88,7 @@ def main(args):
 
 
     model = SingleLayerMLP(512, 512).cuda()
-    optimizer = th.optim.Adam(model.parameters(), lr=2e-4)
+    
 
     if args.loss_type == "MILNCE":
         loss_func = MILNCELoss()
@@ -130,28 +131,103 @@ def main(args):
         emb = np.expand_dims(emb, axis=0)
         total_text_embedding.append(emb)
     total_text_embedding = np.concatenate(total_text_embedding, axis=0)
+    total_text_embedding = normalize_embeddings(total_text_embedding, False)
+    total_text_embedding = np.array(total_text_embedding, dtype=np.float32)
 
 
     if args.norm_vlm:
         evaluate_run_embeddings = normalize_embeddings(evaluate_run_embeddings, False)
         total_evaluate_embeddings = normalize_embeddings(total_evaluate_embeddings, False)
+        BPTD_embedding = normalize_embeddings(BPTD_embedding, False)
+        DO_embedding = normalize_embeddings(DO_embedding, False)
+    BPTD_text_embedding = normalize_embeddings(BPTD_text_embedding, False)
+    DO_text_embedding = normalize_embeddings(DO_text_embedding, False)
     evaluate_run_text_embeddings = normalize_embeddings(evaluate_run_text_embeddings, False)
 
+    pca_text_model = None
+    pca_video_model = None
+
     if args.pca:
+        use_text_embedding = None
+        for kk in range (11):
+            if kk == 0:
+                use_text_embedding = total_text_embedding
+            else:
+                use_text_embedding = np.concatenate([use_text_embedding, total_text_embedding], axis=0)
         pca_video_model = PCA(n_components=512)
         pca_text_model = PCA(n_components=512)
         pca_video_model.fit(total_evaluate_embeddings)
-        pca_text_model.fit(total_text_embedding)
+        pca_text_model.fit(use_text_embedding)
+        # convert to numpy float type
+        pca_save_path = (f"pca_loss_models/{experiment_name}")
+        os.makedirs(pca_save_path, exist_ok=True)
+        video_model_filename = (f"{pca_save_path}/pca_model_video.pkl")
+        joblib.dump(pca_video_model, video_model_filename)
+
+        os.makedirs(pca_save_path, exist_ok=True)
+        text_model_filename = (f"{pca_save_path}/pca_model_text.pkl")
+        joblib.dump(pca_text_model, text_model_filename)
+
         total_evaluate_embeddings = pca_video_model.transform(total_evaluate_embeddings)
         evaluate_run_embeddings = pca_video_model.transform(evaluate_run_embeddings)
+        BPTD_embedding = pca_video_model.transform(BPTD_embedding)
+        DO_embedding = pca_video_model.transform(DO_embedding)
+
+        total_text_embedding = pca_text_model.transform(total_text_embedding)
+        evaluate_run_text_embeddings = pca_text_model.transform(evaluate_run_text_embeddings)
+        BPTD_text_embedding = pca_text_model.transform(BPTD_text_embedding)
+        DO_text_embedding = pca_text_model.transform(DO_text_embedding)
+
+        total_evaluate_embeddings = np.array(total_evaluate_embeddings, dtype=np.float32)
+        evaluate_run_embeddings = np.array(evaluate_run_embeddings, dtype=np.float32)
+        BPTD_embedding = np.array(BPTD_embedding, dtype=np.float32)
+        DO_embedding = np.array(DO_embedding, dtype=np.float32)
+
+        total_text_embedding = np.array(total_text_embedding, dtype=np.float32)
+        evaluate_run_text_embeddings = np.array(evaluate_run_text_embeddings, dtype=np.float32)
+        BPTD_text_embedding = np.array(BPTD_text_embedding, dtype=np.float32)
+        DO_text_embedding = np.array(DO_text_embedding, dtype=np.float32)
+
+        # total_evaluate_embeddings = normalize_embeddings(total_evaluate_embeddings, False)
+        # evaluate_run_embeddings = normalize_embeddings(evaluate_run_embeddings, False)
+        # BPTD_embedding = normalize_embeddings(BPTD_embedding, False)
+        # DO_embedding = normalize_embeddings(DO_embedding, False)
+
+        total_text_embedding = normalize_embeddings(total_text_embedding, False)
+        evaluate_run_text_embeddings = normalize_embeddings(evaluate_run_text_embeddings, False)
+        BPTD_text_embedding = normalize_embeddings(BPTD_text_embedding, False)
+        DO_text_embedding = normalize_embeddings(DO_text_embedding, False)
 
     h5_text_file.close()
     h5_embedding_file.close()
 
+    # # save pca model
+    # # compute embedding distance
+    # aaa = copy.deepcopy(BPTD_text_embedding)
+    # bbb = copy.deepcopy(DO_text_embedding)
+    # aaa = normalize_embeddings(aaa, False)
+    # bbb = normalize_embeddings(bbb, False)
+    # dis = np.linalg.norm(aaa - bbb, axis=1)
+    # # aaa norm 
+    # aaa = np.linalg.norm(aaa, axis=1)
+
+
+    # import pdb ; pdb.set_trace()
+
+
+    # init MLP model
+    if args.pca:
+        computed_matrix = compute_M(pca_video_model.components_, pca_text_model.components_)
+        with th.no_grad():
+            model.linear.weight = nn.Parameter(computed_matrix.T.cuda().float())
+            model.linear.bias = nn.Parameter(th.zeros(512).cuda())
+
+    optimizer = th.optim.Adam(model.parameters(), lr=1e-4)
+
     run = wandb.init(
         entity=WANDB_ENTITY_NAME,
         project=WANDB_PROJECT_NAME,
-        group="text_embedding_triplet_xclip",
+        group="debug_text_embedding_triplet_xclip",
         config=args,
         name=experiment_name,
     )
@@ -171,6 +247,19 @@ def main(args):
             if args.norm_vlm:
                 pos_features = normalize_embeddings(pos_features).float()
                 neg_features = normalize_embeddings(neg_features).float() # already type 4 loss already add random noise
+
+            if args.pca:
+                gt_features = pca_text_model.transform(gt_features.cpu().detach().numpy())
+                pos_features = pca_video_model.transform(pos_features.cpu().detach().numpy())
+                neg_features = pca_video_model.transform(neg_features.cpu().detach().numpy())
+
+                
+                # pos_features = normalize_embeddings(pos_features, False)
+                # neg_features = normalize_embeddings(neg_features, False)
+            gt_features = normalize_embeddings(gt_features, False)
+            gt_features = th.tensor(gt_features).cuda().float()
+            pos_features = th.tensor(pos_features).cuda().float()
+            neg_features = th.tensor(neg_features).cuda().float()
 
             pos_features = model(pos_features)
             neg_features = model(neg_features)
@@ -203,6 +292,16 @@ def main(args):
             loss.backward()
             optimizer.step()
 
+            # log average gradient
+            # total_grad = 0
+            # for name, param in model.named_parameters():
+            #     total_grad += param.grad.abs().mean().item()
+            # wandb.log({"grad/average_grad": total_grad / len(list(model.parameters()))})
+            #compute norm
+            # aaa = gt_features[0:1]
+            # aaa_norm = torch.norm(aaa, p=2, dim=1).mean().item()
+
+            # import pdb ; pdb.set_trace()
             with torch.no_grad():
                 pos_cos_avg = F.cosine_similarity(gt_features, pos_features, dim=1).mean().item()
                 neg_cos_avg = F.cosine_similarity(gt_features, neg_features, dim=1).mean().item()
@@ -218,7 +317,8 @@ def main(args):
                     "neg_l2_dis": neg_l2_dis,
                 })
 
-        if epoch % 500 == 499:
+        if epoch % 100 == 99:
+        # if epoch % 500 == 0:
             model.eval()
             with torch.no_grad():
                 # plot distribution
@@ -228,7 +328,8 @@ def main(args):
                     total_evaluate_embeddings, 
                     evaluate_task,
                     total_evaluate_tasks, 
-                    evaluate_run_text_embeddings)
+                    evaluate_run_text_embeddings,
+                )
 
                 BPTD_progress_figure = plot_progress_embedding(
                     BPTD_embedding, 

@@ -125,11 +125,15 @@ def xclip_get_progress_embedding(args, array, xclip_processor, xclip_net):
     
 def plot_progress_embedding(embedding, transform_model, text_embedding):
     # text_array already tensor
-    text_embedding = normalize_embeddings(text_embedding).clone()
+    text_embedding = normalize_embeddings(text_embedding).clone().float().cuda()
     embedding_length = embedding.shape[0]
     text_array = text_embedding.repeat(embedding_length, 1).cuda()
     
     # similarities = []
+    # if embedding type is not tensor convert to tensor
+    if not isinstance(embedding, th.Tensor):
+        embedding = th.tensor(embedding).cuda().float()
+
     use_embedding = embedding.clone()
     transform_model.eval()
     with th.no_grad():
@@ -156,8 +160,8 @@ def plot_progress_embedding(embedding, transform_model, text_embedding):
 
 def plot_distribution(transform_model, evaluate_run_embeddings, total_evaluate_embeddings, evaluate_tasks, total_evaluate_tasks, eval_text_embedding):
 
-    total_evaluate_embeddings = transform_model(th.tensor(total_evaluate_embeddings.copy()).cuda()).detach().cpu().numpy()
-    evaluate_run_embeddings = transform_model(th.tensor(evaluate_run_embeddings.copy()).cuda()).detach().cpu().numpy()
+    total_evaluate_embeddings = transform_model(th.tensor(total_evaluate_embeddings.copy()).cuda().float()).detach().cpu().numpy()
+    evaluate_run_embeddings = transform_model(th.tensor(evaluate_run_embeddings.copy()).cuda().float()).detach().cpu().numpy()
     eval_text_embedding = normalize_embeddings(eval_text_embedding, False)
     # evaluate_run_embeddings = normalize_embeddings(evaluate_run_embeddings, False)
     # total_evaluate_embeddings = normalize_embeddings(total_evaluate_embeddings, False)

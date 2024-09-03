@@ -8,6 +8,19 @@ import numpy as np
 import torch
 from transformers import AutoTokenizer, AutoModel, AutoProcessor
 
+def compute_M(X_S, X_T):
+    M = np.dot(X_S, X_T.T)  # 35 35
+    M_tensor = th.from_numpy(M).float()
+    # if filter:
+    #     save_dir = "/scr/yusenluo/RoboCLIP/visualization/saved_model/M/OpenX/droid/filter"
+    # else:
+    #     save_dir = "/scr/yusenluo/RoboCLIP/visualization/saved_model/pca_matrix_models"
+    # os.makedirs(save_dir, exist_ok=True)
+    # M_model_path = f"{save_dir}/M_model_{variance_threshold}_Seed{seed}.pth"
+    # th.save(M_tensor, M_model_path)
+    # print(f'M model saved to {M_model_path}')
+    return M_tensor
+
 
 def load_model(model_name):
     if model_name == "xclip":
