@@ -379,6 +379,7 @@ def get_xclip_embeddings(task_id):
         video_features.append(this_video_feature)
         train_task_name.append(task_name)
         text_features.append(this_text_feature)
+
     mappings = {
         "video_id_to_text_label": dict(zip(video_ids, text_labels)),
         "index_to_video_id": {i: vid for i, vid in enumerate(video_ids)},
@@ -740,32 +741,42 @@ if __name__ == "__main__":
     # (train_video_embeddings_normalized, train_text_embeddings_normalized, validate_video_embeddings_normalized,
     #  validate_text_embeddings_normalized, train_mappings, validate_mappings) = get_s3d_embeddings(train_task_id=train_task_id, val_task_id=val_task_id, s3d=s3d_model, seed=42)
     transform_model = SingleLayerMLP(512, 512).to(device)
-    checkpoint_path = '/scr/jzhang96/triplet_text_loss_models/triplet_loss_10_50_42_s3d_TimeShuffle_TimeShort_Normtriplet/3945.pth'
-    checkpoint = th.load(checkpoint_path)
-    transform_model.load_state_dict(checkpoint)
-    video_features, text_features, mappings = get_s3d_embeddings_h5(val_task_id)
+    checkpoint_path = '/scr/jzhang96/triplet_text_loss_models/triplet_loss_50_42_NormVLM_AugmentationMILNCE/model_9999.pth'
+
+    model_dict = th.load(checkpoint_path)
+    if 'model_state_dict' in model_dict.keys():
+        transform_model.load_state_dict(model_dict["model_state_dict"])
+    else:
+        transform_model.load_state_dict(model_dict)
+
+    video_features, text_features, mappings = get_xclip_embeddings(all_task_id)
     print(video_features.shape, text_features.shape)
+    # pca_text = joblib.load('/scr/yusenluo/RoboCLIP/visualization/jzhang96_losses/triplet_loss_PCA_50_42_xclip_NormMILNCE/pca_model_text.pkl')
+    # pca_video = joblib.load('/scr/yusenluo/RoboCLIP/visualization/jzhang96_losses/triplet_loss_PCA_50_42_xclip_NormMILNCE/pca_model_video.pkl')
+    # reduced_train_text = th.from_numpy(pca_text.transform(text_features)).float()
+    # reduced_train_video = th.from_numpy(pca_video.transform(video_features)).float()
 
-    mrr_1, mrr_3, mrr_5, mrr_10 = eval_mrr(model=transform_model, evaluate_task=val_task_id,
-                                           video_embeddings=video_features.to(device),
-                                           text_embeddings=text_features.to(device), mappings=mappings)
-    print(mrr_1, mrr_3, mrr_5, mrr_10)
+    # mrr_1, mrr_3, mrr_5, mrr_10 = eval_mrr(model=transform_model, evaluate_task=val_task_id,
+    #                                        video_embeddings=video_features.to(device),
+    #                                        text_embeddings=text_features.to(device), mappings=mappings)
+    # print(mrr_1, mrr_3, mrr_5, mrr_10)
 
-    # variance_threshold = 512
-    # pca_text, reduced_train_text = reduce_dimension(text_features.cpu(), variance_threshold,
-    #                                                 'text', seed=42, kernel='linear',
-    #                                                 val_task_name=val_task_id)  # pca_emb=pca_train_alltext
-    # pca_video, reduced_train_video = reduce_dimension(video_features.cpu(), variance_threshold, 'video',
-    #                                                   dimension=reduced_train_text.shape[1],
-    #                                                   seed=42, kernel='linear',
-    #                                                   val_task_name=val_task_id)  # 35，512
+    variance_threshold = 0
+    pca_text, reduced_train_text = reduce_dimension(text_features.cpu(), variance_threshold,
+                                                    'text', seed=42, kernel='linear',
+                                                    val_task_name=val_task_id)  # pca_emb=pca_train_alltext
+    pca_video, reduced_train_video = reduce_dimension(video_features.cpu(), variance_threshold, 'video',
+                                                      dimension=reduced_train_text.shape[1],
+                                                      seed=42, kernel='linear',
+                                                      val_task_name=val_task_id)  # 35，512
     # computed_matrix = compute_M(pca_video.components_, pca_text.components_, variance_threshold, seed=42)
     # with th.no_grad():
     #     transform_model.linear.weight = nn.Parameter(computed_matrix.T.to(device))
     #     transform_model.linear.bias = nn.Parameter(th.zeros(512).to(device))
     #
     # print(th.allclose(transform_model(reduced_train_video.to(device)), normalize_embeddings(th.matmul(reduced_train_video.to(device), computed_matrix.to(device)))))
-    # mrr_1, mrr_3, mrr_5, mrr_10 = eval_mrr(model=transform_model, evaluate_task=all_task_id,
-    #                                        video_embeddings=reduced_train_video.to(device),
-    #                                        text_embeddings=reduced_train_text.to(device), mappings=mappings)
-    # print(mrr_1, mrr_3, mrr_5, mrr_10)
+
+    mrr_1, mrr_3, mrr_5, mrr_10 = eval_mrr(model=transform_model, evaluate_task=all_task_id,
+                                           video_embeddings=reduced_train_video.to(device),
+                                           text_embeddings=reduced_train_text.to(device), mappings=mappings)
+    print(mrr_1, mrr_3, mrr_5, mrr_10)
