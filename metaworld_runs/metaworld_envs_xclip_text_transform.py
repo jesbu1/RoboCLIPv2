@@ -446,6 +446,14 @@ def make_env(args, eval = False):
 
 
 
+class CustomWandbCallback(WandbCallback):
+    def _on_rollout_end(self):
+        # Log episode metrics with environment steps as x-axis
+        wandb.log({
+            'episode_reward': sum(self.locals['rewards']),  # Cumulative reward for the episode
+            'episode_length': len(self.locals['rewards'])   # Length of the episode
+        }, step=self.model.num_timesteps) 
+
 
 
 class CustomEvalCallback(EvalCallback):
@@ -606,8 +614,12 @@ def main():
                                     log_path=log_dir, eval_freq=args.eval_freq, video_freq=args.video_freq,
                                     deterministic=True, render=False, n_eval_episodes = 25)
      
-    wandb_callback = WandbCallback(verbose = 1)
-    callback = CallbackList([eval_callback, wandb_callback])
+    
+    
+    # wandb_callback = WandbCallback(verbose = 1)
+    # callback = CallbackList([eval_callback, wandb_callback])
+    customwandbcallback = CustomWandbCallback()
+    callback = CallbackList([eval_callback, customwandbcallback])
     model.learn(total_timesteps=int(args.total_time_steps), callback=callback)
     model.save(f"{log_dir}/{experiment_name}")
 

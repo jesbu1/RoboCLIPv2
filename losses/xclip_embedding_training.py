@@ -22,6 +22,8 @@ from triplet_utils import SingleLayerMLP, normalize_embeddings, triplet_loss, MI
 from plot_utils import plot_distribution, xclip_get_progress_embedding, plot_progress_embedding
 from triplet_utils import compute_M
 import joblib
+from mrr_utils import get_xclip_embeddings, eval_mrr
+import json
 # this file will add everything
 # 1. loss type: MILNCE, Triplet, Ours, also add random noise to the embedding, random noise will add at the output of the VLM
 # 2. model: xclip
@@ -36,8 +38,7 @@ def main(args):
 
     WANDB_ENTITY_NAME = "clvr"
     WANDB_PROJECT_NAME = "roboclip-v2"
-    experiment_name = "triplet_loss_" + str(args.task_nums) + "_" + str(args.seed) + "_long"
-
+    experiment_name = "triplet_loss_" + "subset_" + str(args.subset) + "_" + str(args.seed)
 
 
     if args.time_shuffle:
@@ -50,8 +51,6 @@ def main(args):
         experiment_name += "_NoNormVLM"
     if args.random_noise:
         experiment_name += "_RandomNoise" 
-    if args.rand_neg:
-        experiment_name += "_RandNeg"
     if args.augmentation:
         experiment_name += "_Augmentation"
     if args.pca:
@@ -85,6 +84,8 @@ def main(args):
     BPTD_embedding = xclip_get_progress_embedding(args, BPTD_video, xclip_processor, xclip_net).squeeze(1)
     DO_embedding = xclip_get_progress_embedding(args, DO_video, xclip_processor, xclip_net).squeeze(1)
     del xclip_net, xclip_processor, xclip_tokenizer
+
+
 
 
     model = SingleLayerMLP(512, 512).cuda()
@@ -148,16 +149,49 @@ def main(args):
     pca_video_model = None
 
     if args.pca:
-        use_text_embedding = None
-        for kk in range (11):
-            if kk == 0:
-                use_text_embedding = total_text_embedding
-            else:
-                use_text_embedding = np.concatenate([use_text_embedding, total_text_embedding], axis=0)
+        text_pca_embedding = None
+
+        if args.subset == 0:
+            video_pca_embedding = copy.deepcopy(total_evaluate_embeddings)
+            text_pca_embedding = copy.deepcopy(total_text_embedding)
+            for kk in range (11):
+                if kk == 0:
+                    text_pca_embedding = copy.deepcopy(total_text_embedding)
+                else:
+                    text_pca_embedding = np.concatenate([text_pca_embedding, total_text_embedding], axis=0)
+
+        else:
+            subset_list = json.load(open("task_subset.json"))
+            subset_name = "subset_" + str(args.subset)
+            subset_keys = subset_list[subset_name]
+            video_pca_embedding = []
+            for keys in subset_keys:
+                task_data = np.asarray(h5_embedding_file["GT_Videos"][keys])
+                video_pca_embedding.append(task_data)
+            video_pca_embedding = np.concatenate(video_pca_embedding, axis = 0)
+            # copy 4 times
+            video_pca_embedding = np.concatenate([video_pca_embedding, video_pca_embedding, video_pca_embedding, video_pca_embedding], axis=0)
+            video_pca_embedding = normalize_embeddings(video_pca_embedding, False)
+            video_pca_embedding = np.array(video_pca_embedding, dtype=np.float32)
+
+            text_pca_embedding = []
+            for keys in subset_keys:
+                emb = np.asarray(h5_text_file[keys])
+                emb = np.expand_dims(emb, axis=0)
+                text_pca_embedding.append(emb)
+            text_pca_embedding = np.concatenate(text_pca_embedding, axis=0)
+            text_pca_embedding = normalize_embeddings(text_pca_embedding, False)
+            text_pca_embedding = np.array(text_pca_embedding, dtype=np.float32)
+            # copy 60 times
+            for i in range (4):
+                text_pca_embedding = np.concatenate([text_pca_embedding, text_pca_embedding, text_pca_embedding, text_pca_embedding], axis=0)
+
+
+
         pca_video_model = PCA(n_components=512)
         pca_text_model = PCA(n_components=512)
-        pca_video_model.fit(total_evaluate_embeddings)
-        pca_text_model.fit(use_text_embedding)
+        pca_video_model.fit(video_pca_embedding)
+        pca_text_model.fit(text_pca_embedding)
         # convert to numpy float type
         pca_save_path = (f"pca_loss_models/{experiment_name}")
         os.makedirs(pca_save_path, exist_ok=True)
@@ -201,6 +235,14 @@ def main(args):
     h5_text_file.close()
     h5_embedding_file.close()
 
+
+    mrr_video, mrr_text, mapping = get_xclip_embeddings(set(range(50)))
+    if args.pca:
+        mrr_video = normalize_embeddings(mrr_video, False)
+        mrr_text = normalize_embeddings(mrr_text, False)
+        mrr_video = pca_video_model.transform(mrr_video)
+        mrr_text = pca_text_model.transform(mrr_text)
+
     # # save pca model
     # # compute embedding distance
     # aaa = copy.deepcopy(BPTD_text_embedding)
@@ -233,7 +275,11 @@ def main(args):
     )
 
     dataset = GifTextEmbeddingDataset(args)
-    dataloader = DataLoader(dataset, batch_size=args.batch_size, shuffle=True, num_workers=args.num_workers, drop_last=True)
+    if args.subset == 0:
+        batch_size = 50 
+    else:
+        batch_size = 10
+    dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=True, num_workers=args.num_workers, drop_last=True)
 
     for epoch in range(args.start_epoch, args.epochs):
         model.train()
@@ -317,7 +363,7 @@ def main(args):
                     "neg_l2_dis": neg_l2_dis,
                 })
 
-        if epoch % 100 == 99:
+        if epoch % 500 == 499:
         # if epoch % 500 == 0:
             model.eval()
             with torch.no_grad():
@@ -341,11 +387,20 @@ def main(args):
                     model, 
                     DO_text_embedding)
                 
+                # evaluate MRR
+                mrr_video = th.tensor(mrr_video).cuda().float()
+                mrr_text = th.tensor(mrr_text).cuda().float()
+                mrr_1, mrr_3, mrr_5, mrr_10 = eval_mrr(model, None, mrr_video, mrr_text, mapping)
+
                 wandb.log({
                     "total_dist": wandb.Image(figure_1),
                     "eval_task_dist": wandb.Image(figure_2),
                     "progress/BPTD_progress_figure": wandb.Image(BPTD_progress_figure),
                     "progress/DO_progress_figure": wandb.Image(DO_progress_figure),
+                    "mrr/mrr_1": mrr_1,
+                    "mrr/mrr_3": mrr_3,
+                    "mrr/mrr_5": mrr_5,
+                    "mrr/mrr_10": mrr_10,
                 })
                 plt.close(figure_1)
                 plt.close(figure_2)
@@ -359,6 +414,9 @@ def main(args):
                 "model_state_dict": model.state_dict(),
                 "optimizer_state_dict": optimizer.state_dict(),
             }, os.path.join(save_path, "model_" + str(epoch) + ".pth"))
+
+
+
 
             
 
@@ -380,8 +438,7 @@ if __name__ == '__main__':
     argparser.add_argument('--random_noise', action='store_true')
     # argparser.add_argument('--norm', action='store_true')
     argparser.add_argument('--seed', type=int, default=42)
-    argparser.add_argument('--batch_size', type=int, default=16)
-    argparser.add_argument('--num_workers', type=int, default=16)
+    argparser.add_argument('--num_workers', type=int, default=0)
     argparser.add_argument('--epochs', type=int, default=50)
     argparser.add_argument('--rand_neg', action='store_true')
     argparser.add_argument('--loss_type', type=str, default='triplet', choices=['triplet', 'MILNCE'])
@@ -391,6 +448,7 @@ if __name__ == '__main__':
     argparser.add_argument('--load_model_path', type=str, default=None)
     argparser.add_argument('--start_epoch', type=int, default=0)
     argparser.add_argument('--pca', action='store_true')
+    argparser.add_argument('--subset', type=int, default=0)
 
     args = argparser.parse_args()
     main(args)

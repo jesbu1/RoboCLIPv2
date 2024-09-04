@@ -723,6 +723,10 @@ def eval_mrr(model, evaluate_task, video_embeddings, text_embeddings, mappings):
     return (mrr_text.get("Top 1", ""), mrr_text.get("Top 3", ""), mrr_text.get("Top 5", ""),
             mrr_text.get("Top 10", ""))
 
+
+
+
+
 if __name__ == "__main__":
     #假设val_task_id 是这些
     val_task_id = [6, 5, 13, 15, 18, 49, 46, 9, 10, 2] #[4, 13, 19, 36, 48]

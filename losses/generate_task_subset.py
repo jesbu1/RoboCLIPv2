@@ -40,6 +40,10 @@ with open(id_subset_dir_path, "w") as f:
     json.dump(task_subset, f, indent=4)
 
 
+aaa = json.load(open("task_subset.json"))
+print(aaa)
+
+
 
 
 

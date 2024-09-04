@@ -284,6 +284,7 @@ def main():
             for i in range(128):
                 action, _states = model.predict(obs)
                 obs, rewards, dones, info = eval_env.step(action)
+                import pdb; pdb.set_trace()
                 if seed == 400:
                     img = eval_env.render()
                     img_buffer.append(img)

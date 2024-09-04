@@ -7,6 +7,7 @@ import torch as th
 import random
 import numpy as np
 import copy
+import json
 
 def load_model(model_name):
     if model_name == "xclip":
@@ -29,32 +30,18 @@ class GifTextDataset(Dataset):
         # if args.model_name == "xclip":
         self.h5_text_file = h5py.File("metaworld_xclip_text.h5", "r")
         # else:
-        if args.task_nums == 50:
+        subset_list = json.load(open("task_subset.json"))
+        if args.subset == 0:
+        # if args.task_nums == 50:
             self.keys = list(self.h5_file.keys())
         else:
-            self.keys = ["door-lock-v2-goal-hidden", # 14
-                        "button-press-wall-v2-goal-hidden", # 7 
-                        "drawer-open-v2-goal-hidden", # 19 
-                        "window-open-v2-goal-hidden", # 48 
-                        "sweep-v2-goal-hidden", # 47 
-                        "coffee-button-v2-goal-hidden", # 8 
-                        "button-press-topdown-wall-v2-goal-hidden", # 5 
-                        "pick-out-of-hole-v2-goal-hidden", # 30
-                        "hand-insert-v2-goal-hidden", # 17
-                        "handle-press-v2-goal-hidden" ] # 24
-
-    # evaluate_task = ["door-close-v2-goal-hidden", 
-    #                 "door-open-v2-goal-hidden", 
-    #                 "drawer-close-v2-goal-hidden", 
-    #                 "button-press-v2-goal-hidden", 
-    #                 "button-press-topdown-v2-goal-hidden"]
+            subset_name = "subset_" + str(args.subset)
+            self.keys = subset_list[subset_name]
 
         self.vlm_name = args.model_name
         if self.vlm_name == "xclip":
             self.processor = AutoProcessor.from_pretrained("microsoft/xclip-base-patch16-zero-shot")
-            # self.model = AutoModel.from_pretrained("microsoft/xclip-base-patch16-zero-shot").cuda()
-        # else:
-        # self.s3d_model = load_model("s3d")  
+
         self.shuffle_time = args.time_shuffle
         self.shorten_time = args.time_shorten
         self.random_sample_neg = args.rand_neg
