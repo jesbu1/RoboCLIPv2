@@ -396,7 +396,7 @@ class MetaworldDense(Env):
             if info['success']:
                 done = True
         if info["success"]:
-            reward += 1000
+            reward += 1
 
         return obs, reward, done, info
         
@@ -604,7 +604,7 @@ def main():
 
     eval_callback = CustomEvalCallback(eval_env, best_model_save_path=log_dir,
                                     log_path=log_dir, eval_freq=args.eval_freq, video_freq=args.video_freq,
-                                    deterministic=True, render=False)
+                                    deterministic=True, render=False, n_eval_episodes = 25)
      
     wandb_callback = WandbCallback(verbose = 1)
     callback = CallbackList([eval_callback, wandb_callback])
@@ -612,6 +612,8 @@ def main():
     model.save(f"{log_dir}/{experiment_name}")
 
     # Evaluate the agent
+    # load the best model
+    model = SAC.load(f"{log_dir}/{experiment_name}/best_model.zip")
     success_rate = eval_policys(args, MetaworldDense, model)
     wandb.log({"eval/evaluate_succ": success_rate})
 

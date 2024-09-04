@@ -36,7 +36,7 @@ def main(args):
 
     WANDB_ENTITY_NAME = "clvr"
     WANDB_PROJECT_NAME = "roboclip-v2"
-    experiment_name = "triplet_loss_" + str(args.task_nums) + "_" + str(args.seed) + "_fix"
+    experiment_name = "triplet_loss_" + str(args.task_nums) + "_" + str(args.seed) + "_long"
 
 
 
