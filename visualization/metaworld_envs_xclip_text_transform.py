@@ -397,7 +397,7 @@ class MetaworldDense(Env):
             if info['success']:
                 done = True
         if info["success"]:
-            reward += 1000
+            reward += 1
 
         return obs, reward, done, info
 
@@ -409,6 +409,16 @@ class MetaworldDense(Env):
             self.baseEnv = self.door_open_goal_hidden_cls(seed=self.rank)
             # env = door_open_goal_hidden_cls(seed=rank)
             self.env = TimeLimit(self.baseEnv, max_episode_steps=128)
+        if not self.time:
+            return self.env.reset()
+        return np.concatenate([self.env.reset(), np.array([0.0])])
+
+    def reset_seed(self, seed):
+        self.counter = 0
+
+        self.rank = seed
+        self.baseEnv = self.door_open_goal_hidden_cls(seed=self.rank)
+        self.env = TimeLimit(self.baseEnv, max_episode_steps=128)
         if not self.time:
             return self.env.reset()
         return np.concatenate([self.env.reset(), np.array([0.0])])
@@ -434,6 +444,15 @@ def make_env(args, eval=False):
         return env
 
     return _init
+
+
+class CustomWandbCallback(WandbCallback):
+    def _on_rollout_end(self):
+        # Log episode metrics with environment steps as x-axis
+        wandb.log({
+            'episode_reward': sum(self.locals['rewards']),  # Cumulative reward for the episode
+            'episode_length': len(self.locals['rewards'])  # Length of the episode
+        }, step=self.model.num_timesteps)
 
 
 class CustomEvalCallback(EvalCallback):
@@ -492,7 +511,10 @@ def main():
 
     WANDB_ENTITY_NAME = "clvr"
     WANDB_PROJECT_NAME = "roboclip-v2"
-    experiment_name = "xclip_textTRANS_" + args.algo + "_" + args.env_id
+    if args.pca_path != None:
+        experiment_name = "PCA_" + "xclip_textTRANS_" + args.algo + "_" + args.env_id
+    else:
+        experiment_name = "NOPCA_" + "xclip_textTRANS_" + args.algo + "_" + args.env_id
     if args.train_orcale:
         experiment_name = experiment_name + "_Oracle"
     if args.threshold_reward:
@@ -503,8 +525,7 @@ def main():
     #     experiment_name = experiment_name + "_NormIn"
     # if args.norm_output:
     #     experiment_name = experiment_name + "_NormOut"
-    if args.pca_path != None:
-        experiment_name = experiment_name + '_PCA_512'
+    experiment_name = experiment_name + '_PCA_512'
     # if args.time_reward != 1.0:
     #     experiment_name = experiment_name + "_XReward" + str(args.time_reward)
     # if args.time:
@@ -517,7 +538,7 @@ def main():
     #     experiment_name = experiment_name + "_RandReset"
 
     if args.succ_bonus > 0:
-        experiment_name = experiment_name + "_SuccBonus" + f'_{str(args.succ_bonus)}'
+        experiment_name = experiment_name + "_SuccBonus" + str(args.succ_bonus)
     # if args.time_penalty > 0:
     #     experiment_name = experiment_name + "_TimePenalty" + str(args.time_penalty)
     # if args.algo.lower() == 'sac':
@@ -546,7 +567,7 @@ def main():
     table2.add_data([args.env_id])
     wandb.log({"text_string": table1, "env_id": table2})
 
-    log_dir = f"/scr/jzhang96/logs/baseline_logs/{experiment_name}"
+    log_dir = f"/scr/yusenluo/RoboCLIP/visualization/xclip_text_transform_logs/{experiment_name}"
     # log_dir = f"/home/jzhang96/logs/baseline_logs/{experiment_name}"
 
     if not os.path.exists(log_dir):
@@ -581,14 +602,18 @@ def main():
 
     eval_callback = CustomEvalCallback(eval_env, best_model_save_path=log_dir,
                                        log_path=log_dir, eval_freq=args.eval_freq, video_freq=args.video_freq,
-                                       deterministic=True, render=False)
+                                       deterministic=True, render=False, n_eval_episodes=25)
 
-    wandb_callback = WandbCallback(verbose=1)
-    callback = CallbackList([eval_callback, wandb_callback])
+    # wandb_callback = WandbCallback(verbose = 1)
+    # callback = CallbackList([eval_callback, wandb_callback])
+    customwandbcallback = CustomWandbCallback()
+    callback = CallbackList([eval_callback, customwandbcallback])
     model.learn(total_timesteps=int(args.total_time_steps), callback=callback)
     model.save(f"{log_dir}/{experiment_name}")
 
     # Evaluate the agent
+    # load the best model
+    model = SAC.load(f"{log_dir}/{experiment_name}/best_model.zip")
     success_rate = eval_policys(args, MetaworldDense, model)
     wandb.log({"eval/evaluate_succ": success_rate})
 
