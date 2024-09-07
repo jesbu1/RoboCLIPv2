@@ -55,6 +55,9 @@ def main(args):
         experiment_name += "_Augmentation"
     if args.pca:
         experiment_name += "_PCA"
+
+    if args.aug_pca:
+        experiment_name += "_AugPCA"
     
     experiment_name += args.loss_type
 
@@ -168,6 +171,10 @@ def main(args):
             for keys in subset_keys:
                 task_data = np.asarray(h5_embedding_file["GT_Videos"][keys])
                 video_pca_embedding.append(task_data)
+                if args.aug_pca:
+                    shorten_pca_embedding = np.asarray(h5_embedding_file["Time_Shortened_Videos"][keys])
+                    video_pca_embedding.append(shorten_pca_embedding)
+
             video_pca_embedding = np.concatenate(video_pca_embedding, axis = 0)
             # copy 4 times
             video_pca_embedding = np.concatenate([video_pca_embedding, video_pca_embedding, video_pca_embedding, video_pca_embedding], axis=0)
@@ -179,6 +186,8 @@ def main(args):
                 emb = np.asarray(h5_text_file[keys])
                 emb = np.expand_dims(emb, axis=0)
                 text_pca_embedding.append(emb)
+
+
             text_pca_embedding = np.concatenate(text_pca_embedding, axis=0)
             text_pca_embedding = normalize_embeddings(text_pca_embedding, False)
             text_pca_embedding = np.array(text_pca_embedding, dtype=np.float32)
@@ -309,6 +318,7 @@ def main(args):
 
             pos_features = model(pos_features)
             neg_features = model(neg_features)
+
 
             # find hardest negative
             if not args.rand_neg:
@@ -449,6 +459,7 @@ if __name__ == '__main__':
     argparser.add_argument('--start_epoch', type=int, default=0)
     argparser.add_argument('--pca', action='store_true')
     argparser.add_argument('--subset', type=int, default=0)
+    argparser.add_argument('--aug_pca', action='store_true')
 
     args = argparser.parse_args()
     main(args)

@@ -732,6 +732,8 @@ if __name__ == "__main__":
     val_task_id = [6, 5, 13, 15, 18, 49, 46, 9, 10, 2] #[4, 13, 19, 36, 48]
     train_task_id = [14, 7, 19, 48, 47, 8, 3, 17, 30, 24] #[4, 13, 19, 36, 48]
     # eval_task_name = "_".join([str(i) for i in val_task_id])
+    eval_ids = (4, 6, 9, 15, 16, 19, 25, 20, 41, 49, 47, 33)
+    train_ids = (13, 18, 7, 48, 23, 10, 21, 42, 46, 32)
     all_task_id = set(range(50))
     th.manual_seed(42)
     np.random.seed(42)
@@ -745,8 +747,8 @@ if __name__ == "__main__":
     # (train_video_embeddings_normalized, train_text_embeddings_normalized, validate_video_embeddings_normalized,
     #  validate_text_embeddings_normalized, train_mappings, validate_mappings) = get_s3d_embeddings(train_task_id=train_task_id, val_task_id=val_task_id, s3d=s3d_model, seed=42)
     transform_model = SingleLayerMLP(512, 512).to(device)
-    checkpoint_path = '/scr/jzhang96/triplet_text_loss_models/triplet_loss_50_42_long_TimeShort_NormVLM_PCAtriplet/model_4999.pth'
-    eval_pca = True
+    checkpoint_path = '/scr/jzhang96/triplet_text_loss_models/triplet_loss_subset_6_42_TimeShuffle_TimeShort_NormVLMtriplet/model_9999.pth'
+    eval_pca = False
 
     model_dict = th.load(checkpoint_path)
     if 'model_state_dict' in model_dict.keys():
@@ -754,12 +756,12 @@ if __name__ == "__main__":
     else:
         transform_model.load_state_dict(model_dict)
 
-    video_features, text_features, mappings = get_xclip_embeddings(all_task_id)
+    video_features, text_features, mappings = get_xclip_embeddings(eval_ids)
 
     print(video_features.shape, text_features.shape)
     if eval_pca:
-        pca_text = joblib.load('/home/jzhang96/RoboCLIPv2/losses/pca_loss_models/triplet_loss_50_42_long_TimeShort_NormVLM_PCAtriplet/pca_model_text.pkl')
-        pca_video = joblib.load('/home/jzhang96/RoboCLIPv2/losses/pca_loss_models/triplet_loss_50_42_long_TimeShort_NormVLM_PCAtriplet/pca_model_video.pkl')
+        pca_text = joblib.load('/home/jzhang96/RoboCLIPv2/losses/pca_loss_models/triplet_loss_subset_6_42_TimeShuffle_TimeShort_NormVLM_PCAtriplet/pca_model_text.pkl')
+        pca_video = joblib.load('/home/jzhang96/RoboCLIPv2/losses/pca_loss_models/triplet_loss_subset_6_42_TimeShuffle_TimeShort_NormVLM_PCAtriplet/pca_model_video.pkl')
         reduced_train_text = th.from_numpy(pca_text.transform(text_features)).float()
         reduced_train_video = th.from_numpy(pca_video.transform(video_features)).float()
     else:

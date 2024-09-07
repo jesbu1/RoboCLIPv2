@@ -625,7 +625,7 @@ def main():
 
     # Evaluate the agent
     # load the best model
-    model = SAC.load(f"{log_dir}/{experiment_name}/best_model")
+    model = SAC.load(f"{log_dir}/best_model")
     success_rate = eval_policys(args, MetaworldDense, model)
     wandb.log({"eval/evaluate_succ": success_rate}, step = 0)
 
