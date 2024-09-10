@@ -272,6 +272,24 @@ class MetaworldSparse(Env):
         frame = self.env.render()
         return frame
 
+    def warm_up_run(self):
+        self.env.reset()
+        images = []
+        frame_num = random.randint(32, 128)
+
+        for _ in range(frame_num):
+            action = self.env.action_space.sample()
+            _, _, _, _ = self.env.step(action)
+            images.append(self.env.render()[:,:,:3])
+        images = np.array(images)
+
+        with th.no_grad():
+            frames = adjust_frames_xclip(images, target_frame_count = self.args.frame_length, processor=self.processor).cuda()
+            frames = self.net.get_video_features(frames)
+
+        return frames
+
+
 
     def step(self, action):
         obs, _, done, info = self.env.step(action)
@@ -598,7 +616,7 @@ def main():
         if not args.pretrained:
             model = SAC("MlpPolicy", envs, verbose=1, tensorboard_log=log_dir, 
                         # batch_size=args.n_steps * args.n_envs,
-                        ent_coef=args.entropy_term , buffer_size=args.total_time_steps, learning_starts=256)
+                        ent_coef=args.entropy_term , buffer_size=args.total_time_steps, learning_starts=256, seed=args.seed)
         else:
             model = SAC.load(args.pretrained, env=envs, tensorboard_log=log_dir)
     else:
@@ -627,7 +645,7 @@ def main():
     # load the best model
     model = SAC.load(f"{log_dir}/best_model")
     success_rate = eval_policys(args, MetaworldDense, model)
-    wandb.log({"eval/evaluate_succ": success_rate}, step = 0)
+    wandb.log({"eval_SR/evaluate_succ": success_rate}, step = 0)
 
 
 if __name__ == '__main__':

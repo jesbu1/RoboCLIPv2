@@ -269,11 +269,11 @@ def main():
 
 
     # Evaluate the agent
-    seed_num = ["5", "32", "42", "0", "1"]
-    # seed_num = ["42"]
+    # seed_num = ["5", "32", "42", "0", "1"]
+    seed_num = ["42", "1"]
     total_sr = 0
     for seed_str in seed_num:
-        model = SAC.load(f"/home/jzhang96/logs/baseline_logs/xclip_textTRANS_sac_button-press-v2-goal-hidden_XReward100.0_SuccEndMILNCELong_{seed_str}NEW/best_model.zip")
+        model = SAC.load(f"/scr/jzhang96/logs/baseline_logs/PCA_xclip_textTRANS_sac_faucet-open-v2-goal-hidden_PCA_512_SuccEndSet6_{seed_str}NEW/best_model.zip")
     # model = PPO.load(f"/scr/jzhang96/logs/baseline_logs/s3d_baseline_ppo_door-close-v2-goal-hidden_Oracle_NormIn_XReward100.0_NoTime_RandReset_Entropyauto_5/best_model.zip")
         succ_count = 0
         total_count = 0
@@ -284,15 +284,14 @@ def main():
             for i in range(128):
                 action, _states = model.predict(obs)
                 obs, rewards, dones, info = eval_env.step(action)
-                import pdb; pdb.set_trace()
                 if seed == 400:
                     img = eval_env.render()
                     img_buffer.append(img)
                 if info['success']:
                     succ_count += 1
                     break
-            if seed == 400:
-                imageio.mimsave(f"{seed_str}_seed.gif", img_buffer)
+            # if seed == 400:
+            #     imageio.mimsave(f"{seed_str}_seed.gif", img_buffer)
             total_count += 1
 
         print(f"seed {seed_str}, success rate {succ_count/total_count}")

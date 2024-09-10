@@ -38,7 +38,7 @@ def main(args):
 
     WANDB_ENTITY_NAME = "clvr"
     WANDB_PROJECT_NAME = "roboclip-v2"
-    experiment_name = "triplet_loss_" + "subset_" + str(args.subset) + "_" + str(args.seed)
+    experiment_name = "triplet_loss_" + "subset_" + str(args.subset) + "_" + str(args.seed) + "RE"
 
 
     if args.time_shuffle:
