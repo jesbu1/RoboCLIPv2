@@ -163,6 +163,7 @@ def get_args():
     parser.add_argument('--frame_length', type=int, default=32)
     parser.add_argument("--exp_name_end", type=str, default="triplet_hard_neg")
     parser.add_argument("--sparse_only", action="store_true")
+    parser.add_argument("--baseline", action="store_true")
 
     args = parser.parse_args()
     return args
@@ -310,8 +311,8 @@ class MetaworldSparse(Env):
 
                     # print(f"video_embedding dtype: {video_embedding.dtype}")
                     # print(f"transform_model.linear.weight dtype: {self.transform_model.linear.weight.dtype}")
-
-                    video_embedding = self.transform_model(video_embedding)
+                    if args.baseline:
+                        video_embedding = self.transform_model(video_embedding)
                     video_embedding = normalize_embeddings(video_embedding, return_tensor=True).float()
 
                     similarity_matrix = th.matmul(self.target_embedding, video_embedding.t())
@@ -587,7 +588,7 @@ def main():
         if not args.pretrained:
             model = SAC("MlpPolicy", envs, verbose=1, tensorboard_log=log_dir,
                         # batch_size=args.n_steps * args.n_envs,
-                        ent_coef=args.entropy_term, buffer_size=args.total_time_steps, learning_starts=256)
+                        ent_coef=args.entropy_term, buffer_size=args.total_time_steps, learning_starts=256, seed=args.seed)
         else:
             model = SAC.load(args.pretrained, env=envs, tensorboard_log=log_dir)
     else:
@@ -613,7 +614,7 @@ def main():
 
     # Evaluate the agent
     # load the best model
-    model = SAC.load(f"{log_dir}/{experiment_name}/best_model.zip")
+    model = SAC.load(f"{log_dir}/best_model")
     success_rate = eval_policys(args, MetaworldDense, model)
     wandb.log({"eval/evaluate_succ": success_rate})
 
