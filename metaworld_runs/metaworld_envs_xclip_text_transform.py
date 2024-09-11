@@ -163,6 +163,8 @@ def get_args():
     parser.add_argument('--frame_length', type=int, default=32)
     parser.add_argument("--exp_name_end", type=str, default="triplet_hard_neg")
     parser.add_argument("--sparse_only", action="store_true")
+    parser.add_argument("--baseline", action="store_true")
+    parser.add_argument("--obs_env", action="store_true")
 
 
     args = parser.parse_args()
@@ -173,7 +175,10 @@ class MetaworldSparse(Env):
     def __init__(self, args):
         super(MetaworldSparse,self)
         self.args = args
-        self.door_open_goal_hidden_cls = ALL_V2_ENVIRONMENTS_GOAL_HIDDEN[args.env_id]
+        if args.obs_env:
+            self.door_open_goal_hidden_cls = ALL_V2_ENVIRONMENTS_GOAL_OBSERVABLE[args.env_id]
+        else:
+            self.door_open_goal_hidden_cls = ALL_V2_ENVIRONMENTS_GOAL_HIDDEN[args.env_id]
         self.rank = args.seed
         self.baseEnv = self.door_open_goal_hidden_cls(seed=self.rank)
         self.env = TimeLimit(self.baseEnv, max_episode_steps=128)
@@ -205,17 +210,17 @@ class MetaworldSparse(Env):
                 self.net = AutoModel.from_pretrained(model_name).cuda()
                 self.processor = AutoProcessor.from_pretrained(model_name)
                 self.net = self.net.eval()
+                if args.baseline:
+                    self.transform_model = SingleLayerMLP(512, 512, normalize=True)
 
-                self.transform_model = SingleLayerMLP(512, 512, normalize=True)
+                    transform_model_path = os.path.join(args.transform_base_path, args.transform_model_path)
+                    dict = th.load(transform_model_path)
+                    if 'model_state_dict' in dict.keys():
+                        self.transform_model.load_state_dict(dict["model_state_dict"])
+                    else:
+                        self.transform_model.load_state_dict(dict)
 
-                transform_model_path = os.path.join(args.transform_base_path, args.transform_model_path)
-                dict = th.load(transform_model_path)
-                if 'model_state_dict' in dict.keys():
-                    self.transform_model.load_state_dict(dict["model_state_dict"])
-                else:
-                    self.transform_model.load_state_dict(dict)
-
-                self.transform_model = self.transform_model.eval().cuda()
+                    self.transform_model = self.transform_model.eval().cuda()
                 #self.transform_model.load_state_dict(th.load("/scr/jzhang96/triplet_text_loss_models/triplet_loss_50_42_xclip_TimeShort_Normtriplet/55.pth"))
 
                 
@@ -319,13 +324,13 @@ class MetaworldSparse(Env):
                         video_embedding = normalize_embeddings(video_embedding, return_tensor=True).float()
                         self.target_embedding = normalize_embeddings(self.target_embedding, return_tensor=True).float()
 
-                    if args.pca_path != None:
+                    if self.args.pca_path != None:
                         video_embedding = th.from_numpy(self.pca_video_model.transform(video_embedding.cpu())).float().cuda()
 
                     # print(f"video_embedding dtype: {video_embedding.dtype}")
                     # print(f"transform_model.linear.weight dtype: {self.transform_model.linear.weight.dtype}")
-
-                    video_embedding = self.transform_model(video_embedding)
+                    if not self.args.baseline:
+                        video_embedding = self.transform_model(video_embedding)
                     video_embedding = normalize_embeddings(video_embedding, return_tensor=True).float() 
 
 
@@ -373,7 +378,10 @@ class MetaworldSparse(Env):
 class MetaworldDense(Env):
     def __init__(self, args):
         super(MetaworldDense, self)
-        self.door_open_goal_hidden_cls = ALL_V2_ENVIRONMENTS_GOAL_HIDDEN[args.env_id]
+        if args.obs_env:
+            self.door_open_goal_hidden_cls = ALL_V2_ENVIRONMENTS_GOAL_OBSERVABLE[args.env_id]
+        else:
+            self.door_open_goal_hidden_cls = ALL_V2_ENVIRONMENTS_GOAL_HIDDEN[args.env_id]
         self.args = args
         self.rank = args.seed
         self.baseEnv = self.door_open_goal_hidden_cls(seed=self.rank)
@@ -571,7 +579,7 @@ def main():
     # if args.algo.lower() == 'sac':
     # experiment_name = experiment_name + "_Entropy" + str(args.entropy_term)
     experiment_name = experiment_name + args.exp_name_end
-    run_group = "PCA_Ini" + experiment_name + "NEW"
+    run_group = experiment_name + "NEW"
     experiment_name = experiment_name + "_" + str(args.seed) + "NEW"
 
     if args.wandb:

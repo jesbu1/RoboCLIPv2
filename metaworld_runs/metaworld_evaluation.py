@@ -270,10 +270,10 @@ def main():
 
     # Evaluate the agent
     # seed_num = ["5", "32", "42", "0", "1"]
-    seed_num = ["42", "1"]
+    seed_num = ["42",  "1"]
     total_sr = 0
     for seed_str in seed_num:
-        model = SAC.load(f"/scr/jzhang96/logs/baseline_logs/PCA_xclip_textTRANS_sac_faucet-open-v2-goal-hidden_PCA_512_SuccEndSet6_{seed_str}NEW/best_model.zip")
+        model = SAC.load(f"/scr/jzhang96/logs/baseline_logs/PCA_xclip_textTRANS_sac_stick-push-v2-goal-hidden_PCA_512_SuccEndSet6_{seed_str}NEW/best_model.zip")
     # model = PPO.load(f"/scr/jzhang96/logs/baseline_logs/s3d_baseline_ppo_door-close-v2-goal-hidden_Oracle_NormIn_XReward100.0_NoTime_RandReset_Entropyauto_5/best_model.zip")
         succ_count = 0
         total_count = 0
