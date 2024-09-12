@@ -547,9 +547,9 @@ def main():
     WANDB_ENTITY_NAME = "clvr"
     WANDB_PROJECT_NAME = "roboclip-v2"
     if args.pca_path != None:
-        experiment_name = "PCA_" + "xclip_textTRANS_" + args.algo + "_" + args.env_id
+        experiment_name = "debug_ep500_PCA_" + "xclip_textTRANS_" + args.algo + "_" + args.env_id
     else:
-        experiment_name = "NOPCA_" +"xclip_textTRANS_" + args.algo + "_" + args.env_id
+        experiment_name = "debug_ep500_NOPCA_" +"xclip_textTRANS_" + args.algo + "_" + args.env_id
     if args.train_orcale:
         experiment_name = experiment_name + "_Oracle"
     if args.threshold_reward:
@@ -560,7 +560,6 @@ def main():
     #     experiment_name = experiment_name + "_NormIn"
     # if args.norm_output:
     #     experiment_name = experiment_name + "_NormOut"
-    experiment_name = experiment_name + '_PCA_512'
     # if args.time_reward != 1.0:
     #     experiment_name = experiment_name + "_XReward" + str(args.time_reward)
     # if args.time:
