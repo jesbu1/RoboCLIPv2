@@ -137,7 +137,7 @@ def get_args():
     parser.add_argument('--pretrained', type=str, default=None)
     parser.add_argument('--wandb', action="store_true")
     parser.add_argument('--seed', type=int, default=42)
-    parser.add_argument('--eval_freq', type=int, default=20000)
+    parser.add_argument('--eval_freq', type=int, default=10000)
     parser.add_argument('--video_freq', type=int, default=40000)
     parser.add_argument('--succ_end', action="store_true")
     parser.add_argument('--video_path', type=str, default=None)
@@ -547,9 +547,9 @@ def main():
     WANDB_ENTITY_NAME = "clvr"
     WANDB_PROJECT_NAME = "roboclip-v2"
     if args.pca_path != None:
-        experiment_name = "debug_ep500_PCA_" + "xclip_textTRANS_" + args.algo + "_" + args.env_id
+        experiment_name = "ep500_PCA_" + "xclip_textTRANS_" + args.algo + "_" + args.env_id
     else:
-        experiment_name = "debug_ep500_NOPCA_" +"xclip_textTRANS_" + args.algo + "_" + args.env_id
+        experiment_name = "ep500_NOPCA_" +"xclip_textTRANS_" + args.algo + "_" + args.env_id
     if args.train_orcale:
         experiment_name = experiment_name + "_Oracle"
     if args.threshold_reward:
