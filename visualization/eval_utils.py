@@ -54,7 +54,7 @@ def eval_policys(args, env, policy):
         eval_env = env(args)
         obs = eval_env.reset_seed(seed)
         img_buffer = []
-        for i in range(128):
+        for i in range(500):
             action, _states = policy.predict(obs)
             obs, rewards, dones, info = eval_env.step(action)
             if info['success']:

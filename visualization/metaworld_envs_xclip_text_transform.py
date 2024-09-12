@@ -133,12 +133,12 @@ def get_args():
     parser.add_argument('--env_id', type=str, default='window-open-v2-goal-hidden')
     parser.add_argument('--total_time_steps', type=int, default=1000000)
     parser.add_argument('--n_envs', type=int, default=8)
-    parser.add_argument('--n_steps', type=int, default=128)
+    parser.add_argument('--n_steps', type=int, default=500)
     parser.add_argument('--pretrained', type=str, default=None)
     parser.add_argument('--wandb', action="store_true")
     parser.add_argument('--seed', type=int, default=42)
-    parser.add_argument('--eval_freq', type=int, default=1280)
-    parser.add_argument('--video_freq', type=int, default=5120)
+    parser.add_argument('--eval_freq', type=int, default=20000)
+    parser.add_argument('--video_freq', type=int, default=40000)
     parser.add_argument('--succ_end', action="store_true")
     parser.add_argument('--video_path', type=str, default=None)
     parser.add_argument('--pca_path', type=str, default=None)
@@ -164,6 +164,7 @@ def get_args():
     parser.add_argument("--exp_name_end", type=str, default="triplet_hard_neg")
     parser.add_argument("--sparse_only", action="store_true")
     parser.add_argument("--baseline", action="store_true")
+    parser.add_argument("--obs_env", action="store_true")
 
     args = parser.parse_args()
     return args
@@ -174,10 +175,13 @@ class MetaworldSparse(Env):
     def __init__(self, args):
         super(MetaworldSparse, self)
         self.args = args
-        self.door_open_goal_hidden_cls = ALL_V2_ENVIRONMENTS_GOAL_HIDDEN[args.env_id]
+        if args.obs_env:
+            self.door_open_goal_hidden_cls = ALL_V2_ENVIRONMENTS_GOAL_OBSERVABLE[args.env_id]
+        else:
+            self.door_open_goal_hidden_cls = ALL_V2_ENVIRONMENTS_GOAL_HIDDEN[args.env_id]
         self.rank = args.seed
         self.baseEnv = self.door_open_goal_hidden_cls(seed=self.rank)
-        self.env = TimeLimit(self.baseEnv, max_episode_steps=128)
+        self.env = TimeLimit(self.baseEnv, max_episode_steps=500)
         self.time = args.time
         if args.pca_path != None:
             pca_text_path = os.path.join(args.pca_path,
@@ -209,17 +213,17 @@ class MetaworldSparse(Env):
                 self.net = AutoModel.from_pretrained(model_name).cuda()
                 self.processor = AutoProcessor.from_pretrained(model_name)
                 self.net = self.net.eval()
+                if not args.baseline:
+                    self.transform_model = SingleLayerMLP(512, 512, normalize=True)
 
-                self.transform_model = SingleLayerMLP(512, 512, normalize=True)
+                    transform_model_path = os.path.join(args.transform_base_path, args.transform_model_path)
+                    dict = th.load(transform_model_path)
+                    if 'model_state_dict' in dict.keys():
+                        self.transform_model.load_state_dict(dict["model_state_dict"])
+                    else:
+                        self.transform_model.load_state_dict(dict)
 
-                transform_model_path = os.path.join(args.transform_base_path, args.transform_model_path)
-                dict = th.load(transform_model_path)
-                if 'model_state_dict' in dict.keys():
-                    self.transform_model.load_state_dict(dict["model_state_dict"])
-                else:
-                    self.transform_model.load_state_dict(dict)
-
-                self.transform_model = self.transform_model.eval().cuda()
+                    self.transform_model = self.transform_model.eval().cuda()
                 # self.transform_model.load_state_dict(th.load("/scr/jzhang96/triplet_text_loss_models/triplet_loss_50_42_xclip_TimeShort_Normtriplet/55.pth"))
 
                 self.target_embedding = None
@@ -276,11 +280,29 @@ class MetaworldSparse(Env):
         frame = self.env.render()
         return frame
 
+    def warm_up_run(self):
+        self.env.reset()
+        images = []
+        frame_num = random.randint(32, 128)
+
+        for _ in range(frame_num):
+            action = self.env.action_space.sample()
+            _, _, _, _ = self.env.step(action)
+            images.append(self.env.render()[:, :, :3])
+        images = np.array(images)
+
+        with th.no_grad():
+            frames = adjust_frames_xclip(images, target_frame_count=self.args.frame_length,
+                                         processor=self.processor).cuda()
+            frames = self.net.get_video_features(frames)
+
+        return frames
+
     def step(self, action):
         obs, _, done, info = self.env.step(action)
         self.past_observations.append(self.env.render())
         self.counter += 1
-        t = self.counter / 128
+        t = self.counter / 500
         if self.time:
             obs = np.concatenate([obs, np.array([t])])
 
@@ -305,13 +327,13 @@ class MetaworldSparse(Env):
                         video_embedding = normalize_embeddings(video_embedding, return_tensor=True).float()
                         self.target_embedding = normalize_embeddings(self.target_embedding, return_tensor=True).float()
 
-                    if args.pca_path != None:
+                    if self.args.pca_path != None:
                         video_embedding = th.from_numpy(
                             self.pca_video_model.transform(video_embedding.cpu())).float().cuda()
 
                     # print(f"video_embedding dtype: {video_embedding.dtype}")
                     # print(f"transform_model.linear.weight dtype: {self.transform_model.linear.weight.dtype}")
-                    if args.baseline:
+                    if not self.args.baseline:
                         video_embedding = self.transform_model(video_embedding)
                     video_embedding = normalize_embeddings(video_embedding, return_tensor=True).float()
 
@@ -348,7 +370,7 @@ class MetaworldSparse(Env):
         if self.args.random_reset:
             self.rank = random.randint(0, 400)
             self.baseEnv = self.door_open_goal_hidden_cls(seed=self.rank)
-            self.env = TimeLimit(self.baseEnv, max_episode_steps=128)
+            self.env = TimeLimit(self.baseEnv, max_episode_steps=500)
 
         if not self.time:
             return self.env.reset()
@@ -358,11 +380,14 @@ class MetaworldSparse(Env):
 class MetaworldDense(Env):
     def __init__(self, args):
         super(MetaworldDense, self)
-        self.door_open_goal_hidden_cls = ALL_V2_ENVIRONMENTS_GOAL_HIDDEN[args.env_id]
+        if args.obs_env:
+            self.door_open_goal_hidden_cls = ALL_V2_ENVIRONMENTS_GOAL_OBSERVABLE[args.env_id]
+        else:
+            self.door_open_goal_hidden_cls = ALL_V2_ENVIRONMENTS_GOAL_HIDDEN[args.env_id]
         self.args = args
         self.rank = args.seed
         self.baseEnv = self.door_open_goal_hidden_cls(seed=self.rank)
-        self.env = TimeLimit(self.baseEnv, max_episode_steps=128)
+        self.env = TimeLimit(self.baseEnv, max_episode_steps=500)
         self.time = args.time
         if not self.time:
             self.observation_space = self.env.observation_space
@@ -388,7 +413,7 @@ class MetaworldDense(Env):
         obs, _, done, info = self.env.step(action)
         self.counter += 1
         self.counter_total += 1
-        t = self.counter / 128
+        t = self.counter / 500
         if self.time:
             obs = np.concatenate([obs, np.array([t])])
 
@@ -409,7 +434,7 @@ class MetaworldDense(Env):
             self.rank = random.randint(400, 500)
             self.baseEnv = self.door_open_goal_hidden_cls(seed=self.rank)
             # env = door_open_goal_hidden_cls(seed=rank)
-            self.env = TimeLimit(self.baseEnv, max_episode_steps=128)
+            self.env = TimeLimit(self.baseEnv, max_episode_steps=500)
         if not self.time:
             return self.env.reset()
         return np.concatenate([self.env.reset(), np.array([0.0])])
@@ -419,7 +444,7 @@ class MetaworldDense(Env):
 
         self.rank = seed
         self.baseEnv = self.door_open_goal_hidden_cls(seed=self.rank)
-        self.env = TimeLimit(self.baseEnv, max_episode_steps=128)
+        self.env = TimeLimit(self.baseEnv, max_episode_steps=500)
         if not self.time:
             return self.env.reset()
         return np.concatenate([self.env.reset(), np.array([0.0])])
@@ -477,7 +502,7 @@ class CustomEvalCallback(EvalCallback):
         frames = []
         obs = self.eval_env.reset()
         # success = 0
-        for _ in range(128):  # You can adjust the number of steps for recording
+        for _ in range(500):  # You can adjust the number of steps for recording
             frame = self.eval_env.render(mode='rgb_array')
             # downsample frame
             frame = frame[::3, ::3, :3]
@@ -513,9 +538,9 @@ def main():
     WANDB_ENTITY_NAME = "clvr"
     WANDB_PROJECT_NAME = "roboclip-v2"
     if args.pca_path != None:
-        experiment_name = "PCA_" + "xclip_textTRANS_" + args.algo + "_" + args.env_id
+        experiment_name = "debug_ep500_PCA_" + "xclip_textTRANS_" + args.algo + "_" + args.env_id
     else:
-        experiment_name = "NOPCA_" + "xclip_textTRANS_" + args.algo + "_" + args.env_id
+        experiment_name = "debug_ep500_NOPCA_" + "xclip_textTRANS_" + args.algo + "_" + args.env_id
     if args.train_orcale:
         experiment_name = experiment_name + "_Oracle"
     if args.threshold_reward:
@@ -526,7 +551,6 @@ def main():
     #     experiment_name = experiment_name + "_NormIn"
     # if args.norm_output:
     #     experiment_name = experiment_name + "_NormOut"
-    experiment_name = experiment_name + '_PCA_512'
     # if args.time_reward != 1.0:
     #     experiment_name = experiment_name + "_XReward" + str(args.time_reward)
     # if args.time:
@@ -538,14 +562,14 @@ def main():
     # if args.random_reset:
     #     experiment_name = experiment_name + "_RandReset"
 
-    if args.succ_bonus > 0:
-        experiment_name = experiment_name + "_SuccBonus" + str(args.succ_bonus)
+    # if args.succ_bonus > 0:
+    #     experiment_name = experiment_name + "_SuccBonus" + str(args.succ_bonus)
     # if args.time_penalty > 0:
     #     experiment_name = experiment_name + "_TimePenalty" + str(args.time_penalty)
     # if args.algo.lower() == 'sac':
     # experiment_name = experiment_name + "_Entropy" + str(args.entropy_term)
     experiment_name = experiment_name + args.exp_name_end
-    run_group = "PCA_Ini" + experiment_name + "NEW"
+    run_group = experiment_name + "NEW"
     experiment_name = experiment_name + "_" + str(args.seed) + "NEW"
 
     if args.wandb:
@@ -568,7 +592,7 @@ def main():
     table2.add_data([args.env_id])
     wandb.log({"text_string": table1, "env_id": table2})
 
-    log_dir = f"/scr/yusenluo/RoboCLIP/visualization/xclip_text_transform_logs/{experiment_name}"
+    log_dir = f"/scr/jzhang96/logs/baseline_logs/{experiment_name}"
     # log_dir = f"/home/jzhang96/logs/baseline_logs/{experiment_name}"
 
     if not os.path.exists(log_dir):
@@ -588,7 +612,7 @@ def main():
         if not args.pretrained:
             model = SAC("MlpPolicy", envs, verbose=1, tensorboard_log=log_dir,
                         # batch_size=args.n_steps * args.n_envs,
-                        ent_coef=args.entropy_term, buffer_size=args.total_time_steps, learning_starts=256, seed=args.seed)
+                        ent_coef="auto", buffer_size=args.total_time_steps, learning_starts=4000, seed=args.seed)
         else:
             model = SAC.load(args.pretrained, env=envs, tensorboard_log=log_dir)
     else:
@@ -616,7 +640,7 @@ def main():
     # load the best model
     model = SAC.load(f"{log_dir}/best_model")
     success_rate = eval_policys(args, MetaworldDense, model)
-    wandb.log({"eval/evaluate_succ": success_rate})
+    wandb.log({"eval_SR/evaluate_succ": success_rate}, step=0)
 
 
 if __name__ == '__main__':
