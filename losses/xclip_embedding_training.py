@@ -272,8 +272,16 @@ def main(args):
         with th.no_grad():
             model.linear.weight = nn.Parameter(computed_matrix.T.cuda().float())
             model.linear.bias = nn.Parameter(th.zeros(512).cuda())
-
     optimizer = th.optim.Adam(model.parameters(), lr=1e-4)
+    org_model_save_path = os.path.join(pca_save_path, "org_model.pth")
+    # save org model
+    th.save({
+        "model_state_dict": model.state_dict(),
+        "optimizer_state_dict": optimizer.state_dict(),
+    }, org_model_save_path)
+
+    import pdb ; pdb.set_trace()
+    
 
     run = wandb.init(
         entity=WANDB_ENTITY_NAME,
