@@ -43,10 +43,12 @@ if __name__ == "__main__":
 
     aaa = ["a", "b", "c"]
     text_embeddings = embedding_text(aaa, xclip_tokenizer, xclip_net)
+    text_embeddings = normalize_embeddings(text_embeddings)
     print(text_embeddings.shape) #(3, 512)
 
 
     # embedding video
     video = np.random.randint(0, 255, (32, 224, 224, 3))
     video_embeddings = embedding_video(video, xclip_net, xclip_processor)
+    video_embeddings = normalize_embeddings(video_embeddings)
     print(video_embeddings.shape) #(1, 512)
