@@ -106,3 +106,42 @@ class H5ReplayBuffer(ReplayBuffer):
             self._normalize_reward(self.rewards[batch_inds].reshape(-1, 1), env=None),
         )
         return ReplayBufferSamples(*tuple(map(self.to_torch, data)))
+
+
+class CombinedBuffer(BaseBuffer):
+    def __init__(self, old_buffer: ReplayBuffer, new_buffer: ReplayBuffer):
+        self.old_buffer = old_buffer
+        self.new_buffer = new_buffer
+
+    def _get_samples(
+        self,
+        batch_inds: np.ndarray,
+    ) -> ReplayBufferSamples:
+        return
+
+    def sample(self, batch_size: int, env: Optional[VecNormalize] = None):
+        """
+        :param batch_size: Number of element to sample
+        :param env: associated gym VecEnv
+            to normalize the observations/rewards when sampling
+        :return:
+        """
+        old_batch_size = batch_size // 2
+        new_batch_size = batch_size - old_batch_size
+        old_samples = self.old_buffer.sample(old_batch_size, env=env)
+        new_samples = self.new_buffer.sample(new_batch_size, env=env)
+
+        # Concatenate the samples into old_samples
+        cat_names = ["observations", "actions", "next_observations", "dones", "rewards"]
+        for name in cat_names:
+            old_data = getattr(old_samples, name)
+            new_data = getattr(new_samples, name)
+            setattr(old_samples, name, th.cat((old_data, new_data), dim=0))
+
+        return old_samples
+
+    def size(self) -> int:
+        """
+        :return: The total size of the buffer
+        """
+        return self.new_buffer.size + self.old_buffer.size
