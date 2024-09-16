@@ -137,8 +137,8 @@ def get_args():
     parser.add_argument('--pretrained', type=str, default=None)
     parser.add_argument('--wandb', action="store_true")
     parser.add_argument('--seed', type=int, default=42)
-    parser.add_argument('--eval_freq', type=int, default=10000)
-    parser.add_argument('--video_freq', type=int, default=40000)
+    parser.add_argument('--eval_freq', type=int, default=5000)
+    parser.add_argument('--video_freq', type=int, default=10000)
     parser.add_argument('--succ_end', action="store_true")
     parser.add_argument('--video_path', type=str, default=None)
     parser.add_argument('--pca_path', type=str, default=None)
@@ -165,6 +165,10 @@ def get_args():
     parser.add_argument("--sparse_only", action="store_true")
     parser.add_argument("--baseline", action="store_true")
     parser.add_argument("--obs_env", action="store_true")
+    parser.add_argument("--var", type=float, default=1.0)
+    parser.add_argument("--ep_length", type=int, default=128)
+
+
 
 
     args = parser.parse_args()
@@ -181,7 +185,7 @@ class MetaworldSparse(Env):
             self.door_open_goal_hidden_cls = ALL_V2_ENVIRONMENTS_GOAL_HIDDEN[args.env_id]
         self.rank = args.seed
         self.baseEnv = self.door_open_goal_hidden_cls(seed=self.rank)
-        self.env = TimeLimit(self.baseEnv, max_episode_steps=500)
+        self.env = TimeLimit(self.baseEnv, max_episode_steps=args.ep_length)
         self.time = args.time
         if args.pca_path != None:
             pca_text_path = os.path.join(args.pca_path, 'pca_model_text.pkl') #'/scr/yusenluo/RoboCLIP/visualization/saved_model/pca_loss_models/[4, 13, 19, 36, 48]_Seed_42/512_linear/pca_model_text.pkl'
@@ -211,7 +215,10 @@ class MetaworldSparse(Env):
                 self.processor = AutoProcessor.from_pretrained(model_name)
                 self.net = self.net.eval()
                 if not args.baseline:
-                    self.transform_model = SingleLayerMLP(512, 512, normalize=True)
+                    if args.var >= 1.0:
+                        self.transform_model = SingleLayerMLP(512, 512, normalize=True)
+                    else:
+                        self.transform_model = SingleLayerMLP(13, 13, normalize=True)
 
                     transform_model_path = os.path.join(args.transform_base_path, args.transform_model_path)
                     dict = th.load(transform_model_path)
@@ -300,7 +307,7 @@ class MetaworldSparse(Env):
         obs, _, done, info = self.env.step(action)
         self.past_observations.append(self.env.render())
         self.counter += 1
-        t = self.counter/500
+        t = self.counter/self.args.ep_length
         if self.time:
             obs = np.concatenate([obs, np.array([t])])
         
@@ -368,7 +375,7 @@ class MetaworldSparse(Env):
         if self.args.random_reset:
             self.rank = random.randint(0, 400)
             self.baseEnv = self.door_open_goal_hidden_cls(seed=self.rank)
-            self.env = TimeLimit(self.baseEnv, max_episode_steps=500)
+            self.env = TimeLimit(self.baseEnv, max_episode_steps=self.args.ep_length)
 
         if not self.time:
             return self.env.reset()
@@ -385,7 +392,7 @@ class MetaworldDense(Env):
         self.args = args
         self.rank = args.seed
         self.baseEnv = self.door_open_goal_hidden_cls(seed=self.rank)
-        self.env = TimeLimit(self.baseEnv, max_episode_steps=500)
+        self.env = TimeLimit(self.baseEnv, max_episode_steps=args.ep_length)
         self.time = args.time
         if not self.time:
             self.observation_space = self.env.observation_space
@@ -412,7 +419,7 @@ class MetaworldDense(Env):
         obs, _, done, info = self.env.step(action)
         self.counter += 1
         self.counter_total += 1
-        t = self.counter/500
+        t = self.counter/self.args.ep_length
         if self.time:
             obs = np.concatenate([obs, np.array([t])])
 
@@ -433,7 +440,7 @@ class MetaworldDense(Env):
             self.rank = random.randint(400, 500)
             self.baseEnv = self.door_open_goal_hidden_cls(seed=self.rank)
             # env = door_open_goal_hidden_cls(seed=rank)
-            self.env = TimeLimit(self.baseEnv, max_episode_steps=500)
+            self.env = TimeLimit(self.baseEnv, max_episode_steps=self.args.ep_length)
         if not self.time:
             return self.env.reset()
         return np.concatenate([self.env.reset(), np.array([0.0])])
@@ -443,7 +450,7 @@ class MetaworldDense(Env):
         
         self.rank = seed
         self.baseEnv = self.door_open_goal_hidden_cls(seed=self.rank)
-        self.env = TimeLimit(self.baseEnv, max_episode_steps=500)
+        self.env = TimeLimit(self.baseEnv, max_episode_steps=self.args.ep_length)
         if not self.time:
             return self.env.reset()
         return np.concatenate([self.env.reset(), np.array([0.0])])
@@ -479,6 +486,13 @@ class CustomWandbCallback(WandbCallback):
             'episode_reward': sum(self.locals['rewards']),  # Cumulative reward for the episode
             'episode_length': len(self.locals['rewards'])   # Length of the episode
         }, step=self.model.num_timesteps) 
+    def _on_step(self):
+        # Log the number of gradient steps
+        wandb.log({
+            'gradient_steps': self.model._n_updates,
+            'num_timesteps': self.model.num_timesteps
+        }, step=self.model.num_timesteps)
+        return True        
 
 
 
@@ -503,7 +517,7 @@ class CustomEvalCallback(EvalCallback):
         frames = []
         obs = self.eval_env.reset()
         #success = 0
-        for _ in range(500):  # You can adjust the number of steps for recording
+        for _ in range(128):  # You can adjust the number of steps for recording
             frame = self.eval_env.render(mode='rgb_array')
             # downsample frame
             frame = frame[::3, ::3, :3]
@@ -547,15 +561,16 @@ def main():
     WANDB_ENTITY_NAME = "clvr"
     WANDB_PROJECT_NAME = "roboclip-v2"
     if args.pca_path != None:
-        experiment_name = "ep500_PCA_" + "xclip_textTRANS_" + args.algo + "_" + args.env_id
+        experiment_name = "ep" + str(args.ep_length) + "_PCA_" + "xclip_textTRANS_" + str(args.var) + args.algo + "_" + args.env_id
     else:
-        experiment_name = "ep500_NOPCA_" +"xclip_textTRANS_" + args.algo + "_" + args.env_id
+        experiment_name = "ep" + str(args.ep_length) + "_NOPCA_" +"xclip_textTRANS_" + str(args.var) + args.algo + "_" + args.env_id
     if args.train_orcale:
         experiment_name = experiment_name + "_Oracle"
     if args.threshold_reward:
         experiment_name = experiment_name + "_Thld"
     if args.project_reward:
         experiment_name = experiment_name + "_ProjReward"
+    
     # if args.norm_input:
     #     experiment_name = experiment_name + "_NormIn"
     # if args.norm_output:
@@ -621,8 +636,7 @@ def main():
             model = PPO.load(args.pretrained, env=envs, tensorboard_log=log_dir)
     elif args.algo.lower() == 'sac':
         if not args.pretrained:
-            model = SAC("MlpPolicy", envs, verbose=1, tensorboard_log=log_dir, 
-                        # batch_size=args.n_steps * args.n_envs,
+            model = SAC("MlpPolicy", envs, verbose=1, tensorboard_log=log_dir, gradient_steps = args.n_envs,
                         ent_coef="auto", buffer_size=args.total_time_steps, learning_starts=4000, seed=args.seed)
         else:
             model = SAC.load(args.pretrained, env=envs, tensorboard_log=log_dir)
@@ -635,7 +649,7 @@ def main():
         eval_env = DummyVecEnv([make_env(args, eval = True)])#KitchenEnvDenseOriginalReward(time=True)
     # Use deterministic actions for evaluation
 
-    eval_callback = CustomEvalCallback(eval_env, best_model_save_path=log_dir,
+    eval_callback = CustomEvalCallback(eval_env, best_model_save_path=log_dir, 
                                     log_path=log_dir, eval_freq=args.eval_freq, video_freq=args.video_freq,
                                     deterministic=True, render=False, n_eval_episodes = 25)
      

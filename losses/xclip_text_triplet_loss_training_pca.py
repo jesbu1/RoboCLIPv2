@@ -344,7 +344,7 @@ def main(args):
     run = wandb.init(
         entity=WANDB_ENTITY_NAME,
         project=WANDB_PROJECT_NAME,
-        group="text_adaptive_triplet_xclip_rerun",
+        group="text_adaptive_triplet_xclip_rerun_0.9",
         config=args,
         name=experiment_name,
     )
@@ -357,7 +357,7 @@ def main(args):
         xclip_processor = AutoProcessor.from_pretrained("microsoft/xclip-base-patch16-zero-shot")
         # h5_xclip_embedding_file = h5py.File("/scr/jzhang96/metaworld_25_generated_xclip_embeddings.h5", "r")
         # train_xclip_video, train_xclip_text, train_xclip_mappings = get_xclip_embeddings(task_id=set(range(50)))
-        train_xclip_video, train_xclip_text, train_xclip_mappings = get_xclip_embeddings(task_id=set(4,7,19,48,47,8,5,30,17,24))
+        train_xclip_video, train_xclip_text, train_xclip_mappings = get_xclip_embeddings(task_id=set(13,))
 
         pca_text, reduced_train_text = reduce_dimension(train_xclip_text.cpu(), variance_threshold=args.variance_threshold,
                                                         embed_type='text', seed=args.seed, kernel='linear',

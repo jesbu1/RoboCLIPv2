@@ -38,7 +38,7 @@ def main(args):
 
     WANDB_ENTITY_NAME = "clvr"
     WANDB_PROJECT_NAME = "roboclip-v2"
-    experiment_name = "triplet_loss_" + "subset_" + str(args.subset) + "_" + str(args.seed) + "RE"
+    experiment_name = "triplet_loss_" + "subset_" + str(args.subset) + "_" + str(args.seed) + "_var" + str(args.variance_threshold) + "new"
 
 
     if args.time_shuffle:
@@ -91,7 +91,7 @@ def main(args):
 
 
 
-    model = SingleLayerMLP(512, 512).cuda()
+    
     
 
     if args.loss_type == "MILNCE":
@@ -196,12 +196,23 @@ def main(args):
                 text_pca_embedding = np.concatenate([text_pca_embedding, text_pca_embedding, text_pca_embedding, text_pca_embedding], axis=0)
 
 
-
-        pca_video_model = PCA(n_components=512)
-        pca_text_model = PCA(n_components=512)
+        if args.variance_threshold < 1.0:
+            pca_video_model = PCA(n_components=args.variance_threshold)
+            pca_video_model.fit(video_pca_embedding)
+            video_dim = pca_video_model.n_components_
+            pca_text_model = PCA(n_components=video_dim)
+        else:
+            video_dim = 512
+            pca_video_model = PCA(n_components=512)
+            pca_text_model = PCA(n_components=512)
         pca_video_model.fit(video_pca_embedding)
         pca_text_model.fit(text_pca_embedding)
+
+
+
         # convert to numpy float type
+
+
         pca_save_path = (f"pca_loss_models/{experiment_name}")
         os.makedirs(pca_save_path, exist_ok=True)
         video_model_filename = (f"{pca_save_path}/pca_model_video.pkl")
@@ -213,6 +224,8 @@ def main(args):
 
         total_evaluate_embeddings = pca_video_model.transform(total_evaluate_embeddings)
         evaluate_run_embeddings = pca_video_model.transform(evaluate_run_embeddings)
+
+        
         BPTD_embedding = pca_video_model.transform(BPTD_embedding)
         DO_embedding = pca_video_model.transform(DO_embedding)
 
@@ -263,15 +276,14 @@ def main(args):
     # aaa = np.linalg.norm(aaa, axis=1)
 
 
-    # import pdb ; pdb.set_trace()
-
+    model = SingleLayerMLP(video_dim, video_dim).cuda()
 
     # init MLP model
     if args.pca:
         computed_matrix = compute_M(pca_video_model.components_, pca_text_model.components_)
         with th.no_grad():
             model.linear.weight = nn.Parameter(computed_matrix.T.cuda().float())
-            model.linear.bias = nn.Parameter(th.zeros(512).cuda())
+            model.linear.bias = nn.Parameter(th.zeros(video_dim).cuda())
     optimizer = th.optim.Adam(model.parameters(), lr=1e-4)
     org_model_save_path = os.path.join(pca_save_path, "org_model.pth")
     # save org model
@@ -280,7 +292,6 @@ def main(args):
         "optimizer_state_dict": optimizer.state_dict(),
     }, org_model_save_path)
 
-    import pdb ; pdb.set_trace()
     
 
     run = wandb.init(
@@ -365,7 +376,6 @@ def main(args):
             # aaa = gt_features[0:1]
             # aaa_norm = torch.norm(aaa, p=2, dim=1).mean().item()
 
-            # import pdb ; pdb.set_trace()
             with torch.no_grad():
                 pos_cos_avg = F.cosine_similarity(gt_features, pos_features, dim=1).mean().item()
                 neg_cos_avg = F.cosine_similarity(gt_features, neg_features, dim=1).mean().item()
@@ -433,12 +443,20 @@ def main(args):
                 "optimizer_state_dict": optimizer.state_dict(),
             }, os.path.join(save_path, "model_" + str(epoch) + ".pth"))
 
+            if epoch == 9999 or epoch == 19999:
+                last_model_save_path = os.path.join(pca_save_path, "model_" + str(epoch) + ".pth")
+                th.save({
+                    "model_state_dict": model.state_dict(),
+                    "optimizer_state_dict": optimizer.state_dict(),
+                }, last_model_save_path)
+
 
 
 
             
 
     run.finish()
+    print("video_dim", video_dim)
 
 
 
@@ -468,6 +486,7 @@ if __name__ == '__main__':
     argparser.add_argument('--pca', action='store_true')
     argparser.add_argument('--subset', type=int, default=0)
     argparser.add_argument('--aug_pca', action='store_true')
+    argparser.add_argument('--variance_threshold', type=float, default=1.0)
 
     args = argparser.parse_args()
     main(args)
