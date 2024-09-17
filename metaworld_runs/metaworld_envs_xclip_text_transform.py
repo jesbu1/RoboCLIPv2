@@ -486,13 +486,14 @@ class CustomWandbCallback(WandbCallback):
             'episode_reward': sum(self.locals['rewards']),  # Cumulative reward for the episode
             'episode_length': len(self.locals['rewards'])   # Length of the episode
         }, step=self.model.num_timesteps) 
-    def _on_step(self):
-        # Log the number of gradient steps
-        wandb.log({
-            'gradient_steps': self.model._n_updates,
-            'num_timesteps': self.model.num_timesteps
-        }, step=self.model.num_timesteps)
-        return True        
+
+    # def _on_step(self):
+    #     # Log the number of gradient steps
+    #     wandb.log({
+    #         'gradient_steps': self.model._n_updates,
+    #         'num_timesteps': self.model.num_timesteps
+    #     }, step=self.model.num_timesteps)
+    #     return True        
 
 
 
@@ -570,28 +571,10 @@ def main():
         experiment_name = experiment_name + "_Thld"
     if args.project_reward:
         experiment_name = experiment_name + "_ProjReward"
-    
-    # if args.norm_input:
-    #     experiment_name = experiment_name + "_NormIn"
-    # if args.norm_output:
-    #     experiment_name = experiment_name + "_NormOut"
-    # if args.time_reward != 1.0:
-    #     experiment_name = experiment_name + "_XReward" + str(args.time_reward)
-    # if args.time:
-    #     experiment_name = experiment_name + "_Time"
-    # else:
-    #     experiment_name = experiment_name + "_NoTime"
+
     if args.succ_end:
         experiment_name = experiment_name + "_SuccEnd"
-    # if args.random_reset:
-    #     experiment_name = experiment_name + "_RandReset"
 
-    # if args.succ_bonus > 0:
-    #     experiment_name = experiment_name + "_SuccBonus" + str(args.succ_bonus)
-    # if args.time_penalty > 0:
-    #     experiment_name = experiment_name + "_TimePenalty" + str(args.time_penalty)
-    # if args.algo.lower() == 'sac':
-    # experiment_name = experiment_name + "_Entropy" + str(args.entropy_term)
     experiment_name = experiment_name + args.exp_name_end
     run_group = experiment_name + "NEW"
     experiment_name = experiment_name + "_" + str(args.seed) + "NEW"
@@ -664,9 +647,10 @@ def main():
 
     # Evaluate the agent
     # load the best model
-    model = SAC.load(f"{log_dir}/best_model")
-    success_rate = eval_policys(args, MetaworldDense, model)
-    wandb.log({"eval_SR/evaluate_succ": success_rate}, step = 0)
+
+    # model = SAC.load(f"{log_dir}/best_model")
+    # success_rate = eval_policys(args, MetaworldDense, model)
+    # wandb.log({"eval_SR/evaluate_succ": success_rate}, step = 0)
 
 
 if __name__ == '__main__':
