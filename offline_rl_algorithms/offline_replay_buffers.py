@@ -6,7 +6,7 @@ from typing import Any, Dict, Generator, List, Optional, Tuple, Union
 
 import numpy as np
 import torch as th
-from gymnasium import spaces
+from gym import spaces
 
 from stable_baselines3.common.preprocessing import get_action_dim, get_obs_shape
 from stable_baselines3.common.type_aliases import (
@@ -59,17 +59,29 @@ class H5ReplayBuffer(ReplayBuffer):
         n_envs: int = 1,
         success_bonus: float = 0.0,
     ):
-        super().__init__(0, device, n_envs=n_envs)
-        self.optimize_memory_usage = True
+
         with h5py.File(h5_path, "r") as f:
-            self.observations = f["state"][()]
+            observations = f["state"][()]
             # self.lang_embeddings = f["lang_embedding"][()]
-            self.next_observations = self.observations
-            self.actions = f["action"][()]
-            self.rewards = f["reward"][()]
-            self.dones = f["done"][()]
-        self.buffer_size = self.actions.shape[0]
+            next_observations = observations
+            actions = f["action"][()]
+            rewards = f["rewards"][()]
+            dones = f["done"][()]
+
+        self.optimize_memory_usage = True
+
+        self.observations = observations
+        self.next_observations = next_observations
+        self.actions = actions
+        self.rewards = rewards
+        self.dones = dones
+
+        self.buffer_size = self.rewards.shape[0]
         self.success_bonus = success_bonus
+
+        self.pos = self.buffer_size
+        self.full = True
+        self.device = get_device(device)
 
     def add(
         self,
@@ -87,6 +99,7 @@ class H5ReplayBuffer(ReplayBuffer):
     def _get_samples(
         self,
         batch_inds: np.ndarray,
+        env: Optional[VecNormalize] = None,
     ) -> ReplayBufferSamples:
         # Sample randomly the env idx
 
@@ -149,3 +162,11 @@ class CombinedBuffer(BaseBuffer):
         :return: The total size of the buffer
         """
         return self.new_buffer.size + self.old_buffer.size
+
+if __name__ == "__main__":
+    # Test the H5ReplayBuffer
+    h5_path = "updated_trajs.h5"
+    buffer = H5ReplayBuffer(h5_path)
+    print(buffer.size())
+    samples = buffer.sample(10)
+    print(samples)

@@ -180,7 +180,7 @@ class OfflineRLAlgorithm(OffPolicyAlgorithm):
 
         # divide train_steps by 100 and call train 100 times
         for _ in range(train_steps // 100):
-            self.train(100, batch_size=batch_size, callback=callback)
+            self.train(100, batch_size=batch_size, callback=callback, logging_prefix="offline_")
 
         self.replay_buffer = old_replay_buffer
 

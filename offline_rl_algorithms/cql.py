@@ -8,7 +8,7 @@ from torch.nn import functional as F
 from stable_baselines3.common.buffers import ReplayBuffer
 from stable_baselines3.common.noise import ActionNoise
 from stable_baselines3.common.off_policy_algorithm import OffPolicyAlgorithm
-from offline_rl_algorithms.base import OfflineRLAlgorithm
+from offline_rl_algorithms.base_offline_rl_algorithm import OfflineRLAlgorithm
 from stable_baselines3.common.policies import BasePolicy, ContinuousCritic
 from stable_baselines3.common.type_aliases import GymEnv, MaybeCallback, Schedule
 from stable_baselines3.common.utils import get_parameters_by_name, polyak_update
@@ -210,7 +210,7 @@ class CQL(OfflineRLAlgorithm):
         self.critic_target = self.policy.critic_target
 
     def train(
-        self, gradient_steps: int, batch_size: int = 64, callback: MaybeCallback = None
+        self, gradient_steps: int, batch_size: int = 64, callback: MaybeCallback = None, logging_prefix: str = ""
     ) -> None:
         # Switch to train mode (this affects batch norm / dropout)
         self.policy.set_training_mode(True)
@@ -380,13 +380,13 @@ class CQL(OfflineRLAlgorithm):
 
         self._n_updates += gradient_steps
 
-        self.logger.record("train/n_updates", self._n_updates, exclude="tensorboard")
-        self.logger.record("train/ent_coef", np.mean(ent_coefs))
-        self.logger.record("train/actor_loss", np.mean(actor_losses))
-        self.logger.record("train/critic_loss", np.mean(critic_losses))
-        self.logger.record("train/cql_loss", np.mean(cql_losses))
+        self.logger.record(f"{logging_prefix}train/n_updates", self._n_updates, exclude="tensorboard")
+        self.logger.record(f"{logging_prefix}train/ent_coef", np.mean(ent_coefs))
+        self.logger.record(f"{logging_prefix}train/actor_loss", np.mean(actor_losses))
+        self.logger.record(f"{logging_prefix}train/critic_loss", np.mean(critic_losses))
+        self.logger.record(f"{logging_prefix}train/cql_loss", np.mean(cql_losses))
         if len(ent_coef_losses) > 0:
-            self.logger.record("train/ent_coef_loss", np.mean(ent_coef_losses))
+            self.logger.record(f"{logging_prefix}train/ent_coef_loss", np.mean(ent_coef_losses))
 
         callback.on_rollout_end()
 
