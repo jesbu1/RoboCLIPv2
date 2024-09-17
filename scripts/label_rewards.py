@@ -3,11 +3,13 @@ import torch
 import torch as th
 import h5py
 from tqdm import tqdm
+import torch.nn.functional as F
 
 import numpy as np
 import sys, os
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))) 
 from encoders import XCLIPEncoder, S3DEncoder, VLCEncoder  # Assume these are imported or defined elsewhere
+
 # from transformation_model import load_transformation_model  # Assume this loads the transformation model
 
 
@@ -52,7 +54,6 @@ class RewardLabeler:
         """
         all_rewards = []
 
-
         image = traj_data['img']
         previous_instruction = None
         instruction = traj_data['string']
@@ -81,10 +82,9 @@ class RewardLabeler:
             if done[i]:
                 # Then we reset the buffer
                 images = []
-            
+
             if i == 2:
                 break
-
 
         # # Iterate over each trajectory in the dataset
         # for traj in tqdm(traj_data):
@@ -131,10 +131,10 @@ class RewardLabeler:
 #     images = h5_file['img']
 #     states = h5_file['state']
 #     strings = h5_file['string']
-    
+
 #     trajectories = []
 #     current_trajectory = {'actions': [], 'states': [], 'images': [], 'instruction': []}
-    
+
 #     # Initialize chunk indices
 #     start_idx = 0
 #     end_idx = min(chunk_size, len(dones))
@@ -146,7 +146,7 @@ class RewardLabeler:
 #         chunk_images = images[start_idx:end_idx]
 #         chunk_states = states[start_idx:end_idx]
 #         chunk_strings = strings[start_idx:end_idx]
-        
+
 #         for i in range(len(chunk_dones)):
 #             if chunk_dones[i]:
 #                 # End of a trajectory
@@ -154,7 +154,7 @@ class RewardLabeler:
 #                 current_trajectory['states'].append(chunk_states[i])
 #                 current_trajectory['images'].append(chunk_images[i])
 #                 current_trajectory['instruction'].append(chunk_strings[i])
-                
+
 #                 trajectories.append(current_trajectory)
 #                 current_trajectory = {'actions': [], 'states': [], 'images': [], 'instruction': []}
 #             else:
@@ -163,7 +163,7 @@ class RewardLabeler:
 #                 current_trajectory['states'].append(chunk_states[i])
 #                 current_trajectory['images'].append(chunk_images[i])
 #                 current_trajectory['instruction'].append(chunk_strings[i])
-        
+
 #         # Move to the next chunk
 #         start_idx = end_idx
 #         end_idx = min(start_idx + chunk_size, len(dones))
@@ -171,7 +171,7 @@ class RewardLabeler:
 #     # Handle the last trajectory if it doesn't end with a "done" flag
 #     if len(current_trajectory['actions']) > 0:
 #         trajectories.append(current_trajectory)
-    
+
 #     return trajectories
 
 
