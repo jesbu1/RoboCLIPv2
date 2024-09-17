@@ -44,6 +44,7 @@ class H5ReplayBuffer(ReplayBuffer):
         separately and treat the task as infinite horizon task.
         https://github.com/DLR-RM/stable-baselines3/issues/284
     """
+    # TODO: success bonus needs to be handled in this replay buffer as an optional param
 
     observations: np.ndarray
     next_observations: np.ndarray
@@ -56,16 +57,19 @@ class H5ReplayBuffer(ReplayBuffer):
         h5_path: str,
         device: Union[th.device, str] = "auto",
         n_envs: int = 1,
+        success_bonus: float = 0.0,
     ):
         super().__init__(0, device, n_envs=n_envs)
         self.optimize_memory_usage = True
         with h5py.File(h5_path, "r") as f:
-            self.observations = f["observations"][()]
+            self.observations = f["state"][()]
+            # self.lang_embeddings = f["lang_embedding"][()]
             self.next_observations = self.observations
-            self.actions = f["actions"][()]
-            self.rewards = f["rewards"][()]
-            self.dones = f["dones"][()]
+            self.actions = f["action"][()]
+            self.rewards = f["reward"][()]
+            self.dones = f["done"][()]
         self.buffer_size = self.actions.shape[0]
+        self.success_bonus = success_bonus
 
     def add(
         self,
