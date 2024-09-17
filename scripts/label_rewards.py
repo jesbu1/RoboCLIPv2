@@ -52,34 +52,68 @@ class RewardLabeler:
         """
         all_rewards = []
 
-        # Iterate over each trajectory in the dataset
-        for traj in tqdm(traj_data):
-            buffer_of_images = np.array(traj['images'])
-            rewards = []
 
-            text_embedding = self.encoder.encode_text(traj['instruction'][0])
+        image = traj_data['img']
+        previous_instruction = None
+        instruction = traj_data['string']
+        state = traj_data['state']
+        done = traj_data['done']
 
-            # Process image buffer as growing video
-            for t in range(1, len(buffer_of_images) + 1):
-                video_frames = buffer_of_images[:t]
-                video_embedding = self.encoder.encode_video(video_frames)
+        images = []
+        for i in tqdm(range(len(done))):
+            if instruction[i] != previous_instruction:
+                text_embedding = self.encoder.encode_text(instruction[i])
+                previous_instruction = instruction[i]
 
-                # Apply the transformation model if available
-                if hasattr(self, 'transform_model'):
-                    video_embedding = self.transform_model(video_embedding)
+            # We append images to the buffer, until we reach the end of the trajectory
+            images.append(image[i])
+            video_frames = np.array(images)
+            video_embedding = self.encoder.encode_video(video_frames)
 
-                # Calculate reward (similarity between video embedding and text embedding)
-                similarity = self.compute_similarity(video_embedding, text_embedding)
-                rewards.append(similarity)
+            # Apply the transformation model if available
+            if hasattr(self, 'transform_model'):
+                video_embedding = self.transform_model(video_embedding)
 
-            # Store rewards for the current trajectory
-            all_rewards.append(rewards)
+            # Calculate reward (similarity between video embedding and text embedding)
+            similarity = self.compute_similarity(video_embedding, text_embedding)
+            all_rewards.append(similarity)
 
-            # FOR TESTING: Stop after processing two trajectories
-            if len(all_rewards) == 2:
+            if done[i]:
+                # Then we reset the buffer
+                images = []
+            
+            if i == 2:
                 break
 
-        return all_rewards
+
+        # # Iterate over each trajectory in the dataset
+        # for traj in tqdm(traj_data):
+        #     buffer_of_images = np.array(traj['images'])
+        #     rewards = []
+
+        #     text_embedding = self.encoder.encode_text(traj['instruction'][0])
+
+        #     # Process image buffer as growing video
+        #     for t in range(1, len(buffer_of_images) + 1):
+        #         video_frames = buffer_of_images[:t]
+        #         video_embedding = self.encoder.encode_video(video_frames)
+
+        #         # Apply the transformation model if available
+        #         if hasattr(self, 'transform_model'):
+        #             video_embedding = self.transform_model(video_embedding)
+
+        #         # Calculate reward (similarity between video embedding and text embedding)
+        #         similarity = self.compute_similarity(video_embedding, text_embedding)
+        #         rewards.append(similarity)
+
+        #     # Store rewards for the current trajectory
+        #     all_rewards.append(rewards)
+
+        #     # FOR TESTING: Stop after processing two trajectories
+        #     if len(all_rewards) == 2:
+        #         break
+
+        # return all_rewards
 
     def compute_similarity(self, video_embedding, text_embedding):
         """
@@ -91,54 +125,54 @@ class RewardLabeler:
         return similarity
 
 
-def parse_trajectories(h5_file, chunk_size=1000):
-    actions = h5_file['action']
-    dones = h5_file['done']
-    images = h5_file['img']
-    states = h5_file['state']
-    strings = h5_file['string']
+# def parse_trajectories(h5_file, chunk_size=1000):
+#     actions = h5_file['action']
+#     dones = h5_file['done']
+#     images = h5_file['img']
+#     states = h5_file['state']
+#     strings = h5_file['string']
     
-    trajectories = []
-    current_trajectory = {'actions': [], 'states': [], 'images': [], 'instruction': []}
+#     trajectories = []
+#     current_trajectory = {'actions': [], 'states': [], 'images': [], 'instruction': []}
     
-    # Initialize chunk indices
-    start_idx = 0
-    end_idx = min(chunk_size, len(dones))
+#     # Initialize chunk indices
+#     start_idx = 0
+#     end_idx = min(chunk_size, len(dones))
 
-    while start_idx < len(dones):
-        # Load a chunk of data
-        chunk_actions = actions[start_idx:end_idx]
-        chunk_dones = dones[start_idx:end_idx]
-        chunk_images = images[start_idx:end_idx]
-        chunk_states = states[start_idx:end_idx]
-        chunk_strings = strings[start_idx:end_idx]
+#     while start_idx < len(dones):
+#         # Load a chunk of data
+#         chunk_actions = actions[start_idx:end_idx]
+#         chunk_dones = dones[start_idx:end_idx]
+#         chunk_images = images[start_idx:end_idx]
+#         chunk_states = states[start_idx:end_idx]
+#         chunk_strings = strings[start_idx:end_idx]
         
-        for i in range(len(chunk_dones)):
-            if chunk_dones[i]:
-                # End of a trajectory
-                current_trajectory['actions'].append(chunk_actions[i])
-                current_trajectory['states'].append(chunk_states[i])
-                current_trajectory['images'].append(chunk_images[i])
-                current_trajectory['instruction'].append(chunk_strings[i])
+#         for i in range(len(chunk_dones)):
+#             if chunk_dones[i]:
+#                 # End of a trajectory
+#                 current_trajectory['actions'].append(chunk_actions[i])
+#                 current_trajectory['states'].append(chunk_states[i])
+#                 current_trajectory['images'].append(chunk_images[i])
+#                 current_trajectory['instruction'].append(chunk_strings[i])
                 
-                trajectories.append(current_trajectory)
-                current_trajectory = {'actions': [], 'states': [], 'images': [], 'instruction': []}
-            else:
-                # Continuation of the current trajectory
-                current_trajectory['actions'].append(chunk_actions[i])
-                current_trajectory['states'].append(chunk_states[i])
-                current_trajectory['images'].append(chunk_images[i])
-                current_trajectory['instruction'].append(chunk_strings[i])
+#                 trajectories.append(current_trajectory)
+#                 current_trajectory = {'actions': [], 'states': [], 'images': [], 'instruction': []}
+#             else:
+#                 # Continuation of the current trajectory
+#                 current_trajectory['actions'].append(chunk_actions[i])
+#                 current_trajectory['states'].append(chunk_states[i])
+#                 current_trajectory['images'].append(chunk_images[i])
+#                 current_trajectory['instruction'].append(chunk_strings[i])
         
-        # Move to the next chunk
-        start_idx = end_idx
-        end_idx = min(start_idx + chunk_size, len(dones))
+#         # Move to the next chunk
+#         start_idx = end_idx
+#         end_idx = min(start_idx + chunk_size, len(dones))
 
-    # Handle the last trajectory if it doesn't end with a "done" flag
-    if len(current_trajectory['actions']) > 0:
-        trajectories.append(current_trajectory)
+#     # Handle the last trajectory if it doesn't end with a "done" flag
+#     if len(current_trajectory['actions']) > 0:
+#         trajectories.append(current_trajectory)
     
-    return trajectories
+#     return trajectories
 
 
 def main():
@@ -161,26 +195,25 @@ def main():
 
     print("Loading trajectories...")
     with h5py.File(args.trajs_to_label, 'r') as traj_file:
-        traj_data = parse_trajectories(traj_file)
+        traj_data = traj_file
+    #     traj_data = parse_trajectories(traj_file)
 
-    print(f"Labeling rewards for trajectories in with size {len(traj_data)}...")
-    # Label rewards for the trajectories
-    all_rewards = reward_labeler.label_trajectories(traj_data)
+        print(f"Labeling rewards for trajectories in with size {len(traj_data)}...")
+        # Label rewards for the trajectories
+        all_rewards = reward_labeler.label_trajectories(traj_data)
 
-    # Save the updated trajectories with rewards to a new HDF5 file
-    with h5py.File(args.output, 'w') as output_file:
-        for i, traj in enumerate(traj_data):
-            traj_id = f'trajectory_{i}'
-            grp = output_file.create_group(traj_id)
-            grp.create_dataset('actions', data=np.array(traj['actions']))
-            grp.create_dataset('states', data=np.array(traj['states']))
-            grp.create_dataset('images', data=np.array(traj['images']))
-            grp.create_dataset('instruction', data=np.array(traj['instruction']))
-            grp.create_dataset('rewards', data=np.array(all_rewards[i]))
 
-            # in case all_rewards is not the same length as traj_data
-            if i == len(all_rewards) - 1:
-                break
+        print(f"Saving trajectories with rewards to {args.output}...")
+        # Save an updated version of the trajectories with rewards
+        with h5py.File(args.output, 'w') as output_file:
+            # Save each of the keys along with the corresponding data
+            output_file.create_dataset('reward', data=all_rewards, dtype='float32')
+            # copy the rest of the data from traj_data to output_file
+            for key in traj_data.keys():
+                if key != 'reward':
+                    output_file.create_dataset(key, data=traj_data[key], dtype=traj_data[key].dtype)
+
+
 
     print(f"Trajectories with rewards saved to {args.output}")
 
