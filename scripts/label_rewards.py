@@ -207,10 +207,10 @@ def main():
         # Save an updated version of the trajectories with rewards
         with h5py.File(args.output, 'w') as output_file:
             # Save each of the keys along with the corresponding data
-            output_file.create_dataset('reward', data=all_rewards, dtype='float32')
+            output_file.create_dataset('rewards', data=all_rewards, dtype='float32')
             # copy the rest of the data from traj_data to output_file
             for key in traj_data.keys():
-                if key != 'reward':
+                if key != 'rewards':
                     output_file.create_dataset(key, data=traj_data[key], dtype=traj_data[key].dtype)
 
 
