@@ -4,17 +4,17 @@ After you have collected your own data in `trajs.h5` and given an encoder provid
 we can train a roboCLIP reward function transformation:
 ```
 TODO:
-python train_roboclip.py --input trajs.h5 --encoder roboclip_model.pth --output transformation.npy
+python scripts/train_roboclip.py --input trajs.h5 --encoder roboclip_model.pth --output transformation.npy
 # Output: -> transformation.npy
 ```
 
 Then, we will label rewards onto the provided .h5 file
 ```
-python label_rewards.py --trajs_to_label trajs.h5 --encoder_type xclip --transform_model_path transformation.pth --out updated_trajs.h5
+python scripts/label_rewards.py --trajs_to_label trajs.h5 --encoder_type xclip --transform_model_path transformation.pth --out updated_trajs.h5
 ```
 
 Now we can use offline RL to train online
 ```
 TODO:
-python train_online.py --trajs_for_buffer updated_trajs.h5 --encoder roboclip_model.pth --transform transformation.npy
+python scripts/train_online.py --trajs_for_buffer updated_trajs.h5 --encoder roboclip_model.pth --transform transformation.npy
 ```
