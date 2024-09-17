@@ -113,7 +113,7 @@ class RewardLabeler:
         #     if len(all_rewards) == 2:
         #         break
 
-        # return all_rewards
+        return all_rewards
 
     def compute_similarity(self, video_embedding, text_embedding):
         """
