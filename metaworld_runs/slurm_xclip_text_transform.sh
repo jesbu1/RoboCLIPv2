@@ -1,9 +1,9 @@
 #!/bin/bash
-#SBATCH --job-name=env4_5      # Job name
-#SBATCH --output=env4_5.out   # Output file
-#SBATCH --error=env4_5.err    # Error file
-#SBATCH --ntasks=2                      # Number of tasks (processes)
-#SBATCH --gres=shard:18                    # Number of GPUs
+#SBATCH --job-name=full6_512_3      # Job name
+#SBATCH --output=full6_512_3.out   # Output file
+#SBATCH --error=full6_512_3.err    # Error file
+#SBATCH --ntasks=4                      # Number of tasks (processes)
+#SBATCH --gres=gpu:1                    # Number of GPUs
 #SBATCH --cpus-per-task=5               # Number of CPU cores per task
 
 
@@ -51,7 +51,7 @@
 # wait
 
 
-seeds=(42)
+seeds=(5)
 
 for seed in "${seeds[@]}"; do
 
@@ -64,8 +64,11 @@ for seed in "${seeds[@]}"; do
     # python metaworld_envs_xclip_text_transform.py --n_envs 4 --wandb --time --norm_input --norm_output --entropy_term "auto" --succ_bonus 200 --succ_end --time_reward 100 --random_reset --seed $seed --algo "sac" --pca_path models/triplet_loss_subset_6_42_var0.9_TimeShuffle_TimeShort_NormVLM_PCAtriplet/ --transform_base_path models/triplet_loss_subset_6_42_var0.9_TimeShuffle_TimeShort_NormVLM_PCAtriplet/ --transform_model_path model_19999.pth --env_id 'handle-pull-side-v2-goal-hidden' --text_string 'pullinig handle' --var 0.9 --exp_name_end "envs_4_dim13" & 
     # python metaworld_envs_xclip_text_transform.py --n_envs 4 --wandb --time --norm_input --norm_output --entropy_term "auto" --succ_bonus 200 --succ_end --time_reward 100 --random_reset --seed $seed --algo "sac" --pca_path models/triplet_loss_subset_6_42_var0.9_TimeShuffle_TimeShort_NormVLM_PCAtriplet/ --transform_base_path models/triplet_loss_subset_6_42_var0.9_TimeShuffle_TimeShort_NormVLM_PCAtriplet/ --transform_model_path model_19999.pth --env_id 'door-open-v2-goal-hidden' --text_string 'opening door' --var 0.9 --exp_name_end "envs_4_dim13" & 
 
-    python metaworld_envs_xclip_text_transform.py --n_envs 4 --wandb --time --norm_input --norm_output --entropy_term "auto" --succ_bonus 200 --succ_end --time_reward 100 --random_reset --seed $seed --algo "sac" --pca_path models/triplet_loss_subset_6_42_var0.9_TimeShuffle_TimeShort_NormVLM_PCAtriplet/ --transform_base_path models/triplet_loss_subset_6_42_var0.9_TimeShuffle_TimeShort_NormVLM_PCAtriplet/ --transform_model_path model_19999.pth --env_id 'stick-push-v2-goal-hidden' --text_string 'pushing stick' --var 0.9 --exp_name_end "envs_4_dim13" & 
-    python metaworld_envs_xclip_text_transform.py --n_envs 4 --wandb --time --norm_input --norm_output --entropy_term "auto" --succ_bonus 200 --succ_end --time_reward 100 --random_reset --seed $seed --algo "sac" --pca_path models/triplet_loss_subset_6_42_var0.9_TimeShuffle_TimeShort_NormVLM_PCAtriplet/ --transform_base_path models/triplet_loss_subset_6_42_var0.9_TimeShuffle_TimeShort_NormVLM_PCAtriplet/ --transform_model_path model_19999.pth --env_id 'faucet-open-v2-goal-hidden' --text_string 'opening faucet' --var 0.9 --exp_name_end "envs_4_dim13" & 
+    python metaworld_envs_xclip_text_transform.py --n_envs 4 --wandb --time --norm_input --norm_output --entropy_term "auto" --succ_bonus 200 --succ_end --time_reward 100 --random_reset --seed $seed --algo "sac" --transform_base_path models/triplet_loss_subset_6_42_var1.0new_TimeShuffle_TimeShort_NormVLMtriplet/ --transform_model_path model_19999.pth --env_id 'button-press-topdown-v2-goal-hidden' --text_string 'pressing button' --exp_name_end "set6_512_noPCA" & 
+    python metaworld_envs_xclip_text_transform.py --n_envs 4 --wandb --time --norm_input --norm_output --entropy_term "auto" --succ_bonus 200 --succ_end --time_reward 100 --random_reset --seed $seed --algo "sac" --transform_base_path models/triplet_loss_subset_6_42_var1.0new_TimeShuffle_TimeShort_NormVLMtriplet/ --transform_model_path model_19999.pth --env_id 'handle-pull-side-v2-goal-hidden' --text_string 'pullinig handle' --exp_name_end "set6_512_noPCA" & 
+
+    python metaworld_envs_xclip_text_transform.py --n_envs 4 --wandb --time --norm_input --norm_output --entropy_term "auto" --succ_bonus 200 --succ_end --time_reward 100 --random_reset --seed $seed --algo "sac" --transform_base_path models/triplet_loss_subset_6_42_var1.0new_TimeShuffle_TimeShort_NormVLMtriplet/ --transform_model_path model_19999.pth --env_id 'window-close-v2-goal-hidden' --text_string 'closing window' --exp_name_end "set6_512_noPCA" & 
+    python metaworld_envs_xclip_text_transform.py --n_envs 4 --wandb --time --norm_input --norm_output --entropy_term "auto" --succ_bonus 200 --succ_end --time_reward 100 --random_reset --seed $seed --algo "sac" --transform_base_path models/triplet_loss_subset_6_42_var1.0new_TimeShuffle_TimeShort_NormVLMtriplet/ --transform_model_path model_19999.pth --env_id 'door-open-v2-goal-hidden' --text_string 'opening door' --exp_name_end "set6_512_noPCA" & 
 
     # python metaworld_envs_xclip_text_transform.py --n_envs 1 --wandb --time --norm_input --norm_output --entropy_term "auto" --succ_bonus 200 --succ_end --time_reward 100 --random_reset --seed $seed --algo "sac" --pca_path /home/yusenluo/RoboCLIPv2/visualization/jzhang96_losses/triplet_loss_subset_6_42RE_NormVLM_PCAtriplet --transform_base_path "/home/yusenluo/RoboCLIPv2/visualization/jzhang96_losses/triplet_loss_subset_6_42RE_NormVLM_PCAtriplet" --transform_model_path "org_model.pth" --env_id 'drawer-open-v2-goal-hidden' --text_string 'opening drawer' --exp_name_end "10_12PCAOrg" & 
 

@@ -150,7 +150,8 @@ def main(args):
 
     pca_text_model = None
     pca_video_model = None
-
+    video_dim = 512
+    pca_save_path = (f"pca_loss_models/{experiment_name}")
     if args.pca:
         text_pca_embedding = None
 
@@ -195,7 +196,7 @@ def main(args):
             for i in range (4):
                 text_pca_embedding = np.concatenate([text_pca_embedding, text_pca_embedding, text_pca_embedding, text_pca_embedding], axis=0)
 
-
+        
         if args.variance_threshold < 1.0:
             pca_video_model = PCA(n_components=args.variance_threshold)
             pca_video_model.fit(video_pca_embedding)
@@ -285,6 +286,7 @@ def main(args):
             model.linear.weight = nn.Parameter(computed_matrix.T.cuda().float())
             model.linear.bias = nn.Parameter(th.zeros(video_dim).cuda())
     optimizer = th.optim.Adam(model.parameters(), lr=1e-4)
+    os.makedirs(pca_save_path, exist_ok=True)
     org_model_save_path = os.path.join(pca_save_path, "org_model.pth")
     # save org model
     th.save({

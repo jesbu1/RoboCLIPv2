@@ -1,57 +1,28 @@
-import joblib
-from gym import Env, spaces
-import torch.nn as nn
-import numpy as np
-from stable_baselines3 import PPO, SAC
-import torch as th
-from gym.wrappers.time_limit import TimeLimit
-from stable_baselines3.common.vec_env.subproc_vec_env import SubprocVecEnv
-from stable_baselines3.common.callbacks import CheckpointCallback
-from PIL import Image, ImageSequence
-import torch as th
-import numpy as np
-from PIL import Image, ImageSequence
-import cv2
-import gif2numpy
-import PIL
 import os
-import seaborn as sns
-import matplotlib.pylab as plt
-from stable_baselines3.common.vec_env import DummyVecEnv, VecVideoRecorder
-
-from typing import Any, Dict
-
-import gym
-from gym.spaces import Box
-import torch as th
-
-from stable_baselines3.common.callbacks import BaseCallback
-from stable_baselines3.common.evaluation import evaluate_policy
-from stable_baselines3.common.logger import Video
-import os
-from stable_baselines3.common.monitor import Monitor
-from memory_profiler import profile
-import argparse
-from stable_baselines3.common.callbacks import EvalCallback, CallbackList
-
-import metaworld
-from metaworld.envs import (ALL_V2_ENVIRONMENTS_GOAL_OBSERVABLE,
-                            ALL_V2_ENVIRONMENTS_GOAL_HIDDEN)
-
-# from kitchen_env_wrappers import readGif
-from matplotlib import animation
-import matplotlib.pyplot as plt
-
-from gym.wrappers import RecordVideo
-import imageio
-import wandb
-from wandb.integration.sb3 import WandbCallback
 import io
-import random
-import torch.nn.functional as F
-import h5py
 import json
+import wandb
+import random
+import joblib
+import imageio
+import argparse
+
+import torch as th
+import numpy as np
+from gym import Env
+from gym.spaces import Box
+import torch.nn.functional as F
+from stable_baselines3 import SAC
+from wandb.integration.sb3 import WandbCallback
+from gym.wrappers.time_limit import TimeLimit
 from transformers import AutoTokenizer, AutoModel, AutoProcessor 
+from metaworld.envs import ALL_V2_ENVIRONMENTS_GOAL_OBSERVABLE, ALL_V2_ENVIRONMENTS_GOAL_HIDDEN
+
+from stable_baselines3.common.monitor import Monitor
+from stable_baselines3.common.vec_env import DummyVecEnv
+from stable_baselines3.common.callbacks import EvalCallback, CallbackList
+from stable_baselines3.common.vec_env.subproc_vec_env import SubprocVecEnv
+
 from eval_utils import eval_policys
 
 
@@ -71,7 +42,12 @@ fix gpu, forward xclip with gpu Done
 
 id_task = json.load(open("../id_task.json", "r"))
 
+
+
 class SingleLayerMLP(th.nn.Module):
+    '''
+    A linear transformation layer. The output will norm to 1, if normalize is set to True.
+    '''
     def __init__(self, input_dim, output_dim, normalize=True):
         super(SingleLayerMLP, self).__init__()
         self.linear = th.nn.Linear(input_dim, output_dim)
@@ -79,7 +55,6 @@ class SingleLayerMLP(th.nn.Module):
 
     def forward(self, x):
         x = self.linear(x)
-        # Apply L2 normalization to each embedding
         if self.normalize:
             x = F.normalize(x, p=2, dim=1)
         return x
@@ -87,13 +62,12 @@ class SingleLayerMLP(th.nn.Module):
 
 def adjust_frames_xclip(frames, target_frame_count = 32, processor = None):
     """
-    Ensures same numbers of frames(32). returns a numpy array of shape (target_frame_count, 224, 224, 3)
+    Make the video length to be 32 frames to fit the xclip video encoder. 
+    If video length is less than 32, repeat the last frame to make it 32 frames.
+    If video length is more than 32, use same interval to sample 32 frames.
     """
     frames = np.array(frames)
-    frame_count = frames.shape[0]
-    #print(f"frames number{frame_count}")
-    # frames = th.from_numpy(frames)
-
+    # sample 32 frames
     if len(frames) > target_frame_count:
         index = np.linspace(0, len(frames)-1, target_frame_count, dtype=int)
         frames = frames[index]
@@ -102,8 +76,11 @@ def adjust_frames_xclip(frames, target_frame_count = 32, processor = None):
         last_frame = np.expand_dims(last_frame, axis=0)
         for _ in range(target_frame_count - len(frames)):
             frames = np.concatenate([frames, last_frame])
-    frames = frames[:,240-112:240+112,320-112:320+112,:]
-    # frames = frames[None, :,:,:,:]
+    
+    # center crop the middle 224x224 of the frames
+    center1, center2 = 480/2, 640/2
+    crop_size = 224/2
+    frames = frames[:,center1-crop_size:center1+crop_size,center2-crop_size:center2+crop_size,:]
     frames = processor(videos=list(frames), return_tensors="pt")
     frames = frames["pixel_values"]
     return frames
@@ -116,6 +93,10 @@ def parse_entropy_term(value):
 
 
 def normalize_embeddings(embeddings, return_tensor=True):
+    '''
+    Normalize the embeddings to have unit norm.
+    If return_tensor is set to True, return th.tensor, otherwise return np.ndarray.
+    '''
     if isinstance(embeddings, np.ndarray):
         embeddings = th.tensor(embeddings)
     normalized_embeddings = F.normalize(embeddings, p=2, dim=1)
@@ -127,115 +108,90 @@ def normalize_embeddings(embeddings, return_tensor=True):
 
 def get_args():
     parser = argparse.ArgumentParser(description='RL')
-    parser.add_argument('--algo', type=str, default='sac', choices=['ppo', 'sac'])
     parser.add_argument('--text_string', type=str, default='opening door')
-    parser.add_argument('--dir_add', type=str, default='')
     parser.add_argument('--env_id', type=str, default='window-open-v2-goal-hidden')
     parser.add_argument('--total_time_steps', type=int, default=1000000)
     parser.add_argument('--n_envs', type=int, default=8)
-    parser.add_argument('--n_steps', type=int, default=500)
     parser.add_argument('--pretrained', type=str, default=None)
-    parser.add_argument('--wandb', action="store_true")
     parser.add_argument('--seed', type=int, default=42)
     parser.add_argument('--eval_freq', type=int, default=5000)
     parser.add_argument('--video_freq', type=int, default=10000)
     parser.add_argument('--succ_end', action="store_true")
-    parser.add_argument('--video_path', type=str, default=None)
-    parser.add_argument('--pca_path', type=str, default=None)
-    parser.add_argument('--transform_base_path', type=str, default=None)
+    parser.add_argument('--pca', action="store_true")
+    parser.add_argument('--model_base_path', type=str, default=None)
     parser.add_argument('--transform_model_path', type=str, default=None)
     parser.add_argument('--random_reset', action="store_true")
     parser.add_argument('--target_gif_path', type=str, default="/scr/jzhang96/metaworld_generate_gifs/")
-    #parser.add_argument('--target_gif_path', type=str, default="/home/jzhang96/RoboCLIPv2/metaworld_generate_gifs/")
-    parser.add_argument('--time', action="store_false")
     parser.add_argument('--frame_num', type=int, default=32)
-    parser.add_argument('--train_orcale', action="store_true") # load latent from h5 file
-    parser.add_argument('--warm_up_runs', type=int, default=0)
-    parser.add_argument('--project_reward', action="store_true")
-    parser.add_argument('--norm_input', action="store_true")
     parser.add_argument('--norm_output', action="store_true")
     parser.add_argument('--time_reward', type=float, default=1.0)
-    parser.add_argument('--threshold_reward', action="store_true")
-    parser.add_argument('--entropy_term', type=parse_entropy_term, default="auto")
-    parser.add_argument('--time_penalty', type=float, default=0.0)
     parser.add_argument('--succ_bonus', type=float, default=0.0)
     parser.add_argument('--xclip_model', type=str, default='microsoft/xclip-base-patch16-zero-shot')
     parser.add_argument('--frame_length', type=int, default=32)
-    parser.add_argument("--exp_name_end", type=str, default="triplet_hard_neg")
+    parser.add_argument("--exp_name_end", type=str, default=None)
     parser.add_argument("--sparse_only", action="store_true")
     parser.add_argument("--baseline", action="store_true")
     parser.add_argument("--obs_env", action="store_true")
-    parser.add_argument("--var", type=float, default=1.0)
     parser.add_argument("--ep_length", type=int, default=128)
-
-
-
 
     args = parser.parse_args()
     return args
 
 class MetaworldSparse(Env):
-    # def __init__(self, env_id, text_string=None, time=False, video_path=None, rank=0, human=True):
+    '''
+    Training metaworld environments
+
+    '''
     def __init__(self, args):
         super(MetaworldSparse,self)
         self.args = args
         if args.obs_env:
-            self.door_open_goal_hidden_cls = ALL_V2_ENVIRONMENTS_GOAL_OBSERVABLE[args.env_id]
+            self.env_class = ALL_V2_ENVIRONMENTS_GOAL_OBSERVABLE[args.env_id]
         else:
-            self.door_open_goal_hidden_cls = ALL_V2_ENVIRONMENTS_GOAL_HIDDEN[args.env_id]
+            self.env_class = ALL_V2_ENVIRONMENTS_GOAL_HIDDEN[args.env_id]
         self.rank = args.seed
-        self.baseEnv = self.door_open_goal_hidden_cls(seed=self.rank)
+        self.baseEnv = self.env_class(seed=self.rank)
         self.env = TimeLimit(self.baseEnv, max_episode_steps=args.ep_length)
-        self.time = args.time
-        if args.pca_path != None:
-            pca_text_path = os.path.join(args.pca_path, 'pca_model_text.pkl') #'/scr/yusenluo/RoboCLIP/visualization/saved_model/pca_loss_models/[4, 13, 19, 36, 48]_Seed_42/512_linear/pca_model_text.pkl'
-            pca_video_path = os.path.join(args.pca_path, 'pca_model_video.pkl') #'/scr/yusenluo/RoboCLIP/visualization/saved_model/pca_loss_models/[4, 13, 19, 36, 48]_Seed_42/512_linear/pca_model_video.pkl'
-            #print(pca_video_path)
+        self.observation_space = self.env.observation_space
+        self.action_space = self.env.action_space
+        if args.pca:
+            pca_text_path = os.path.join(args.model_base_path, 'pca_model_text.pkl') 
+            pca_video_path = os.path.join(args.model_base_path, 'pca_model_video.pkl') 
             pca_text_model = joblib.load(pca_text_path)
             pca_video_model = joblib.load(pca_video_path)
             self.pca_text_model = pca_text_model
             self.pca_video_model = pca_video_model
-            # self.computed_matrix = th.from_numpy(np.dot(self.pca_video_model.components_, self.pca_text_model.components_.T)).float()
-
-        if not self.time:
-            self.observation_space = self.env.observation_space
-        else:
-            self.observation_space = Box(low=-8.0, high=8.0, shape=(self.env.observation_space.shape[0]+1,), dtype=np.float32)
-        self.action_space = self.env.action_space
         self.past_observations = []
-
         self.frame_length = args.frame_length
 
+        # if only use sparse reward, we don't need to load the VLM and compute the similarity reward
         if not args.sparse_only:
-
             with th.no_grad():
                 model_name = args.xclip_model
                 self.tokenizer = AutoTokenizer.from_pretrained(model_name)
                 self.net = AutoModel.from_pretrained(model_name).cuda()
                 self.processor = AutoProcessor.from_pretrained(model_name)
                 self.net = self.net.eval()
-                if not args.baseline:
-                    if args.var >= 1.0:
-                        self.transform_model = SingleLayerMLP(512, 512, normalize=True)
-                    else:
-                        self.transform_model = SingleLayerMLP(13, 13, normalize=True)
+                if not args.baseline: # baseline is RoboCLIPv1, only use the similarity from VLM output, not using VLM
 
-                    transform_model_path = os.path.join(args.transform_base_path, args.transform_model_path)
+                    # load transform layer model
+                    if args.pca:
+                        pca_dim = pca_video_model.components_.shape[0]
+                        self.transform_model = SingleLayerMLP(pca_dim, pca_dim, normalize=True)
+                    else:
+                        self.transform_model = SingleLayerMLP(512, 512, normalize=True)
+                    transform_model_path = os.path.join(args.model_base_path, args.transform_model_path)
                     dict = th.load(transform_model_path)
                     if 'model_state_dict' in dict.keys():
                         self.transform_model.load_state_dict(dict["model_state_dict"])
                     else:
                         self.transform_model.load_state_dict(dict)
-
                     self.transform_model = self.transform_model.eval().cuda()
-                #self.transform_model.load_state_dict(th.load("/scr/jzhang96/triplet_text_loss_models/triplet_loss_50_42_xclip_TimeShort_Normtriplet/55.pth"))
 
-                
                 self.target_embedding = None
 
                 if args.text_string:
-                    for _ in range (3):
-                        print("text_string", args.text_string)
+                    print("text_string", args.text_string)
                     text_tokens = self.tokenizer([args.text_string], return_tensors="pt")
                     for key in text_tokens:
                         text_tokens[key] = text_tokens[key].cuda()
@@ -243,39 +199,6 @@ class MetaworldSparse(Env):
                     self.target_embedding = normalize_embeddings(self.target_embedding)
                     if args.pca_path != None:
                         self.target_embedding = th.from_numpy(self.pca_text_model.transform(self.target_embedding.cpu())).cuda()
-                    # with th.no_grad():
-                    #     if args.pca_path != None:
-                    #         self.transform_model.linear.weight = nn.Parameter(
-                    #             self.computed_matrix.T.to(dtype=th.float32).cuda())
-                    #         self.transform_model.linear.bias = nn.Parameter(
-                    #             th.zeros(self.target_embedding.shape[1], dtype=th.float32).cuda())
-                    #     self.transform_model = self.transform_model.eval().cuda()
-
-                self.max_sim = None
-                if args.warm_up_runs > 0:
-                    for _ in range(args.warm_up_runs):
-                        embedding = self.warm_up_run()
-                        if args.norm_output:
-                            embedding = normalize_embeddings(embedding, return_tensor=True).float()
-                        embedding = self.transform_model(embedding)
-                        embedding = normalize_embeddings(embedding, return_tensor=True).float()
-
-                        sim = th.matmul(self.target_embedding, embedding.t())
-                        if self.args.time_reward != 1.0:
-                            sim = sim * self.args.time_reward
-                        if self.max_sim is None:
-                            sim_reward = sim.detach().cpu().numpy()[0][0]
-                            self.max_sim = sim_reward
-                        else:
-                            sim_reward = sim.detach().cpu().numpy()[0][0]
-                            if sim_reward > self.max_sim:
-                                self.max_sim = sim_reward
-                        print("sim_reward", sim_reward, self.max_sim)
-                    print("max_sim", self.max_sim)
-
-                # only input text or demo videos for now
-
-            self.counter = 0
 
     def get_obs(self):
         return self.baseEnv._get_obs(self.baseEnv.prev_time_step)
@@ -393,38 +316,20 @@ class MetaworldDense(Env):
         self.rank = args.seed
         self.baseEnv = self.door_open_goal_hidden_cls(seed=self.rank)
         self.env = TimeLimit(self.baseEnv, max_episode_steps=args.ep_length)
-        self.time = args.time
-        if not self.time:
-            self.observation_space = self.env.observation_space
-        else:
-            self.observation_space = Box(low=-8.0, high=8.0, shape=(self.env.observation_space.shape[0]+1,), dtype=np.float32)
+        self.observation_space = self.env.observation_space
         self.action_space = self.env.action_space
         self.past_observations = []
-        
-        self.counter = 0
-        self.counter_total = 0
-        self.gif_buffer = []
 
     def get_obs(self):
-        return self.baseEnv._get_obs(self.baseEnv.prev_time_step)
-        
+        return self.baseEnv._get_obs(self.baseEnv.prev_time_step)      
     
     def render(self, camera_name="topview"):
         frame = self.env.render()
-
         return frame
-
 
     def step(self, action):
         obs, _, done, info = self.env.step(action)
-        self.counter += 1
-        self.counter_total += 1
-        t = self.counter/self.args.ep_length
-        if self.time:
-            obs = np.concatenate([obs, np.array([t])])
-
-        reward = 0.0
-
+        reward = 0.0 # original reward is always 0
         if self.args.succ_end:
             if info['success']:
                 done = True
@@ -485,15 +390,7 @@ class CustomWandbCallback(WandbCallback):
         wandb.log({
             'episode_reward': sum(self.locals['rewards']),  # Cumulative reward for the episode
             'episode_length': len(self.locals['rewards'])   # Length of the episode
-        }, step=self.model.num_timesteps) 
-
-    # def _on_step(self):
-    #     # Log the number of gradient steps
-    #     wandb.log({
-    #         'gradient_steps': self.model._n_updates,
-    #         'num_timesteps': self.model.num_timesteps
-    #     }, step=self.model.num_timesteps)
-    #     return True        
+        }, step=self.model.num_timesteps)      
 
 
 
@@ -565,8 +462,7 @@ def main():
         experiment_name = "ep" + str(args.ep_length) + "_PCA_" + "xclip_textTRANS_" + str(args.var) + args.algo + "_" + args.env_id
     else:
         experiment_name = "ep" + str(args.ep_length) + "_NOPCA_" +"xclip_textTRANS_" + str(args.var) + args.algo + "_" + args.env_id
-    if args.train_orcale:
-        experiment_name = experiment_name + "_Oracle"
+
     if args.threshold_reward:
         experiment_name = experiment_name + "_Thld"
     if args.project_reward:
@@ -611,20 +507,14 @@ def main():
     else:
         envs = DummyVecEnv([make_env(args, eval = False)])
 
-    if args.algo.lower() == 'ppo':
-        if not args.pretrained:
-            model = PPO("MlpPolicy", envs, verbose=1, tensorboard_log=log_dir, n_steps=args.n_steps,
-                        batch_size=args.n_steps * args.n_envs, n_epochs=1, ent_coef=args.entropy_term)
-        else:
-            model = PPO.load(args.pretrained, env=envs, tensorboard_log=log_dir)
-    elif args.algo.lower() == 'sac':
-        if not args.pretrained:
-            model = SAC("MlpPolicy", envs, verbose=1, tensorboard_log=log_dir, gradient_steps = args.n_envs,
-                        ent_coef="auto", buffer_size=args.total_time_steps, learning_starts=4000, seed=args.seed)
-        else:
-            model = SAC.load(args.pretrained, env=envs, tensorboard_log=log_dir)
+
+
+    if not args.pretrained:
+        model = SAC("MlpPolicy", envs, verbose=1, tensorboard_log=log_dir, gradient_steps = args.n_envs,
+                    ent_coef="auto", buffer_size=args.total_time_steps, learning_starts=4000, seed=args.seed)
     else:
-        raise ValueError("Unsupported algorithm. Choose either 'ppo' or 'sac'.")
+        model = SAC.load(args.pretrained, env=envs, tensorboard_log=log_dir)
+
 
     if args.n_envs > 1:
         eval_env = SubprocVecEnv([make_env(args, eval = True) for i in range(args.n_envs)])#KitchenEnvDenseOriginalReward(time=True)
