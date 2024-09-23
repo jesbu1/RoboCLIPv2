@@ -15,7 +15,6 @@ import torch.nn.functional as F
 from stable_baselines3 import SAC
 from wandb.integration.sb3 import WandbCallback
 from gym.wrappers.time_limit import TimeLimit
-from transformers import AutoTokenizer, AutoModel, AutoProcessor 
 from metaworld.envs import ALL_V2_ENVIRONMENTS_GOAL_OBSERVABLE, ALL_V2_ENVIRONMENTS_GOAL_HIDDEN
 
 from stable_baselines3.common.monitor import Monitor
@@ -24,25 +23,10 @@ from stable_baselines3.common.callbacks import EvalCallback, CallbackList
 from stable_baselines3.common.vec_env.subproc_vec_env import SubprocVecEnv
 
 from eval_utils import eval_policys
+from encoders import xclip_encoder
 
-
-
-'''
-1. Regular RoboCLIP v1
-2. RoboCLIP v1 with single seed
-3. RoboCLIP v1 with multiple seeds
-4. RoboCLIP v1 with same video demo
-5. RoboCLIP v1 with pca
-6. RoboCLIP v1 with pca and single seed
-7. RoboCLIP v1 with pca and multiple seeds
-8. RoboCLIP v1 with pca and same video demo
-fix gpu, forward xclip with gpu Done
-
-'''
 
 id_task = json.load(open("../id_task.json", "r"))
-
-
 
 class SingleLayerMLP(th.nn.Module):
     '''
@@ -58,32 +42,6 @@ class SingleLayerMLP(th.nn.Module):
         if self.normalize:
             x = F.normalize(x, p=2, dim=1)
         return x
-
-
-def adjust_frames_xclip(frames, target_frame_count = 32, processor = None):
-    """
-    Make the video length to be 32 frames to fit the xclip video encoder. 
-    If video length is less than 32, repeat the last frame to make it 32 frames.
-    If video length is more than 32, use same interval to sample 32 frames.
-    """
-    frames = np.array(frames)
-    # sample 32 frames
-    if len(frames) > target_frame_count:
-        index = np.linspace(0, len(frames)-1, target_frame_count, dtype=int)
-        frames = frames[index]
-    elif len(frames) < target_frame_count:
-        last_frame = frames[-1]
-        last_frame = np.expand_dims(last_frame, axis=0)
-        for _ in range(target_frame_count - len(frames)):
-            frames = np.concatenate([frames, last_frame])
-    
-    # center crop the middle 224x224 of the frames
-    center1, center2 = 480/2, 640/2
-    crop_size = 224/2
-    frames = frames[:,center1-crop_size:center1+crop_size,center2-crop_size:center2+crop_size,:]
-    frames = processor(videos=list(frames), return_tensors="pt")
-    frames = frames["pixel_values"]
-    return frames
 
 def parse_entropy_term(value):
     try:
@@ -108,11 +66,11 @@ def normalize_embeddings(embeddings, return_tensor=True):
 
 def get_args():
     parser = argparse.ArgumentParser(description='RL')
+    parser.add_argument('--encoder', type=str, default='xclip')
     parser.add_argument('--text_string', type=str, default='opening door')
     parser.add_argument('--env_id', type=str, default='window-open-v2-goal-hidden')
     parser.add_argument('--total_time_steps', type=int, default=1000000)
-    parser.add_argument('--n_envs', type=int, default=8)
-    parser.add_argument('--pretrained', type=str, default=None)
+    parser.add_argument('--n_envs', type=int, default=4)
     parser.add_argument('--seed', type=int, default=42)
     parser.add_argument('--eval_freq', type=int, default=5000)
     parser.add_argument('--video_freq', type=int, default=10000)
@@ -123,7 +81,6 @@ def get_args():
     parser.add_argument('--random_reset', action="store_true")
     parser.add_argument('--target_gif_path', type=str, default="/scr/jzhang96/metaworld_generate_gifs/")
     parser.add_argument('--frame_num', type=int, default=32)
-    parser.add_argument('--norm_output', action="store_true")
     parser.add_argument('--time_reward', type=float, default=1.0)
     parser.add_argument('--succ_bonus', type=float, default=0.0)
     parser.add_argument('--xclip_model', type=str, default='microsoft/xclip-base-patch16-zero-shot')
@@ -145,6 +102,10 @@ class MetaworldSparse(Env):
     def __init__(self, args):
         super(MetaworldSparse,self)
         self.args = args
+        if args.encoder == 'xclip':
+            self.encoder = xclip_encoder.XCLIPEncoder()
+        else:
+            raise ValueError("Please provide a valid encoder")
         if args.obs_env:
             self.env_class = ALL_V2_ENVIRONMENTS_GOAL_OBSERVABLE[args.env_id]
         else:
@@ -152,6 +113,7 @@ class MetaworldSparse(Env):
         self.rank = args.seed
         self.baseEnv = self.env_class(seed=self.rank)
         self.env = TimeLimit(self.baseEnv, max_episode_steps=args.ep_length)
+        self.env.action_space.seed(self.rank)
         self.observation_space = self.env.observation_space
         self.action_space = self.env.action_space
         if args.pca:
@@ -162,18 +124,13 @@ class MetaworldSparse(Env):
             self.pca_text_model = pca_text_model
             self.pca_video_model = pca_video_model
         self.past_observations = []
+        self.past_dense_reward = []
         self.frame_length = args.frame_length
 
         # if only use sparse reward, we don't need to load the VLM and compute the similarity reward
         if not args.sparse_only:
             with th.no_grad():
-                model_name = args.xclip_model
-                self.tokenizer = AutoTokenizer.from_pretrained(model_name)
-                self.net = AutoModel.from_pretrained(model_name).cuda()
-                self.processor = AutoProcessor.from_pretrained(model_name)
-                self.net = self.net.eval()
                 if not args.baseline: # baseline is RoboCLIPv1, only use the similarity from VLM output, not using VLM
-
                     # load transform layer model
                     if args.pca:
                         pca_dim = pca_video_model.components_.shape[0]
@@ -187,17 +144,11 @@ class MetaworldSparse(Env):
                     else:
                         self.transform_model.load_state_dict(dict)
                     self.transform_model = self.transform_model.eval().cuda()
-
                 self.target_embedding = None
 
-                if args.text_string:
-                    print("text_string", args.text_string)
-                    text_tokens = self.tokenizer([args.text_string], return_tensors="pt")
-                    for key in text_tokens:
-                        text_tokens[key] = text_tokens[key].cuda()
-                    self.target_embedding = self.net.get_text_features(**text_tokens)
-                    self.target_embedding = normalize_embeddings(self.target_embedding)
-                    if args.pca_path != None:
+                if args.text_string: 
+                    self.target_embedding = self.encoder.encode_text(args.text_string)
+                    if args.pca:
                         self.target_embedding = th.from_numpy(self.pca_text_model.transform(self.target_embedding.cpu())).cuda()
 
     def get_obs(self):
@@ -207,32 +158,19 @@ class MetaworldSparse(Env):
         frame = self.env.render()
         return frame
 
-    def warm_up_run(self):
-        self.env.reset()
-        images = []
-        frame_num = random.randint(32, 128)
-
-        for _ in range(frame_num):
-            action = self.env.action_space.sample()
-            _, _, _, _ = self.env.step(action)
-            images.append(self.env.render()[:,:,:3])
-        images = np.array(images)
-
-        with th.no_grad():
-            frames = adjust_frames_xclip(images, target_frame_count = self.args.frame_length, processor=self.processor).cuda()
-            frames = self.net.get_video_features(frames)
-
-        return frames
-
+    def compute_similarity_reward(self, video_embedding):
+        video_embedding = normalize_embeddings(video_embedding, return_tensor=True).float() 
+        similarity_matrix = th.matmul(self.target_embedding, video_embedding.t())
+        reward = similarity_matrix.detach().cpu().numpy()[0][0]
+        if self.args.time_reward != 1.0:
+            reward = reward * self.args.time_reward
+        return reward
 
 
     def step(self, action):
-        obs, _, done, info = self.env.step(action)
+        obs, dense_reward, done, info = self.env.step(action)
         self.past_observations.append(self.env.render())
-        self.counter += 1
-        t = self.counter/self.args.ep_length
-        if self.time:
-            obs = np.concatenate([obs, np.array([t])])
+        self.past_dense_reward.append(dense_reward)
         
         if self.args.succ_end:
             if info['success']:
@@ -247,74 +185,51 @@ class MetaworldSparse(Env):
 
             else:
                 with th.no_grad():
-                    frames = adjust_frames_xclip(self.past_observations, target_frame_count = self.args.frame_length, processor=self.processor).cuda()
-                    video_embedding = self.net.get_video_features(frames)
-                    # used to test the model with norm embeddings
-                    if self.args.norm_output:
-                        video_embedding = normalize_embeddings(video_embedding, return_tensor=True).float()
-                        self.target_embedding = normalize_embeddings(self.target_embedding, return_tensor=True).float()
-
-                    if self.args.pca_path != None:
+                    video_embedding = self.encoder.encode_video(self.past_observations)
+                    if self.args.pca:
                         video_embedding = th.from_numpy(self.pca_video_model.transform(video_embedding.cpu())).float().cuda()
-
-                    # print(f"video_embedding dtype: {video_embedding.dtype}")
-                    # print(f"transform_model.linear.weight dtype: {self.transform_model.linear.weight.dtype}")
                     if not self.args.baseline:
                         video_embedding = self.transform_model(video_embedding)
-                    video_embedding = normalize_embeddings(video_embedding, return_tensor=True).float() 
-
-
-
-                    similarity_matrix = th.matmul(self.target_embedding, video_embedding.t())
-                    reward = similarity_matrix.detach().cpu().numpy()[0][0]
-
-                    if self.args.time_reward != 1.0:
-                        reward = reward * self.args.time_reward    
-                    print("sim reward", reward)
-                    if self.args.threshold_reward:
-                        if self.max_sim is not None:
-                            if reward < self.max_sim:
-                                reward = 0.0
-                            else:
-                                if self.args.project_reward:
-                                    total_max = 100
-                                    # project from max_sim to 100
-                                    reward = (reward - self.max_sim) / (total_max - self.max_sim) * 100
-                        else:
-                            raise ValueError("Please provide the max similarity score")
-                    print("reward", reward)
+                    reward = self.compute_similarity_reward(video_embedding)
+                    info['roboclip_reward'] = reward
+                    info['dense_return'] = sum(self.past_dense_reward)
+                    info['dense_reward'] = dense_reward
+                    info['ep_length'] = len(self.past_dense_reward)
                     if self.args.succ_bonus > 0:
                         if info['success']:
                             reward += self.args.succ_bonus
-                    reward -= self.args.time_penalty
+
+                    info["total_reward"] = reward
                 return obs, reward, done, info
-            
-        return obs, -self.args.time_penalty, done, info
+        info['roboclip_reward'] = 0.0
+        info['dense_return'] = 0.0
+        info['ep_length'] = 0.0
+        info['dense_reward'] = dense_reward
+        return obs, 0, done, info
 
     def reset(self):
         self.past_observations = []
-        self.counter = 0
+        self.past_dense_reward = []
 
         if self.args.random_reset:
             self.rank = random.randint(0, 400)
-            self.baseEnv = self.door_open_goal_hidden_cls(seed=self.rank)
+            self.baseEnv = self.env_class(seed=self.rank)
             self.env = TimeLimit(self.baseEnv, max_episode_steps=self.args.ep_length)
+            self.env.action_space.seed(self.rank)
 
-        if not self.time:
-            return self.env.reset()
-        return np.concatenate([self.env.reset(), np.array([0.0])])
+        return self.env.reset()
 
 
 class MetaworldDense(Env):
     def __init__(self, args):
         super(MetaworldDense, self)
         if args.obs_env:
-            self.door_open_goal_hidden_cls = ALL_V2_ENVIRONMENTS_GOAL_OBSERVABLE[args.env_id]
+            self.env_class = ALL_V2_ENVIRONMENTS_GOAL_OBSERVABLE[args.env_id]
         else:
-            self.door_open_goal_hidden_cls = ALL_V2_ENVIRONMENTS_GOAL_HIDDEN[args.env_id]
+            self.env_class = ALL_V2_ENVIRONMENTS_GOAL_HIDDEN[args.env_id]
         self.args = args
         self.rank = args.seed
-        self.baseEnv = self.door_open_goal_hidden_cls(seed=self.rank)
+        self.baseEnv = self.env_class(seed=self.rank)
         self.env = TimeLimit(self.baseEnv, max_episode_steps=args.ep_length)
         self.observation_space = self.env.observation_space
         self.action_space = self.env.action_space
@@ -343,24 +258,9 @@ class MetaworldDense(Env):
 
         if self.args.random_reset:
             self.rank = random.randint(400, 500)
-            self.baseEnv = self.door_open_goal_hidden_cls(seed=self.rank)
-            # env = door_open_goal_hidden_cls(seed=rank)
+            self.baseEnv = self.env_class(seed=self.rank)
             self.env = TimeLimit(self.baseEnv, max_episode_steps=self.args.ep_length)
-        if not self.time:
-            return self.env.reset()
-        return np.concatenate([self.env.reset(), np.array([0.0])])
-    
-    def reset_seed(self, seed):
-        self.counter = 0
-        
-        self.rank = seed
-        self.baseEnv = self.door_open_goal_hidden_cls(seed=self.rank)
-        self.env = TimeLimit(self.baseEnv, max_episode_steps=self.args.ep_length)
-        if not self.time:
-            return self.env.reset()
-        return np.concatenate([self.env.reset(), np.array([0.0])])
-
-
+        return self.env.reset()
 
 
 def make_env(args, eval = False):
@@ -385,12 +285,47 @@ def make_env(args, eval = False):
 
 
 class CustomWandbCallback(WandbCallback):
-    def _on_rollout_end(self):
-        # Log episode metrics with environment steps as x-axis
-        wandb.log({
-            'episode_reward': sum(self.locals['rewards']),  # Cumulative reward for the episode
-            'episode_length': len(self.locals['rewards'])   # Length of the episode
-        }, step=self.model.num_timesteps)      
+    # def _on_rollout_end(self):
+    #     # Log episode metrics with environment steps as x-axis
+    #     wandb.log({
+    #         'episode_reward': sum(self.locals['rewards']),  # Cumulative reward for the episode
+    #         'episode_length': len(self.locals['rewards'])   # Length of the episode
+    #     }, step=self.model.num_timesteps)
+            
+    def _on_step(self):
+        # Log training metrics
+        # print done
+        #if done and done is True, log the info
+
+        done_array = self.locals["dones"]
+        infos = self.locals["infos"]
+        
+        for i, done in enumerate(done_array):
+            if done:
+
+                succ = infos[i].get('success', 0)
+                roboclip_reward = infos[i].get('roboclip_reward', 0)
+                total_reward = infos[i].get('total_reward', 0)
+                dense_return = infos[i].get('dense_return', 0)
+                dense_reward = infos[i].get('dense_reward', 0)
+                ep_length = infos[i].get('ep_length', 0)
+                print("episode logged", self.num_timesteps)
+                wandb.log({"episode_info/episode_success": succ,
+                            "episode_info/roboclip_reward": roboclip_reward,
+                            "episode_info/RoboCLIP_bonus_reward": total_reward,
+                            "episode_info/dense_return": dense_return,
+                            "episode_info/dense_reward": dense_reward,
+                            "episode_info/ep_length": ep_length}, step = self.num_timesteps)
+                
+
+
+
+
+        return True
+
+
+
+
 
 
 
@@ -405,16 +340,15 @@ class CustomEvalCallback(EvalCallback):
         if self.video_freq > 0 and self.n_calls % self.video_freq == 0:
             video_buffer = self.record_video()
             # wandb.log({f"evaluation_video": wandb.Video(video_buffer, fps=20, format="mp4")}, commit=False)
-            wandb.log({f"eval/evaluation_video": wandb.Video(video_buffer, fps=20, format="mp4")}, step = self.n_calls)
-            #wandb.log({f"eval/evaluate_succ": success}, step = self.n_calls)
+            wandb.log({f"eval/evaluation_video": wandb.Video(video_buffer, fps=20, format="mp4")}, step = self.num_timesteps)
             print("video logged")
 
-        return result
+
 
     def record_video(self):
         frames = []
         obs = self.eval_env.reset()
-        #success = 0
+
         for _ in range(128):  # You can adjust the number of steps for recording
             frame = self.eval_env.render(mode='rgb_array')
             # downsample frame
@@ -422,11 +356,6 @@ class CustomEvalCallback(EvalCallback):
             frames.append(frame)
             action, _ = self.model.predict(obs, deterministic=self.deterministic)
             obs, _, _, info = self.eval_env.step(action)
-            # print(type(info))
-            # print(info)
-            # if info['success']:
-            #     success = 1
-            #     break
 
         video_buffer = io.BytesIO()
 
@@ -436,11 +365,6 @@ class CustomEvalCallback(EvalCallback):
 
         video_buffer.seek(0)
         return video_buffer
-
-
-
-
-
 
 
 
@@ -458,33 +382,27 @@ def main():
 
     WANDB_ENTITY_NAME = "clvr"
     WANDB_PROJECT_NAME = "roboclip-v2"
-    if args.pca_path != None:
-        experiment_name = "ep" + str(args.ep_length) + "_PCA_" + "xclip_textTRANS_" + str(args.var) + args.algo + "_" + args.env_id
+    if args.pca:
+        experiment_name = "ep" + str(args.ep_length) + "_PCA_" + "xclip_textTRANS_" + args.env_id
     else:
-        experiment_name = "ep" + str(args.ep_length) + "_NOPCA_" +"xclip_textTRANS_" + str(args.var) + args.algo + "_" + args.env_id
-
-    if args.threshold_reward:
-        experiment_name = experiment_name + "_Thld"
-    if args.project_reward:
-        experiment_name = experiment_name + "_ProjReward"
+        experiment_name = "ep" + str(args.ep_length) + "_NOPCA_" +"xclip_textTRANS_" + args.env_id
 
     if args.succ_end:
         experiment_name = experiment_name + "_SuccEnd"
 
     experiment_name = experiment_name + args.exp_name_end
-    run_group = experiment_name + "NEW"
+    run_group = experiment_name + "NEWDEBUG"
     experiment_name = experiment_name + "_" + str(args.seed) + "NEW"
 
-    if args.wandb:
-        run = wandb.init(
-            entity=WANDB_ENTITY_NAME,
-            project=WANDB_PROJECT_NAME,
-            group=run_group,
-            config=args,
-            name=experiment_name,
-            monitor_gym=True,
-            sync_tensorboard=True,
-        )
+    run = wandb.init(
+        entity=WANDB_ENTITY_NAME,
+        project=WANDB_PROJECT_NAME,
+        group=run_group,
+        config=args,
+        name=experiment_name,
+        monitor_gym=True,
+        sync_tensorboard=False,
+    )
 
 
     column1 = ["text_string"]
@@ -507,29 +425,18 @@ def main():
     else:
         envs = DummyVecEnv([make_env(args, eval = False)])
 
-
-
-    if not args.pretrained:
-        model = SAC("MlpPolicy", envs, verbose=1, tensorboard_log=log_dir, gradient_steps = args.n_envs,
-                    ent_coef="auto", buffer_size=args.total_time_steps, learning_starts=4000, seed=args.seed)
-    else:
-        model = SAC.load(args.pretrained, env=envs, tensorboard_log=log_dir)
-
-
     if args.n_envs > 1:
-        eval_env = SubprocVecEnv([make_env(args, eval = True) for i in range(args.n_envs)])#KitchenEnvDenseOriginalReward(time=True)
+        eval_env = SubprocVecEnv([make_env(args, eval = True) for i in range(args.n_envs)])
     else:
-        eval_env = DummyVecEnv([make_env(args, eval = True)])#KitchenEnvDenseOriginalReward(time=True)
-    # Use deterministic actions for evaluation
+        eval_env = DummyVecEnv([make_env(args, eval = True)]) 
+
+    model = SAC("MlpPolicy", envs, verbose=1, tensorboard_log=log_dir, gradient_steps = args.n_envs,
+                ent_coef="auto", buffer_size=args.total_time_steps, learning_starts=1000, seed=args.seed)
 
     eval_callback = CustomEvalCallback(eval_env, best_model_save_path=log_dir, 
                                     log_path=log_dir, eval_freq=args.eval_freq, video_freq=args.video_freq,
                                     deterministic=True, render=False, n_eval_episodes = 25)
      
-    
-    
-    # wandb_callback = WandbCallback(verbose = 1)
-    # callback = CallbackList([eval_callback, wandb_callback])
     customwandbcallback = CustomWandbCallback()
     callback = CallbackList([eval_callback, customwandbcallback])
     model.learn(total_timesteps=int(args.total_time_steps), callback=callback)
