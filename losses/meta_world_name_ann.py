@@ -47,7 +47,7 @@ task_ann = {
     "push-wall-v2-goal-hidden": "pushing bin",
     "reach-wall-v2-goal-hidden": "reaching red",
     "shelf-place-v2-goal-hidden": "placing bin to shelf",
-    "sweep-into-v2-goal-hidden": "sweeping bin",
+    "sweep-into-v2-goal-hidden": "sweeping bin into hole",
     "sweep-v2-goal-hidden": "sweeping bin",
     "window-open-v2-goal-hidden": "opening window",
     "window-close-v2-goal-hidden": "closing window",
