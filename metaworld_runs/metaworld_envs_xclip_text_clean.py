@@ -337,11 +337,29 @@ class CustomEvalCallback(EvalCallback):
     def _on_step(self) -> bool:
         result = super(CustomEvalCallback, self)._on_step()
 
-        if self.video_freq > 0 and self.n_calls % self.video_freq == 0:
+        if self.n_calls % self.video_freq == 0:
             video_buffer = self.record_video()
             # wandb.log({f"evaluation_video": wandb.Video(video_buffer, fps=20, format="mp4")}, commit=False)
             wandb.log({f"eval/evaluation_video": wandb.Video(video_buffer, fps=20, format="mp4")}, step = self.num_timesteps)
-            print("video logged")
+
+        if self.n_calls % self.eval_freq == 0:
+            mean_reward = np.mean(self.evaluations_results[-1])
+            eval_episode_lengths = self.evaluations_length[-1]  # Get the episode lengths
+            mean_episode_length = np.mean(eval_episode_lengths) 
+            log_data = {
+                "eval/succ_rate": mean_reward,
+                "eval/mean_episode_length": mean_episode_length
+            }
+
+            # Log to wandb
+            wandb.log(log_data, step=self.num_timesteps)
+            if mean_reward > self.best_mean_reward:
+                self.best_mean_reward = mean_reward
+                self.model.save(f"{self.best_model_save_path}/best_model_{self.num_timesteps}_steps.zip")
+
+        return result
+
+
 
 
 
@@ -434,7 +452,7 @@ def main():
                 ent_coef="auto", buffer_size=args.total_time_steps, learning_starts=1000, seed=args.seed)
 
     eval_callback = CustomEvalCallback(eval_env, best_model_save_path=log_dir, 
-                                    log_path=log_dir, eval_freq=args.eval_freq, video_freq=args.video_freq,
+                                    log_path=log_dir, eval_freq=args.eval_freq//args.n_envs, video_freq=args.video_freq//args.n_envs,
                                     deterministic=True, render=False, n_eval_episodes = 25)
      
     customwandbcallback = CustomWandbCallback()

@@ -58,7 +58,7 @@ class XCLIPEncoder(BaseEncoder):
             text = text.decode()
 
 
-        text_tokens = self.tokenizer(text, return_tensors="pt")
+        text_tokens = self.tokenizer(text, return_tensors="pt", padding=True, truncation=True)
         for key in text_tokens:
             text_tokens[key] = text_tokens[key].cuda()
 
@@ -90,6 +90,7 @@ class XCLIPEncoder(BaseEncoder):
         Ensures same numbers of frames(32). returns a numpy array of shape (target_frame_count, 224, 224, 3)
         """
         frames = np.array(frames)
+        frames = frames[:,240-112:240+112,320-112:320+112,:]
         frame_count = frames.shape[0]
         #print(f"frames number{frame_count}")
         # frames = th.from_numpy(frames)
