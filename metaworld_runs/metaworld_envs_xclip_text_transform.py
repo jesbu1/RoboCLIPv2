@@ -52,7 +52,7 @@ import torch.nn.functional as F
 import h5py
 import json
 from transformers import AutoTokenizer, AutoModel, AutoProcessor 
-from eval_utils import eval_policys
+from metaworld_runs.eval_utils import eval_policys
 
 
 
@@ -69,7 +69,7 @@ fix gpu, forward xclip with gpu Done
 
 '''
 
-id_task = json.load(open("../id_task.json", "r"))
+#id_task = json.load(open("../id_task.json", "r"))
 
 class SingleLayerMLP(th.nn.Module):
     def __init__(self, input_dim, output_dim, normalize=True):
@@ -466,7 +466,7 @@ def make_env(args, eval = False):
                 env = MetaworldSparse(args)
         else:
             env = MetaworldDense(args)
-        env = Monitor(env, os.path.join(log_dir, str(args.seed)))
+        env = Monitor(env, os.path.join(args.log_dir, str(args.seed)))
         return env
     return _init
 

@@ -1,5 +1,6 @@
 import joblib
 from gym import Env, spaces
+from offline_rl_algorithms.offline_replay_buffers import H5ReplayBuffer
 import torch.nn as nn
 import numpy as np
 from stable_baselines3 import PPO, SAC
@@ -54,19 +55,130 @@ import json
 from transformers import AutoTokenizer, AutoModel, AutoProcessor 
 import sys
 
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))) 
-
+#sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))) 
 from metaworld_runs.eval_utils import eval_policys
 
 from offline_rl_algorithms.cql import CQL
 from offline_rl_algorithms.base_offline_rl_algorithm import OfflineRLAlgorithm
 
 
-from metaworld_runs.metaword_envs_xclip_text_transform import SingleLayerMLP, MetaworldSparse, MetaworldDense, parse_entropy_term, make_env, CustomEvalCallback, CustomWandbCallback
+from metaworld_runs.metaworld_envs_xclip_text_transform import SingleLayerMLP, MetaworldSparse, MetaworldDense, parse_entropy_term, make_env, CustomEvalCallback, CustomWandbCallback
+
+
+class OfflineEvalCallback(EvalCallback):
+    def __init__(self, *args, video_freq, **kwargs):
+        super(OfflineEvalCallback, self).__init__(*args, **kwargs)
+        self.video_freq = video_freq
+
+    def _on_step(self) -> bool:
+        result = super(OfflineEvalCallback, self)._on_step()
+
+        if self.video_freq > 0 and self.n_calls % self.video_freq == 0:
+            video_buffer = self.record_video()
+            # wandb.log({f"evaluation_video": wandb.Video(video_buffer, fps=20, format="mp4")}, commit=False)
+            wandb.log({f"eval/evaluation_video": wandb.Video(video_buffer, fps=20, format="mp4")}, step = self.n_calls)
+            #wandb.log({f"eval/evaluate_succ": success}, step = self.n_calls)
+            print("video logged")
+
+        return result
+
+    def record_video(self):
+        frames = []
+        obs = self.eval_env.reset()
+        #success = 0
+        for _ in range(500):  # You can adjust the number of steps for recording
+            frame = self.eval_env.render(mode='rgb_array')
+            # downsample frame
+            frame = frame[::3, ::3, :3]
+            frames.append(frame)
+            action, _ = self.model.predict(obs, deterministic=self.deterministic)
+            obs, _, _, info = self.eval_env.step(action)
+            # print(type(info))
+            # print(info)
+            # if info['success']:
+            #     success = 1
+            #     break
+
+        video_buffer = io.BytesIO()
+
+        with imageio.get_writer(video_buffer, format='mp4', fps=20) as writer:
+            for frame in frames:
+                writer.append_data(frame)
+
+        video_buffer.seek(0)
+        return video_buffer
+
+
+
+class OfflineWandbCallback(WandbCallback):
+    # def _on_rollout_end(self):
+    #     # Log episode metrics with environment steps as x-axis
+    #     wandb.log({
+    #         'episode_reward': sum(self.locals['rewards']),  # Cumulative reward for the episode
+    #         'episode_length': len(self.locals['rewards'])   # Length of the episode
+    #     }, step=self.model.num_timesteps)
+
+    @property
+    def wandb_log_step(self) -> int:
+        if hasattr(self.model, "offline_num_timesteps"):
+            print(self.num_timesteps, self.locals['self'].offline_num_timesteps)
+            return self.num_timesteps + self.locals['self'].offline_num_timesteps
+            
+        return self.num_timesteps
+            
+
+    # def _on_rollout_end(self):
+    #     # Log episode metrics with environment steps as x-axis
+    #     wandb.log({
+    #         'episode_reward': sum(self.locals['rewards']),  # Cumulative reward for the episode
+    #         'episode_length': len(self.locals['rewards'])   # Length of the episode
+    #     }, step=self.model.num_timesteps) 
+
+
+
+    def _on_step(self):
+        # Log training metrics
+        # print done
+        #if done and done is True, log the info
+        if 'metrics' in self.locals:
+            wandb.log(self.locals['metrics'], step = self.wandb_log_step)
+        # done_array = self.locals["dones"]
+        # infos = self.locals["infos"]
+        
+    #     for i, done in enumerate(done_array):
+    #         if done:
+
+    #             succ = infos[i].get('success', 0)
+    #             roboclip_reward = infos[i].get('roboclip_reward', 0)
+    #             total_reward = infos[i].get('total_reward', 0)
+    #             dense_return = infos[i].get('dense_return', 0)
+    #             dense_reward = infos[i].get('dense_reward', 0)
+    #             ep_length = infos[i].get('ep_length', 0)
+    #             RMS_reward = infos[i].get('RMS_reward', 0)
+    #             RMS_total_reward = infos[i].get('RMS_total_reward', 0)
+    #             offset = infos[i].get('offset', 0)
+    #             print("episode logged", self.wandb_log_step)
+    #             wandb.log({"origin_episode_info/episode_success": succ,
+    #                         "origin_episode_info/roboclip_reward": roboclip_reward,
+    #                         "origin_episode_info/RoboCLIP_bonus_reward": total_reward,
+    #                         "origin_episode_info/dense_return": dense_return,
+    #                         "origin_episode_info/dense_reward": dense_reward,
+    #                         "origin_episode_info/ep_length": ep_length,
+
+    #                         "RMS/RMS_reward": RMS_reward,
+    #                         "RMS/RMS_total_reward": RMS_total_reward,
+    #                         "RMS/offset": offset
+                            
+    #                         }, step = self.wandb_log_step)
+
+                
+    #     return True
+
+
 
 def get_args():
     parser = argparse.ArgumentParser(description='RL')
-    parser.add_argument('--algo', type=str, default='sac', choices=['ppo', 'sac', 'cql', 'calibrated_cql'])
+    parser.add_argument('--algo', type=str, default='cql', choices=['ppo', 'sac', 'cql', 'calibrated_cql'])
     parser.add_argument('--text_string', type=str, default='opening door')
     parser.add_argument('--dir_add', type=str, default='')
     parser.add_argument('--env_id', type=str, default='window-open-v2-goal-hidden')
@@ -109,7 +221,6 @@ def get_args():
 
     args = parser.parse_args()
     return args
-
 
 class SingleLayerMLP(th.nn.Module):
     def __init__(self, input_dim, output_dim, normalize=True):
@@ -173,6 +284,7 @@ def main():
     experiment_name = experiment_name + args.exp_name_end
     run_group = experiment_name + "NEW"
     experiment_name = experiment_name + "_" + str(args.seed) + "NEW"
+    wandb.disabled = True
 
     if args.wandb:
         run = wandb.init(
@@ -182,22 +294,25 @@ def main():
             config=args,
             name=experiment_name,
             monitor_gym=True,
-            sync_tensorboard=True,
+            sync_tensorboard=False,
         )
 
 
-    column1 = ["text_string"]
-    table1 = wandb.Table(columns=column1)
-    table1.add_data([args.text_string])  
+        # column1 = ["text_string"]
+        # table1 = wandb.Table(columns=column1)
+        # table1.add_data([args.text_string])  
 
-    column2 = ["env_id"]
-    table2 = wandb.Table(columns=column2)
-    table2.add_data([args.env_id])  
-    wandb.log({"text_string": table1, "env_id": table2})
+        # column2 = ["env_id"]
+        # table2 = wandb.Table(columns=column2)
+        # table2.add_data([args.env_id])  
+        # wandb.log({"text_string": table1, "env_id": table2})
 
 
-    log_dir = f"/scr/jzhang96/logs/baseline_logs/{experiment_name}"
+    # log_dir = f"/scr/jzhang96/logs/baseline_logs/{experiment_name}"
+    log_dir = f"logs/baseline_logs/{experiment_name}"
     # log_dir = f"/home/jzhang96/logs/baseline_logs/{experiment_name}"
+
+    args.log_dir = log_dir
 
     if not os.path.exists(log_dir):
         os.makedirs(log_dir)
@@ -239,7 +354,7 @@ def main():
         eval_env = DummyVecEnv([make_env(args, eval = True)])#KitchenEnvDenseOriginalReward(time=True)
     # Use deterministic actions for evaluation
 
-    eval_callback = CustomEvalCallback(eval_env, best_model_save_path=log_dir,
+    eval_callback = OfflineEvalCallback(eval_env, best_model_save_path=log_dir,
                                     log_path=log_dir, eval_freq=args.eval_freq, video_freq=args.video_freq,
                                     deterministic=True, render=False, n_eval_episodes = 25)
      
@@ -247,12 +362,18 @@ def main():
     
     # wandb_callback = WandbCallback(verbose = 1)
     # callback = CallbackList([eval_callback, wandb_callback])
-    customwandbcallback = CustomWandbCallback()
-    callback = CallbackList([eval_callback, customwandbcallback])
+    if args.wandb:
+        # customwandbcallback = CustomWandbCallback()
+        customwandbcallback = OfflineWandbCallback()
+        callback = CallbackList([eval_callback, customwandbcallback])
+    else:
+        callback = eval_callback
 
     # load the offline replay buffer
     if isinstance(model, OfflineRLAlgorithm):
-        model.learn_offline(train_steps=args.offline_training_steps, callback=callback)
+        h5_path = "updated_trajs.h5"
+        buffer = H5ReplayBuffer(h5_path)
+        model.learn_offline(offline_replay_buffer=buffer, train_steps=args.offline_training_steps, callback=callback)
 
 
     model.learn(total_timesteps=int(args.total_time_steps), callback=callback)
@@ -262,7 +383,9 @@ def main():
     # load the best model
     model = model_class.load(f"{log_dir}/best_model")
     success_rate = eval_policys(args, MetaworldDense, model)
-    wandb.log({"eval_SR/evaluate_succ": success_rate}, step = 0)
+
+    if args.wandb:
+        wandb.log({"eval_SR/evaluate_succ": success_rate}, step = 0)
 
 
 if __name__ == '__main__':

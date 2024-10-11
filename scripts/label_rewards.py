@@ -54,6 +54,8 @@ class RewardLabeler:
         done = traj_data['done']
 
         images = []
+        timesteps = []
+        current_timestep = 0
         for i in tqdm(range(len(done))):
 
             
@@ -65,6 +67,7 @@ class RewardLabeler:
             # We append images to the buffer, until we reach the end of the trajectory
             images.append(image[i])
             all_lang_embeds.append(text_embedding.cpu().numpy())
+            timesteps.append(current_timestep)
 
             if done[i]:
 
@@ -82,13 +85,17 @@ class RewardLabeler:
                 # Then we reset the buffer
                 images = []
 
+                current_timestep = 0
+
             else:
                 all_rewards.append(0.0)
 
-            if i == 300:
+                current_timestep += 1
+
+            if i == 100:
                 break
 
-        return all_rewards, all_lang_embeds
+        return all_rewards, all_lang_embeds, timesteps
 
     def compute_similarity(self, video_embedding, text_embedding):
         """
@@ -123,7 +130,7 @@ def main():
 
         print(f"Labeling rewards for trajectories in with size {len(traj_data)}...")
         # Label rewards for the trajectories
-        all_rewards, all_lang_embeds = reward_labeler.label_trajectories(traj_data)
+        all_rewards, all_lang_embeds, timesteps = reward_labeler.label_trajectories(traj_data)
 
 
         print(f"Saving trajectories with rewards to {args.output}...")
@@ -132,6 +139,7 @@ def main():
             # Save each of the keys along with the corresponding data
             output_file.create_dataset('rewards', data=all_rewards, dtype='float32')
             output_file.create_dataset('lang_embedding', data=all_lang_embeds, dtype='float32')
+            output_file.create_dataset('timesteps', data=timesteps, dtype='int32')
             # copy the rest of the data from traj_data to output_file
             for key in traj_data.keys():
                 if key != 'rewards':

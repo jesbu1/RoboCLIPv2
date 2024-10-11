@@ -58,8 +58,17 @@ class H5ReplayBuffer(ReplayBuffer):
         device: Union[th.device, str] = "auto",
         n_envs: int = 1,
         success_bonus: float = 0.0,
+        add_timestep: bool = True,
     ):
+        """
+        Initialize the replay buffer.
 
+        :param h5_path: Path to the HDF5 file that stores the transitions
+        :param device: PyTorch device to store the transitions
+        :param n_envs: Number of parallel environments
+        :param success_bonus: Success bonus added to the rewards
+        :param add_timestep: Add a column with the timesteps to the transitions
+        """
         with h5py.File(h5_path, "r") as f:
             observations = f["state"][()]
             # self.lang_embeddings = f["lang_embedding"][()]
@@ -67,6 +76,7 @@ class H5ReplayBuffer(ReplayBuffer):
             actions = f["action"][()]
             rewards = f["rewards"][()]
             dones = f["done"][()]
+            timesteps = f["timesteps"][()]
 
         self.optimize_memory_usage = True
 
@@ -75,6 +85,7 @@ class H5ReplayBuffer(ReplayBuffer):
         self.actions = actions
         self.rewards = rewards
         self.dones = dones
+        self.timesteps = timesteps
 
         self.buffer_size = self.rewards.shape[0]
         self.success_bonus = success_bonus
@@ -82,6 +93,8 @@ class H5ReplayBuffer(ReplayBuffer):
         self.pos = self.buffer_size
         self.full = True
         self.device = get_device(device)
+
+        self.add_timestep = add_timestep
 
     def add(
         self,
@@ -102,20 +115,37 @@ class H5ReplayBuffer(ReplayBuffer):
         env: Optional[VecNormalize] = None,
     ) -> ReplayBufferSamples:
         # Sample randomly the env idx
-
         if self.optimize_memory_usage:
             next_obs = self._normalize_obs(
                 self.observations[(batch_inds + 1) % self.buffer_size, :],
                 env=None,
             )
+            # add timestep into the observation
+            if self.add_timestep:
+                timesteps = self.timesteps[(batch_inds + 1) % self.buffer_size]
+                next_obs = np.concatenate((next_obs, timesteps.reshape(-1, 1)), axis=1)
         else:
             next_obs = self._normalize_obs(
                 self.next_observations[batch_inds, :], env=None
             )
+            if self.add_timestep:
+                timesteps = self.timesteps[batch_inds]
+                next_obs = np.concatenate((next_obs, timesteps.reshape(-1, 1)), axis=1)
+
+        observation = self._normalize_obs(self.observations[batch_inds, :], env=None)
+
+        # add the timestep into the observation
+        if self.add_timestep:
+            timesteps = self.timesteps[batch_inds]
+            observation = np.concatenate((observation, timesteps.reshape(-1, 1)), axis=1)
+        
+        # set dtype of observations to float32
+        observation = observation.astype(np.float32)
+        next_obs = next_obs.astype(np.float32)
 
         data = (
-            self._normalize_obs(self.observations[batch_inds, :], env=None),
-            self.actions[batch_inds, :],
+            observation,
+            self.actions[batch_inds, :].astype(np.float32),
             next_obs,
             # Only use dones that are not due to timeouts
             # deactivated by default (timeouts is initialized as an array of False)
@@ -170,3 +200,5 @@ if __name__ == "__main__":
     print(buffer.size())
     samples = buffer.sample(10)
     print(samples)
+
+    breakpoint()

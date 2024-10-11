@@ -9,6 +9,7 @@ from stable_baselines3.common.buffers import ReplayBuffer
 from stable_baselines3.common.noise import ActionNoise
 from stable_baselines3.common.off_policy_algorithm import OffPolicyAlgorithm
 from stable_baselines3.common.policies import BasePolicy, ContinuousCritic
+from metaworld_runs.eval_utils import evaluate_policy
 from stable_baselines3.common.type_aliases import GymEnv, MaybeCallback, Schedule
 from stable_baselines3.common.utils import get_parameters_by_name, polyak_update
 from stable_baselines3.sac.policies import (
@@ -113,6 +114,8 @@ class OfflineRLAlgorithm(OffPolicyAlgorithm):
         seed: Optional[int] = None,
         device: Union[th.device, str] = "auto",
         _init_setup_model: bool = True,
+        supported_action_spaces: Optional[Tuple[spaces.Space]] = (spaces.Box,),
+        support_multi_env: bool = True,
     ):
         super().__init__(
             policy,
@@ -138,8 +141,8 @@ class OfflineRLAlgorithm(OffPolicyAlgorithm):
             sde_sample_freq=sde_sample_freq,
             use_sde_at_warmup=use_sde_at_warmup,
             optimize_memory_usage=optimize_memory_usage,
-            supported_action_spaces=(spaces.Box,),
-            support_multi_env=True,
+            supported_action_spaces=supported_action_spaces,
+            support_multi_env=support_multi_env,
         )
 
         self.target_entropy = target_entropy
@@ -149,6 +152,8 @@ class OfflineRLAlgorithm(OffPolicyAlgorithm):
         self.ent_coef = ent_coef
         self.target_update_interval = target_update_interval
         self.ent_coef_optimizer: Optional[th.optim.Adam] = None
+        
+        self.offline_num_timesteps = 0
 
         if _init_setup_model:
             self._setup_model()
@@ -167,20 +172,41 @@ class OfflineRLAlgorithm(OffPolicyAlgorithm):
         offline_replay_buffer: ReplayBuffer,
         batch_size: int = 64,
         callback: MaybeCallback = None,
+        train_frequency: int = 100,
     ) -> None:
 
         # Getting callbacks to work
         # Create eval callback if needed
-        # callback = self._init_callback(callback, True)
+        # total_timesteps = 0
 
+        total_timesteps, callback = self._setup_learn(
+            total_timesteps=train_steps,
+            callback=callback,
+            reset_num_timesteps=False,
+            tb_log_name="offline",
+            progress_bar=False,
+        )
+
+        callback = self._init_callback(callback, True)
         callback.on_training_start(locals(), globals())
 
         old_replay_buffer = self.replay_buffer
         self.replay_buffer = offline_replay_buffer
 
+        print('learning offline')
         # divide train_steps by 100 and call train 100 times
-        for _ in range(train_steps // 100):
-            self.train(100, batch_size=batch_size, callback=callback, logging_prefix="offline_")
+        for _ in range(train_steps // train_frequency):
+            print("STARTING A TRAIN RUN")
+            metrics = self.train(100, batch_size=batch_size, logging_prefix="offline_")
+            # rollout_metrics = 
+            self.offline_num_timesteps += train_frequency
+            metrics['num_timesteps'] = self.offline_num_timesteps + self.num_timesteps
+            metrics['offline_num_timesteps'] = self.offline_num_timesteps
+            callback.update_locals(locals()) # a little hacky
+            callback.on_step() # because of locals, we have access to self.locals['metrics']
+
+
+        callback.on_training_end()
 
         self.replay_buffer = old_replay_buffer
 
@@ -196,7 +222,7 @@ class OfflineRLAlgorithm(OffPolicyAlgorithm):
         total_timesteps: int,
         callback: MaybeCallback = None,
         log_interval: int = 4,
-        tb_log_name: str = "SAC",
+        tb_log_name: str = "OfflineRL",
         reset_num_timesteps: bool = True,
         progress_bar: bool = False,
     ):
@@ -210,8 +236,8 @@ class OfflineRLAlgorithm(OffPolicyAlgorithm):
             progress_bar=progress_bar,
         )
 
-    def _excluded_save_params(self) -> List[str]:
-        raise NotImplementedError
+    # def _excluded_save_params(self) -> List[str]:
+    #     raise NotImplementedError
 
-    def _get_torch_save_params(self) -> Tuple[List[str], List[str]]:
-        raise NotImplementedError
+    # def _get_torch_save_params(self) -> Tuple[List[str], List[str]]:
+    #     raise NotImplementedError
