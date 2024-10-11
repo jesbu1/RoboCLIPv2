@@ -62,7 +62,7 @@ from offline_rl_algorithms.cql import CQL
 from offline_rl_algorithms.base_offline_rl_algorithm import OfflineRLAlgorithm
 
 
-from metaworld_runs.metaworld_envs_xclip.metaworld_envs_xclip_transform import SingleLayerMLP, MetaworldSparse, MetaworldDense, parse_entropy_term, make_env, CustomEvalCallback, CustomWandbCallback
+from metaworld_runs.metaword_envs_xclip_text_transform import SingleLayerMLP, MetaworldSparse, MetaworldDense, parse_entropy_term, make_env, CustomEvalCallback, CustomWandbCallback
 
 def get_args():
     parser = argparse.ArgumentParser(description='RL')

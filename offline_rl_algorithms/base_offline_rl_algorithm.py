@@ -2,7 +2,7 @@ from typing import Any, ClassVar, Dict, List, Optional, Tuple, Type, TypeVar, Un
 
 import numpy as np
 import torch as th
-from gymnasium import spaces
+from gym import spaces
 from torch.nn import functional as F
 
 from stable_baselines3.common.buffers import ReplayBuffer

@@ -264,7 +264,7 @@ def main():
     global log_dir
     args = get_args()
     env_id = "button-press-v2-goal-hidden"
-    log_dir = f"/scr/jzhang96/metaworld/{args.env_id}_{args.env_type}{args.dir_add}"+"/s3d_draw_close"
+    log_dir = f"./logs/metaworld/{args.env_id}_{args.env_type}{args.dir_add}"+"/s3d_draw_close"
     if not os.path.exists(log_dir):
         os.makedirs(log_dir)
     envs = SubprocVecEnv([make_env(args.env_type, args.env_id, i) for i in range(args.n_envs)])
