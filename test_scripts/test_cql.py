@@ -250,10 +250,12 @@ def main():
 
     WANDB_ENTITY_NAME = "clvr"
     WANDB_PROJECT_NAME = "roboclip-v2"
-    if args.pca_path != None:
-        experiment_name = "ep500_PCA_" + "xclip_textTRANS_" + args.algo + "_" + args.env_id
-    else:
-        experiment_name = "ep500_NOPCA_" +"xclip_textTRANS_" + args.algo + "_" + args.env_id
+    # if args.pca_path != None:
+    #     experiment_name = "ep500_PCA_" + "xclip_textTRANS_" + args.algo + "_" + args.env_id
+    # else:
+    #     experiment_name = "ep500_NOPCA_" +"xclip_textTRANS_" + args.algo + "_" + args.env_id
+
+    experiment_name = args.algo + "_" + args.env_id
     if args.train_orcale:
         experiment_name = experiment_name + "_Oracle"
     if args.threshold_reward:
@@ -283,7 +285,7 @@ def main():
     # experiment_name = experiment_name + "_Entropy" + str(args.entropy_term)
     experiment_name = experiment_name + args.exp_name_end
     run_group = experiment_name + "NEW"
-    experiment_name = experiment_name + "_" + str(args.seed) + "NEW"
+    # experiment_name = experiment_name + "_" + str(args.seed) + "NEW"
     wandb.disabled = True
 
     if args.wandb:
