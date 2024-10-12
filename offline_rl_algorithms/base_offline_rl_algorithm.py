@@ -196,7 +196,6 @@ class OfflineRLAlgorithm(OffPolicyAlgorithm):
         print('learning offline')
         # divide train_steps by 100 and call train 100 times
         for _ in range(train_steps // train_frequency):
-            print("STARTING A TRAIN RUN")
             metrics = self.train(100, batch_size=batch_size, logging_prefix="offline_")
             # rollout_metrics = 
             self.offline_num_timesteps += train_frequency

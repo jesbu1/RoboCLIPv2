@@ -76,7 +76,7 @@ class OfflineEvalCallback(EvalCallback):
         if self.video_freq > 0 and self.n_calls % self.video_freq == 0:
             video_buffer = self.record_video()
             # wandb.log({f"evaluation_video": wandb.Video(video_buffer, fps=20, format="mp4")}, commit=False)
-            wandb.log({f"eval/evaluation_video": wandb.Video(video_buffer, fps=20, format="mp4")}, step = self.n_calls)
+            wandb.log({"eval/evaluation_video": wandb.Video(video_buffer, fps=20, format="mp4")}, step = self.n_calls)
             #wandb.log({f"eval/evaluate_succ": success}, step = self.n_calls)
             print("video logged")
 
@@ -342,7 +342,7 @@ def main():
         if not args.pretrained:
             model = model_class("MlpPolicy", envs, verbose=1, tensorboard_log=log_dir, 
                         # batch_size=args.n_steps * args.n_envs,
-                        ent_coef="auto", buffer_size=args.total_time_steps, learning_starts=4000, seed=args.seed, min_q_weight=5.0, min_q_temp=1.0, use_calibrated_q=use_calibrated_cql)
+                        ent_coef="auto", buffer_size=args.total_time_steps, learning_starts=4000, seed=args.seed, min_q_weight=5.0, min_q_temp=1.0, use_calibrated_q=use_calibrated_cql, learning_rate=0.0001)
         else:
             model = model_class.load(args.pretrained, env=envs, tensorboard_log=log_dir)
     else:
@@ -355,9 +355,9 @@ def main():
     # Use deterministic actions for evaluation
 
     eval_callback = OfflineEvalCallback(eval_env, best_model_save_path=log_dir,
-                                    log_path=log_dir, eval_freq=args.eval_freq, video_freq=args.video_freq,
+                                    log_path=log_dir, eval_freq=1, video_freq=1,
                                     deterministic=True, render=False, n_eval_episodes = 25)
-     
+
     
     
     # wandb_callback = WandbCallback(verbose = 1)
@@ -374,6 +374,9 @@ def main():
         h5_path = "updated_trajs.h5"
         buffer = H5ReplayBuffer(h5_path)
         model.learn_offline(offline_replay_buffer=buffer, train_steps=args.offline_training_steps, callback=callback)
+    # once learn offline is done, fix the eval callback
+    eval_callback.eval_freq = args.eval_freq
+    eval_callback.video_freq = args.video_freq
 
 
     model.learn(total_timesteps=int(args.total_time_steps), callback=callback)
