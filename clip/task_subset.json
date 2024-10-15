@@ -1,0 +1,130 @@
+{
+    "subset_1": [
+        "assembly-v2-goal-hidden",
+        "button-press-topdown-wall-v2-goal-hidden",
+        "coffee-push-v2-goal-hidden",
+        "door-open-v2-goal-hidden",
+        "faucet-open-v2-goal-hidden",
+        "handle-pull-side-v2-goal-hidden",
+        "pick-out-of-hole-v2-goal-hidden",
+        "plate-slide-v2-goal-hidden",
+        "soccer-v2-goal-hidden",
+        "shelf-place-v2-goal-hidden"
+    ],
+    "subset_2": [
+        "basketball-v2-goal-hidden",
+        "button-press-v2-goal-hidden",
+        "dial-turn-v2-goal-hidden",
+        "door-unlock-v2-goal-hidden",
+        "faucet-close-v2-goal-hidden",
+        "handle-pull-v2-goal-hidden",
+        "reach-v2-goal-hidden",
+        "plate-slide-side-v2-goal-hidden",
+        "stick-push-v2-goal-hidden",
+        "sweep-into-v2-goal-hidden"
+    ],
+    "subset_3": [
+        "bin-picking-v2-goal-hidden",
+        "button-press-wall-v2-goal-hidden",
+        "disassemble-v2-goal-hidden",
+        "hand-insert-v2-goal-hidden",
+        "hammer-v2-goal-hidden",
+        "lever-pull-v2-goal-hidden",
+        "push-back-v2-goal-hidden",
+        "plate-slide-back-v2-goal-hidden",
+        "stick-pull-v2-goal-hidden",
+        "sweep-v2-goal-hidden"
+    ],
+    "subset_4": [
+        "box-close-v2-goal-hidden",
+        "coffee-button-v2-goal-hidden",
+        "door-close-v2-goal-hidden",
+        "drawer-close-v2-goal-hidden",
+        "handle-press-side-v2-goal-hidden",
+        "peg-insert-side-v2-goal-hidden",
+        "push-v2-goal-hidden",
+        "plate-slide-back-side-v2-goal-hidden",
+        "push-wall-v2-goal-hidden",
+        "window-open-v2-goal-hidden"
+    ],
+    "subset_5": [
+        "button-press-topdown-v2-goal-hidden",
+        "coffee-pull-v2-goal-hidden",
+        "door-lock-v2-goal-hidden",
+        "drawer-open-v2-goal-hidden",
+        "handle-press-v2-goal-hidden",
+        "pick-place-wall-v2-goal-hidden",
+        "pick-place-v2-goal-hidden",
+        "peg-unplug-side-v2-goal-hidden",
+        "reach-wall-v2-goal-hidden",
+        "window-close-v2-goal-hidden"
+    ],
+    "subset_6":[
+        "door-close-v2", 
+        "drawer-close-v2",  
+        "button-press-wall-v2", 
+        "window-open-v2",  
+        "handle-press-side-v2", 
+        "coffee-push-v2", 
+        "faucet-close-v2", 
+        "stick-pull-v2", 
+        "sweep-into-v2", 
+        "push-back-v2"  
+    ],
+    "evaluate_tasks":[
+        "button-press-topdown-v2",
+        "button-press-v2",
+        "coffee-pull-v2",
+        "door-open-v2",
+        "door-unlock-v2",
+        "drawer-open-v2",
+        "handle-pull-side-v2",
+        "faucet-open-v2",
+        "stick-push-v2",
+        "window-close-v2",
+        "sweep-v2",
+        "push-v2"
+    ],
+    "evaluate_tasks_idx":[
+        "4",
+        "6",
+        "9",
+        "15",
+        "16",
+        "19",
+        "25",
+        "20",
+        "41",
+        "49",
+        "47",
+        "33"
+    ],
+    "eval_annotation":[
+        "Robot pressing button from top.",
+        "Robot pressing button from side.",
+        "Robot pulling cup",
+        "Robot opening door",
+        "Robot unlocking door",
+        "Robot opening drawer",
+        "Robot pulling handle",
+        "Robot opening faucet",
+        "Robot pushing stick",
+        "Robot closing window",
+        "Robot sweeping block",
+        "Robot pushing block"
+    ],
+    "train_annotation":[
+        "Robot closing door.",
+        "Robot closing drawer.",
+        "Robot pressing button from side",
+        "Robot opening window",
+        "Robot pressing handle from side",
+        "Robot pushing coffee cup",
+        "Robot closing faucet",
+        "Robot pulling stick",
+        "Robot sweeping block into hole",
+        "Robot pulling block back"
+    ]
+
+
+}
