@@ -229,6 +229,228 @@ class ClipLivSingleDataset(Dataset):
 
 
 
+class ClipLivSingleNegDataset(Dataset):
+
+    def __init__(self, args, h5_file):
+        self.h5_file = h5_file
+        subset_list = json.load(open("task_subset.json"))
+        subset_name = "subset_6"
+        self.keys = subset_list[subset_name]
+        self.model_name = args.model_name
+        if args.loss_type == "mse":
+            self.sample_goal = False
+        else:
+            self.sample_goal = True
+
+    def __len__(self):
+        return len(self.keys) * 1000
+
+
+    def __getitem__(self, idx):
+        real_idx = idx % len(self.keys) # env name
+        key = self.keys[real_idx]
+        
+        # sample text sample
+        text_array = self.sample_text_feature(key)
+        # sample video sample
+        # chance to sample negative video from other task 0.25
+        if random.random() > 0.25:
+            video_array, progress = self.sample_progress_feature(key)
+        else:
+            video_array, progress = self.sample_neg_progress_feature(key)
+
+        if self.sample_goal:
+            goal_array = self.sample_goal_feature(key)
+
+        output_dict = {
+            "text_array": text_array,
+            "video_array": video_array,
+            "progress": progress,
+        }
+
+        if self.sample_goal:
+            output_dict["goal_array"] = goal_array
+
+        return  output_dict
+    
+    def sample_text_feature(self, env_name):
+        text_env_name = env_name + "_text"
+        text_dataset = self.h5_file[self.model_name][text_env_name]
+        # choose index
+        idx = random.randint(0, len(text_dataset)-1)
+        text_array = np.asarray(text_dataset[idx])
+        return text_array
+
+
+    def sample_progress_feature(self, env_name):
+        progress_group = self.h5_file[self.model_name][env_name]
+        # choose index
+        datasets = sorted(list(progress_group.keys()), key = int)[:15]
+        random_name = random.choice(datasets)
+        progress_dataset = np.asarray(progress_group[random_name])
+        idx = random.randint(0, len(progress_dataset)-1)
+        video_array = np.asarray(progress_dataset[idx])
+        
+        length = len(progress_dataset)
+        progress = (idx + 1) / length
+
+        return video_array, progress
+    
+    def sample_neg_progress_feature(self, env_name):
+        env_name = random.choice(self.keys)
+        while env_name == env_name:
+            env_name = random.choice(self.keys)
+        progress_group = self.h5_file[self.model_name][env_name]
+        # choose index
+        datasets = sorted(list(progress_group.keys()), key = int)[:15]
+        random_name = random.choice(datasets)
+        progress_dataset = np.asarray(progress_group[random_name])
+        idx = random.randint(0, len(progress_dataset)-1)
+        video_array = np.asarray(progress_dataset[idx])
+
+
+        return video_array, -1
+
+    def sample_goal_feature(self, env_name):
+        progress_group = self.h5_file[self.model_name][env_name]
+        # choose index
+        datasets = sorted(list(progress_group.keys()), key = int)[:15]
+        random_name = random.choice(datasets)
+        progress_dataset = np.asarray(progress_group[random_name])
+        goal_array = progress_dataset[-1]
+
+        return goal_array
+    
+
+    def __del__(self):
+        self.h5_file.close()
+
+
+class ClipLivCategoryDataset(Dataset):
+
+    def __init__(self, args, h5_file):
+        self.h5_file = h5_file
+        subset_list = json.load(open("task_subset.json"))
+        subset_name = "subset_6"
+        self.keys = subset_list[subset_name]
+        self.model_name = args.model_name
+        if args.sample_neg:
+            self.sample_neg = True
+        else:
+            self.sample_neg = False
+
+        self.num_classes = args.num_classes
+
+
+    def __len__(self):
+        return len(self.keys) * 1000
+
+
+    def __getitem__(self, idx):
+        real_idx = idx % len(self.keys) # env name
+        key = self.keys[real_idx]
+        
+        # sample text sample
+        text_array = self.sample_text_feature(key)
+        # sample video sample
+
+        if self.sample_neg:
+            if random.random() > 0.25:
+                video_array, progress_class = self.sample_progress_feature(key)
+            else:
+                video_array, progress_class = self.sample_neg_progress_feature(key)
+        else:
+            video_array, progress_class = self.sample_progress_feature(key)
+
+        out_dict = {
+            "text_array": text_array,
+            "video_array": video_array,
+            "progress_class": progress_class
+        }
+
+        return out_dict
+
+
+    
+    def sample_text_feature(self, env_name):
+        text_env_name = env_name + "_text"
+        text_dataset = self.h5_file[self.model_name][text_env_name]
+        # choose index
+        idx = random.randint(0, len(text_dataset)-1)
+        text_array = np.asarray(text_dataset[idx])
+        return text_array
+
+
+    def sample_progress_feature(self, env_name):
+        progress_group = self.h5_file[self.model_name][env_name]
+        # choose index
+        datasets = sorted(list(progress_group.keys()), key = int)[:15]
+        random_name = random.choice(datasets)
+        progress_dataset = np.asarray(progress_group[random_name])
+        idx = random.randint(0, len(progress_dataset)-1)
+        video_array = np.asarray(progress_dataset[idx])
+        
+        length = len(progress_dataset)
+        progress = (idx + 1) / length
+
+        if self.sample_neg:
+            progress_class = int(progress * self.num_classes + 1 )
+            if progress_class > self.num_classes:
+                progress_class = self.num_classes
+        else:
+            progress_class = int(progress * self.num_classes)
+            if progress_class == self.num_classes:
+                progress_class -= 1
+
+        return video_array, progress_class
+
+    def sample_mean_progress_feature(self, env_name):
+        progress_group = self.h5_file[self.model_name][env_name]
+        # choose index
+        datasets = sorted(list(progress_group.keys()), key = int)[:15]
+        random_name = random.choice(datasets)
+        progress_dataset = np.asarray(progress_group[random_name])
+        idx = random.randint(0, len(progress_dataset)-1)
+        video_array = np.asarray(progress_dataset[:idx])
+        # mean pooling
+        progress = np.mean(progress_dataset[:idx], axis=0)
+        
+        length = len(progress_dataset)
+        progress = (idx + 1) / length
+
+        if self.sample_neg:
+            progress_class = int(progress * self.num_classes + 1 )
+            if progress_class > self.num_classes:
+                progress_class = self.num_classes
+        else:
+            progress_class = int(progress * self.num_classes)
+            if progress_class == self.num_classes:
+                progress_class -= 1
+
+        return video_array, progress_class
+
+
+
+    def sample_neg_progress_feature(self, env_name):
+        neg_env_name = random.choice(self.keys)
+        while neg_env_name == env_name:
+            
+            neg_env_name = random.choice(self.keys)
+        progress_group = self.h5_file[self.model_name][neg_env_name]
+        # choose index
+        datasets = sorted(list(progress_group.keys()), key = int)[:15]
+        random_name = random.choice(datasets)
+        progress_dataset = np.asarray(progress_group[random_name])
+        idx = random.randint(0, len(progress_dataset)-1)
+        video_array = np.asarray(progress_dataset[idx])
+
+        
+        return video_array, 0
+    
+
+    def __del__(self):
+        self.h5_file.close()
+
 
 
 

@@ -147,8 +147,8 @@ def pca_learner(h5_file, model_name, only_goal_image = True, pca_var = 0.95, exp
     # text_file_name = text_file_name + ".pkl"
     # image_file_name = image_file_name + ".pkl"
 
-    text_file_name = f"{folder_path}/{experiment_name}.pkl"
-    image_file_name = f"{folder_path}/{experiment_name}.pkl"
+    text_file_name = f"{folder_path}/{experiment_name}_text.pkl"
+    image_file_name = f"{folder_path}/{experiment_name}_image.pkl"
 
 
     if os.path.exists(text_file_name) and os.path.exists(image_file_name):

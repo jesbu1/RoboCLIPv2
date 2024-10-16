@@ -56,7 +56,7 @@ def main(args):
     run = wandb.init(
         entity=WANDB_ENTITY_NAME,
         project=WANDB_PROJECT_NAME,
-        group="Rank_loss_train_substraction_new1",
+        group="Rank_loss_train_substraction_new4",
         config=args,
         name=experiment_name,
     )
@@ -67,7 +67,7 @@ def main(args):
     h5_file = h5py.File(args.h5_embedding_path, "r")
     text_pca_model, image_pca_model, linear_model = None, None, None
     if args.pca:
-        text_pca_model, image_pca_model = pca_learner(h5_file, args.model_name, args.pca_only_goal, args.pca_var)
+        text_pca_model, image_pca_model = pca_learner(h5_file, args.model_name, args.pca_only_goal, args.pca_var, experiment_name)
         computed_matrix = compute_M(image_pca_model.components_, text_pca_model.components_)
         linear_model = SingleLayerMLP(image_pca_model.components_.shape[0], text_pca_model.components_.shape[0]).to(device)
         linear_model.linear.weight.data = computed_matrix.to(device).float()
@@ -189,8 +189,9 @@ def main(args):
             save_dict = {
                 "transform_model": transform_model.state_dict(),
                 "optimizer": optimizer.state_dict(),
-                "linear_model": linear_model.state_dict()
             }
+            if args.pca:
+                save_dict["linear_model"] = linear_model.state_dict()
 
             save_path = "save_models"
             if not os.path.exists(save_path):
