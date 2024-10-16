@@ -103,6 +103,17 @@ class TwoLayerMLP(torch.nn.Module):
         x = F.tanh(x)
         return x
 
+class TwoLayerClassMLP(torch.nn.Module):
+    def __init__(self, input_dim, num_classes):
+        super(TwoLayerClassMLP, self).__init__()
+        self.linear1 = torch.nn.Linear(input_dim, input_dim // 2)
+        self.linear2 = torch.nn.Linear(input_dim // 2, num_classes)
+
+    def forward(self, x):
+        x = F.relu(self.linear1(x))
+        x = self.linear2(x)
+        return x
+
 class ThreeLayerMLP(torch.nn.Module):
     def __init__(self, input_dim, output_dim):
         super(ThreeLayerMLP, self).__init__()
@@ -118,7 +129,7 @@ class ThreeLayerMLP(torch.nn.Module):
         return x
 
 
-def pca_learner(h5_file, model_name, only_goal_image = True, pca_var = 0.95):
+def pca_learner(h5_file, model_name, only_goal_image = True, pca_var = 0.95, experiment_name = None):
 
     folder_path = "pca_models"
     if not os.path.exists(folder_path):
@@ -126,15 +137,18 @@ def pca_learner(h5_file, model_name, only_goal_image = True, pca_var = 0.95):
 
 
 
-    text_file_name = f"{folder_path}/{model_name}_text_pca_model_var" + str(pca_var)
-    image_file_name = f"{folder_path}/{model_name}_image_pca_model_var" + str(pca_var)
+    # text_file_name = f"{folder_path}/{model_name}_text_pca_model_var" + str(pca_var)
+    # image_file_name = f"{folder_path}/{model_name}_image_pca_model_var" + str(pca_var)
 
-    if only_goal_image:
-        text_file_name = text_file_name + "_goal"
-        image_file_name = image_file_name + "_goal"
+    # if only_goal_image:
+    #     text_file_name = text_file_name + "_goal"
+    #     image_file_name = image_file_name + "_goal"
 
-    text_file_name = text_file_name + ".pkl"
-    image_file_name = image_file_name + ".pkl"
+    # text_file_name = text_file_name + ".pkl"
+    # image_file_name = image_file_name + ".pkl"
+
+    text_file_name = f"{folder_path}/{experiment_name}.pkl"
+    image_file_name = f"{folder_path}/{experiment_name}.pkl"
 
 
     if os.path.exists(text_file_name) and os.path.exists(image_file_name):
@@ -160,8 +174,8 @@ def pca_learner(h5_file, model_name, only_goal_image = True, pca_var = 0.95):
 
         text_embeddings = np.concatenate(text_embeddings, axis=0)
         image_embeddings = np.concatenate(image_embeddings, axis=0)
-        text_embeddings = normalize_embeddings(text_embeddings)
-        image_embeddings = normalize_embeddings(image_embeddings)
+        text_embeddings = normalize_embeddings(torch.from_numpy(text_embeddings).to(device))
+        image_embeddings = normalize_embeddings(torch.from_numpy(image_embeddings).to(device))
         print("text_embeddings shape", text_embeddings.shape)
         print("image_embeddings shape", image_embeddings.shape)
         
@@ -169,18 +183,19 @@ def pca_learner(h5_file, model_name, only_goal_image = True, pca_var = 0.95):
             text_pca_model = PCA(n_components = pca_var)
         else:
             text_pca_model = PCA(n_components = text_embeddings.shape[0])
-        text_pca_model.fit(text_embeddings)
+        text_pca_model.fit(text_embeddings.cpu())
         print("Text PCA Model Fitted", text_pca_model.n_components_)
         joblib.dump(text_pca_model, text_file_name)
         
         
 
         image_pca_model = PCA(n_components = text_pca_model.n_components_)
-        image_pca_model.fit(image_embeddings)
+        image_pca_model.fit(image_embeddings.cpu())
         print("Image PCA Model Fitted", image_pca_model.n_components_)
         joblib.dump(image_pca_model, image_file_name)
 
     return text_pca_model, image_pca_model
+
 
 def compute_M(X_S, X_T):
     M = np.dot(X_S, X_T.T)  # 35 35
