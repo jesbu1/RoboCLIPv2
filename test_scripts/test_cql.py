@@ -384,8 +384,8 @@ def main():
         ignore_language = args.ignore_language
         use_language = not ignore_language
         buffer = H5ReplayBuffer(h5_path, use_language_embeddings=use_language)
-        # model.learn_offline(offline_replay_buffer=buffer, train_steps=args.offline_training_steps, callback=callback,
-        #                     batch_size=256, train_frequency=100)
+        model.learn_offline(offline_replay_buffer=buffer, train_steps=args.offline_training_steps, callback=callback,
+                            batch_size=256, train_frequency=100)
     # once learn offline is done, fix the eval callback
     eval_callback.eval_freq = args.eval_freq
     eval_callback.video_freq = args.video_freq
