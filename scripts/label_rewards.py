@@ -38,7 +38,7 @@ class RewardLabeler:
             self.transform_model.load_state_dict(dict['model_state_dict'])
             self.transform_model.eval().cuda()
 
-    def label_trajectories(self, traj_data):
+    def label_trajectories(self, args, traj_data):
         """
         Densely labels rewards for each trajectory based on encoded video frames.
         :param traj_data: Trajectory data containing video frames to be labeled.
@@ -46,54 +46,31 @@ class RewardLabeler:
         """
         all_rewards = []
         all_lang_embeds = []
-
-        image = traj_data['img']
-        previous_instruction = None
-        instruction = traj_data['string']
-        state = traj_data['state']
-        done = traj_data['done']
-
-        images = []
         timesteps = []
-        current_timestep = 0
-        for i in tqdm(range(len(done))):
 
-            
+        previous_instruction = None
+        for i in tqdm(range(len(traj_data['done']))):
+            if traj_data['string'][i] != previous_instruction:
+                text_embedding = self.encoder.encode_text(traj_data['string'][i])
+                previous_instruction = traj_data['string'][i]
 
-            if instruction[i] != previous_instruction:
-                text_embedding = self.encoder.encode_text(instruction[i])
-                previous_instruction = instruction[i]
-
-            # We append images to the buffer, until we reach the end of the trajectory
-            images.append(image[i])
             all_lang_embeds.append(text_embedding.cpu().numpy())
-            timesteps.append(current_timestep)
+            timesteps.append(i)
 
-            if done[i]:
-
-                video_frames = np.array(images)
-                video_embedding = self.encoder.encode_video(video_frames)
-
-                # Apply the transformation model if available
-                if hasattr(self, 'transform_model'):
-                    video_embedding = self.transform_model.apply_transform(video_embedding)
-
-                # Calculate reward (similarity between video embedding and text embedding)
-                similarity = self.compute_similarity(video_embedding, text_embedding)
-                all_rewards.append(similarity)
-
-                # Then we reset the buffer
-                images = []
-
-                current_timestep = 0
-
-            else:
+            if not traj_data['done'][i]:
                 all_rewards.append(0.0)
+            else:
+                if args.sparse_only:
+                    all_rewards.append(1.0)
+                else:
+                    video_frames = traj_data['img'][timesteps[-args.window_length:]]
+                    video_embedding = self.encoder.encode_video(video_frames)
 
-                current_timestep += 1
+                    if hasattr(self, 'transform_model'):
+                        video_embedding = self.transform_model.apply_transform(video_embedding)
 
-            if i == 100:
-                break
+                    similarity = self.compute_similarity(video_embedding, text_embedding)
+                    all_rewards.append(similarity)
 
         return all_rewards, all_lang_embeds, timesteps
 
@@ -119,6 +96,8 @@ def main():
     # transformation model
     parser.add_argument('--transform_model_path', required=False, help='Path to the transformation model file.', default=None)
 
+    parser.add_argument('--sparse_only', action="store_true")
+
     args = parser.parse_args()
 
     # Initialize RewardLabeler with arguments
@@ -128,10 +107,10 @@ def main():
     with h5py.File(args.trajs_to_label, 'r') as traj_file:
         traj_data = traj_file
 
+        # Get the trajectories
         print(f"Labeling rewards for trajectories in with size {len(traj_data)}...")
         # Label rewards for the trajectories
-        all_rewards, all_lang_embeds, timesteps = reward_labeler.label_trajectories(traj_data)
-
+        all_rewards, all_lang_embeds, timesteps = reward_labeler.label_trajectories(args, traj_data)
 
         print(f"Saving trajectories with rewards to {args.output}...")
         # Save an updated version of the trajectories with rewards
@@ -140,9 +119,12 @@ def main():
             output_file.create_dataset('rewards', data=all_rewards, dtype='float32')
             output_file.create_dataset('lang_embedding', data=all_lang_embeds, dtype='float32')
             output_file.create_dataset('timesteps', data=timesteps, dtype='int32')
+            images = np.array(traj_data['img'])
+            output_file.create_dataset('img', data=images, dtype=images.dtype)
             # copy the rest of the data from traj_data to output_file
             for key in traj_data.keys():
-                if key != 'rewards':
+                if key not in ['rewards', 'img']:
+                    print(f"Saving {key}...")
                     output_file.create_dataset(key, data=traj_data[key], dtype=traj_data[key].dtype)
 
 

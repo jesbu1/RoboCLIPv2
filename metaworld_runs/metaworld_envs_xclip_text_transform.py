@@ -386,11 +386,20 @@ class MetaworldDense(Env):
         self.rank = args.seed
         self.baseEnv = self.door_open_goal_hidden_cls(seed=self.rank)
         self.env = TimeLimit(self.baseEnv, max_episode_steps=500)
+
         self.time = args.time
-        if not self.time:
-            self.observation_space = self.env.observation_space
-        else:
-            self.observation_space = Box(low=-8.0, high=8.0, shape=(self.env.observation_space.shape[0]+1,), dtype=np.float32)
+        self.use_language = not args.ignore_language
+        obs_dim = self.env.observation_space.shape[0]
+        lang_dim = 768 if self.use_language else 0
+        time_dim = 1 if self.time else 0
+
+        self.observation_space = Box(
+            low=-8.0,
+            high=8.0,
+            shape=(obs_dim + lang_dim + time_dim,),
+            dtype=np.float32,
+        )
+
         self.action_space = self.env.action_space
         self.past_observations = []
         

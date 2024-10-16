@@ -59,6 +59,7 @@ class H5ReplayBuffer(ReplayBuffer):
         n_envs: int = 1,
         success_bonus: float = 0.0,
         add_timestep: bool = True,
+        use_language_embeddings: bool = True
     ):
         """
         Initialize the replay buffer.
@@ -71,13 +72,25 @@ class H5ReplayBuffer(ReplayBuffer):
         """
         with h5py.File(h5_path, "r") as f:
             observations = f["state"][()]
-            # self.lang_embeddings = f["lang_embedding"][()]
+            lang_embeddings = f["lang_embedding"][()]
             next_observations = observations
             actions = f["action"][()]
             rewards = f["rewards"][()]
+            # rewards = f["done"][()]
             dones = f["done"][()]
-            timesteps = f["timesteps"][()]
+            # timesteps = f["timesteps"][()]
 
+        # TODO: Temporary, but set timesteps to be going from 0-n until it hits a done of 1
+        timesteps = np.zeros_like(rewards)
+        current_timestep = 0
+        for i in range(len(rewards)):
+            if dones[i] == 1:
+                timesteps[i] = current_timestep
+                current_timestep = 0
+            else:
+                timesteps[i] = current_timestep
+                current_timestep += 1
+        
         self.optimize_memory_usage = True
 
         self.observations = observations
@@ -86,6 +99,7 @@ class H5ReplayBuffer(ReplayBuffer):
         self.rewards = rewards
         self.dones = dones
         self.timesteps = timesteps
+        self.lang_embeddings = np.squeeze(lang_embeddings)
 
         self.buffer_size = self.rewards.shape[0]
         self.success_bonus = success_bonus
@@ -95,6 +109,7 @@ class H5ReplayBuffer(ReplayBuffer):
         self.device = get_device(device)
 
         self.add_timestep = add_timestep
+        self.use_language_embeddings = use_language_embeddings
 
     def add(
         self,
@@ -122,23 +137,33 @@ class H5ReplayBuffer(ReplayBuffer):
             )
             # add timestep into the observation
             if self.add_timestep:
-                timesteps = self.timesteps[(batch_inds + 1) % self.buffer_size]
+                timesteps = self.timesteps[(batch_inds + 1) % self.buffer_size] / 500 # 500 is the max episode length
                 next_obs = np.concatenate((next_obs, timesteps.reshape(-1, 1)), axis=1)
+
+            if self.use_language_embeddings:
+                next_obs = np.concatenate((next_obs, self.lang_embeddings[(batch_inds + 1) % self.buffer_size, :]), axis=1)
+                
         else:
             next_obs = self._normalize_obs(
                 self.next_observations[batch_inds, :], env=None
             )
             if self.add_timestep:
-                timesteps = self.timesteps[batch_inds]
+                timesteps = self.timesteps[batch_inds] / 500 # 500 is the max episode length
                 next_obs = np.concatenate((next_obs, timesteps.reshape(-1, 1)), axis=1)
+
+            if self.use_language_embeddings:
+                next_obs = np.concatenate((next_obs, self.lang_embeddings[batch_inds, :]), axis=1)
 
         observation = self._normalize_obs(self.observations[batch_inds, :], env=None)
 
         # add the timestep into the observation
         if self.add_timestep:
-            timesteps = self.timesteps[batch_inds]
+            timesteps = self.timesteps[batch_inds] / 500 # 500 is the max episode length
             observation = np.concatenate((observation, timesteps.reshape(-1, 1)), axis=1)
-        
+
+        if self.use_language_embeddings:
+            observation = np.concatenate((observation, self.lang_embeddings[batch_inds, :]), axis=1)
+
         # set dtype of observations to float32
         observation = observation.astype(np.float32)
         next_obs = next_obs.astype(np.float32)
@@ -150,7 +175,7 @@ class H5ReplayBuffer(ReplayBuffer):
             # Only use dones that are not due to timeouts
             # deactivated by default (timeouts is initialized as an array of False)
             self.dones[batch_inds].reshape(-1, 1),
-            self._normalize_reward(self.rewards[batch_inds].reshape(-1, 1), env=None),
+            self._normalize_reward(self.rewards[batch_inds].reshape(-1, 1), env=None).astype(np.float32),
         )
         return ReplayBufferSamples(*tuple(map(self.to_torch, data)))
 
