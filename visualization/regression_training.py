@@ -86,7 +86,7 @@ def main(args):
     else:
         raise ValueError("Invalid loss type")
     if args.pca:
-        transform_model = TwoLayerMLP(image_pca_model.components_.shape[0] + text_pca_model.components_.shape[0]).to(device)
+        transform_model = TwoLayerMLP(image_pca_model.components_.shape[0] * (2 - args.Subtract)).to(device)
     else:
         if args.model_name == "clip":
             transform_model = TwoLayerMLP(768 * (2 - args.Subtract)).to(device)
@@ -97,8 +97,8 @@ def main(args):
     optimizer = torch.optim.Adam(transform_model.parameters(), lr=args.lr)
 
 
-    corr_train_dict = plot_progress_corr(h5_file, args.model_name, transform_model, "train", text_pca_model, image_pca_model, linear_model)
-    corr_eval_dict = plot_progress_corr(h5_file, args.model_name, transform_model, "eval", text_pca_model, image_pca_model, linear_model)
+    corr_train_dict = plot_progress_corr(h5_file, args.model_name, transform_model, "train", text_pca_model, image_pca_model, linear_model, args.Subtract)
+    corr_eval_dict = plot_progress_corr(h5_file, args.model_name, transform_model, "eval", text_pca_model, image_pca_model, linear_model, args.Subtract)
     plot_progress(h5_file, args.model_name, transform_model, "train", text_pca_model, image_pca_model, linear_model, args.Subtract)
     plot_progress(h5_file, args.model_name, transform_model, "eval", text_pca_model, image_pca_model, linear_model, args.Subtract)
     plot_videos(args.model_name, transform_model, text_pca_model, image_pca_model, linear_model, args.Subtract)
@@ -171,8 +171,8 @@ def main(args):
 
 
         if epoch % 10 == 0:
-            corr_train_dict = plot_progress_corr(h5_file, args.model_name, transform_model, "train", text_pca_model, image_pca_model, linear_model)
-            corr_eval_dict = plot_progress_corr(h5_file, args.model_name, transform_model, "eval", text_pca_model, image_pca_model, linear_model)
+            corr_train_dict = plot_progress_corr(h5_file, args.model_name, transform_model, "train", text_pca_model, image_pca_model, linear_model, args.Subtract)
+            corr_eval_dict = plot_progress_corr(h5_file, args.model_name, transform_model, "eval", text_pca_model, image_pca_model, linear_model, args.Subtract)
             plot_progress(h5_file, args.model_name, transform_model, "train", text_pca_model, image_pca_model, linear_model, args.Subtract)
             plot_progress(h5_file, args.model_name, transform_model, "eval", text_pca_model, image_pca_model, linear_model, args.Subtract)
             plot_videos(args.model_name, transform_model, text_pca_model, image_pca_model, linear_model, args.Subtract)

@@ -126,6 +126,7 @@ def plot_progress_corr(h5_file, model_name, transform_model, set, text_pca_model
             input_embedding = traj_data - env_text_embedding
         else:
             input_embedding = torch.cat([env_text_embedding, traj_data], dim=1)
+
         predicted_progress = transform_model(input_embedding).squeeze().detach().cpu().numpy()
                 
         gt_index = np.linspace(1, len(predicted_progress), len(predicted_progress))
@@ -256,7 +257,46 @@ def plot_videos(model_name, transform_model, text_pca_model, image_pca_model, li
 
 
 
+# def mrr_clip(model_name, transform_model, text_pca_model, image_pca_model, linear_model, subtract=False):
 
+#     N_v, D = video_embeddings.shape
+#     N_t, _ = text_embeddings.shape
+
+#     rewards = np.zeros((N_v, N_t))
+
+#     ground_truth_index = np.arange(N_v)
+
+#     # 遍历每一个视频嵌入 V[i]
+#     for i in range(N_v):
+#         for j in range(N_t):
+#             input_embedding = torch.cat([video_embeddings[i], text_embeddings[j]], dim=0).unsqueeze(0)
+#             predicted_progress = transform_model(input_embedding).squeeze().detach().cpu().numpy()
+#             rewards[i, j] = predicted_progress
+
+#     def calculate_mrr(rewards, ground_truth_index, top_k=None):
+#         num_videos = rewards.shape[0]
+#         mrr_total = 0.0
+
+#         for i in range(num_videos):
+#             # 找出 reward 排名（从高到低排序）
+#             sorted_indices = np.argsort(rewards[i])[::-1]
+#             # 限制只考虑前 k 个排名 (top_k)
+#             if top_k is not None:
+#                 sorted_indices = sorted_indices[:top_k]
+
+#             if ground_truth_index[i] in sorted_indices:
+#                 rank = np.where(sorted_indices == ground_truth_index[i])[0][0] + 1
+#                 mrr_total += 1.0 / rank
+        
+#         return mrr_total / num_videos
+
+#     mrr_top_1 = calculate_mrr(rewards, ground_truth_index, top_k=1)
+#     mrr_top_3 = calculate_mrr(rewards, ground_truth_index, top_k=3)
+#     mrr_top_5 = calculate_mrr(rewards, ground_truth_index, top_k=5)
+
+#     print(f"MRR (Top 1): {mrr_top_1}")
+#     print(f"MRR (Top 3): {mrr_top_3}")
+#     print(f"MRR (Top 5): {mrr_top_5}")
 
 
 

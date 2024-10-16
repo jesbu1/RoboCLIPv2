@@ -78,7 +78,7 @@ def normalize_embeddings(embeddings, return_tensor=True):
         embeddings = torch.tensor(embeddings)
     normalized_embeddings = F.normalize(embeddings, p=2, dim=1)
     if return_tensor:
-        return normalized_embeddings.cpu()
+        return normalized_embeddings
     else:
         return normalized_embeddings.detach().cpu().numpy()
 
@@ -100,7 +100,7 @@ class TwoLayerMLP(torch.nn.Module):
     def forward(self, x):
         x = F.relu(self.linear1(x))
         x = self.linear2(x)
-        x = F.tanh(x)
+        x = torch.tanh(x)
         return x
 
 class ThreeLayerMLP(torch.nn.Module):
