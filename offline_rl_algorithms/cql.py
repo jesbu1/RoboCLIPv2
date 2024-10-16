@@ -224,8 +224,10 @@ class CQL(OfflineRLAlgorithm):
 
         ent_coef_losses, ent_coefs = [], []
         actor_losses, critic_losses = [], []
+        q1_values, q2_values = [], []
+        q1_next_values, q2_next_values = [], []
+        reward_values = []
         cql_losses = []
-
 
         for gradient_step in range(gradient_steps):
             # Sample replay buffer
@@ -285,6 +287,7 @@ class CQL(OfflineRLAlgorithm):
             q1_current_actions, q2_current_actions = self.critic(
                 replay_data.observations, replay_data.actions
             )
+
             # CQL Implementation
             random_actions = (
                 th.FloatTensor(batch_size, self.action_space.shape[0])
@@ -304,8 +307,6 @@ class CQL(OfflineRLAlgorithm):
             q1_current_actions, q2_current_actions = self.critic(
                 replay_data.observations, current_actions.to(th.float32)
             )
-            # TODO @Jesse. q1_forward only returns 1 set of q_values
-            # q1_next_actions, q2_next_actions = self.critic.q1_forward(
             q1_next_actions, q2_next_actions = self.critic(
                 replay_data.observations, next_actions.to(th.float32)
             )
@@ -356,6 +357,17 @@ class CQL(OfflineRLAlgorithm):
             critic_losses.append(critic_loss.item())
             cql_losses.append((cql_min_qf1_loss + cql_min_qf2_loss).item())
 
+            # log q1 and q2 values
+            q1_values.append(q1_current_actions.mean().item())
+            q2_values.append(q2_current_actions.mean().item())
+
+            # log next q1 and q2 values
+            q1_next_values.append(q1_next_actions.mean().item())
+            q2_next_values.append(q2_next_actions.mean().item())
+
+            # log average in batch reward
+            reward_values.append(replay_data.rewards.mean().item())
+
             self.critic.optimizer.zero_grad()
             critic_loss.backward()
             self.critic.optimizer.step()
@@ -371,7 +383,6 @@ class CQL(OfflineRLAlgorithm):
             actor_loss.backward()
             self.actor.optimizer.step()
 
-
             if gradient_step % self.target_update_interval == 0:
                 polyak_update(
                     self.critic.parameters(), self.critic_target.parameters(), self.tau
@@ -385,7 +396,11 @@ class CQL(OfflineRLAlgorithm):
             f"{logging_prefix}/actor_loss": np.mean(actor_losses),
             f"{logging_prefix}/critic_loss": np.mean(critic_losses),
             f"{logging_prefix}/cql_loss": np.mean(cql_losses),
-
+            f"{logging_prefix}/average_q1_values": q1_current_actions.mean().item(),
+            f"{logging_prefix}/average_q2_values": q2_current_actions.mean().item(),
+            f"{logging_prefix}/average_q1_next_values": q1_next_actions.mean().item(),
+            f"{logging_prefix}/average_q2_next_values": q2_next_actions.mean().item(),
+            f"{logging_prefix}/average_reward": replay_data.rewards.mean().item,
         }
 
         if len(ent_coef_losses) > 0:
@@ -393,11 +408,8 @@ class CQL(OfflineRLAlgorithm):
 
         for metric in metrics_dict:
             self.logger.record(logging_prefix + metric, metrics_dict[metric])
-        
+
         return metrics_dict
-
-        
-
 
     def learn(
         self,
