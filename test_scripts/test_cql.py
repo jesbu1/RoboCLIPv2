@@ -62,8 +62,14 @@ from offline_rl_algorithms.cql import CQL
 from offline_rl_algorithms.base_offline_rl_algorithm import OfflineRLAlgorithm
 
 
-from metaworld_runs.metaworld_envs_xclip_text_transform import SingleLayerMLP, MetaworldSparse, MetaworldDense, parse_entropy_term, make_env, CustomEvalCallback, CustomWandbCallback
+from envs.metaworld_envs.metaworld import create_wrapped_env
 
+
+def parse_entropy_term(value):
+    try:
+        return float(value)
+    except ValueError:
+        return value
 
 class OfflineEvalCallback(EvalCallback):
     def __init__(self, *args, video_freq, **kwargs):
@@ -200,6 +206,8 @@ def get_args():
     parser.add_argument('--target_gif_path', type=str, default="/scr/jzhang96/metaworld_generate_gifs/")
     #parser.add_argument('--target_gif_path', type=str, default="/home/jzhang96/RoboCLIPv2/metaworld_generate_gifs/")
     parser.add_argument('--time', action="store_false")
+    parser.add_argument('--ignore_language', action="store_true")
+
     parser.add_argument('--frame_num', type=int, default=32)
     parser.add_argument('--train_orcale', action="store_true") # load latent from h5 file
     parser.add_argument('--warm_up_runs', type=int, default=0)
@@ -318,10 +326,12 @@ def main():
 
     if not os.path.exists(log_dir):
         os.makedirs(log_dir)
+
+    dummy_lang_feat = th.zeros((512))
     if args.n_envs > 1:
-        envs = SubprocVecEnv([make_env(args, eval = False) for i in range(args.n_envs)])
+        envs = SubprocVecEnv([create_wrapped_env(args.env_id, language_features=dummy_lang_feat) for i in range(args.n_envs)])
     else:
-        envs = DummyVecEnv([make_env(args, eval = False)])
+        envs = DummyVecEnv([create_wrapped_env(args.env_id,  language_features=dummy_lang_feat)])
 
     if args.algo.lower() == 'ppo':
         model_class = PPO
@@ -351,21 +361,17 @@ def main():
         raise ValueError("Unsupported algorithm. Choose either 'ppo' or 'sac'.")
 
     if args.n_envs > 1:
-        eval_env = SubprocVecEnv([make_env(args, eval = True) for i in range(args.n_envs)])#KitchenEnvDenseOriginalReward(time=True)
+        eval_env = SubprocVecEnv([create_wrapped_env(args.env_id, language_features=dummy_lang_feat) for i in range(args.n_envs)])#KitchenEnvDenseOriginalReward(time=True)
     else:
-        eval_env = DummyVecEnv([make_env(args, eval = True)])#KitchenEnvDenseOriginalReward(time=True)
+        eval_env = DummyVecEnv([create_wrapped_env(args.env_id, language_features=dummy_lang_feat)])#KitchenEnvDenseOriginalReward(time=True)
     # Use deterministic actions for evaluation
 
     eval_callback = OfflineEvalCallback(eval_env, best_model_save_path=log_dir,
-                                    log_path=log_dir, eval_freq=1, video_freq=1,
+                                    log_path=log_dir, eval_freq=1, video_freq=100000,
                                     deterministic=True, render=False, n_eval_episodes = 25)
 
     
-    
-    # wandb_callback = WandbCallback(verbose = 1)
-    # callback = CallbackList([eval_callback, wandb_callback])
     if args.wandb:
-        # customwandbcallback = CustomWandbCallback()
         customwandbcallback = OfflineWandbCallback()
         callback = CallbackList([eval_callback, customwandbcallback])
     else:
@@ -373,9 +379,13 @@ def main():
 
     # load the offline replay buffer
     if isinstance(model, OfflineRLAlgorithm):
-        h5_path = "updated_trajs.h5"
-        buffer = H5ReplayBuffer(h5_path)
-        model.learn_offline(offline_replay_buffer=buffer, train_steps=args.offline_training_steps, callback=callback)
+        # h5_path = "updated_trajs.h5"
+        h5_path = 'data/h5_buffers/updated_trajs/metaworld_dataset_sparse_only.h5'
+        ignore_language = args.ignore_language
+        use_language = not ignore_language
+        buffer = H5ReplayBuffer(h5_path, use_language_embeddings=use_language)
+        # model.learn_offline(offline_replay_buffer=buffer, train_steps=args.offline_training_steps, callback=callback,
+        #                     batch_size=256, train_frequency=100)
     # once learn offline is done, fix the eval callback
     eval_callback.eval_freq = args.eval_freq
     eval_callback.video_freq = args.video_freq
@@ -387,10 +397,10 @@ def main():
     # Evaluate the agent
     # load the best model
     model = model_class.load(f"{log_dir}/best_model")
-    success_rate = eval_policys(args, MetaworldDense, model)
+    # success_rate = eval_policys(args, MetaworldDense, model)
 
-    if args.wandb:
-        wandb.log({"eval_SR/evaluate_succ": success_rate}, step = 0)
+    # if args.wandb:
+    #     wandb.log({"eval_SR/evaluate_succ": success_rate}, step = 0)
 
 
 if __name__ == '__main__':
