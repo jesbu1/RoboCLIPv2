@@ -168,6 +168,17 @@ class H5ReplayBuffer(ReplayBuffer):
         observation = observation.astype(np.float32)
         next_obs = next_obs.astype(np.float32)
 
+        rewards = self.rewards[batch_inds].reshape(-1, 1)
+
+        if self.success_bonus is not None:
+            # Give a positive reward if the environment is solved
+            success = np.expand_dims(
+                np.array([float(done) for done in self.dones[batch_inds]]), -1
+            )
+            rewards = rewards + self.success_bonus * success
+
+
+
         data = (
             observation,
             self.actions[batch_inds, :].astype(np.float32),
@@ -175,7 +186,7 @@ class H5ReplayBuffer(ReplayBuffer):
             # Only use dones that are not due to timeouts
             # deactivated by default (timeouts is initialized as an array of False)
             self.dones[batch_inds].reshape(-1, 1),
-            self._normalize_reward(self.rewards[batch_inds].reshape(-1, 1), env=None).astype(np.float32),
+            self._normalize_reward(rewards, env=None).astype(np.float32),
         )
         return ReplayBufferSamples(*tuple(map(self.to_torch, data)))
 
@@ -205,11 +216,14 @@ class CombinedBuffer(BaseBuffer):
 
         # Concatenate the samples into old_samples
         cat_names = ["observations", "actions", "next_observations", "dones", "rewards"]
+        attributes = {}
         for name in cat_names:
             old_data = getattr(old_samples, name)
             new_data = getattr(new_samples, name)
-            setattr(old_samples, name, th.cat((old_data, new_data), dim=0))
 
+            attributes[name] = th.cat((old_data, new_data), dim=0)
+        
+        old_samples = ReplayBufferSamples(**attributes)
         return old_samples
 
     def size(self) -> int:
@@ -220,10 +234,9 @@ class CombinedBuffer(BaseBuffer):
 
 if __name__ == "__main__":
     # Test the H5ReplayBuffer
-    h5_path = "updated_trajs.h5"
-    buffer = H5ReplayBuffer(h5_path)
+    h5_path = 'data/h5_buffers/updated_trajs/metaworld_dataset_sparse_only.h5'
+    buffer = H5ReplayBuffer(h5_path, success_bonus=10)
     print(buffer.size())
     samples = buffer.sample(10)
-    print(samples)
 
     breakpoint()

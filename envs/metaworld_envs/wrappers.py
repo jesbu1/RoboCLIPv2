@@ -76,17 +76,22 @@ class PCAReducerWrapper(gym.Wrapper):
 
 
 class RewardWrapper(gym.Wrapper):
-    def __init__(self, env, sparse=True):
+    def __init__(self, env, sparse=True, success_bonus=0.0):
         super(RewardWrapper, self).__init__(env)
         self.sparse = sparse
         self.observation_space = env.observation_space
         self.action_space = env.action_space
+        self.success_bonus = success_bonus
 
     def step(self, action):
         obs, reward, done, info = self.env.step(action)
+        # Convert dense rewards to sparse
+        sparse_reward = self.success_bonus if info.get("success", False) else 0.0
         if self.sparse:
-            # Convert dense rewards to sparse
-            reward = 1.0 if info.get("success", False) else 0.0
+            reward = sparse_reward
+        else:
+            reward = reward + sparse_reward
+            
         return obs, reward, done, info
 
 

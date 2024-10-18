@@ -135,7 +135,7 @@ def create_wrapped_env(
     env_id,
     pca_model=None,
     language_features=None,
-    sparse_reward=True,
+    success_bonus=0.0,
     use_simulator_reward=False,
     use_time=True,
 ):
@@ -165,14 +165,8 @@ def create_wrapped_env(
         if use_time:
             base_env = TimeWrapper(base_env)
 
-        if sparse_reward and not use_simulator_reward:
-            base_env = RewardWrapper(base_env, sparse=True)
-        elif use_simulator_reward and not sparse_reward:
-            base_env = RewardWrapper(base_env, sparse=False)
-        elif use_simulator_reward and sparse_reward:
-            raise ValueError(
-                "Cannot use both dense sim reward and sparse reward at the same time."
-            )
+        use_sparse_only = not use_simulator_reward
+        base_env = RewardWrapper(base_env, sparse=use_sparse_only, success_bonus=success_bonus)
 
         return base_env
 

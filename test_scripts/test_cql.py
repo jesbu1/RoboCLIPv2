@@ -329,9 +329,9 @@ def main():
 
     dummy_lang_feat = th.zeros((512))
     if args.n_envs > 1:
-        envs = SubprocVecEnv([create_wrapped_env(args.env_id, language_features=dummy_lang_feat) for i in range(args.n_envs)])
+        envs = SubprocVecEnv([create_wrapped_env(args.env_id, language_features=dummy_lang_feat, success_bonus=args.succ_bonus, use_simulator_reward=False) for i in range(args.n_envs)])
     else:
-        envs = DummyVecEnv([create_wrapped_env(args.env_id,  language_features=dummy_lang_feat)])
+        envs = DummyVecEnv([create_wrapped_env(args.env_id,  language_features=dummy_lang_feat, success_bonus=args.succ_bonus, use_simulator_reward=False)])
 
     if args.algo.lower() == 'ppo':
         model_class = PPO
@@ -361,9 +361,9 @@ def main():
         raise ValueError("Unsupported algorithm. Choose either 'ppo' or 'sac'.")
 
     if args.n_envs > 1:
-        eval_env = SubprocVecEnv([create_wrapped_env(args.env_id, language_features=dummy_lang_feat) for i in range(args.n_envs)])#KitchenEnvDenseOriginalReward(time=True)
+        eval_env = SubprocVecEnv([create_wrapped_env(args.env_id, language_features=dummy_lang_feat, success_bonus=args.succ_bonus, use_simulator_reward=False) for i in range(args.n_envs)])#KitchenEnvDenseOriginalReward(time=True)
     else:
-        eval_env = DummyVecEnv([create_wrapped_env(args.env_id, language_features=dummy_lang_feat)])#KitchenEnvDenseOriginalReward(time=True)
+        eval_env = DummyVecEnv([create_wrapped_env(args.env_id, language_features=dummy_lang_feat, success_bonus=args.succ_bonus, use_simulator_reward=False)])#KitchenEnvDenseOriginalReward(time=True)
     # Use deterministic actions for evaluation
 
     eval_callback = OfflineEvalCallback(eval_env, best_model_save_path=log_dir,
@@ -383,7 +383,7 @@ def main():
         h5_path = 'data/h5_buffers/updated_trajs/metaworld_dataset_sparse_only.h5'
         ignore_language = args.ignore_language
         use_language = not ignore_language
-        buffer = H5ReplayBuffer(h5_path, use_language_embeddings=use_language)
+        buffer = H5ReplayBuffer(h5_path, use_language_embeddings=use_language, success_bonus=args.succ_bonus)
         model.learn_offline(offline_replay_buffer=buffer, train_steps=args.offline_training_steps, callback=callback,
                             batch_size=256, train_frequency=100)
     # once learn offline is done, fix the eval callback
