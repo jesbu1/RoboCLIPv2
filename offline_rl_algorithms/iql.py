@@ -129,8 +129,8 @@ class IQL(OfflineRLAlgorithm):
     }
     policy: SACPolicy
     actor: Actor
-    q_nets: ContinuousCritic
-    q_targets: ContinuousCritic
+    # q_nets: ContinuousCritic
+    # q_targets: ContinuousCritic
     v_net: ValueCritic
 
     def __init__(
@@ -228,8 +228,11 @@ class IQL(OfflineRLAlgorithm):
         self._update_learning_rate(optimizers)
 
         actor_losses, critic_losses = [], []
+        actor_log_pis = []
         q1_values, q2_values = [], []
-        q1_next_values, q2_next_values = [], []
+        v_next_values = []
+        v_values = []
+        q1_target_values, q2_target_values = [], []
         reward_values = []
 
         for gradient_step in range(gradient_steps):
@@ -240,89 +243,77 @@ class IQL(OfflineRLAlgorithm):
             if self.use_sde:
                 self.actor.reset_noise()
 
-            # Train the Q Function
-            q1_pred, q2_pred = self.critic(replay_data.observations, replay_data.actions)
-            target_vf_pred = self.
-
-            # Action by the current actor for the sampled state
-            actions_pi, log_prob = self.actor.action_log_prob(replay_data.observations)
-            log_prob = log_prob.reshape(-1, 1)
-
-            with th.no_grad():
-                # Select action according to policy
-                next_actions, next_log_prob = self.actor.action_log_prob(
-                    replay_data.next_observations
-                )
-                # Compute the next Q values: min over all critics targets
-                next_q_values = th.cat(
-                    self.critic_target(replay_data.next_observations, next_actions),
-                    dim=1,
-                )
-                next_q_values, _ = th.min(next_q_values, dim=1, keepdim=True)
-                # add entropy term
-                next_q_values = next_q_values - ent_coef * next_log_prob.reshape(-1, 1)
-                # td error + entropy term
-                target_q_values = (
-                    replay_data.rewards
-                    + (1 - replay_data.dones) * self.gamma * next_q_values
-                )
-
-            # Get current Q-values estimates for each critic network
-            # using action from the replay buffer
-            q1_current_actions, q2_current_actions = self.critic(
+            # Compute necessary values for the training update
+            q1_pred, q2_pred = self.critic(
                 replay_data.observations, replay_data.actions
             )
+            with th.no_grad():
+                target_q1_pred, target_q2_pred = self.critic_target(
+                    replay_data.next_observations, replay_data.actions
+                )
+                target_q_pred = th.min(target_q1_pred, target_q2_pred)
+                next_vf_pred = self.v_net(replay_data.next_observations)
+            vf_pred = self.v_net(replay_data.observations)
 
-            # CQL Implementation
-            random_actions = (
-                th.FloatTensor(batch_size, self.action_space.shape[0])
-                .uniform_(-1, 1)
-                .to(self.device)
+            # Policy loss
+            advantage = target_q_pred - vf_pred.detach()
+            weights = th.clamp(
+                th.exp(advantage / self.advantage_temp), 0, self.clip_score
             )
-            # Sample policy actions to calculate the CQL loss
-            current_actions, current_log_pis = self.actor.action_log_prob(
-                replay_data.observations
-            )
-            next_actions, next_log_pis = self.actor.action_log_prob(
-                replay_data.next_observations
-            )
+            _, log_prob = self.actor.action_log_prob(replay_data.observations)
+            log_prob = log_prob.reshape(-1, 1)
+            policy_loss = -th.mean(weights * log_prob)
 
-            # Compute the Q values of random actions
-            q1_rand, q2_rand = self.critic(
-                replay_data.observations, random_actions.to(th.float32)
+            # Q value loss
+            target_q_values = (
+                replay_data.rewards
+                + (1 - replay_data.dones) * self.gamma * next_vf_pred
             )
-            q1_current_actions, q2_current_actions = self.critic(
-                replay_data.observations, current_actions.to(th.float32)
-            )
-            q1_next_actions, q2_next_actions = self.critic(
-                replay_data.observations, next_actions.to(th.float32)
-            )
+            q1_loss = F.mse_loss(q1_pred, target_q_values)
+            q2_loss = F.mse_loss(q2_pred, target_q_values)
+            q_loss = q1_loss + q2_loss
+
+            # Value function expectile loss
+            vf_err = vf_pred - target_q_pred
+            vf_sign = (vf_err > 0).float()
+            vf_weight = (1 - vf_sign) * self.expectile + vf_sign * (1 - self.expectile)
+            vf_loss = (vf_weight * (vf_err**2)).mean()
 
             # log q1 and q2 values
-            q1_values.append(q1_current_actions.mean().item())
-            q2_values.append(q2_current_actions.mean().item())
+            q1_values.append(q1_pred.mean().item())
+            q2_values.append(q2_pred.mean().item())
 
-            # log next q1 and q2 values
-            q1_next_values.append(q1_next_actions.mean().item())
-            q2_next_values.append(q2_next_actions.mean().item())
+            # log v
+            v_values.append(vf_pred.mean().item())
+
+            # log target
+            q1_target_values.append(target_q1_pred.mean().item())
+            q2_target_values.append(target_q2_pred.mean().item())
+
+            # log next v
+            v_next_values.append(next_vf_pred.mean().item())
 
             # log average in batch reward
             reward_values.append(replay_data.rewards.mean().item())
 
+            # Optimize the critic Q
             self.critic.optimizer.zero_grad()
-            critic_loss.backward()
+            q_loss.backward()
             self.critic.optimizer.step()
 
-            q_values_pi = th.cat(
-                self.critic(replay_data.observations, actions_pi), dim=1
-            )
-            min_qf_pi, _ = th.min(q_values_pi, dim=1, keepdim=True)
-            actor_loss = (ent_coef * log_prob - min_qf_pi).mean()
-            actor_losses.append(actor_loss.item())
+            # Optimize the value function
+            self.v_net.optimizer.zero_grad()
+            vf_loss.backward()
+            self.v_net.optimizer.step()
 
+            # Optimize the policy
             self.actor.optimizer.zero_grad()
-            actor_loss.backward()
+            policy_loss.backward()
             self.actor.optimizer.step()
+
+            # log actor stuff
+            actor_losses.append(policy_loss.item())
+            actor_log_pis.append(log_prob.mean().item())
 
             if gradient_step % self.target_update_interval == 0:
                 polyak_update(
@@ -335,11 +326,14 @@ class IQL(OfflineRLAlgorithm):
         metrics_dict = {
             f"{logging_prefix}/actor_loss": np.mean(actor_losses),
             f"{logging_prefix}/critic_loss": np.mean(critic_losses),
-            f"{logging_prefix}/average_q1_values": q1_current_actions.mean().item(),
-            f"{logging_prefix}/average_q2_values": q2_current_actions.mean().item(),
-            f"{logging_prefix}/average_q1_next_values": q1_next_actions.mean().item(),
-            f"{logging_prefix}/average_q2_next_values": q2_next_actions.mean().item(),
+            f"{logging_prefix}/average_q1_values": np.mean(q1_values),
+            f"{logging_prefix}/average_q2_values": np.mean(q2_values),
+            f"{logging_prefix}/average_v_next_values": np.mean(v_next_values),
             f"{logging_prefix}/average_reward": replay_data.rewards.mean().item,
+            f"{logging_prefix}/average_v_values": np.mean(v_values),
+            f"{logging_prefix}/average_q1_target_values": np.mean(q1_target_values),
+            f"{logging_prefix}/average_q2_target_values": np.mean(q2_target_values),
+            f"{logging_prefix}/average_actor_log_pis": np.mean(actor_log_pis),
         }
 
         for metric in metrics_dict:
@@ -370,9 +364,15 @@ class IQL(OfflineRLAlgorithm):
             "actor",
             "critic",
             "critic_target",
+            "v_net",
         ]  # noqa: RUF005
 
     def _get_torch_save_params(self) -> Tuple[List[str], List[str]]:
-        state_dicts = ["policy", "actor.optimizer", "critic.optimizer"]
+        state_dicts = [
+            "policy",
+            "actor.optimizer",
+            "critic.optimizer",
+            "v_net.optimizer",
+        ]
         saved_pytorch_variables = []
         return state_dicts, saved_pytorch_variables
