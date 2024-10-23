@@ -64,6 +64,8 @@ class ValueCritic(BaseModel):
         v_net = nn.Sequential(*v_net_list)
         self.add_module(f"vf", v_net)
 
+        self.optimizer = th.optim.Adam(self.parameters(), lr=3e-4)
+
     def forward(self, obs: th.Tensor) -> Tuple[th.Tensor, ...]:
         # Learn the features extractor using the policy loss only
         # when the features_extractor is shared with the actor
@@ -195,7 +197,7 @@ class IQL(OfflineRLAlgorithm):
         # Entropy coefficient / Entropy temperature
         # Inverse of the reward scale
         self.target_update_interval = target_update_interval
-
+    
         if _init_setup_model:
             self._setup_model()
 
@@ -211,6 +213,19 @@ class IQL(OfflineRLAlgorithm):
         self.batch_norm_stats_target = get_parameters_by_name(
             self.critic_target, ["running_"]
         )
+
+        import pdb ; pdb.set_trace()
+        # TODO: maybe need to deep copy feature extractor
+        self.v_net = ValueCritic(
+            self.observation_space,
+            self.action_space,
+            self.policy.net_arch,
+            self.policy.critic.features_extractor, 
+            features_dim=self.policy.actor.latent_pi[0].in_features,
+            activation_fn=self.policy.net_args["activation_fn"],
+            normalize_images=self.policy.critic.normalize_images,
+            share_features_extractor=self.policy.critic.share_features_extractor,
+        ).to(self.device)
 
     def _create_aliases(self) -> None:
         self.actor = self.policy.actor

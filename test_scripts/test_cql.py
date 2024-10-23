@@ -59,6 +59,7 @@ import sys
 from metaworld_runs.eval_utils import eval_policys
 
 from offline_rl_algorithms.cql import CQL
+from offline_rl_algorithms.iql import IQL
 from offline_rl_algorithms.base_offline_rl_algorithm import OfflineRLAlgorithm
 
 
@@ -184,7 +185,7 @@ class OfflineWandbCallback(WandbCallback):
 
 def get_args():
     parser = argparse.ArgumentParser(description='RL')
-    parser.add_argument('--algo', type=str, default='cql', choices=['ppo', 'sac', 'cql', 'calibrated_cql'])
+    parser.add_argument('--algo', type=str, default='iql', choices=['ppo', 'sac', 'cql', 'calibrated_cql', 'iql'])
     parser.add_argument('--text_string', type=str, default='opening door')
     parser.add_argument('--dir_add', type=str, default='')
     parser.add_argument('--env_id', type=str, default='window-open-v2-goal-hidden')
@@ -357,6 +358,16 @@ def main():
                         ent_coef="auto", buffer_size=args.total_time_steps, learning_starts=4000, seed=args.seed, min_q_weight=5.0, min_q_temp=1.0, use_calibrated_q=use_calibrated_cql, learning_rate=0.0001)
         else:
             model = model_class.load(args.pretrained, env=envs, tensorboard_log=log_dir)
+    
+    elif args.algo.lower() == 'iql':
+        model_class = IQL
+        if not args.pretrained:
+            model = model_class("MlpPolicy", envs, verbose=1, tensorboard_log=log_dir, 
+                        # batch_size=args.n_steps * args.n_envs,
+                        buffer_size=args.total_time_steps, learning_starts=4000, seed=args.seed)
+        else:
+            model = model_class.load(args.pretrained, env=envs, tensorboard_log=log_dir)
+
     else:
         raise ValueError("Unsupported algorithm. Choose either 'ppo' or 'sac'.")
 
