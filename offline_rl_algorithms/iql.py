@@ -51,6 +51,8 @@ class ValueCritic(BaseModel):
         activation_fn: Type[nn.Module] = nn.ReLU,
         normalize_images: bool = True,
         share_features_extractor: bool = True,
+        optimizer_class: Type[th.optim.Optimizer] = th.optim.Adam,
+        optimizer_kwargs: Optional[Dict[str, Any]] = None,
     ):
         super().__init__(
             observation_space,
@@ -63,6 +65,11 @@ class ValueCritic(BaseModel):
         v_net_list = create_mlp(features_dim, 1, net_arch, activation_fn)
         v_net = nn.Sequential(*v_net_list)
         self.add_module(f"vf", v_net)
+        self.optimizer = optimizer_class(
+            self.v_net.parameters(),
+            lr=lr_schedule(1),  # type: ignore[call-arg]
+            **optimizer_kwargs,
+        )
 
         self.optimizer = th.optim.Adam(self.parameters(), lr=3e-4)
 
