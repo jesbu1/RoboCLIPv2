@@ -234,7 +234,7 @@ class IQL(OfflineRLAlgorithm):
         # Update learning rate according to lr schedule
         self._update_learning_rate(optimizers)
 
-        actor_losses, critic_losses = [], []
+        actor_losses, q_losses, v_losses = [], [], []
         actor_log_pis = []
         q1_values, q2_values = [], []
         v_next_values = []
@@ -303,6 +303,10 @@ class IQL(OfflineRLAlgorithm):
             # log average in batch reward
             reward_values.append(replay_data.rewards.mean().item())
 
+            # log q and v losses
+            q_losses.append(q_loss.item())
+            v_losses.append(vf_loss.item())
+
             # Optimize the critic Q
             self.critic.optimizer.zero_grad()
             q_loss.backward()
@@ -332,7 +336,8 @@ class IQL(OfflineRLAlgorithm):
 
         metrics_dict = {
             f"{logging_prefix}/actor_loss": np.mean(actor_losses),
-            f"{logging_prefix}/critic_loss": np.mean(critic_losses),
+            f"{logging_prefix}/q_loss": np.mean(q_losses),
+            f"{logging_prefix}/v_loss": np.mean(v_losses),
             f"{logging_prefix}/average_q1_values": np.mean(q1_values),
             f"{logging_prefix}/average_q2_values": np.mean(q2_values),
             f"{logging_prefix}/average_v_next_values": np.mean(v_next_values),
