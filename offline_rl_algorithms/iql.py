@@ -51,6 +51,7 @@ class ValueCritic(BaseModel):
         activation_fn: Type[nn.Module] = nn.ReLU,
         normalize_images: bool = True,
         share_features_extractor: bool = True,
+        lr_schedule: Schedule = None,
         optimizer_class: Type[th.optim.Optimizer] = th.optim.Adam,
         optimizer_kwargs: Optional[Dict[str, Any]] = None,
     ):
@@ -66,12 +67,10 @@ class ValueCritic(BaseModel):
         v_net = nn.Sequential(*v_net_list)
         self.add_module(f"vf", v_net)
         self.optimizer = optimizer_class(
-            self.v_net.parameters(),
+            self.vf.parameters(),
             lr=lr_schedule(1),  # type: ignore[call-arg]
             **optimizer_kwargs,
         )
-
-        self.optimizer = th.optim.Adam(self.parameters(), lr=3e-4)
 
     def forward(self, obs: th.Tensor) -> Tuple[th.Tensor, ...]:
         # Learn the features extractor using the policy loss only
@@ -232,6 +231,9 @@ class IQL(OfflineRLAlgorithm):
             activation_fn=self.policy.net_args["activation_fn"],
             normalize_images=self.policy.critic.normalize_images,
             share_features_extractor=self.policy.critic.share_features_extractor,
+            lr_schedule=self.lr_schedule,
+            optimizer_class=self.policy.optimizer_class,
+            optimizer_kwargs=self.policy.optimizer_kwargs
         ).to(self.device)
 
     def _create_aliases(self) -> None:
