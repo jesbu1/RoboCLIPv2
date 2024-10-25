@@ -10,6 +10,7 @@ import wandb
 import matplotlib
 from tqdm import tqdm
 import imageio
+from animation_utils import animate_video_with_rewards, log_gif_to_wandb
 
 matplotlib.use('Agg')
 def plot_progress_eval(h5_file, model_name, transform_model):
@@ -88,7 +89,7 @@ def plot_progress_train(h5_file, model_name, transform_model):
         plt.close()
 
     
-def plot_progress_corr(h5_file, model_name, transform_model, set, text_pca_model, image_pca_model, linear_model, subtract=False):
+def plot_progress_corr(h5_file, model_name, transform_model, set, text_pca_model, image_pca_model, linear_model, subtract=False, start_frame_conditioned=False):
     device = next(transform_model.parameters()).device
     model, processor, tokenizer = load_model(model_name)
     if set == "train":
@@ -104,6 +105,7 @@ def plot_progress_corr(h5_file, model_name, transform_model, set, text_pca_model
         text_embeddings = torch.tensor(text_embeddings).to(device).float()
 
     wandb_dict = {}
+    corrs = []
     for i  in tqdm(range(len(eval_envs))):
         env = eval_envs[i]
         
@@ -121,10 +123,24 @@ def plot_progress_corr(h5_file, model_name, transform_model, set, text_pca_model
             traj_data = torch.tensor(traj_data).to(device).float()
             traj_data = linear_model(traj_data)
 
+
+
+        if start_frame_conditioned:
+            start_embedding = traj_data[0:1,:]
+            start_embedding = start_embedding.repeat(traj_data.shape[0], 1)
+            
         if subtract:
             input_embedding = traj_data - env_text_embedding
+
+            if start_frame_conditioned:
+                start_embedding = start_embedding - env_text_embedding
+                input_embedding = torch.cat([start_embedding, input_embedding], dim = 1)
         else:
-            input_embedding = torch.cat([env_text_embedding, traj_data], dim=1)
+            if start_frame_conditioned:
+                input_embedding = torch.cat([env_text_embedding, start_embedding, traj_data], dim=1)
+
+            else:
+                input_embedding = torch.cat([env_text_embedding, traj_data], dim=1)
 
         predicted_progress = transform_model(input_embedding).squeeze().detach().cpu().numpy()
                 
@@ -134,11 +150,13 @@ def plot_progress_corr(h5_file, model_name, transform_model, set, text_pca_model
         # pearson correlation act_index
         corr = np.corrcoef(act_index, gt_index)[0, 1]
         wandb_dict["corr/" + set + "/" + env] = corr
+        corrs.append(corr)
+    wandb_dict["mean_corr/" + set] = np.mean(corrs)
 
     return wandb_dict
 
 
-def plot_progress(h5_file, model_name, transform_model, set, text_pca_model, image_pca_model, linear_model, subtract=False):
+def plot_progress(h5_file, model_name, transform_model, set, text_pca_model, image_pca_model, linear_model, subtract=False, start_frame_conditioned=False):
     device = next(transform_model.parameters()).device
     model, processor, tokenizer = load_model(model_name)
     if set == "train":
@@ -172,10 +190,24 @@ def plot_progress(h5_file, model_name, transform_model, set, text_pca_model, ima
             traj_data = torch.tensor(traj_data).to(device).float()
             traj_data = linear_model(traj_data)
         
+
+        if start_frame_conditioned:
+            start_embedding = traj_data[0:1,:]
+            start_embedding = start_embedding.repeat(traj_data.shape[0], 1)
+            
         if subtract:
             input_embedding = traj_data - env_text_embedding
+
+            if start_frame_conditioned:
+                start_embedding = start_embedding - env_text_embedding
+                input_embedding = torch.cat([start_embedding, input_embedding], dim = 1)
         else:
-            input_embedding = torch.cat([env_text_embedding, traj_data], dim=1)
+            if start_frame_conditioned:
+                input_embedding = torch.cat([env_text_embedding, start_embedding, traj_data], dim=1)
+
+            else:
+                input_embedding = torch.cat([env_text_embedding, traj_data], dim=1)
+
         predicted_progress = transform_model(input_embedding).squeeze().detach().cpu().numpy()
                 
         frame_index = np.linspace(1, len(predicted_progress), len(predicted_progress))
@@ -191,7 +223,7 @@ def plot_progress(h5_file, model_name, transform_model, set, text_pca_model, ima
         plt.close()
     
 
-def plot_videos(model_name, transform_model, text_pca_model, image_pca_model, linear_model, subtract=False):
+def plot_videos(model_name, transform_model, text_pca_model, image_pca_model, linear_model, subtract=False, start_frame_conditioned=False):
     device = next(transform_model.parameters()).device
     model, processor, tokenizer = load_model(model_name)
     video_base_path = "/home/jzhang96/RoboCLIPv2/clip/reward_eval_videos"
@@ -202,7 +234,11 @@ def plot_videos(model_name, transform_model, text_pca_model, image_pca_model, li
     texts = {"button_press_wall": "Robot pressing button from side",
              "topdown": "Robot pressing button from top",
              "windowclose": "Robot closing window"}
-    
+
+    # texts = {"button_press_wall": "Pushing the button from the side",
+    #          "topdown": "Pressing button from top",
+    #          "windowclose": "Closing window"}
+
 
     for task in tasks:
         text = texts[task]
@@ -233,12 +269,34 @@ def plot_videos(model_name, transform_model, text_pca_model, image_pca_model, li
                     image_embeddings = linear_model(image_embeddings)
 
                 env_text_embedding = text_embeddings.repeat(image_embeddings.shape[0], 1)
-                if subtract:
-                    input_embedding = image_embeddings - env_text_embedding
-                else:
-                    input_embedding = torch.cat([env_text_embedding, image_embeddings], dim=1)
-                predicted_progress = transform_model(input_embedding).squeeze().detach().cpu().numpy()
 
+                if start_frame_conditioned:
+                    start_embedding = image_embeddings[0:1,:]
+                    start_embedding = start_embedding.repeat(image_embeddings.shape[0], 1)
+                    if subtract:
+                        start_embedding = start_embedding - env_text_embedding
+
+                if subtract:
+                    if start_frame_conditioned:
+                        input_embedding = torch.cat([start_embedding, image_embeddings - env_text_embedding], dim = 1)
+                    else:
+                        input_embedding = image_embeddings - env_text_embedding
+                else:
+                    if start_frame_conditioned:
+                        input_embedding = torch.cat([env_text_embedding, start_embedding, image_embeddings], dim=1)
+                    else:
+                        input_embedding = torch.cat([env_text_embedding, image_embeddings], dim=1)
+
+
+
+
+                predicted_progress = transform_model(input_embedding).squeeze().detach().cpu().numpy()
+                gt_index = np.linspace(1, len(predicted_output), len(predicted_output))
+                act_index = np.argsort(predicted_output) + 1
+
+                # pearson correlation act_index
+                corr = np.corrcoef(act_index, gt_index)[0, 1]
+                wandb.log({f"corr/{task}/{diff}_{video_idx}": corr})
                 frame_index = np.linspace(1, len(predicted_progress), len(predicted_progress))
 
                 figure = plt.figure()
@@ -253,6 +311,12 @@ def plot_videos(model_name, transform_model, text_pca_model, image_pca_model, li
                 wandb.log({f"progress_video/{task}/{diff}_{video_idx}": wandb.Image(figure)})
                 plt.close()
                 print(f"progress_video/{task}/{diff}/{video_idx}")
+
+                frames = np.stack(frames)
+                predicted_output = np.stack(predicted_progress)
+                gif_buffer = animate_video_with_rewards(frames, predicted_output, 15)
+                
+                log_gif_to_wandb(gif_buffer, f"{task}/{diff}_{video_idx}")
 
 
 def plot_class_progress(h5_file, model_name, transform_model, set, text_pca_model, image_pca_model, linear_model, num_classes, subtract=False):
@@ -374,6 +438,8 @@ def plot_videos_class(model_name, transform_model, text_pca_model, image_pca_mod
                 wandb.log({f"progress_video/{task}/{diff}_{video_idx}": wandb.Image(figure)})
                 plt.close()
                 print(f"progress_video/{task}/{diff}/{video_idx}")
+
+
 
 
 

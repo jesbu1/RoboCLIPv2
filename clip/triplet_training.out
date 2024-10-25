@@ -1,0 +1,28 @@
+text_embeddings shape torch.Size([150, 768])
+image_embeddings shape torch.Size([150, 768])
+Text PCA Model Fitted 150
+Image PCA Model Fitted 150
+text_embeddings shape torch.Size([150, 1024])
+image_embeddings shape torch.Size([150, 1024])
+Text PCA Model Fitted 150
+Image PCA Model Fitted 150
+text_embeddings shape torch.Size([150, 1024])
+image_embeddings shape torch.Size([150, 1024])
+Text PCA Model Fitted 55
+Image PCA Model Fitted 55
+text_embeddings shape torch.Size([150, 768])
+image_embeddings shape torch.Size([150, 768])
+Text PCA Model Fitted 63
+Image PCA Model Fitted 63
+text_embeddings shape torch.Size([150, 1024])
+image_embeddings shape torch.Size([10554, 1024])
+Text PCA Model Fitted 55
+Image PCA Model Fitted 55
+text_embeddings shape torch.Size([150, 768])
+image_embeddings shape torch.Size([10554, 768])
+Text PCA Model Fitted 150
+Image PCA Model Fitted 150
+text_embeddings shape torch.Size([150, 1024])
+image_embeddings shape torch.Size([10554, 1024])
+Text PCA Model Fitted 150
+Image PCA Model Fitted 150
