@@ -96,11 +96,40 @@ class ClipLivVideoDataset(ClipLivVideoMeanDataset):
         end_idx = random.randint(start_idx+1, len(progress_dataset)-1)
 
         video_frames = np.array(progress_dataset)[start_idx:end_idx]
-        video_frames = normalize_embeddings(video_frames, return_tensor=False)
+        video_frames = normalize_embeddings(video_frames, return_tensor=True)
         length = len(progress_dataset) - start_idx
         progress = (end_idx - start_idx + 1) / length
 
         return video_frames, progress
+
+
+class ClipLivVideoReverseDataset(ClipLivVideoDataset):
+
+    def sample_progress_video_feature(self, env_name):
+        progress_group = self.h5_file[self.model_name][env_name]
+        datasets = list(progress_group.keys())
+        random_name = random.choice(datasets)
+        progress_dataset = np.asarray(progress_group[random_name]) # all video data
+
+        start_idx = random.randint(0, len(progress_dataset)-2)
+        end_idx = random.randint(start_idx+1, len(progress_dataset)-1)
+
+        video_frames = np.array(progress_dataset)[start_idx:end_idx]
+        video_frames = normalize_embeddings(video_frames, return_tensor=True)
+        length = len(progress_dataset) - start_idx
+        progress = (end_idx - start_idx + 1) / length
+        reverse = random.random() > 0.5
+        # if reverse:
+        if reverse:
+            # video_frames = th.flip(video_frames, [0])
+            frames = []
+            for i in range(len(video_frames) - 1, -1, -1):
+                frames.append(video_frames[i])
+            video_frames = th.stack(frames)
+            progress = -progress
+
+        return video_frames, progress
+
 
 
 class ClipLivVideoCatDataset(ClipLivVideoMeanDataset):
@@ -159,9 +188,10 @@ def video_collate_fn(batch):
     text_output = list()
     progress_output = list()
 
-
     for i in range(batch_size):
-        video = th.tensor(batch[i]["video_array"])
+        # print(i, batch[i]["video_array"].shape)
+        video = batch[i]["video_array"]
+        # video = batch[i]["video_array"]
         padding = th.zeros((max_length - video.shape[0], embedding_size))
         padded_video = th.cat((video, padding), dim=0)
         mask = th.zeros(max_length)

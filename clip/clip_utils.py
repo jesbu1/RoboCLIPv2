@@ -103,6 +103,22 @@ class TwoLayerMLP(torch.nn.Module):
         x = F.tanh(x)
         return x
 
+
+class ThreeLayerMLP(torch.nn.Module):
+    def __init__(self, input_dim):
+        super(ThreeLayerMLP, self).__init__()
+        self.linear1 = torch.nn.Linear(input_dim, input_dim)
+        self.linear2 = torch.nn.Linear(input_dim, input_dim // 2)
+        self.linear3 = torch.nn.Linear(input_dim // 2, 1)
+
+    def forward(self, x):
+        x = F.relu(self.linear1(x))
+        x = F.relu(self.linear2(x))
+        x = self.linear3(x)
+        x = F.tanh(x)
+        return x
+
+
 class TwoLayerClassMLP(torch.nn.Module):
     def __init__(self, input_dim, num_classes):
         super(TwoLayerClassMLP, self).__init__()
@@ -114,19 +130,19 @@ class TwoLayerClassMLP(torch.nn.Module):
         x = self.linear2(x)
         return x
 
-class ThreeLayerMLP(torch.nn.Module):
-    def __init__(self, input_dim, output_dim):
-        super(ThreeLayerMLP, self).__init__()
-        self.linear1 = torch.nn.Linear(input_dim, input_dim)
-        self.linear2 = torch.nn.Linear(input_dim, output_dim)
-        self.linear3 = torch.nn.Linear(output_dim, output_dim)
+# class ThreeLayerMLP(torch.nn.Module):
+#     def __init__(self, input_dim):
+#         super(ThreeLayerMLP, self).__init__()
+#         self.linear1 = torch.nn.Linear(input_dim, input_dim // 2)
+#         self.linear2 = torch.nn.Linear(input_dim // 2, input_dim // 4)
+#         self.linear3 = torch.nn.Linear(input_dim // 4, 1)
 
-    def forward(self, x):
-        x = F.relu(self.linear1(x))
-        x = F.relu(self.linear2(x))
-        x = self.linear3(x)
-        x = F.normalize(x, p=2, dim=1)
-        return x
+#     def forward(self, x):
+#         x = F.relu(self.linear1(x))
+#         x = F.relu(self.linear2(x))
+#         x = self.linear3(x)
+#         x = F.normalize(x, p=2, dim=1)
+#         return x
 
 
 def pca_learner(h5_file, model_name, only_goal_image = True, pca_var = 0.95, experiment_name = None):

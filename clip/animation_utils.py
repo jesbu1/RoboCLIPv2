@@ -87,3 +87,31 @@ def log_gif_to_wandb(gif_buffer, gif_name="animation.gif"):
 # Example of logging to WandB:
 # gif_buffer = animate_video_with_rewards(frames, rewards)
 # log_gif_to_wandb
+
+
+def compute_mmrv(gt_index, cos_sim):
+        n = len(gt_index)
+        total_violation = 0
+
+        for i in range(n):
+            for j in range(i + 1, n):
+                # 检查预测进度和帧索引的排序是否一致，不一致则计算排名违约
+                if (cos_sim[i] < cos_sim[j]) != (gt_index[i] < gt_index[j]):
+                    total_violation += abs(cos_sim[i] - cos_sim[j])
+
+        mmrv = total_violation / n
+        return mmrv
+# for frame in frames:
+#             image_embedding = embedding_image(model, processor, frame)
+
+#             image_embedding = normalize_embeddings(image_embedding)
+#             cos_sim.append(compute_similarity(text_embeddings, image_embedding).item())
+
+#         cos_sim = np.array(cos_sim)
+#         frame_index = np.linspace(1, len(cos_sim), len(cos_sim))
+        
+#         gt_index = np.linspace(1, len(cos_sim), len(cos_sim))
+#         act_index = np.argsort(cos_sim) + 1
+#  mmrv = compute_mmrv(gt_index, cos_sim)
+#         wandb.log({f"mmrv_eval/{task}": mmrv})
+# 这是mmrv的代码和使用上下文，这是单个task的

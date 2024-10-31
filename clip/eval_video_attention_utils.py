@@ -67,6 +67,9 @@ def plot_progress(h5_file, model_name, transform_model, set, subtract=False, con
 
         frame_index = np.linspace(1, len(predicted_progress), len(predicted_progress))
 
+
+        
+
         figure = plt.figure()
         plt.plot(frame_index, predicted_progress)
         plt.xlabel("Frame Index")
@@ -98,6 +101,7 @@ def plot_progress_corr(h5_file, model_name, transform_model, set, subtract=False
 
     wandb_dict = {}
     corrs = []
+    diags = []
     for i  in tqdm(range(len(eval_envs))):
         env = eval_envs[i]
         
@@ -134,15 +138,28 @@ def plot_progress_corr(h5_file, model_name, transform_model, set, subtract=False
         mean_embeddings = torch.cat(mean_embeddings, dim=0)
         predicted_progress = transform_model(mean_embeddings).squeeze().detach().cpu().numpy()
 
+        
+
                 
         gt_index = np.linspace(1, len(predicted_progress), len(predicted_progress))
         act_index = np.argsort(predicted_progress) + 1
 
+        normed_index = gt_index / len(predicted_progress)
+        diag_mse = np.mean((normed_index - predicted_progress)**2)
+
+        
+
+
+
         # pearson correlation act_index
         corr = np.corrcoef(act_index, gt_index)[0, 1]
         wandb_dict["corr/" + set + "/" + env] = corr
+        wandb_dict["diag_mse/" + set + "/" + env] = diag_mse
         corrs.append(corr)
+        diags.append(diag_mse)
+
     wandb_dict["mean_corr/" + set] = np.mean(corrs)
+    wandb_dict["mean_diag_mse/" + set] = np.mean(diags)
 
     return wandb_dict
 
@@ -365,6 +382,7 @@ def plot_progress_corr_fix(h5_file, model_name, transform_model, set, subtract=F
         traj_data = normalize_embeddings(traj_data)
 
         mean_embeddings = list()
+        diag = list()
         for i in range(traj_data.shape[0]):
             video_frame_data = traj_data[0:i+1]
             video_frame_data = padding_frames(video_frame_data, 15)
@@ -388,11 +406,20 @@ def plot_progress_corr_fix(h5_file, model_name, transform_model, set, subtract=F
         gt_index = np.linspace(1, len(predicted_progress), len(predicted_progress))
         act_index = np.argsort(predicted_progress) + 1
 
+        normed_index = gt_index / len(predicted_progress)
+        diag_mse = np.mean((normed_index - predicted_progress)**2)
+
+        diag.append(diag_mse)
+
+
+
         # pearson correlation act_index
         corr = np.corrcoef(act_index, gt_index)[0, 1]
         wandb_dict["corr/" + set + "/" + env] = corr
+        wandb_dict["diag_mse/" + set + "/" + env] = diag_mse
         corrs.append(corr)
     wandb_dict["mean_corr/" + set] = np.mean(corrs)
+    wandb_dict["mean_diag_mse/" + set] = np.mean(diag)
 
     return wandb_dict
 
