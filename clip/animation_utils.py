@@ -115,3 +115,74 @@ def compute_mmrv(gt_index, cos_sim):
 #  mmrv = compute_mmrv(gt_index, cos_sim)
 #         wandb.log({f"mmrv_eval/{task}": mmrv})
 # 这是mmrv的代码和使用上下文，这是单个task的
+
+
+def animate_video_with_rewards_class(frames, rewards, num_class = 11, fps=10):
+    """
+    Create an animation where the left side shows video frames and the right side shows rewards,
+    and return an in-memory GIF buffer to log directly to WandB without saving to disk.
+
+    Parameters:
+    - frames: numpy array of shape [n, H, W, 3] representing video frames
+    - rewards: List or numpy array of rewards, where rewards[i] corresponds to frames[i]
+    - fps: Frames per second for the animation
+    Returns:
+    - gif_buffer: In-memory buffer of the GIF video
+    """
+    n = len(frames)  # Number of frames
+
+    # Create figure and axes
+    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(10, 5))
+
+    # Left part for video frame
+    image_plot = ax1.imshow(frames[0])
+    ax1.set_title('Video Frames')
+    ax1.axis('off')
+
+    # Right part for rewards
+    ax2.set_title('Rewards')
+    ax2.set_xlim(0, n - 1)
+    ax2.set_ylim(- 1, num_class + 1)
+    line_plot, = ax2.plot([], [], lw=2, color='blue')
+    scat = ax2.scatter([], [], color='red', zorder=5)
+
+    # Initialize the plot
+    def init():
+        line_plot.set_data([], [])
+        scat.set_offsets(np.empty((0, 2)))  # Ensure it's a 2D array with shape (0, 2)
+        return image_plot, line_plot, scat
+
+    # Update function for animation
+    def update(frame_idx):
+        # Update video frame on the left
+        image_plot.set_array(frames[frame_idx])
+
+        # Update rewards plot on the right
+        line_plot.set_data(np.arange(frame_idx + 1), rewards[:frame_idx + 1])
+        scat.set_offsets(np.array([[frame_idx, rewards[frame_idx]]]))
+
+        return image_plot, line_plot, scat
+
+    # Create animation
+    # ani = FuncAnimation(fig, update, frames=n, init_func=init, blit=True, interval=1000//fps)
+
+    # Save the animation frames to an in-memory GIF
+    gif_buffer = io.BytesIO()
+
+    # Collect frames to create a GIF
+    images = []
+    for frame_idx in range(n):
+        update(frame_idx)  # Manually update the frame
+        fig.canvas.draw()
+        img_array = np.frombuffer(fig.canvas.tostring_rgb(), dtype=np.uint8)
+        img_array = img_array.reshape(fig.canvas.get_width_height()[::-1] + (3,))
+        images.append(Image.fromarray(img_array))
+
+    # Save the images as a GIF in the buffer
+    images[0].save(gif_buffer, format="GIF", save_all=True, append_images=images[1:], duration=1000//fps, loop=0)
+    gif_buffer.seek(0)  # Reset buffer to the beginning
+
+    # Close the figure to prevent it from displaying
+    plt.close(fig)
+
+    return gif_buffer
