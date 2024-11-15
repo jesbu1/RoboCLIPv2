@@ -103,6 +103,18 @@ class TwoLayerMLP(torch.nn.Module):
         x = F.tanh(x)
         return x
 
+class TwoLayerMLPClass(torch.nn.Module):
+    def __init__(self, input_dim, num_classes):
+        super(TwoLayerMLPClass, self).__init__()
+        self.linear1 = torch.nn.Linear(input_dim, input_dim // 2)
+        self.linear2 = torch.nn.Linear(input_dim // 2, num_classes)
+
+    def forward(self, x):
+        x = F.relu(self.linear1(x))
+        x = self.linear2(x)
+        return x
+
+
 
 class ThreeLayerMLP(torch.nn.Module):
     def __init__(self, input_dim):
