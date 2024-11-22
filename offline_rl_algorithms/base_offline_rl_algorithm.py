@@ -13,6 +13,7 @@ from metaworld_runs.eval_utils import evaluate_policy
 from stable_baselines3.common.type_aliases import GymEnv, MaybeCallback, Schedule
 from stable_baselines3.common.utils import get_parameters_by_name, polyak_update
 from stable_baselines3.sac.policies import (
+    Actor,
     CnnPolicy,
     MlpPolicy,
     MultiInputPolicy,
@@ -164,6 +165,7 @@ class OfflineRLAlgorithm(OffPolicyAlgorithm):
     def _create_aliases(self) -> None:
         raise NotImplementedError
 
+    # TODO
     def learn_offline(
         self,
         train_steps: int,
