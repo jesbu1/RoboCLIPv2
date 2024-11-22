@@ -365,17 +365,21 @@ def main():
         eval_env = DummyVecEnv([create_wrapped_env(args.env_id, language_features=dummy_lang_feat, success_bonus=args.succ_bonus, use_simulator_reward=False)])#KitchenEnvDenseOriginalReward(time=True)
 
     # Set eval freq and video freq if not set
-    if args.eval_freq is None:
-        args.eval_freq = args.offline_training_steps // 10
-    if args.video_freq is None:
-        args.video_freq = args.offline_training_steps // 10
+    eval_freq = (
+        args.offline_training_steps // 10 if args.eval_freq is None else args.eval_freq
+    )
+    video_freq = (
+        args.offline_training_steps // 10
+        if args.video_freq is None
+        else args.video_freq
+    )
     # Use deterministic actions for evaluation
     eval_callback = OfflineEvalCallback(
         eval_env,
         best_model_save_path=log_dir,
         log_path=log_dir,
-        eval_freq=args.eval_freq,
-        video_freq=args.video_freq,
+        eval_freq=eval_freq,
+        video_freq=video_freq,
         deterministic=True,
         render=False,
         n_eval_episodes=25,
