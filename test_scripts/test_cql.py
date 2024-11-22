@@ -361,9 +361,30 @@ def main():
         raise ValueError("Unsupported algorithm. Choose either 'ppo' or 'sac'.")
 
     if args.n_envs > 1:
-        eval_env = SubprocVecEnv([create_wrapped_env(args.env_id, language_features=dummy_lang_feat, success_bonus=args.succ_bonus, use_simulator_reward=False) for i in range(args.n_envs)])#KitchenEnvDenseOriginalReward(time=True)
+        eval_env = SubprocVecEnv(
+            [
+                create_wrapped_env(
+                    args.env_id,
+                    language_features=dummy_lang_feat,
+                    success_bonus=args.succ_bonus,
+                    use_simulator_reward=False,
+                    monitor=False,
+                )
+                for i in range(args.n_envs)
+            ]
+        )  # KitchenEnvDenseOriginalReward(time=True)
     else:
-        eval_env = DummyVecEnv([create_wrapped_env(args.env_id, language_features=dummy_lang_feat, success_bonus=args.succ_bonus, use_simulator_reward=False)])#KitchenEnvDenseOriginalReward(time=True)
+        eval_env = DummyVecEnv(
+            [
+                create_wrapped_env(
+                    args.env_id,
+                    language_features=dummy_lang_feat,
+                    success_bonus=args.succ_bonus,
+                    use_simulator_reward=False,
+                    monitor=False,
+                )
+            ]
+        )  # KitchenEnvDenseOriginalReward(time=True)
 
     # Set eval freq and video freq if not set
     eval_freq = (
@@ -404,7 +425,6 @@ def main():
             train_steps=args.offline_training_steps,
             callback=callback,
             batch_size=256,
-            train_frequency=1,
         )
     # once learn offline is done, fix the eval callback
     # eval_callback.eval_freq = args.eval_freq
