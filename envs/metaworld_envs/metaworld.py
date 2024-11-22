@@ -90,7 +90,7 @@ class MetaworldBase(Env):
 
         return self.base_env.reset()
 
-    def render(self):
+    def render(self, mode="rgb_array"):
         """
         Render the environment.
 

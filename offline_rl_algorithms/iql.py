@@ -220,7 +220,6 @@ class IQL(OfflineRLAlgorithm):
             self.critic_target, ["running_"]
         )
 
-        import pdb ; pdb.set_trace()
         # TODO: maybe need to deep copy feature extractor
         self.v_net = ValueCritic(
             self.observation_space,

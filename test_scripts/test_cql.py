@@ -78,6 +78,7 @@ class OfflineEvalCallback(EvalCallback):
         self.video_freq = video_freq
 
     def _on_step(self) -> bool:
+        print(self.n_calls, self.n_calls % self.video_freq)
         result = super(OfflineEvalCallback, self)._on_step()
 
         if self.video_freq > 0 and self.n_calls % self.video_freq == 0:
@@ -366,10 +367,10 @@ def main():
 
     # Set eval freq and video freq if not set
     eval_freq = (
-        args.offline_training_steps // 10 if args.eval_freq is None else args.eval_freq
+        args.offline_training_steps // 100 if args.eval_freq is None else args.eval_freq
     )
     video_freq = (
-        args.offline_training_steps // 10
+        args.offline_training_steps // 100
         if args.video_freq is None
         else args.video_freq
     )
