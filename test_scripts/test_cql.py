@@ -190,8 +190,8 @@ def get_args():
     parser.add_argument('--pretrained', type=str, default=None)
     parser.add_argument('--wandb', action="store_true")
     parser.add_argument('--seed', type=int, default=42)
-    parser.add_argument('--eval_freq', type=int, default=10000)
-    parser.add_argument('--video_freq', type=int, default=40000)
+    parser.add_argument("--eval_freq", type=int, default=None)
+    parser.add_argument("--video_freq", type=int, default=None)
     parser.add_argument('--succ_end', action="store_true")
     parser.add_argument('--video_path', type=str, default=None)
     parser.add_argument('--pca_path', type=str, default=None)
@@ -199,7 +199,7 @@ def get_args():
     parser.add_argument('--transform_model_path', type=str, default=None)
     parser.add_argument('--random_reset', action="store_true")
     parser.add_argument('--target_gif_path', type=str, default="/scr/jzhang96/metaworld_generate_gifs/")
-    #parser.add_argument('--target_gif_path', type=str, default="/home/jzhang96/RoboCLIPv2/metaworld_generate_gifs/")
+    # parser.add_argument('--target_gif_path', type=str, default="/home/jzhang96/RoboCLIPv2/metaworld_generate_gifs/")
     parser.add_argument('--time', action="store_false")
     parser.add_argument('--ignore_language', action="store_true")
 
@@ -220,7 +220,6 @@ def get_args():
     parser.add_argument("--sparse_only", action="store_true")
     parser.add_argument("--baseline", action="store_true")
     parser.add_argument("--obs_env", action="store_true")
-
 
     args = parser.parse_args()
     return args
@@ -365,8 +364,13 @@ def main():
         eval_env = SubprocVecEnv([create_wrapped_env(args.env_id, language_features=dummy_lang_feat, success_bonus=args.succ_bonus, use_simulator_reward=False) for i in range(args.n_envs)])#KitchenEnvDenseOriginalReward(time=True)
     else:
         eval_env = DummyVecEnv([create_wrapped_env(args.env_id, language_features=dummy_lang_feat, success_bonus=args.succ_bonus, use_simulator_reward=False)])#KitchenEnvDenseOriginalReward(time=True)
-    # Use deterministic actions for evaluation
 
+    # Set eval freq and video freq if not set
+    if args.eval_freq is None:
+        args.eval_freq = args.offline_training_steps // 10
+    if args.video_freq is None:
+        args.video_freq = args.offline_training_steps // 10
+    # Use deterministic actions for evaluation
     eval_callback = OfflineEvalCallback(
         eval_env,
         best_model_save_path=log_dir,
