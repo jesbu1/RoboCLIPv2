@@ -127,7 +127,6 @@ class OfflineWandbCallback(WandbCallback):
     @property
     def wandb_log_step(self) -> int:
         if hasattr(self.model, "offline_num_timesteps"):
-            print(self.num_timesteps, self.locals['self'].offline_num_timesteps)
             return self.num_timesteps + self.locals['self'].offline_num_timesteps
 
         return self.num_timesteps
