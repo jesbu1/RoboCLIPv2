@@ -55,7 +55,7 @@ import json
 from transformers import AutoTokenizer, AutoModel, AutoProcessor 
 import sys
 
-#sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))) 
+# sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from metaworld_runs.eval_utils import eval_policys
 
 from offline_rl_algorithms.cql import CQL
@@ -84,7 +84,7 @@ class OfflineEvalCallback(EvalCallback):
             video_buffer = self.record_video()
             # wandb.log({f"evaluation_video": wandb.Video(video_buffer, fps=20, format="mp4")}, commit=False)
             wandb.log({"eval/evaluation_video": wandb.Video(video_buffer, fps=20, format="mp4")}, step = self.n_calls)
-            #wandb.log({f"eval/evaluate_succ": success}, step = self.n_calls)
+            # wandb.log({f"eval/evaluate_succ": success}, step = self.n_calls)
             print("video logged")
 
         return result
@@ -92,8 +92,8 @@ class OfflineEvalCallback(EvalCallback):
     def record_video(self):
         frames = []
         obs = self.eval_env.reset()
-        #success = 0
-        for _ in range(500):  # You can adjust the number of steps for recording
+        # success = 0
+        for _ in range(128):  # You can adjust the number of steps for recording
             frame = self.eval_env.render(mode='rgb_array')
             # downsample frame
             frame = frame[::3, ::3, :3]
@@ -116,7 +116,6 @@ class OfflineEvalCallback(EvalCallback):
         return video_buffer
 
 
-
 class OfflineWandbCallback(WandbCallback):
     # def _on_rollout_end(self):
     #     # Log episode metrics with environment steps as x-axis
@@ -130,28 +129,25 @@ class OfflineWandbCallback(WandbCallback):
         if hasattr(self.model, "offline_num_timesteps"):
             print(self.num_timesteps, self.locals['self'].offline_num_timesteps)
             return self.num_timesteps + self.locals['self'].offline_num_timesteps
-            
+
         return self.num_timesteps
-            
 
     # def _on_rollout_end(self):
     #     # Log episode metrics with environment steps as x-axis
     #     wandb.log({
     #         'episode_reward': sum(self.locals['rewards']),  # Cumulative reward for the episode
     #         'episode_length': len(self.locals['rewards'])   # Length of the episode
-    #     }, step=self.model.num_timesteps) 
-
-
+    #     }, step=self.model.num_timesteps)
 
     def _on_step(self):
         # Log training metrics
         # print done
-        #if done and done is True, log the info
+        # if done and done is True, log the info
         if 'metrics' in self.locals:
             wandb.log(self.locals['metrics'], step = self.wandb_log_step)
         # done_array = self.locals["dones"]
         # infos = self.locals["infos"]
-        
+
     #     for i, done in enumerate(done_array):
     #         if done:
 
@@ -175,12 +171,10 @@ class OfflineWandbCallback(WandbCallback):
     #                         "RMS/RMS_reward": RMS_reward,
     #                         "RMS/RMS_total_reward": RMS_total_reward,
     #                         "RMS/offset": offset
-                            
+
     #                         }, step = self.wandb_log_step)
 
-                
     #     return True
-
 
 
 def get_args():
@@ -254,8 +248,6 @@ def main():
     th.manual_seed(args.seed)
     np.random.seed(args.seed)
     random.seed(args.seed)
-    
-
 
     WANDB_ENTITY_NAME = "clvr"
     WANDB_PROJECT_NAME = "roboclip-v2"
@@ -308,16 +300,14 @@ def main():
             sync_tensorboard=False,
         )
 
-
         # column1 = ["text_string"]
         # table1 = wandb.Table(columns=column1)
-        # table1.add_data([args.text_string])  
+        # table1.add_data([args.text_string])
 
         # column2 = ["env_id"]
         # table2 = wandb.Table(columns=column2)
-        # table2.add_data([args.env_id])  
+        # table2.add_data([args.env_id])
         # wandb.log({"text_string": table1, "env_id": table2})
-
 
     # log_dir = f"/scr/jzhang96/logs/baseline_logs/{experiment_name}"
     log_dir = f"logs/baseline_logs/{experiment_name}"
@@ -358,7 +348,7 @@ def main():
                         ent_coef="auto", buffer_size=args.total_time_steps, learning_starts=4000, seed=args.seed, min_q_weight=5.0, min_q_temp=1.0, use_calibrated_q=use_calibrated_cql, learning_rate=0.0001)
         else:
             model = model_class.load(args.pretrained, env=envs, tensorboard_log=log_dir)
-    
+
     elif args.algo.lower() == 'iql':
         model_class = IQL
         if not args.pretrained:
@@ -377,11 +367,17 @@ def main():
         eval_env = DummyVecEnv([create_wrapped_env(args.env_id, language_features=dummy_lang_feat, success_bonus=args.succ_bonus, use_simulator_reward=False)])#KitchenEnvDenseOriginalReward(time=True)
     # Use deterministic actions for evaluation
 
-    eval_callback = OfflineEvalCallback(eval_env, best_model_save_path=log_dir,
-                                    log_path=log_dir, eval_freq=1, video_freq=100000,
-                                    deterministic=True, render=False, n_eval_episodes = 25)
+    eval_callback = OfflineEvalCallback(
+        eval_env,
+        best_model_save_path=log_dir,
+        log_path=log_dir,
+        eval_freq=args.eval_freq,
+        video_freq=args.video_freq,
+        deterministic=True,
+        render=False,
+        n_eval_episodes=25,
+    )
 
-    
     if args.wandb:
         customwandbcallback = OfflineWandbCallback()
         callback = CallbackList([eval_callback, customwandbcallback])
@@ -395,12 +391,16 @@ def main():
         ignore_language = args.ignore_language
         use_language = not ignore_language
         buffer = H5ReplayBuffer(h5_path, use_language_embeddings=use_language, success_bonus=args.succ_bonus)
-        model.learn_offline(offline_replay_buffer=buffer, train_steps=args.offline_training_steps, callback=callback,
-                            batch_size=256, train_frequency=100)
+        model.learn_offline(
+            offline_replay_buffer=buffer,
+            train_steps=args.offline_training_steps,
+            callback=callback,
+            batch_size=256,
+            train_frequency=1,
+        )
     # once learn offline is done, fix the eval callback
-    eval_callback.eval_freq = args.eval_freq
-    eval_callback.video_freq = args.video_freq
-
+    # eval_callback.eval_freq = args.eval_freq
+    # eval_callback.video_freq = args.video_freq
 
     model.learn(total_timesteps=int(args.total_time_steps), callback=callback)
     model.save(f"{log_dir}/{experiment_name}")

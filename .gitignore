@@ -4,6 +4,7 @@ data
 *.h5
 wandb
 logs
+*.DS_Store
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

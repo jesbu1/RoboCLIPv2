@@ -152,7 +152,7 @@ class OfflineRLAlgorithm(OffPolicyAlgorithm):
         self.ent_coef = ent_coef
         self.target_update_interval = target_update_interval
         self.ent_coef_optimizer: Optional[th.optim.Adam] = None
-        
+
         self.offline_num_timesteps = 0
 
         if _init_setup_model:
@@ -195,17 +195,14 @@ class OfflineRLAlgorithm(OffPolicyAlgorithm):
 
         print('learning offline')
         # divide train_steps by 100 and call train 100 times
-        for _ in range(train_steps // train_frequency):
-            metrics = self.train(100, batch_size=batch_size, logging_prefix="offline_")
-            # rollout_metrics = 
-            self.offline_num_timesteps += train_frequency
+        for _ in range(train_steps):
+            metrics = self.train(1, batch_size=batch_size, logging_prefix="offline_")
+            # rollout_metrics =
+            self.offline_num_timesteps += 1
             metrics['num_timesteps'] = self.offline_num_timesteps + self.num_timesteps
             metrics['offline_num_timesteps'] = self.offline_num_timesteps
             callback.update_locals(locals()) # a little hacky
             callback.on_step() # because of locals, we have access to self.locals['metrics']
-
-
-        callback.on_training_end()
 
         self.replay_buffer = old_replay_buffer
 
