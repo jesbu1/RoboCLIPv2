@@ -13,7 +13,6 @@ from metaworld_runs.eval_utils import evaluate_policy
 from stable_baselines3.common.type_aliases import GymEnv, MaybeCallback, Schedule
 from stable_baselines3.common.utils import get_parameters_by_name, polyak_update
 from stable_baselines3.sac.policies import (
-    Actor,
     CnnPolicy,
     MlpPolicy,
     MultiInputPolicy,
@@ -165,14 +164,12 @@ class OfflineRLAlgorithm(OffPolicyAlgorithm):
     def _create_aliases(self) -> None:
         raise NotImplementedError
 
-    # TODO
     def learn_offline(
         self,
         train_steps: int,
         offline_replay_buffer: ReplayBuffer,
         batch_size: int = 64,
         callback: MaybeCallback = None,
-        train_frequency: int = 100,
     ) -> None:
 
         # Getting callbacks to work
@@ -193,8 +190,7 @@ class OfflineRLAlgorithm(OffPolicyAlgorithm):
         old_replay_buffer = self.replay_buffer
         self.replay_buffer = offline_replay_buffer
 
-        print('learning offline')
-        # divide train_steps by 100 and call train 100 times
+        print("learning offline")
         for _ in range(train_steps):
             metrics = self.train(1, batch_size=batch_size, logging_prefix="offline_")
             # rollout_metrics =

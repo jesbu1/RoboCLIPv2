@@ -4,6 +4,7 @@ import numpy as np
 import torch as th
 from gym import Env
 from gym.wrappers.time_limit import TimeLimit
+from stable_baselines3.common.monitor import Monitor
 from metaworld.envs import (
     ALL_V2_ENVIRONMENTS_GOAL_HIDDEN,
     ALL_V2_ENVIRONMENTS_GOAL_OBSERVABLE,
@@ -138,6 +139,7 @@ def create_wrapped_env(
     success_bonus=0.0,
     use_simulator_reward=False,
     use_time=True,
+    monitor=False,
 ):
     """
     Creates a wrapped MetaWorld environment with the given options.
@@ -149,6 +151,7 @@ def create_wrapped_env(
         sparse_reward: Whether to use sparse rewards (default=True).
         use_simulator_reward: Whether to use the simulator reward (default=False).
         use_time: Whether to add time to the observation (default=True).
+        monitor: Whether to monitor the environment returns, rewards, etc. (default=False).
 
     Returns:
         A function that returns the wrapped environment when called.
@@ -167,6 +170,9 @@ def create_wrapped_env(
 
         use_sparse_only = not use_simulator_reward
         base_env = RewardWrapper(base_env, sparse=use_sparse_only, success_bonus=success_bonus)
+
+        if monitor:
+            base_env = Monitor(base_env)
 
         return base_env
 

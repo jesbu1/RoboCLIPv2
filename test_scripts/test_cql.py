@@ -360,16 +360,37 @@ def main():
         raise ValueError("Unsupported algorithm. Choose either 'ppo' or 'sac'.")
 
     if args.n_envs > 1:
-        eval_env = SubprocVecEnv([create_wrapped_env(args.env_id, language_features=dummy_lang_feat, success_bonus=args.succ_bonus, use_simulator_reward=False) for i in range(args.n_envs)])#KitchenEnvDenseOriginalReward(time=True)
+        eval_env = SubprocVecEnv(
+            [
+                create_wrapped_env(
+                    args.env_id,
+                    language_features=dummy_lang_feat,
+                    success_bonus=args.succ_bonus,
+                    use_simulator_reward=False,
+                    monitor=True,
+                )
+                for i in range(args.n_envs)
+            ]
+        )  # KitchenEnvDenseOriginalReward(time=True)
     else:
-        eval_env = DummyVecEnv([create_wrapped_env(args.env_id, language_features=dummy_lang_feat, success_bonus=args.succ_bonus, use_simulator_reward=False)])#KitchenEnvDenseOriginalReward(time=True)
+        eval_env = DummyVecEnv(
+            [
+                create_wrapped_env(
+                    args.env_id,
+                    language_features=dummy_lang_feat,
+                    success_bonus=args.succ_bonus,
+                    use_simulator_reward=False,
+                    monitor=True,
+                )
+            ]
+        )  # KitchenEnvDenseOriginalReward(time=True)
 
     # Set eval freq and video freq if not set
     eval_freq = (
-        args.offline_training_steps // 10 if args.eval_freq is None else args.eval_freq
+        args.offline_training_steps // 20 if args.eval_freq is None else args.eval_freq
     )
     video_freq = (
-        args.offline_training_steps // 10
+        args.offline_training_steps // 20
         if args.video_freq is None
         else args.video_freq
     )
@@ -403,7 +424,6 @@ def main():
             train_steps=args.offline_training_steps,
             callback=callback,
             batch_size=256,
-            train_frequency=1,
         )
     # once learn offline is done, fix the eval callback
     # eval_callback.eval_freq = args.eval_freq
