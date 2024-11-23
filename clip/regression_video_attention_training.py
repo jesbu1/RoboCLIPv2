@@ -1,6 +1,6 @@
 import torch
 from PIL import Image
-from dataloader_clipliv_video import ClipLivVideoDataset, video_collate_fn
+from dataloader_clipliv_video import ClipLivVideoDataset, video_collate_fn, ClipLivVideoReverseDataset
 import torch.nn.functional as F
 import numpy as np
 import random
@@ -47,12 +47,15 @@ def main(args):
     
     if args.subtract:
         experiment_name += "_subtract1"
+    
+    if args.reverse:
+        experiment_name += "_reverse"
 
 
     run = wandb.init(
         entity=WANDB_ENTITY_NAME,
         project=WANDB_PROJECT_NAME,
-        group="RegressionRandomStartVideoAttentionLossSubstraction",
+        group="RegressionRandomStartVideoDiag",
         config=args,
         name=experiment_name,
     )
@@ -68,8 +71,10 @@ def main(args):
     #     linear_model.linear.weight.data = computed_matrix.to(device).float()
     #     linear_model.linear.requires_grad = False
 
-
-    dataset = ClipLivVideoDataset(args, h5_file)
+    if args.reverse:
+        dataset = ClipLivVideoReverseDataset(args, h5_file)
+    else:
+        dataset = ClipLivVideoDataset(args, h5_file)
     # dataloader = DataLoader(dataset, batch_size=args.batch_size, shuffle=True, num_workers=0, drop_last=True)
     dataloader = DataLoader(dataset, batch_size=args.batch_size, shuffle=True, num_workers=4, drop_last=True, collate_fn=video_collate_fn)
 
@@ -177,8 +182,8 @@ def main(args):
             plot_progress(h5_file, args.model_name, transform_model, "eval", args.subtract, context_parameters)
 
         
-        if epoch % 20 == 19:
-            plot_videos(args.model_name, transform_model, args.subtract, context_parameters)
+        # if epoch % 20 == 19:
+        #     plot_videos(args.model_name, transform_model, args.subtract, context_parameters)
 
 
 
@@ -203,6 +208,7 @@ if __name__ == "__main__":
     argparser.add_argument('--subtract', action='store_true')
     argparser.add_argument('--pca_var', type=float, default=1.0)
     argparser.add_argument('--learn_params', action='store_true')
+    argparser.add_argument('--reverse', action='store_true')
     args = argparser.parse_args()
     main(args)
 

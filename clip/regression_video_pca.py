@@ -67,7 +67,7 @@ def main(args):
     run = wandb.init(
         entity=WANDB_ENTITY_NAME,
         project=WANDB_PROJECT_NAME,
-        group="RegressionRandomPCAFinal",
+        group="RegressionRandomPCAFinal2",
         config=args,
         name=experiment_name,
     )
@@ -179,6 +179,7 @@ def main(args):
                     "corr_train": corr_train_dict,
                     "corr_eval": corr_eval_dict
                 }
+                wandb.log(wandb_log)
 
                 if args.pca:
                     plot_progress(h5_file, args.model_name, "train", self_attention_model, pca_text_model, pca_video_model, transform_model)

@@ -52,7 +52,7 @@ def main(args):
     run = wandb.init(
         entity=WANDB_ENTITY_NAME,
         project=WANDB_PROJECT_NAME,
-        group="RegressionRandomStartVideoWeightsLossSubstraction",
+        group="RegressionRandomStartVideoDiag",
         config=args,
         name=experiment_name,
     )
@@ -161,8 +161,8 @@ def main(args):
                 plot_progress_fix(h5_file, args.model_name, transform_model, "eval", args.subtract, context_parameters)
 
         
-        if epoch % 20 == 19:
-            plot_videos_fix(args.model_name, transform_model, args.subtract, context_parameters)
+        # if epoch % 20 == 19:
+        #     plot_videos_fix(args.model_name, transform_model, args.subtract, context_parameters)
 
 
 

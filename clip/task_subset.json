@@ -100,30 +100,30 @@
         "33"
     ],
     "eval_annotation":[
-        "Robot pressing button from top.",
-        "Robot pressing button from side.",
-        "Robot pulling cup",
-        "Robot opening door",
-        "Robot unlocking door",
-        "Robot opening drawer",
-        "Robot pulling handle",
-        "Robot opening faucet",
-        "Robot pushing stick",
-        "Robot closing window",
-        "Robot sweeping block",
-        "Robot pushing block"
+        "pressing button from top.",
+        "pressing button from side.",
+        "pulling cup",
+        "opening door",
+        "unlocking door",
+        "opening drawer",
+        "pulling handle",
+        "opening faucet",
+        "pushing stick",
+        "closing window",
+        "sweeping block",
+        "pushing block"
     ],
     "train_annotation":[
-        "Robot closing door.",
-        "Robot closing drawer.",
-        "Robot pressing button from side",
-        "Robot opening window",
-        "Robot pressing handle from side",
-        "Robot pushing coffee cup",
-        "Robot closing faucet",
-        "Robot pulling stick",
-        "Robot sweeping block into hole",
-        "Robot pulling block back"
+        "closing door.",
+        "closing drawer.",
+        "pressing button from side",
+        "opening window",
+        "pressing handle from side",
+        "pushing coffee cup",
+        "closing faucet",
+        "pulling stick",
+        "sweeping block into hole",
+        "pulling block back"
     ]
 
 
