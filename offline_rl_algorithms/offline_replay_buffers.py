@@ -58,8 +58,8 @@ class H5ReplayBuffer(ReplayBuffer):
         device: Union[th.device, str] = "auto",
         n_envs: int = 1,
         success_bonus: float = 0.0,
-        add_timestep: bool = True,
-        use_language_embeddings: bool = True
+        add_timestep: bool = False,
+        use_language_embeddings: bool = True,
     ):
         """
         Initialize the replay buffer.
@@ -90,7 +90,7 @@ class H5ReplayBuffer(ReplayBuffer):
             else:
                 timesteps[i] = current_timestep
                 current_timestep += 1
-        
+
         self.optimize_memory_usage = True
 
         self.observations = observations
@@ -142,7 +142,7 @@ class H5ReplayBuffer(ReplayBuffer):
 
             if self.use_language_embeddings:
                 next_obs = np.concatenate((next_obs, self.lang_embeddings[(batch_inds + 1) % self.buffer_size, :]), axis=1)
-                
+
         else:
             next_obs = self._normalize_obs(
                 self.next_observations[batch_inds, :], env=None
@@ -176,8 +176,6 @@ class H5ReplayBuffer(ReplayBuffer):
                 np.array([float(done) for done in self.dones[batch_inds]]), -1
             )
             rewards = rewards + self.success_bonus * success
-
-
 
         data = (
             observation,
