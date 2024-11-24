@@ -296,7 +296,7 @@ def main():
             config=args,
             name=experiment_name,
             monitor_gym=True,
-            sync_tensorboard=False,
+            sync_tensorboard=True,
         )
 
         # column1 = ["text_string"]
@@ -368,7 +368,7 @@ def main():
                     language_features=dummy_lang_feat,
                     success_bonus=args.succ_bonus,
                     use_simulator_reward=False,
-                    monitor=False,
+                    monitor=True,
                 )
                 for i in range(args.n_envs)
             ]
@@ -381,7 +381,7 @@ def main():
                     language_features=dummy_lang_feat,
                     success_bonus=args.succ_bonus,
                     use_simulator_reward=False,
-                    monitor=False,
+                    monitor=True,
                 )
             ]
         )  # KitchenEnvDenseOriginalReward(time=True)

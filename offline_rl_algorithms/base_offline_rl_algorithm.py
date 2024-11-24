@@ -172,7 +172,6 @@ class OfflineRLAlgorithm(OffPolicyAlgorithm):
         offline_replay_buffer: ReplayBuffer,
         batch_size: int = 64,
         callback: MaybeCallback = None,
-        train_frequency: int = 100,
     ) -> None:
 
         # Getting callbacks to work
@@ -195,10 +194,10 @@ class OfflineRLAlgorithm(OffPolicyAlgorithm):
 
         print('learning offline')
         # divide train_steps by 100 and call train 100 times
-        for _ in range(train_steps // train_frequency):
-            metrics = self.train(100, batch_size=batch_size, logging_prefix="offline_")
+        for _ in range(train_steps):
+            metrics = self.train(1, batch_size=batch_size, logging_prefix="offline_")
             # rollout_metrics = 
-            self.offline_num_timesteps += train_frequency
+            self.offline_num_timesteps += 1
             metrics['num_timesteps'] = self.offline_num_timesteps + self.num_timesteps
             metrics['offline_num_timesteps'] = self.offline_num_timesteps
             callback.update_locals(locals()) # a little hacky
@@ -208,8 +207,6 @@ class OfflineRLAlgorithm(OffPolicyAlgorithm):
         callback.on_training_end()
 
         self.replay_buffer = old_replay_buffer
-
-        callback.on_training_end()
 
     def train(
         self, gradient_steps: int, batch_size: int = 64, callback: MaybeCallback = None
