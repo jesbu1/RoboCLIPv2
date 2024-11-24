@@ -5,6 +5,8 @@ This repository contains the implementation for the NeurIPS 2023 paper, [RoboCLI
 
 We recommend using conda for installation and provide a `.yml` file for installation. 
 
+Might need to `rm -rf Metaworld` and then replace with `git clone git@github.com:sumedh7/Metaworld.git`
+
 ```sh
 git clone https://github.com/sumedh7/RoboCLIP.git --recursive
 cd RoboCLIP
