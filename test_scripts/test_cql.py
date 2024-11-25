@@ -62,6 +62,8 @@ from offline_rl_algorithms.cql import CQL
 from offline_rl_algorithms.iql import IQL
 from offline_rl_algorithms.base_offline_rl_algorithm import OfflineRLAlgorithm
 
+from encoders.xclip_encoder import XCLIPEncoder
+
 
 from envs.metaworld_envs.metaworld import create_wrapped_env
 
@@ -78,7 +80,7 @@ class OfflineEvalCallback(EvalCallback):
         self.video_freq = video_freq
 
     def _on_step(self) -> bool:
-        print(self.n_calls, self.n_calls % self.video_freq)
+        # print(self.n_calls, self.n_calls % self.video_freq)
         result = super(OfflineEvalCallback, self)._on_step()
 
         if self.video_freq > 0 and self.n_calls % self.video_freq == 0:
@@ -180,7 +182,7 @@ class OfflineWandbCallback(WandbCallback):
 def get_args():
     parser = argparse.ArgumentParser(description='RL')
     parser.add_argument('--algo', type=str, default='iql', choices=['ppo', 'sac', 'cql', 'calibrated_cql', 'iql'])
-    parser.add_argument('--text_string', type=str, default='opening door')
+    parser.add_argument('--text_string', type=str, default='opening window')
     parser.add_argument('--dir_add', type=str, default='')
     parser.add_argument('--env_id', type=str, default='window-open-v2-goal-hidden')
     parser.add_argument('--offline_training_steps', type=int, default=1000000)
@@ -317,11 +319,15 @@ def main():
     if not os.path.exists(log_dir):
         os.makedirs(log_dir)
 
-    dummy_lang_feat = th.zeros((512))
+    # compute a language feature
+    encoder = XCLIPEncoder()
+    lang_feat = encoder.encode_text(args.text_string)
+    lang_feat = lang_feat.to('cpu').detach().squeeze()
+
     if args.n_envs > 1:
-        envs = SubprocVecEnv([create_wrapped_env(args.env_id, language_features=dummy_lang_feat, success_bonus=args.succ_bonus, use_simulator_reward=False) for i in range(args.n_envs)])
+        envs = SubprocVecEnv([create_wrapped_env(args.env_id, language_features=lang_feat, success_bonus=args.succ_bonus, use_simulator_reward=False) for i in range(args.n_envs)])
     else:
-        envs = DummyVecEnv([create_wrapped_env(args.env_id,  language_features=dummy_lang_feat, success_bonus=args.succ_bonus, use_simulator_reward=False)])
+        envs = DummyVecEnv([create_wrapped_env(args.env_id,  language_features=lang_feat, success_bonus=args.succ_bonus, use_simulator_reward=False)])
 
     if args.algo.lower() == 'ppo':
         model_class = PPO
@@ -365,7 +371,7 @@ def main():
             [
                 create_wrapped_env(
                     args.env_id,
-                    language_features=dummy_lang_feat,
+                    language_features=lang_feat,
                     success_bonus=args.succ_bonus,
                     use_simulator_reward=False,
                     monitor=True,
@@ -378,7 +384,7 @@ def main():
             [
                 create_wrapped_env(
                     args.env_id,
-                    language_features=dummy_lang_feat,
+                    language_features=lang_feat,
                     success_bonus=args.succ_bonus,
                     use_simulator_reward=False,
                     monitor=True,
@@ -429,7 +435,7 @@ def main():
     # once learn offline is done, fix the eval callback
     # eval_callback.eval_freq = args.eval_freq
     # eval_callback.video_freq = args.video_freq
-
+    # import pdb; pdb.set_trace()
     model.learn(total_timesteps=int(args.total_time_steps), callback=callback)
     model.save(f"{log_dir}/{experiment_name}")
 

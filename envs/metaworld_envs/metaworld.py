@@ -138,7 +138,7 @@ def create_wrapped_env(
     language_features=None,
     success_bonus=0.0,
     use_simulator_reward=False,
-    use_time=True,
+    use_time=False,
     monitor=False,
 ):
     """
