@@ -18,6 +18,8 @@ from self_attention_utils import MultiHeadAttention, MultiHeadAttentionSubtracti
 from confusion_matrix import plot_confusion_matrix_pca
 # import pca 
 from pca_utils import pca_learner
+import joblib
+
 
 
 os.environ["TOKENIZERS_PARALLELISM"] = "False"
@@ -192,6 +194,25 @@ def main(args):
             self_attention_model.train()
             if args.pca:
                 transform_model.train()
+
+        if epoch % 25 == 24:
+            save_model_path = "/scr/jzhang96/clip_liv_models"
+            if not os.path.exists(save_model_path):
+                os.makedirs(save_model_path)
+            folder_name = experiment_name
+            if not os.path.exists(os.path.join(save_model_path, folder_name)):
+                os.makedirs(os.path.join(save_model_path, folder_name))
+            torch.save(self_attention_model.state_dict(), os.path.join(save_model_path, folder_name, f"model_{epoch}.pt"))
+            if args.pca:
+                torch.save(transform_model.state_dict(), os.path.join(save_model_path, folder_name, f"transform_{epoch}.pt"))
+                # dump pca models
+                pca_video_path = os.path.join(save_model_path, folder_name, f"pca_video.pkl")
+                pca_text_path = os.path.join(save_model_path, folder_name, f"pca_text.pkl")
+                joblib.dump(pca_video_model, pca_video_path)
+                joblib.dump(pca_text_model, pca_text_path)
+            
+
+
 
         
 
