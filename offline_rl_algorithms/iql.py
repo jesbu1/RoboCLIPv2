@@ -128,6 +128,8 @@ class IQL(OfflineRLAlgorithm):
     :param advantage_temp: IQL's advantage temperature
     :param expectile: IQL's expectile regression value
     :param clip_score: Clipping term on the advantage temp
+    :param policy_extraction: ["awr", "ddpg"] policy extraction algorithm
+    :param ddpg_bc_weight: DDPG's behavior cloning weight, only used when policy_extraction is "ddpg"
     """
 
     policy_aliases: ClassVar[Dict[str, Type[BasePolicy]]] = {
@@ -171,6 +173,8 @@ class IQL(OfflineRLAlgorithm):
         advantage_temp: float = 5.0,
         expectile: float = 0.7,
         clip_score: float = 100,
+        policy_extraction: str = "awr",
+        ddpg_bc_weight: float = 0.1,
     ):
         super().__init__(
             policy,
@@ -203,13 +207,19 @@ class IQL(OfflineRLAlgorithm):
         # Entropy coefficient / Entropy temperature
         # Inverse of the reward scale
         self.target_update_interval = target_update_interval
-    
+
         if _init_setup_model:
             self._setup_model()
 
         self.advantage_temp = advantage_temp
         self.expectile = expectile
         self.clip_score = clip_score
+        assert policy_extraction in [
+            "awr",
+            "ddpg",
+        ], "Policy extraction algorithm must be either 'awr' or 'ddpg'"
+        self.policy_extraction = policy_extraction
+        self.ddpg_bc_weight = ddpg_bc_weight
 
     def _setup_model(self) -> None:
         super()._setup_model()
@@ -279,13 +289,25 @@ class IQL(OfflineRLAlgorithm):
             vf_pred = self.v_net(replay_data.observations)
 
             # Policy loss
-            advantage = target_q_pred - vf_pred.detach()
-            weights = th.clamp(
-                th.exp(advantage / self.advantage_temp), 0, self.clip_score
-            )
-            _, log_prob = self.actor.action_log_prob(replay_data.observations)
-            log_prob = log_prob.reshape(-1, 1)
-            policy_loss = -th.mean(weights * log_prob)
+            if self.policy_extraction == "awr":
+                advantage = target_q_pred - vf_pred.detach()
+                weights = th.clamp(
+                    th.exp(advantage / self.advantage_temp), 0, self.clip_score
+                )
+                _, log_prob = self.actor.action_log_prob(replay_data.observations)
+                log_prob = log_prob.reshape(-1, 1)
+                policy_loss = -th.mean(weights * log_prob)
+            elif self.policy_extraction == "ddpg":
+                actions_pi, log_prob = self.actor.action_log_prob(
+                    replay_data.observations
+                )
+                q_values_pi = th.cat(
+                    self.critic(replay_data.observations, actions_pi), dim=1
+                )
+                min_qf_pi, _ = th.min(q_values_pi, dim=1, keepdim=True)
+
+                log_prob = log_prob.reshape(-1, 1)
+                policy_loss = -th.mean(min_qf_pi + self.ddpg_bc_weight * log_prob)
 
             # Q value loss
             target_q_values = (
