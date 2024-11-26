@@ -174,8 +174,8 @@ class IQL(OfflineRLAlgorithm):
         advantage_temp: float = 5.0,
         expectile: float = 0.7,
         clip_score: float = 100,
-        policy_extraction: str = "awr",
-        ddpg_bc_weight: float = 0.1,
+        policy_extraction: str = "ddpg",
+        ddpg_bc_weight: float = 0,
     ):
         super().__init__(
             policy,
