@@ -1,17 +1,14 @@
-from typing import Any, ClassVar, Dict, List, Optional, Tuple, Type, TypeVar, Union
+from typing import Any, ClassVar, Dict, List, Optional, Tuple, Type, Union
 
 import numpy as np
 import torch as th
 from gym import spaces
-from torch.nn import functional as F
 
 from stable_baselines3.common.buffers import ReplayBuffer
 from stable_baselines3.common.noise import ActionNoise
-from stable_baselines3.common.off_policy_algorithm import OffPolicyAlgorithm
-from stable_baselines3.common.policies import BasePolicy, ContinuousCritic
-from metaworld_runs.eval_utils import evaluate_policy
+from offline_rl_algorithms.base_offline_rl_algorithm import OfflineRLAlgorithm
+from stable_baselines3.common.policies import BasePolicy
 from stable_baselines3.common.type_aliases import GymEnv, MaybeCallback, Schedule
-from stable_baselines3.common.utils import get_parameters_by_name, polyak_update
 from stable_baselines3.sac.policies import (
     Actor,
     CnnPolicy,
@@ -19,11 +16,9 @@ from stable_baselines3.sac.policies import (
     MultiInputPolicy,
     SACPolicy,
 )
-
-
-class OfflineRLAlgorithm(OffPolicyAlgorithm):
+class BC(OfflineRLAlgorithm):
     """
-    Base OfflineRL Algorithm Class
+    Behavior Cloning
 
     :param policy: The policy model to use (MlpPolicy, CnnPolicy, ...)
     :param env: The environment to learn from (if registered in Gym, can be str)
@@ -48,12 +43,8 @@ class OfflineRLAlgorithm(OffPolicyAlgorithm):
     :param optimize_memory_usage: Enable a memory efficient variant of the replay buffer
         at a cost of more complexity.
         See https://github.com/DLR-RM/stable-baselines3/issues/37#issuecomment-637501195
-    :param ent_coef: Entropy regularization coefficient. (Equivalent to
-        inverse of reward scale in the original SAC paper.)  Controlling exploration/exploitation trade-off.
-        Set it to 'auto' to learn it automatically (and 'auto_0.1' for using 0.1 as initial value)
     :param target_update_interval: update the target network every ``target_network_update_freq``
         gradient steps.
-    :param target_entropy: target entropy when learning ``ent_coef`` (``ent_coef = 'auto'``)
     :param use_sde: Whether to use generalized State Dependent Exploration (gSDE)
         instead of action noise exploration (default: False)
     :param sde_sample_freq: Sample a new noise matrix every n steps when using gSDE
@@ -70,9 +61,6 @@ class OfflineRLAlgorithm(OffPolicyAlgorithm):
     :param device: Device (cpu, cuda, ...) on which the code should be run.
         Setting it to auto, the code will be run on the GPU if possible.
     :param _init_setup_model: Whether or not to build the network at the creation of the instance
-    :param min_q_weight: Weight for the min_q loss for CQL
-    :param min_q_temp: Temperature parameter for the min_q loss for CQL
-    :param use_calibrated_q: Whether to use calibrated Q for CQL (Cal-QL algorithm)
     """
 
     policy_aliases: ClassVar[Dict[str, Type[BasePolicy]]] = {
@@ -82,8 +70,6 @@ class OfflineRLAlgorithm(OffPolicyAlgorithm):
     }
     policy: SACPolicy
     actor: Actor
-    critic: ContinuousCritic
-    critic_target: ContinuousCritic
 
     def __init__(
         self,
@@ -93,17 +79,15 @@ class OfflineRLAlgorithm(OffPolicyAlgorithm):
         buffer_size: int = 1_000_000,  # 1e6
         learning_starts: int = 100,
         batch_size: int = 256,
-        tau: float = 0.005,
-        gamma: float = 0.99,
+        tau: float = 0.005, # just to keep it consistent with other offline RL algs
+        gamma: float = 0.99, # just to keep it consistent with other offline RL algs
         train_freq: Union[int, Tuple[int, str]] = 1,
         gradient_steps: int = 1,
         action_noise: Optional[ActionNoise] = None,
         replay_buffer_class: Optional[Type[ReplayBuffer]] = None,
         replay_buffer_kwargs: Optional[Dict[str, Any]] = None,
         optimize_memory_usage: bool = False,
-        ent_coef: Union[str, float] = "auto",
         target_update_interval: int = 1,
-        target_entropy: Union[str, float] = "auto",
         use_sde: bool = False,
         sde_sample_freq: int = -1,
         use_sde_at_warmup: bool = False,
@@ -114,8 +98,6 @@ class OfflineRLAlgorithm(OffPolicyAlgorithm):
         seed: Optional[int] = None,
         device: Union[th.device, str] = "auto",
         _init_setup_model: bool = True,
-        supported_action_spaces: Optional[Tuple[spaces.Space]] = (spaces.Box,),
-        support_multi_env: bool = True,
     ):
         super().__init__(
             policy,
@@ -141,87 +123,82 @@ class OfflineRLAlgorithm(OffPolicyAlgorithm):
             sde_sample_freq=sde_sample_freq,
             use_sde_at_warmup=use_sde_at_warmup,
             optimize_memory_usage=optimize_memory_usage,
-            supported_action_spaces=supported_action_spaces,
-            support_multi_env=support_multi_env,
+            supported_action_spaces=(spaces.Box,),
+            support_multi_env=True,
         )
 
-        self.target_entropy = target_entropy
-        self.log_ent_coef = None  # type: Optional[th.Tensor]
         # Entropy coefficient / Entropy temperature
         # Inverse of the reward scale
-        self.ent_coef = ent_coef
         self.target_update_interval = target_update_interval
-        self.ent_coef_optimizer: Optional[th.optim.Adam] = None
-        
-        self.offline_num_timesteps = 0
-
+    
         if _init_setup_model:
             self._setup_model()
+
 
     def _setup_model(self) -> None:
         super()._setup_model()
         self._create_aliases()
 
     def _create_aliases(self) -> None:
-        raise NotImplementedError
-
-    def learn_offline(
-        self,
-        train_steps: int,
-        offline_replay_buffer: ReplayBuffer,
-        batch_size: int = 64,
-        callback: MaybeCallback = None,
-    ) -> None:
-
-        # Getting callbacks to work
-        # Create eval callback if needed
-        # total_timesteps = 0
-
-        total_timesteps, callback = self._setup_learn(
-            total_timesteps=train_steps,
-            callback=callback,
-            reset_num_timesteps=False,
-            tb_log_name="offline",
-            progress_bar=False,
-        )
-
-        callback = self._init_callback(callback, True)
-        callback.on_training_start(locals(), globals())
-
-        old_replay_buffer = self.replay_buffer
-        self.replay_buffer = offline_replay_buffer
-
-        print('learning offline')
-        # divide train_steps by 100 and call train 100 times
-        for _ in range(train_steps):
-            metrics = self.train(1, batch_size=batch_size, logging_prefix="offline_")
-            # rollout_metrics = 
-            self.offline_num_timesteps += 1
-            metrics['num_timesteps'] = self.offline_num_timesteps + self.num_timesteps
-            metrics['offline_num_timesteps'] = self.offline_num_timesteps
-            callback.update_locals(locals()) # a little hacky
-            callback.on_step() # because of locals, we have access to self.locals['metrics']
-
-
-        callback.on_training_end()
-
-        self.replay_buffer = old_replay_buffer
+        self.actor = self.policy.actor
 
     def train(
-        self, gradient_steps: int, batch_size: int = 64, callback: MaybeCallback = None
+        self, gradient_steps: int, batch_size: int = 64, logging_prefix: str = ""
     ) -> None:
-        raise NotImplementedError
+        # Switch to train mode (this affects batch norm / dropout)
+        self.policy.set_training_mode(True)
+        # Update optimizers learning rate
+        optimizers = [self.actor.optimizer]
+        # Update learning rate according to lr schedule
+        self._update_learning_rate(optimizers)
+
+        actor_losses = []
+        actor_log_pis = []
+
+        for gradient_step in range(gradient_steps):
+            # Sample replay buffer
+            replay_data = self.replay_buffer.sample(batch_size, env=self._vec_normalize_env)  # type: ignore[union-attr]
+
+            # We need to sample because `log_std` may have changed between two gradient steps
+            if self.use_sde:
+                self.actor.reset_noise()
+
+            # Policy loss
+            _, log_prob = self.actor.action_log_prob(replay_data.observations)
+            log_prob = log_prob.reshape(-1, 1)
+            policy_loss = -th.mean(log_prob)
+
+            # Optimize the policy
+            self.actor.optimizer.zero_grad()
+            policy_loss.backward()
+            self.actor.optimizer.step()
+
+            # log actor stuff
+            actor_losses.append(policy_loss.item())
+            actor_log_pis.append(log_prob.mean().item())
+
+        self._n_updates += gradient_steps
+
+        metrics_dict = {
+            f"{logging_prefix}/actor_loss": np.mean(actor_losses),
+            f"{logging_prefix}/average_reward": replay_data.rewards.mean().item,
+            f"{logging_prefix}/average_actor_log_pis": np.mean(actor_log_pis),
+        }
+
+        for metric in metrics_dict:
+            self.logger.record(logging_prefix + metric, metrics_dict[metric])
+
+        return metrics_dict
 
     def learn(
         self,
         total_timesteps: int,
         callback: MaybeCallback = None,
         log_interval: int = 4,
-        tb_log_name: str = "OfflineRL",
+        tb_log_name: str = "BC",
         reset_num_timesteps: bool = True,
         progress_bar: bool = False,
     ):
-        # TODO: implement custom buffer and switch it here
         return super().learn(
             total_timesteps=total_timesteps,
             callback=callback,
@@ -231,8 +208,14 @@ class OfflineRLAlgorithm(OffPolicyAlgorithm):
             progress_bar=progress_bar,
         )
 
-    # def _excluded_save_params(self) -> List[str]:
-    #     raise NotImplementedError
+    def _excluded_save_params(self) -> List[str]:
+        return super()._excluded_save_params() + [
+            "actor",
+        ]  # noqa: RUF005
 
-    # def _get_torch_save_params(self) -> Tuple[List[str], List[str]]:
-    #     raise NotImplementedError
+    def _get_torch_save_params(self) -> Tuple[List[str], List[str]]:
+        state_dicts = [
+            "policy",
+        ]
+        saved_pytorch_variables = []
+        return state_dicts, saved_pytorch_variables
