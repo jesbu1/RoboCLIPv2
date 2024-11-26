@@ -60,6 +60,7 @@ from metaworld_runs.eval_utils import eval_policys
 
 from offline_rl_algorithms.cql import CQL
 from offline_rl_algorithms.iql import IQL
+from offline_rl_algorithms.bc import BC
 from offline_rl_algorithms.base_offline_rl_algorithm import OfflineRLAlgorithm
 
 from encoders.xclip_encoder import XCLIPEncoder
@@ -96,6 +97,12 @@ class OfflineEvalCallback(EvalCallback):
         frames = []
         obs = self.eval_env.reset()
         # success = 0
+        # breakpoint()
+
+        # print the first layer's weight of self.model.policy
+        print(self.model.policy.actor.latent_pi[0].weight[0][:10])
+        
+        
         for _ in range(128):  # You can adjust the number of steps for recording
             frame = self.eval_env.render(mode='rgb_array')
             # downsample frame
@@ -181,7 +188,7 @@ class OfflineWandbCallback(WandbCallback):
 
 def get_args():
     parser = argparse.ArgumentParser(description='RL')
-    parser.add_argument('--algo', type=str, default='iql', choices=['ppo', 'sac', 'cql', 'calibrated_cql', 'iql'])
+    parser.add_argument('--algo', type=str, default='iql', choices=['ppo', 'sac', 'cql', 'calibrated_cql', 'iql', 'bc'])
     parser.add_argument('--text_string', type=str, default='opening window')
     parser.add_argument('--dir_add', type=str, default='')
     parser.add_argument('--env_id', type=str, default='window-open-v2-goal-hidden')
@@ -200,12 +207,9 @@ def get_args():
     parser.add_argument('--transform_base_path', type=str, default=None)
     parser.add_argument('--transform_model_path', type=str, default=None)
     parser.add_argument('--random_reset', action="store_true")
-    parser.add_argument('--target_gif_path', type=str, default="/scr/jzhang96/metaworld_generate_gifs/")
-    # parser.add_argument('--target_gif_path', type=str, default="/home/jzhang96/RoboCLIPv2/metaworld_generate_gifs/")
     parser.add_argument('--time', action="store_false")
     parser.add_argument('--ignore_language', action="store_true")
 
-    parser.add_argument('--frame_num', type=int, default=32)
     parser.add_argument('--train_orcale', action="store_true") # load latent from h5 file
     parser.add_argument('--warm_up_runs', type=int, default=0)
     parser.add_argument('--project_reward', action="store_true")
@@ -324,10 +328,16 @@ def main():
     lang_feat = encoder.encode_text(args.text_string)
     lang_feat = lang_feat.to('cpu').detach().squeeze()
 
+    ignore_language = args.ignore_language
+    use_language = not ignore_language
+
+    if ignore_language:
+        lang_feat = None
+
     if args.n_envs > 1:
-        envs = SubprocVecEnv([create_wrapped_env(args.env_id, language_features=lang_feat, success_bonus=args.succ_bonus, use_simulator_reward=False) for i in range(args.n_envs)])
+        envs = SubprocVecEnv([create_wrapped_env(args.env_id, language_features=lang_feat, success_bonus=args.succ_bonus, use_simulator_reward=True) for i in range(args.n_envs)])
     else:
-        envs = DummyVecEnv([create_wrapped_env(args.env_id,  language_features=lang_feat, success_bonus=args.succ_bonus, use_simulator_reward=False)])
+        envs = DummyVecEnv([create_wrapped_env(args.env_id,  language_features=lang_feat, success_bonus=args.succ_bonus, use_simulator_reward=True)])
 
     if args.algo.lower() == 'ppo':
         model_class = PPO
@@ -349,7 +359,6 @@ def main():
         model_class = CQL
         if not args.pretrained:
             model = model_class("MlpPolicy", envs, verbose=1, tensorboard_log=log_dir, 
-                        # batch_size=args.n_steps * args.n_envs,
                         ent_coef="auto", buffer_size=args.total_time_steps, learning_starts=4000, seed=args.seed, min_q_weight=5.0, min_q_temp=1.0, use_calibrated_q=use_calibrated_cql, learning_rate=0.0001)
         else:
             model = model_class.load(args.pretrained, env=envs, tensorboard_log=log_dir)
@@ -358,11 +367,16 @@ def main():
         model_class = IQL
         if not args.pretrained:
             model = model_class("MlpPolicy", envs, verbose=1, tensorboard_log=log_dir, 
-                        # batch_size=args.n_steps * args.n_envs,
                         buffer_size=args.total_time_steps, learning_starts=4000, seed=args.seed)
         else:
             model = model_class.load(args.pretrained, env=envs, tensorboard_log=log_dir)
-
+    elif args.algo.lower() == 'bc':
+        model_class = BC
+        if not args.pretrained:
+            model = model_class("MlpPolicy", envs, verbose=1, tensorboard_log=log_dir, 
+                        buffer_size=args.total_time_steps, learning_starts=4000, seed=args.seed)
+        else:
+            model = model_class.load(args.pretrained, env=envs, tensorboard_log=log_dir)
     else:
         raise ValueError("Unsupported algorithm. Choose either 'ppo' or 'sac'.")
 
@@ -373,7 +387,7 @@ def main():
                     args.env_id,
                     language_features=lang_feat,
                     success_bonus=args.succ_bonus,
-                    use_simulator_reward=False,
+                    use_simulator_reward=True,
                     monitor=True,
                 )
                 for i in range(args.n_envs)
@@ -386,7 +400,7 @@ def main():
                     args.env_id,
                     language_features=lang_feat,
                     success_bonus=args.succ_bonus,
-                    use_simulator_reward=False,
+                    use_simulator_reward=True,
                     monitor=True,
                 )
             ]
@@ -420,11 +434,10 @@ def main():
         callback = eval_callback
 
     # load the offline replay buffer
-    if isinstance(model, OfflineRLAlgorithm):
+    # if isinstance(model, OfflineRLAlgorithm):
+    if False:
         # h5_path = "updated_trajs.h5"
         h5_path = 'data/h5_buffers/updated_trajs/metaworld_dataset_sparse_only.h5'
-        ignore_language = args.ignore_language
-        use_language = not ignore_language
         buffer = H5ReplayBuffer(h5_path, use_language_embeddings=use_language, success_bonus=args.succ_bonus)
         model.learn_offline(
             offline_replay_buffer=buffer,
