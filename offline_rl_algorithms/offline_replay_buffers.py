@@ -69,6 +69,7 @@ class H5ReplayBuffer(ReplayBuffer):
         :param n_envs: Number of parallel environments
         :param success_bonus: Success bonus added to the rewards
         :param add_timestep: Add a column with the timesteps to the transitions
+        :param use_language_embeddings: Whether to specifically incorporate language embeddings into the observations
         """
         with h5py.File(h5_path, "r") as f:
             observations = f["state"][()]
