@@ -280,6 +280,11 @@ class IQL(OfflineRLAlgorithm):
 
             # Policy loss
             advantage = target_q_pred - vf_pred.detach()
+
+            # Let us record the advantage histogram in wandb
+            import wandb
+            wandb.log({"advantage_histogram": wandb.Histogram(advantage.detach().cpu().numpy())})
+
             weights = th.clamp(
                 th.exp(advantage * self.advantage_temp), 0, self.clip_score
             )
