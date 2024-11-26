@@ -21,6 +21,7 @@ from stable_baselines3.sac.policies import (
     SACPolicy,
 )
 
+from copy import deepcopy
 
 class ValueCritic(BaseModel):
     """
@@ -145,7 +146,7 @@ class IQL(OfflineRLAlgorithm):
         self,
         policy: Union[str, Type[SACPolicy]],
         env: Union[GymEnv, str],
-        learning_rate: Union[float, Schedule] = 3e-4,
+        learning_rate: Union[float, Schedule] = 3e-6,
         buffer_size: int = 1_000_000,  # 1e6
         learning_starts: int = 100,
         batch_size: int = 256,
@@ -168,8 +169,8 @@ class IQL(OfflineRLAlgorithm):
         seed: Optional[int] = None,
         device: Union[th.device, str] = "auto",
         _init_setup_model: bool = True,
-        advantage_temp: float = 5.0,
-        expectile: float = 0.7,
+        advantage_temp: float = 5,
+        expectile: float = 0.5,
         clip_score: float = 100,
     ):
         super().__init__(
@@ -220,12 +221,11 @@ class IQL(OfflineRLAlgorithm):
             self.critic_target, ["running_"]
         )
 
-        # TODO: maybe need to deep copy feature extractor
         self.v_net = ValueCritic(
             self.observation_space,
             self.action_space,
             self.policy.net_arch,
-            self.policy.critic.features_extractor, 
+            deepcopy(self.policy.critic.features_extractor), 
             features_dim=self.policy.actor.latent_pi[0].in_features,
             activation_fn=self.policy.net_args["activation_fn"],
             normalize_images=self.policy.critic.normalize_images,
@@ -281,7 +281,7 @@ class IQL(OfflineRLAlgorithm):
             # Policy loss
             advantage = target_q_pred - vf_pred.detach()
             weights = th.clamp(
-                th.exp(advantage / self.advantage_temp), 0, self.clip_score
+                th.exp(advantage * self.advantage_temp), 0, self.clip_score
             )
             _, log_prob = self.actor.action_log_prob(replay_data.observations)
             log_prob = log_prob.reshape(-1, 1)
