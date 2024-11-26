@@ -23,6 +23,7 @@ from stable_baselines3.sac.policies import (
 
 from copy import deepcopy
 
+
 class ValueCritic(BaseModel):
     """
     Single Value network (state conditioned) for IQL.
@@ -80,6 +81,7 @@ class ValueCritic(BaseModel):
             features = self.extract_features(obs, self.features_extractor)
         value_input = th.cat([features], dim=1)
         return self.vf(value_input)
+
 
 class IQL(OfflineRLAlgorithm):
     """
@@ -235,14 +237,14 @@ class IQL(OfflineRLAlgorithm):
             self.observation_space,
             self.action_space,
             self.policy.net_arch,
-            deepcopy(self.policy.critic.features_extractor), 
+            deepcopy(self.policy.critic.features_extractor),
             features_dim=self.policy.actor.latent_pi[0].in_features,
             activation_fn=self.policy.net_args["activation_fn"],
             normalize_images=self.policy.critic.normalize_images,
             share_features_extractor=self.policy.critic.share_features_extractor,
             lr_schedule=self.lr_schedule,
             optimizer_class=self.policy.optimizer_class,
-            optimizer_kwargs=self.policy.optimizer_kwargs
+            optimizer_kwargs=self.policy.optimizer_kwargs,
         ).to(self.device)
 
     def _create_aliases(self) -> None:
