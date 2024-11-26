@@ -100,25 +100,64 @@ class TwoLayerMLP(torch.nn.Module):
     def forward(self, x):
         x = F.relu(self.linear1(x))
         x = self.linear2(x)
-        x = torch.tanh(x)
+        x = F.tanh(x)
         return x
 
+class TwoLayerMLPClass(torch.nn.Module):
+    def __init__(self, input_dim, num_classes):
+        super(TwoLayerMLPClass, self).__init__()
+        self.linear1 = torch.nn.Linear(input_dim, input_dim // 2)
+        self.linear2 = torch.nn.Linear(input_dim // 2, num_classes)
+
+    def forward(self, x):
+        x = F.relu(self.linear1(x))
+        x = self.linear2(x)
+        return x
+
+
+
 class ThreeLayerMLP(torch.nn.Module):
-    def __init__(self, input_dim, output_dim):
+    def __init__(self, input_dim):
         super(ThreeLayerMLP, self).__init__()
         self.linear1 = torch.nn.Linear(input_dim, input_dim)
-        self.linear2 = torch.nn.Linear(input_dim, output_dim)
-        self.linear3 = torch.nn.Linear(output_dim, output_dim)
+        self.linear2 = torch.nn.Linear(input_dim, input_dim // 2)
+        self.linear3 = torch.nn.Linear(input_dim // 2, 1)
 
     def forward(self, x):
         x = F.relu(self.linear1(x))
         x = F.relu(self.linear2(x))
         x = self.linear3(x)
-        x = F.normalize(x, p=2, dim=1)
+        x = F.tanh(x)
         return x
 
 
-def pca_learner(h5_file, model_name, only_goal_image = True, pca_var = 0.95):
+class TwoLayerClassMLP(torch.nn.Module):
+    def __init__(self, input_dim, num_classes):
+        super(TwoLayerClassMLP, self).__init__()
+        self.linear1 = torch.nn.Linear(input_dim, input_dim // 2)
+        self.linear2 = torch.nn.Linear(input_dim // 2, num_classes)
+
+    def forward(self, x):
+        x = F.relu(self.linear1(x))
+        x = self.linear2(x)
+        return x
+
+# class ThreeLayerMLP(torch.nn.Module):
+#     def __init__(self, input_dim):
+#         super(ThreeLayerMLP, self).__init__()
+#         self.linear1 = torch.nn.Linear(input_dim, input_dim // 2)
+#         self.linear2 = torch.nn.Linear(input_dim // 2, input_dim // 4)
+#         self.linear3 = torch.nn.Linear(input_dim // 4, 1)
+
+#     def forward(self, x):
+#         x = F.relu(self.linear1(x))
+#         x = F.relu(self.linear2(x))
+#         x = self.linear3(x)
+#         x = F.normalize(x, p=2, dim=1)
+#         return x
+
+
+def pca_learner(h5_file, model_name, only_goal_image = True, pca_var = 0.95, experiment_name = None):
 
     folder_path = "pca_models"
     if not os.path.exists(folder_path):
@@ -126,15 +165,18 @@ def pca_learner(h5_file, model_name, only_goal_image = True, pca_var = 0.95):
 
 
 
-    text_file_name = f"{folder_path}/{model_name}_text_pca_model_var" + str(pca_var)
-    image_file_name = f"{folder_path}/{model_name}_image_pca_model_var" + str(pca_var)
+    # text_file_name = f"{folder_path}/{model_name}_text_pca_model_var" + str(pca_var)
+    # image_file_name = f"{folder_path}/{model_name}_image_pca_model_var" + str(pca_var)
 
-    if only_goal_image:
-        text_file_name = text_file_name + "_goal"
-        image_file_name = image_file_name + "_goal"
+    # if only_goal_image:
+    #     text_file_name = text_file_name + "_goal"
+    #     image_file_name = image_file_name + "_goal"
 
-    text_file_name = text_file_name + ".pkl"
-    image_file_name = image_file_name + ".pkl"
+    # text_file_name = text_file_name + ".pkl"
+    # image_file_name = image_file_name + ".pkl"
+
+    text_file_name = f"{folder_path}/{experiment_name}_text.pkl"
+    image_file_name = f"{folder_path}/{experiment_name}_image.pkl"
 
 
     if os.path.exists(text_file_name) and os.path.exists(image_file_name):
@@ -181,6 +223,7 @@ def pca_learner(h5_file, model_name, only_goal_image = True, pca_var = 0.95):
         joblib.dump(image_pca_model, image_file_name)
 
     return text_pca_model, image_pca_model
+
 
 def compute_M(X_S, X_T):
     M = np.dot(X_S, X_T.T)  # 35 35
