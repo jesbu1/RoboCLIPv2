@@ -288,27 +288,6 @@ class IQL(OfflineRLAlgorithm):
                 next_vf_pred = self.v_net(replay_data.next_observations)
             vf_pred = self.v_net(replay_data.observations)
 
-            # Policy loss
-            if self.policy_extraction == "awr":
-                advantage = target_q_pred - vf_pred.detach()
-                weights = th.clamp(
-                    th.exp(advantage / self.advantage_temp), 0, self.clip_score
-                )
-                _, log_prob = self.actor.action_log_prob(replay_data.observations)
-                log_prob = log_prob.reshape(-1, 1)
-                policy_loss = -th.mean(weights * log_prob)
-            elif self.policy_extraction == "ddpg":
-                actions_pi, log_prob = self.actor.action_log_prob(
-                    replay_data.observations
-                )
-                q_values_pi = th.cat(
-                    self.critic(replay_data.observations, actions_pi), dim=1
-                )
-                min_qf_pi, _ = th.min(q_values_pi, dim=1, keepdim=True)
-
-                log_prob = log_prob.reshape(-1, 1)
-                policy_loss = -th.mean(min_qf_pi + self.ddpg_bc_weight * log_prob)
-
             # Q value loss
             target_q_values = (
                 replay_data.rewards
@@ -338,9 +317,6 @@ class IQL(OfflineRLAlgorithm):
             # log next v
             v_next_values.append(next_vf_pred.mean().item())
 
-            # log average in batch reward
-            reward_values.append(replay_data.rewards.mean().item())
-
             # log q and v losses
             q_losses.append(q_loss.item())
             v_losses.append(vf_loss.item())
@@ -354,6 +330,28 @@ class IQL(OfflineRLAlgorithm):
             self.v_net.optimizer.zero_grad()
             vf_loss.backward()
             self.v_net.optimizer.step()
+
+            # Policy loss
+            if self.policy_extraction == "awr":
+                advantage = target_q_pred - vf_pred.detach()
+                weights = th.clamp(
+                    th.exp(advantage / self.advantage_temp), 0, self.clip_score
+                )
+                _, log_prob = self.actor.action_log_prob(replay_data.observations)
+                log_prob = log_prob.reshape(-1, 1)
+                policy_loss = -th.mean(weights * log_prob)
+            elif self.policy_extraction == "ddpg":
+                actions_pi, log_prob = self.actor.action_log_prob(
+                    replay_data.observations
+                )
+                q_values_pi = th.cat(
+                    self.critic(replay_data.observations, actions_pi), dim=1
+                )
+                min_qf_pi, _ = th.min(q_values_pi, dim=1, keepdim=True)
+                policy_loss = -th.mean(min_qf_pi + self.ddpg_bc_weight * log_prob)
+
+            # log average in batch reward
+            reward_values.append(replay_data.rewards.mean().item())
 
             # Optimize the policy
             self.actor.optimizer.zero_grad()
