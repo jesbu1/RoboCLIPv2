@@ -68,6 +68,13 @@ from encoders.xclip_encoder import XCLIPEncoder
 
 from envs.metaworld_envs.metaworld import create_wrapped_env
 
+from stable_baselines3.sac.policies import (
+    Actor,
+    CnnPolicy,
+    MlpPolicy,
+    MultiInputPolicy,
+    SACPolicy,
+)
 
 def parse_entropy_term(value):
     try:
@@ -84,7 +91,86 @@ class OfflineEvalCallback(EvalCallback):
         # print(self.n_calls, self.n_calls % self.video_freq)
         result = super(OfflineEvalCallback, self)._on_step()
 
-        if self.video_freq > 0 and self.n_calls % self.video_freq == 0:
+
+        # Log policy gradients
+        policy_gradients = [
+            param.grad.view(-1).detach().cpu().numpy()  # Flatten each gradient tensor
+            for param in self.model.policy.actor.parameters()
+            if param.grad is not None
+        ]
+        if len(policy_gradients) != 0:
+
+            all_gradients = np.concatenate(policy_gradients)
+            wandb.log({"grad/policy_histogram": wandb.Histogram(all_gradients)}, step=self.n_calls)
+
+        # Log critic gradients
+        critic_gradients = [
+            param.grad.view(-1).detach().cpu().numpy()  # Flatten each gradient tensor
+            for param in self.model.policy.critic.parameters()
+            if param.grad is not None
+        ]
+        if len(critic_gradients) != 0:
+            all_gradients = np.concatenate(critic_gradients)
+            wandb.log({"grad/critic_histogram": wandb.Histogram(all_gradients)}, step=self.n_calls)
+
+        # Log critic_target gradients
+        critic_target_gradients = [
+            param.grad.view(-1).detach().cpu().numpy()  # Flatten each gradient tensor
+            for param in self.model.policy.critic_target.parameters()
+            if param.grad is not None
+        ]
+        if len(critic_target_gradients) != 0:
+            all_gradients = np.concatenate(critic_target_gradients)
+            wandb.log({"grad/critic_target_histogram": wandb.Histogram(all_gradients)}, step=self.n_calls)
+
+        # Log v_net gradients
+        v_net_gradients = [
+            param.grad.view(-1).detach().cpu().numpy()  # Flatten each gradient tensor
+            for param in self.model.v_net.parameters()
+            if param.grad is not None
+        ]
+        if len(v_net_gradients) != 0:
+            all_gradients = np.concatenate(v_net_gradients)
+            wandb.log({"grad/v_net_histogram": wandb.Histogram(all_gradients)}, step=self.n_calls)
+
+        # Log policy weights
+        actor_weights = [
+            param.data.view(-1).detach().cpu().numpy()  # Flatten each weight tensor
+            for param in self.model.policy.actor.parameters()
+        ]
+        if len(actor_weights) != 0:
+            all_weights = np.concatenate(actor_weights)
+            wandb.log({"weights/policy_histogram": wandb.Histogram(all_weights)}, step=self.n_calls)
+
+        # Log critic weights
+        critic_weights = [
+            param.data.view(-1).detach().cpu().numpy()  # Flatten each weight tensor
+            for param in self.model.policy.critic.parameters()
+        ]
+        if len(critic_weights) != 0:
+            all_weights = np.concatenate(critic_weights)
+            wandb.log({"weights/critic_histogram": wandb.Histogram(all_weights)}, step=self.n_calls)
+
+        # Log critic_target weights
+        critic_target_weights = [
+            param.data.view(-1).detach().cpu().numpy()  # Flatten each weight tensor
+            for param in self.model.policy.critic_target.parameters()
+        ]
+        if len(critic_target_weights) != 0:
+            all_weights = np.concatenate(critic_target_weights)
+            wandb.log({"weights/critic_target_histogram": wandb.Histogram(all_weights)}, step=self.n_calls)
+
+        # Log v_net weights
+        v_net_weights = [
+            param.data.view(-1).detach().cpu().numpy()  # Flatten each weight tensor
+            for param in self.model.v_net.parameters()
+        ]
+        if len(v_net_weights) != 0:
+            all_weights = np.concatenate(v_net_weights)
+            wandb.log({"weights/v_net_histogram": wandb.Histogram(all_weights)}, step=self.n_calls)
+
+        # breakpoint()
+        if (self.video_freq > 0 and self.n_calls % self.video_freq == 0) or self.n_calls == 1:
             video_buffer = self.record_video()
             # wandb.log({f"evaluation_video": wandb.Video(video_buffer, fps=20, format="mp4")}, commit=False)
             wandb.log({"eval/evaluation_video": wandb.Video(video_buffer, fps=20, format="mp4")}, step = self.n_calls)
@@ -108,7 +194,10 @@ class OfflineEvalCallback(EvalCallback):
             # downsample frame
             frame = frame[::3, ::3, :3]
             frames.append(frame)
-            action, _ = self.model.predict(obs, deterministic=self.deterministic)
+            action, _ = self.model.predict(obs, deterministic=False)
+            # action += np.random.normal(5, 0.1, size=action.shape)
+            action[0] += 5
+            # print(action)
             obs, _, _, info = self.eval_env.step(action)
             # print(type(info))
             # print(info)
@@ -365,9 +454,16 @@ def main():
 
     elif args.algo.lower() == 'iql':
         model_class = IQL
+        import stable_baselines3
+        action_noise = stable_baselines3.common.noise.OrnsteinUhlenbeckActionNoise(mean=np.ones(4)*5, sigma=1)
+        # action_noise = None
+        # policy = SACPolicy(observation_space=envs.observation_space, action_space=envs.action_space, net_arch=[32, 32], lr_schedule=None)
+        policy_kwargs = {
+            "net_arch": [32, 32],
+        }
         if not args.pretrained:
             model = model_class("MlpPolicy", envs, verbose=1, tensorboard_log=log_dir, 
-                        buffer_size=args.total_time_steps, learning_starts=4000, seed=args.seed)
+                        buffer_size=args.total_time_steps, learning_starts=4000, seed=args.seed, action_noise=action_noise, policy_kwargs=policy_kwargs)
         else:
             model = model_class.load(args.pretrained, env=envs, tensorboard_log=log_dir)
     elif args.algo.lower() == 'bc':
