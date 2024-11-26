@@ -21,7 +21,6 @@ from stable_baselines3.sac.policies import (
     SACPolicy,
 )
 
-
 class ValueCritic(BaseModel):
     """
     Single Value network (state conditioned) for IQL.
