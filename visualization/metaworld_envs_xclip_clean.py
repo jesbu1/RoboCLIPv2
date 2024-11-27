@@ -1,0 +1,952 @@
+import os
+import io
+import json
+from tqdm import tqdm
+import wandb
+import random
+import joblib
+import imageio
+import argparse
+import cv2
+import torch as th
+import numpy as np
+from gym import Env
+from gym.spaces import Box
+import torch.nn.functional as F
+from stable_baselines3 import SAC
+from wandb.integration.sb3 import WandbCallback
+from gym.wrappers.time_limit import TimeLimit
+from metaworld.envs import ALL_V2_ENVIRONMENTS_GOAL_OBSERVABLE, ALL_V2_ENVIRONMENTS_GOAL_HIDDEN
+
+from stable_baselines3.common.monitor import Monitor
+from stable_baselines3.common.vec_env import DummyVecEnv
+from stable_baselines3.common.callbacks import EvalCallback, CallbackList
+from stable_baselines3.common.vec_env.subproc_vec_env import SubprocVecEnv
+import matplotlib.pyplot as plt
+from eval_utils import eval_policys
+from encoders import xclip_encoder
+from video_language_critic.reward import RewardCalculator
+from PIL import Image
+from torchvision.transforms import Compose, Resize, CenterCrop, ToTensor, Normalize
+import pickle
+
+
+id_task = json.load(open("id_task.json", "r"))
+
+class SingleLayerMLP(th.nn.Module):
+    '''
+    A linear transformation layer. The output will norm to 1, if normalize is set to True.
+    '''
+    def __init__(self, input_dim, output_dim, normalize=True):
+        super(SingleLayerMLP, self).__init__()
+        self.linear = th.nn.Linear(input_dim, output_dim)
+        self.normalize = normalize
+
+    def forward(self, x):
+        x = self.linear(x)
+        if self.normalize:
+            x = F.normalize(x, p=2, dim=1)
+        return x
+
+def parse_entropy_term(value):
+    try:
+        return float(value)
+    except ValueError:
+        return value
+
+
+def normalize_embeddings(embeddings, return_tensor=True):
+    '''
+    Normalize the embeddings to have unit norm.
+    If return_tensor is set to True, return th.tensor, otherwise return np.ndarray.
+    '''
+    if isinstance(embeddings, np.ndarray):
+        embeddings = th.tensor(embeddings)
+    normalized_embeddings = F.normalize(embeddings, p=2, dim=1)
+    if return_tensor:
+        return normalized_embeddings
+    else:
+        return normalized_embeddings.detach().numpy()
+
+
+def get_args():
+    parser = argparse.ArgumentParser(description='RL')
+    parser.add_argument('--encoder', type=str, default='xclip')
+    parser.add_argument('--text_string', type=str, default='opening door')
+    parser.add_argument('--env_id', type=str, default='window-open-v2-goal-hidden')
+    parser.add_argument('--total_time_steps', type=int, default=1000000)
+    parser.add_argument('--n_envs', type=int, default=4)
+    parser.add_argument('--seed', type=int, default=42)
+    parser.add_argument('--eval_freq', type=int, default=5000)
+    parser.add_argument('--video_freq', type=int, default=10000)
+    parser.add_argument('--succ_end', action="store_true")
+    parser.add_argument('--pca', action="store_true")
+    parser.add_argument('--model_base_path', type=str, default=None)
+    parser.add_argument('--transform_model_path', type=str, default=None)
+    parser.add_argument('--random_reset', action="store_true")
+    parser.add_argument('--target_gif_path', type=str, default="/scr/jzhang96/metaworld_generate_gifs/")
+    parser.add_argument('--frame_num', type=int, default=32)
+    parser.add_argument('--time_reward', type=float, default=1.0)
+    parser.add_argument('--succ_bonus', type=float, default=0.0)
+    parser.add_argument('--xclip_model', type=str, default='microsoft/xclip-base-patch16-zero-shot')
+    parser.add_argument('--frame_length', type=int, default=32)
+    parser.add_argument("--exp_name_end", type=str, default=None)
+    parser.add_argument("--sparse_only", action="store_true")
+    parser.add_argument("--baseline", action="store_true")
+    parser.add_argument("--obs_env", action="store_true")
+    parser.add_argument("--ep_length", type=int, default=128)
+    parser.add_argument("--reward_normalization_offset", action="store_true")
+    parser.add_argument("--reward_normalization_gymnasium", action="store_true")
+
+    args = parser.parse_args()
+    return args
+
+
+def plot_progress(reward_calculator):
+    # device = next(transform_model.parameters()).device
+    # model, processor, tokenizer = load_model(model_name)
+    # if set == "train":
+    #     eval_envs = json.load(open("task_subset.json"))["subset_6"]
+    #     text = json.load(open("task_subset.json"))["train_annotation"]
+    # elif set == "eval":
+    #     eval_envs = json.load(open("task_subset.json"))["evaluate_tasks"]
+    #     text = json.load(open("task_subset.json"))["eval_annotation"]
+    # text_embeddings = embedding_text(model, tokenizer, text).to(device).float()
+    # text_embeddings = normalize_embeddings(text_embeddings)
+
+    # if text_pca_model is not None:
+    #     text_embeddings = text_pca_model.transform(text_embeddings.detach().cpu().numpy())
+    #     text_embeddings = th.tensor(text_embeddings).to(device).float()
+    eval_envs = ['push', 'stick-push', 'coffee-pull', 'button-press', 'button-press-topdown', 'drawer-open', 
+                 'door-unlock', 'faucet-open', 'window-close', 'sweep', 'door-open', 'handle-pull-side']
+    path = '/scr/yusenluo/video_language_critic/data/metaworld/mw50_roboclip'
+    with open(f'/scr/yusenluo/video_language_critic/data/metaworld/mw50_roboclip/raw-captions.pkl', 'rb') as f:
+        descriptions = pickle.load(f)
+    
+    for i in tqdm(range(len(eval_envs))):
+        env = eval_envs[i]
+        idx = random.randint(1, 26)
+        video_file_name = f"{env}-v2_{idx}.mp4"
+        task_desc = [v for k, v in descriptions.items() if f"{env}-v2_{idx}" in k][0][0]
+        task_desc = " ".join(task_desc)
+        print(task_desc)
+        reward_calculator.text_description = task_desc
+        video_file_path = os.path.join(path, video_file_name)
+        video_tensors = reward_calculator.load_video(video_file_path, accumulate_frames=True)
+        rewards = []
+        for video_tensor in video_tensors:
+            reward = reward_calculator.compute_vlm_reward(video_tensor)
+            rewards.append(reward)
+                
+        frame_index = range(1, len(rewards) + 1)
+
+        figure = plt.figure()
+        plt.plot(frame_index, rewards)
+        plt.xlabel("Frame Index")
+        plt.ylabel("Score")
+        plt.title(f"{env}")
+        #plt.ylim(-1, 1)
+        plt.savefig(f"progress_img/{env}_ours.png")
+        #wandb.log({f"progress_{set}/{env}": wandb.Image(figure)})
+        plt.close()
+
+
+class MetaworldSparse(Env):
+    '''
+    Training metaworld environments
+
+    '''
+    def __init__(self, args):
+        super(MetaworldSparse,self)
+        self.args = args
+        # if args.encoder == 'xclip':
+        #     self.encoder = xclip_encoder.XCLIPEncoder()
+        # else:
+        #     raise ValueError("Please provide a valid encoder")
+        if args.obs_env:
+            self.env_class = ALL_V2_ENVIRONMENTS_GOAL_OBSERVABLE[args.env_id]
+        else:
+            self.env_class = ALL_V2_ENVIRONMENTS_GOAL_HIDDEN[args.env_id]
+        self.rank = args.seed
+        self.baseEnv = self.env_class(seed=self.rank)
+        self.env = TimeLimit(self.baseEnv, max_episode_steps=args.ep_length)
+        self.env.action_space.seed(self.rank)
+        self.observation_space = self.env.observation_space
+        self.action_space = self.env.action_space
+        if args.pca:
+            pca_text_path = os.path.join(args.model_base_path, 'pca_model_text.pkl') 
+            pca_video_path = os.path.join(args.model_base_path, 'pca_model_video.pkl') 
+            pca_text_model = joblib.load(pca_text_path)
+            pca_video_model = joblib.load(pca_video_path)
+            self.pca_text_model = pca_text_model
+            self.pca_video_model = pca_video_model
+        self.past_observations = []
+        self.past_dense_reward = []
+        self.frame_length = args.frame_length
+
+        # if only use sparse reward, we don't need to load the VLM and compute the similarity reward
+        if not args.sparse_only:
+            with th.no_grad():
+                if not args.baseline: # baseline is RoboCLIPv1, only use the similarity from VLM output, not using VLM
+                    # load transform layer model
+                    if args.pca:
+                        pca_dim = pca_video_model.components_.shape[0]
+                        self.transform_model = SingleLayerMLP(pca_dim, pca_dim, normalize=True)
+                    else:
+                        self.transform_model = SingleLayerMLP(512, 512, normalize=True)
+                    transform_model_path = os.path.join(args.model_base_path, args.transform_model_path)
+                    dict = th.load(transform_model_path)
+                    if 'model_state_dict' in dict.keys():
+                        self.transform_model.load_state_dict(dict["model_state_dict"])
+                    else:
+                        self.transform_model.load_state_dict(dict)
+                    self.transform_model = self.transform_model.eval().cuda()
+                self.target_embedding = None
+
+                if args.text_string: 
+                    self.target_embedding = self.encoder.encode_text(args.text_string)
+                    if args.pca:
+                        self.target_embedding = th.from_numpy(self.pca_text_model.transform(self.target_embedding.cpu())).cuda()
+
+    def get_obs(self):
+        return self.baseEnv._get_obs(self.baseEnv.prev_time_step)
+    
+    def render(self):
+        frame = self.env.render()
+        return frame
+
+    def compute_similarity_reward(self, video_embedding):
+        video_embedding = normalize_embeddings(video_embedding, return_tensor=True).float() 
+        similarity_matrix = th.matmul(self.target_embedding, video_embedding.t())
+        reward = similarity_matrix.detach().cpu().numpy()[0][0]
+        if self.args.time_reward != 1.0:
+            reward = reward * self.args.time_reward
+        return reward
+
+
+    def step(self, action):
+        obs, dense_reward, done, info = self.env.step(action)
+        self.past_observations.append(self.env.render())
+        self.past_dense_reward.append(dense_reward)
+        
+        if self.args.succ_end:
+            if info['success']:
+                done = True
+
+        if done:
+            if self.args.sparse_only:
+                if info['success']:
+                    reward = 1.0 * self.args.time_reward
+                else:
+                    reward = 0.0
+                info['roboclip_reward'] = reward
+                info['dense_return'] = sum(self.past_dense_reward)
+                info['dense_reward'] = dense_reward
+                info['ep_length'] = len(self.past_dense_reward)
+                info["total_reward"] = reward
+
+            else:
+                with th.no_grad():
+                    video_embedding = self.encoder.encode_video(self.past_observations)
+                    if self.args.pca:
+                        video_embedding = th.from_numpy(self.pca_video_model.transform(video_embedding.cpu())).float().cuda()
+                    if not self.args.baseline:
+                        video_embedding = self.transform_model(video_embedding)
+                    reward = self.compute_similarity_reward(video_embedding)
+                    info['roboclip_reward'] = reward
+                    info['dense_return'] = sum(self.past_dense_reward)
+                    info['dense_reward'] = dense_reward
+                    info['ep_length'] = len(self.past_dense_reward)
+                    if self.args.succ_bonus > 0:
+                        if info['success']:
+                            reward += self.args.succ_bonus
+
+                    info["total_reward"] = reward
+
+            return obs, reward, done, info
+
+        info['roboclip_reward'] = 0.0
+        info['dense_return'] = 0.0
+        info['ep_length'] = 0.0
+        info['dense_reward'] = dense_reward
+        return obs, 0, done, info
+
+    def reset(self):
+        self.past_observations = []
+        self.past_dense_reward = []
+
+        if self.args.random_reset:
+            self.rank = random.randint(0, 400)
+            self.baseEnv = self.env_class(seed=self.rank)
+            self.env = TimeLimit(self.baseEnv, max_episode_steps=self.args.ep_length)
+            self.env.action_space.seed(self.rank)
+
+        return self.env.reset()
+
+
+class MetaworldDense(Env):
+    def __init__(self, args):
+        super(MetaworldDense, self)
+        if args.obs_env:
+            self.env_class = ALL_V2_ENVIRONMENTS_GOAL_OBSERVABLE[args.env_id]
+        else:
+            self.env_class = ALL_V2_ENVIRONMENTS_GOAL_HIDDEN[args.env_id]
+        self.args = args
+        self.rank = args.seed
+        self.baseEnv = self.env_class(seed=self.rank)
+        self.env = TimeLimit(self.baseEnv, max_episode_steps=args.ep_length)
+        self.observation_space = self.env.observation_space
+        self.action_space = self.env.action_space
+        self.past_observations = []
+
+    def get_obs(self):
+        return self.baseEnv._get_obs(self.baseEnv.prev_time_step)      
+    
+    def render(self, camera_name="topview"):
+        frame = self.env.render()
+        return frame
+
+    def step(self, action):
+        obs, _, done, info = self.env.step(action)
+        reward = 0.0 # original reward is always 0
+        if self.args.succ_end:
+            if info['success']:
+                done = True
+        if info["success"]:
+            reward += 1
+
+        return obs, reward, done, info
+        
+    def reset(self):
+        self.counter = 0
+
+        if self.args.random_reset:
+            self.rank = random.randint(400, 500)
+            self.baseEnv = self.env_class(seed=self.rank)
+            self.env = TimeLimit(self.baseEnv, max_episode_steps=self.args.ep_length)
+        return self.env.reset()
+    
+    def reset_seed(self, seed):
+        self.counter = 0
+
+        self.rank = seed
+        self.baseEnv = self.env_class(seed=self.rank) 
+        self.env = TimeLimit(self.baseEnv, max_episode_steps=args.ep_length)
+        #self.env.action_space.seed(self.rank)
+
+
+        return self.env.reset()
+
+
+def make_env(args, eval = False):
+    """
+    Utility function for multiprocessed env.
+
+    :param env_id: (str) the environment ID
+    :param num_env: (int) the number of environments you wish to have in subprocesses
+    :param seed: (int) the inital seed for RNG
+    :param rank: (int) index of the subprocess
+    """
+    def _init():
+        # env = KitchenMicrowaveHingeSlideV0()
+        if not eval:
+                env = MetaworldSparse(args)
+        else:
+            env = MetaworldDense(args)
+        env = Monitor(env, os.path.join(log_dir, str(args.seed)))
+        return env
+    return _init
+
+
+
+class CustomWandbCallback(WandbCallback):
+    # def _on_rollout_end(self):
+    #     # Log episode metrics with environment steps as x-axis
+    #     wandb.log({
+    #         'episode_reward': sum(self.locals['rewards']),  # Cumulative reward for the episode
+    #         'episode_length': len(self.locals['rewards'])   # Length of the episode
+    #     }, step=self.model.num_timesteps)
+            
+    def _on_step(self):
+        # Log training metrics
+        # print done
+        #if done and done is True, log the info
+
+        done_array = self.locals["dones"]
+        infos = self.locals["infos"]
+        
+        for i, done in enumerate(done_array):
+            if done:
+
+                succ = infos[i].get('success', 0)
+                roboclip_reward = infos[i].get('roboclip_reward', 0)
+                total_reward = infos[i].get('total_reward', 0)
+                dense_return = infos[i].get('dense_return', 0)
+                dense_reward = infos[i].get('dense_reward', 0)
+                ep_length = infos[i].get('ep_length', 0)
+                print("episode logged", self.num_timesteps)
+                wandb.log({"episode_info/episode_success": succ,
+                            "episode_info/roboclip_reward": roboclip_reward,
+                            "episode_info/RoboCLIP_bonus_reward": total_reward,
+                            "episode_info/dense_return": dense_return,
+                            "episode_info/dense_reward": dense_reward,
+                            "episode_info/ep_length": ep_length}, step = self.num_timesteps)
+                
+
+
+
+
+        return True
+
+
+
+class VideoRewardCalculator:
+    def __init__(self, vlc_model_path, text_description, max_frames=12):
+        # 加载 VLM 模型
+        self.vlc_args = self._load_vlc_args(vlc_model_path)
+        self.reward_model = RewardCalculator(args=self.vlc_args)
+        self.reward_model.model.eval()
+        self.reward_model.model.to('cuda:0')
+
+        # 准备文本描述
+        self.text_description = text_description
+        # pairs_text, pairs_mask, pairs_segment, _ = self.reward_model.dataloader._get_text(
+        #     video_id=0, caption=self.text_description
+        # )
+        # self.pairs_text = th.from_numpy(np.asarray(pairs_text)).to('cuda:0')
+        # self.pairs_mask = th.from_numpy(np.asarray(pairs_mask)).to('cuda:0')
+        # self.pairs_segment = th.from_numpy(np.asarray(pairs_segment)).to('cuda:0')
+
+        # 设置最大帧数
+        self.max_frames = max_frames
+        self.transform = self._transform(224)
+
+    def process_directory(self, base_dir, text_description):
+        """遍历 base_dir 下的所有 gif 文件，并对每个子目录计算平均奖励"""
+        for subdir in os.listdir(base_dir):
+            subdir_path = os.path.join(base_dir, subdir)
+            if os.path.isdir(subdir_path):
+                rewards = []
+                print(f"Processing sub-directory: {subdir_path}")
+
+                # 遍历子目录中的所有 gif 文件
+                for root, dirs, files in os.walk(subdir_path):
+                    gif_files = [f for f in files if f.endswith('.gif')]  # 只处理 .gif 文件
+                    for gif_file in gif_files:
+                        video_path = os.path.join(root, gif_file)
+                        print(f"Processing video: {video_path}")
+
+                        # 加载并处理视频
+                        video_tensor = self.load_video(video_path)
+                        reward = self.compute_vlm_reward(video_tensor)
+                        rewards.append(reward)
+
+                # 计算平均值
+                if rewards:
+                    avg_reward = np.mean(rewards)
+                    print(f"Average Reward for '{text_description}' in '{subdir_path}': {avg_reward}")
+                else:
+                    print(f"No GIF files found in '{subdir_path}'")
+
+    def _load_vlc_args(self, vlc_ckpt):
+        REWARD_CKPT_DIR = '/scr/yusenluo/video_language_critic/vlc_rl/vlc_ckpts'
+        init_model_path = os.path.join(REWARD_CKPT_DIR, vlc_ckpt)
+        vlc_args_path = os.path.join(init_model_path + '_config.pkl')
+        roboclip_pretrain_path = "/scr/yusenluo/video_language_critic/experiments/mw50_roboclip/pytorch_model.bin.20"
+        with open(vlc_args_path, 'rb') as f:
+            vlc_args = pickle.load(f)['args']
+        vlc_args.init_model = roboclip_pretrain_path #init_model_path
+        vlc_args.resume_from_latest = False
+        return vlc_args
+
+    def _transform(self, n_px):
+        return Compose(
+            [
+                Resize(n_px, interpolation=Image.Resampling.BICUBIC),
+                CenterCrop(n_px),
+                lambda image: image.convert("RGB"),
+                ToTensor(),
+                Normalize(
+                    (0.48145466, 0.4578275, 0.40821073),
+                    (0.26862954, 0.26130258, 0.27577711),
+                ),
+            ]
+        )
+
+    def load_video(self, video_path, accumulate_frames=False):
+        """读取视频文件，并返回视频帧的列表"""
+        frames = []
+        cap = cv2.VideoCapture(video_path)
+        while True:
+            ret, frame = cap.read()
+            if not ret:
+                break
+            # 将 BGR 转换为 RGB
+            frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+            #frame_rgb = frame_rgb[frame_rgb.shape[0] // 2 - 112: frame_rgb.shape[0] // 2 + 112, frame_rgb.shape[1] // 2 - 112: frame_rgb.shape[1] // 2 + 112, :]
+            # 转换为 PIL 图像，之后进行预处理
+            frame_image = Image.fromarray(frame_rgb)
+            frame_tensor = self.transform(frame_image)
+            frames.append(frame_tensor)
+        
+        cap.release()
+        # if video_path.endswith(".mp4"):
+        #     frames = frames[:-1]
+
+        if accumulate_frames:
+            accumulated_frame_sets = []
+            for i in range(self.max_frames, len(frames) + 1):  # 从前12帧到所有帧
+                subset_frames = frames[:i]
+                # 如果帧数超过最大帧数，均匀选择部分帧
+                if len(subset_frames) > self.max_frames:
+                    indices = np.linspace(0, len(subset_frames) - 1, self.max_frames, dtype=int)
+                    subset_frames = [subset_frames[i] for i in indices]
+                # 如果帧数不足，进行填充
+                elif len(subset_frames) < self.max_frames:
+                    num_padded = self.max_frames - len(subset_frames)
+                    subset_frames.extend([th.zeros_like(subset_frames[0]) for _ in range(num_padded)])
+                
+                accumulated_frame_sets.append(th.stack(subset_frames, dim=0))
+            
+            return accumulated_frame_sets
+
+        # 如果帧数超过最大帧数，均匀选择部分帧
+        if len(frames) > self.max_frames:
+            indices = np.linspace(0, len(frames) - 1, self.max_frames, dtype=int)
+            frames = [frames[i] for i in indices]
+        # 如果帧数不足，进行填充
+        elif len(frames) < self.max_frames:
+            num_padded = self.max_frames - len(frames)
+            frames.extend([th.zeros_like(frames[0]) for _ in range(num_padded)])
+
+        return th.stack(frames, dim=0)  # 返回帧的张量
+
+    def compute_vlm_reward(self, video_tensor):
+        """根据视频张量计算 VLM 奖励"""
+        pairs_text, pairs_mask, pairs_segment, _ = self.reward_model.dataloader._get_text(
+            video_id=0, caption=self.text_description
+        )
+        self.pairs_text = th.from_numpy(np.asarray(pairs_text)).to('cuda:0')
+        self.pairs_mask = th.from_numpy(np.asarray(pairs_mask)).to('cuda:0')
+        self.pairs_segment = th.from_numpy(np.asarray(pairs_segment)).to('cuda:0')
+
+        with th.no_grad():
+            num_frames = video_tensor.size(0)
+            batches = th.zeros((1, 1, self.max_frames, 1, 3, 224, 224)).to('cuda:0')
+
+            # 填充 batches
+            for i in range(num_frames):
+                batches[0, 0, i, 0] = video_tensor[i]
+
+            video_mask = th.ones((1, 1, self.max_frames)).to('cuda:0')
+
+            # 计算视频和文本的嵌入
+            a, b = self.reward_model.model.get_sequence_visual_output(
+                self.pairs_text, self.pairs_mask, self.pairs_segment, batches, video_mask
+            )
+
+            # 计算相似度得分
+            scores = self.reward_model.model.get_similarity_logits(
+                a, b, self.pairs_text, video_mask, loose_type=self.reward_model.model.loose_type
+            )[0]
+
+            if len(scores.shape) > 2:
+                video_lengths = th.argmax(th.logical_not(video_mask).int(), dim=2).squeeze(1) - 1
+                final_scores = scores[0, 0, video_lengths[0]]
+                reward = final_scores.cpu().numpy()
+            else:
+                reward = scores.cpu().numpy()[0]
+
+        print("VLM Reward:", reward)
+        return reward
+
+
+
+
+class CustomEvalCallback(EvalCallback):
+    def __init__(self, *args, video_freq, **kwargs):
+        super(CustomEvalCallback, self).__init__(*args, **kwargs)
+        self.video_freq = video_freq
+
+    def _on_step(self) -> bool:
+        result = super(CustomEvalCallback, self)._on_step()
+
+        if self.n_calls % self.video_freq == 0:
+            video_buffer = self.record_video()
+            # wandb.log({f"evaluation_video": wandb.Video(video_buffer, fps=20, format="mp4")}, commit=False)
+            wandb.log({f"eval/evaluation_video": wandb.Video(video_buffer, fps=20, format="mp4")}, step = self.num_timesteps)
+        
+        if self.n_calls % self.eval_freq == 0:
+            mean_reward = np.mean(self.evaluations_results[-1])
+            eval_episode_lengths = self.evaluations_length[-1]  # Get the episode lengths
+            mean_episode_length = np.mean(eval_episode_lengths) 
+            log_data = {
+                "eval/succ_rate": mean_reward,
+                "eval/mean_episode_length": mean_episode_length
+            }
+            # Log to wandb
+            wandb.log(log_data, step=self.num_timesteps)
+            if mean_reward > self.best_mean_reward:
+                self.best_mean_reward = mean_reward
+                self.model.save(f"{self.best_model_save_path}/best_model_{self.num_timesteps}_steps.zip")
+        return result
+
+
+
+    def record_video(self):
+        frames = []
+        obs = self.eval_env.reset()
+
+        for _ in range(500):  # You can adjust the number of steps for recording
+            frame = self.eval_env.render(mode='rgb_array')
+            # downsample frame
+            frame = frame[::3, ::3, :3]
+            frames.append(frame)
+            action, _ = self.model.predict(obs, deterministic=self.deterministic)
+            obs, _, _, info = self.eval_env.step(action)
+
+        video_buffer = io.BytesIO()
+
+        with imageio.get_writer(video_buffer, format='mp4', fps=20) as writer:
+            for frame in frames:
+                writer.append_data(frame)
+
+        video_buffer.seek(0)
+        return video_buffer
+
+
+class RunningMeanStd:
+    """跟踪值的均值、方差和计数。"""
+
+    # 参考：https://en.wikipedia.org/wiki/Algorithms_for_calculating_variance#Parallel_algorithm
+    def __init__(self, epsilon=1e-8, shape=()):
+        """初始化均值、方差和计数。"""
+        self.mean = np.zeros(shape, dtype=np.float32)
+        self.var = np.ones(shape, dtype=np.float32)
+        self.count = epsilon
+
+    def update(self, x):
+        """使用一批样本更新均值、方差和计数。"""
+        batch_mean = np.mean(x, axis=0)
+        batch_var = np.var(x, axis=0)
+        batch_count = x.shape[0]
+        self.update_from_moments(batch_mean, batch_var, batch_count)
+
+    def update_from_moments(self, batch_mean, batch_var, batch_count):
+        """使用批量的均值、方差和计数更新统计信息。"""
+        delta = batch_mean - self.mean
+        tot_count = self.count + batch_count
+
+        new_mean = self.mean + delta * batch_count / tot_count
+        m_a = self.var * self.count
+        m_b = batch_var * batch_count
+        M2 = m_a + m_b + delta ** 2 * self.count * batch_count / tot_count
+        new_var = M2 / tot_count
+        new_count = tot_count
+
+        self.mean = new_mean
+        self.var = new_var
+        self.count = new_count
+
+
+class MetaworldVLC(Env):
+    def __init__(self, args):
+        super(MetaworldVLC, self).__init__()
+        self.args = args
+        if args.obs_env:
+            self.env_cls = ALL_V2_ENVIRONMENTS_GOAL_OBSERVABLE[args.env_id]
+        else:
+            self.env_cls = ALL_V2_ENVIRONMENTS_GOAL_HIDDEN[args.env_id]
+        self.rank = args.seed
+        self.baseEnv = self.env_cls(seed=self.rank)
+        self.env = TimeLimit(self.baseEnv, max_episode_steps=128)
+        
+
+        self.gamma = args.gamma if hasattr(args, 'gamma') else 0.99
+        self.epsilon = 1e-8
+        self.return_rms = RunningMeanStd(shape=())
+        self.offset = None
+
+        self.observation_space = self.env.observation_space
+        self.action_space = self.env.action_space
+        self.env.action_space.seed(self.rank)
+
+        self.frame_length = args.frame_length
+        self.max_episode_steps = args.ep_length
+        self.counter = 0
+        self.frames = []
+        self.past_dense_reward = []  # **添加的部分：用于记录密集奖励**
+
+        # 初始化 VLM 奖励组件
+        self._initialize_vlm_reward_components()
+
+    def _initialize_vlm_reward_components(self):
+        # 加载 VLM 模型
+        self.vlc_args = self._load_vlc_args('ckpt_mw40_retrank33_tigt_negonly_a_rf_1__pytorch_model.bin.20')
+        self.reward_model = RewardCalculator(args=self.vlc_args)
+        # print("vlc args:")
+        # for key in sorted(self.vlc_args.__dict__):
+        #     print("  <<< {}: {}".format(key, self.vlc_args.__dict__[key]))
+        self.reward_model.model.eval()
+        self.reward_model.model.to('cuda:0')
+
+        # 准备文本描述
+        self.text_description = self.args.text_string  # 任务的文本描述
+        # 预处理文本
+        pairs_text, pairs_mask, pairs_segment, _ = self.reward_model.dataloader._get_text(
+            video_id=0, caption=self.text_description
+        )
+        self.pairs_text = th.from_numpy(np.asarray(pairs_text)).to('cuda:0')
+        self.pairs_mask = th.from_numpy(np.asarray(pairs_mask)).to('cuda:0')
+        self.pairs_segment = th.from_numpy(np.asarray(pairs_segment)).to('cuda:0')
+
+        self.max_frames = self.reward_model.dataloader.max_frames
+        self.transform = self._transform(224)
+
+    def _load_vlc_args(self, vlc_ckpt):
+        # 假设 REWARD_CKPT_DIR 已定义并可访问
+        REWARD_CKPT_DIR = '/scr/yusenluo/video_language_critic/vlc_rl/vlc_ckpts'
+        init_model_path = os.path.join(REWARD_CKPT_DIR, vlc_ckpt)
+        vlc_args_path = os.path.join(init_model_path + '_config.pkl')
+
+        roboclip_pretrain_path = "/scr/yusenluo/video_language_critic/experiments/mw50_training/pytorch_model.bin.20"
+        with open(vlc_args_path, 'rb') as f:
+            vlc_args = pickle.load(f)['args']
+        vlc_args.init_model = roboclip_pretrain_path #init_model_path
+        vlc_args.resume_from_latest = False
+        return vlc_args
+
+    def _transform(self, n_px):
+        return Compose(
+            [
+                Resize(n_px, interpolation=Image.Resampling.BICUBIC),
+                CenterCrop(n_px),
+                lambda image: image.convert("RGB"),
+                ToTensor(),
+                Normalize(
+                    (0.48145466, 0.4578275, 0.40821073),
+                    (0.26862954, 0.26130258, 0.27577711),
+                ),
+            ]
+        )
+
+    def get_obs(self):
+        return self.baseEnv._get_obs(self.baseEnv.prev_time_step)
+
+    def render(self):
+        frame = self.env.render()
+        return frame
+
+    def step(self, action):
+        obs, dense_reward, done, info = self.env.step(action)  # **修改：获取密集奖励 dense_reward**
+        # 收集帧
+        frame = self.env.render()
+        # 将帧转换为 PIL 图像
+        frame_image = Image.fromarray(frame)
+        # 进行图像转换
+        frame_tensor = self.transform(frame_image)
+        self.frames.append(frame_tensor)
+        self.past_dense_reward.append(dense_reward)  # **添加的部分：记录密集奖励**
+
+        self.counter += 1
+        t = self.counter / self.max_episode_steps
+
+        if self.args.succ_end and info.get('success', False):
+            done = True
+
+        if done:
+            # 计算 VLM 奖励
+            reward = self._compute_vlm_reward()
+            
+
+            # **添加的部分：更新 info 字典**
+            info['roboclip_reward'] = reward
+            info['dense_return'] = sum(self.past_dense_reward)
+            info['dense_reward'] = dense_reward
+            info['ep_length'] = len(self.past_dense_reward)
+
+            # 可选地，包含成功奖励或其他处理
+            if self.args.succ_bonus > 0 and info.get('success', False):
+                reward += self.args.succ_bonus
+            info["total_reward"] = reward
+
+            return obs, reward, done, info
+
+        # **添加的部分：在未完成时也更新 info**
+        info['roboclip_reward'] = 0.0
+        info['dense_return'] = 0.0
+        info['ep_length'] = 0.0
+        info['dense_reward'] = dense_reward
+
+        return obs, 0, done, info
+
+    def _compute_vlm_reward(self):
+        with th.no_grad():
+            video_frames = self.frames
+            # 准备批次
+            num_frames = len(video_frames)
+            batches = th.zeros((1, 1, self.max_frames, 1, 3, 224, 224)).to('cuda:0')
+
+            # 处理部分视频
+            if num_frames < self.max_frames:
+                # 用零填充
+                for i, frame_tensor in enumerate(video_frames):
+                    batches[0, 0, i, 0] = frame_tensor
+                num_padded = self.max_frames - num_frames
+                video_mask = th.tensor(
+                    [1] * num_frames + [0] * num_padded
+                ).unsqueeze(0).unsqueeze(0).to('cuda:0')
+            else:
+                # 均匀选择帧
+                selected_indices = np.linspace(0, num_frames - 1, self.max_frames, dtype=int)
+                for i, idx in enumerate(selected_indices):
+                    batches[0, 0, i, 0] = video_frames[idx]
+                video_mask = th.ones((1, 1, self.max_frames)).to('cuda:0')
+
+            # 计算嵌入
+            a, b = self.reward_model.model.get_sequence_visual_output(
+                self.pairs_text, self.pairs_mask, self.pairs_segment, batches, video_mask
+            )
+            # 计算相似度分数
+            scores = self.reward_model.model.get_similarity_logits(
+                a, b, self.pairs_text, video_mask, loose_type=self.reward_model.model.loose_type
+            )[0]
+
+            # 处理分数以获取奖励
+            if len(scores.shape) > 2:
+                video_lengths = th.argmax(
+                    th.logical_not(video_mask).int(), dim=2
+                ).squeeze(1) - 1
+                final_scores = scores[0, 0, video_lengths[0]]
+                reward = final_scores.cpu().numpy()
+            else:
+                reward = scores.cpu().numpy()[0]
+
+        # 加入奖励标准化逻辑
+        if self.args.reward_normalization_offset:
+            if self.offset is None:
+                self.offset = reward  # 第一次设置偏移量
+            reward -= self.offset  # 奖励减去偏移量
+
+        if self.args.reward_normalization_gymnasium:
+            returns = reward  # 因为只有一个奖励值
+            self.return_rms.update(np.array([returns]))
+            reward = reward / np.sqrt(self.return_rms.var + self.epsilon)
+
+        print("VLM Reward after normalization:", reward)
+        return reward
+
+    def reset(self):
+        self.counter = 0
+        self.frames = []
+        self.past_dense_reward = []  # **添加的部分：重置密集奖励记录**
+
+        if self.args.random_reset:
+            self.rank = random.randint(0, 400)
+            print('Training Parallel seeds: ', self.rank)
+            self.baseEnv = self.env_cls(seed=self.rank)
+            self.env = TimeLimit(self.baseEnv, max_episode_steps=128)
+            self.env.action_space.seed(self.rank)
+
+
+        return self.env.reset()
+        #return np.concatenate([self.env.reset(), np.array([0.0])])
+
+    def reset_seed(self, seed):
+        self.counter = 0
+        self.frames = []
+        self.past_dense_reward = []
+
+        self.rank = seed
+        self.baseEnv = self.env_cls(seed=self.rank) 
+        self.env = TimeLimit(self.baseEnv, max_episode_steps=128)
+        self.env.action_space.seed(self.rank)
+
+
+        return self.env.reset()
+        #return np.concatenate([self.env.reset(), np.array([0.0])])
+
+
+def main():
+    global args
+    global log_dir
+    args = get_args()
+
+    # set seed
+    th.manual_seed(args.seed)
+    np.random.seed(args.seed)
+    random.seed(args.seed)
+    
+
+    WANDB_ENTITY_NAME = "clvr"
+    WANDB_PROJECT_NAME = "roboclip-v2"
+    if args.pca:
+        experiment_name = "ep" + str(args.ep_length) + "_PCA_" + "xclip_textTRANS_" + args.env_id
+    else:
+        experiment_name = "ep" + str(args.ep_length) + "_NOPCA_" +"xclip_textTRANS_" + args.env_id
+
+    if args.succ_end:
+        experiment_name = experiment_name + "_SuccEnd"
+
+    experiment_name = experiment_name + args.exp_name_end
+    run_group = experiment_name + "NEWDEBUG"
+    experiment_name = experiment_name + "_" + str(args.seed) + "NEW"
+
+    run = wandb.init(
+        entity=WANDB_ENTITY_NAME,
+        project=WANDB_PROJECT_NAME,
+        group=run_group,
+        config=args,
+        name=experiment_name,
+        monitor_gym=True,
+        sync_tensorboard=False,
+    )
+
+
+    column1 = ["text_string"]
+    table1 = wandb.Table(columns=column1)
+    table1.add_data([args.text_string])  
+
+    column2 = ["env_id"]
+    table2 = wandb.Table(columns=column2)
+    table2.add_data([args.env_id])  
+    wandb.log({"text_string": table1, "env_id": table2})
+
+
+    log_dir = f"/scr/yusenluo/RoboCLIP/visualization/xclip_text_transform_logs/{experiment_name}"
+    # log_dir = f"/home/jzhang96/logs/baseline_logs/{experiment_name}"
+
+    if not os.path.exists(log_dir):
+        os.makedirs(log_dir)
+    if args.n_envs > 1:
+        envs = SubprocVecEnv([make_env(args, eval = False) for i in range(args.n_envs)])
+    else:
+        envs = DummyVecEnv([make_env(args, eval = False)])
+
+    if args.n_envs > 1:
+        eval_env = SubprocVecEnv([make_env(args, eval = True) for i in range(args.n_envs)])
+    else:
+        eval_env = DummyVecEnv([make_env(args, eval = True)]) 
+
+    model = SAC("MlpPolicy", envs, verbose=1, tensorboard_log=log_dir, gradient_steps = args.n_envs,
+                ent_coef="auto", buffer_size=args.total_time_steps, learning_starts=1000, seed=args.seed)
+
+    eval_callback = CustomEvalCallback(eval_env, best_model_save_path=log_dir, 
+                                    log_path=log_dir, eval_freq=args.eval_freq//args.n_envs, video_freq=args.video_freq//args.n_envs,
+                                    deterministic=True, render=False, n_eval_episodes = 25)
+     
+    customwandbcallback = CustomWandbCallback()
+    callback = CallbackList([eval_callback, customwandbcallback])
+    model.learn(total_timesteps=int(args.total_time_steps), callback=callback)
+    model.save(f"{log_dir}/{experiment_name}")
+
+    # Evaluate the agent
+    # load the best model
+
+    model = SAC.load(f"{log_dir}/best_model")
+    success_rate = eval_policys(args, MetaworldDense, model)
+    wandb.log({"eval_SR/evaluate_succ": success_rate}, step = 0)
+
+
+if __name__ == '__main__':
+    main()
