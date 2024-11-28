@@ -24,7 +24,7 @@ from stable_baselines3.common.callbacks import EvalCallback, CallbackList
 from stable_baselines3.common.vec_env.subproc_vec_env import SubprocVecEnv
 import matplotlib.pyplot as plt
 from eval_utils import eval_policys
-from video_language_critic.reward import RewardCalculator
+import torchvision.transforms as T
 from PIL import Image
 from self_attention_utils import MultiHeadAttentionSubtraction 
 from clip_utils import load_model, embedding_text, embedding_image
@@ -32,6 +32,7 @@ import pickle
 
 
 id_task = json.load(open("id_task.json", "r"))
+transform = T.Compose([T.ToTensor()])
 
 class SingleLayerMLP(th.nn.Module):
     '''
@@ -178,8 +179,8 @@ class MetaworldSparseAtt(Env):
         self.observation_space = self.env.observation_space
         self.action_space = self.env.action_space
         if args.pca:
-            pca_text_path = os.path.join(args.model_base_path, 'pca_model_text.pkl') 
-            pca_video_path = os.path.join(args.model_base_path, 'pca_model_video.pkl') 
+            pca_text_path = os.path.join(args.model_base_path, 'pca_text.pkl') 
+            pca_video_path = os.path.join(args.model_base_path, 'pca_video.pkl') 
             pca_text_model = joblib.load(pca_text_path)
             pca_video_model = joblib.load(pca_video_path)
             self.pca_text_model = pca_text_model
@@ -253,21 +254,30 @@ class MetaworldSparseAtt(Env):
             else:
                 with th.no_grad():
                     #video_embedding = self.encoder.encode_video(self.past_observations)
-                    frames = [frame[:,:,:3] for frame in self.past_observations]
+                    frames = [
+                        frame[   # 原帧
+                            (frame.shape[0] - 224) // 2 : (frame.shape[0] + 224) // 2,  # 高度裁剪
+                            (frame.shape[1] - 224) // 2 : (frame.shape[1] + 224) // 2,  # 宽度裁剪
+                            :3  # 只保留前 3 个通道（如果是 RGBA 图像，则去掉 A 通道）
+                        ]
+                        for frame in self.past_observations
+                    ]
                     #print("frames shape", frames[0].shape)
-                    video_embeddings = []
-                    for frame in frames:
-                        image_embeddings = embedding_image(self.model, self.processor, Image.fromarray(frame.astype(np.uint8))).squeeze(0)
-                        video_embeddings.append(image_embeddings.detach().cpu().numpy())
-                    video_embeddings = th.tensor(np.array(video_embeddings)).cuda().float()
+                    frames_tensor = th.stack([transform(Image.fromarray(frame.astype(np.uint8))) for frame in frames])
+                    video_embeddings = embedding_image(self.model, self.processor, frames_tensor)
 
                     if self.args.pca:
+                        video_embeddings = video_embeddings.detach().cpu().numpy()
                         video_embeddings = th.from_numpy(self.pca_video_model.transform(video_embeddings.cpu())).float().cuda()
-                    video_embeddings = video_embeddings.view(1, -1, video_embeddings.shape[-1])
+
+                    video_embeddings = (video_embeddings.view(1, -1, video_embeddings.shape[-1])).float()
 
                     # if not self.args.baseline:
                     #     video_embedding = self.transform_model(video_embedding)
+
                     reward = (self.transform_model(video_embeddings, None, self.target_embedding)).item()
+                    #reward = 0 
+
                     if self.args.time_reward != 1.0:
                         reward = reward * self.args.time_reward
                     info['roboclip_reward'] = reward
@@ -452,7 +462,7 @@ class CustomEvalCallback(EvalCallback):
         frames = []
         obs = self.eval_env.reset()
 
-        for _ in range(500):  # You can adjust the number of steps for recording
+        for _ in range(128):  # You can adjust the number of steps for recording
             frame = self.eval_env.render(mode='rgb_array')
             # downsample frame
             frame = frame[::3, ::3, :3]
