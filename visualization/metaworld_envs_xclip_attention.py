@@ -34,20 +34,70 @@ import pickle
 id_task = json.load(open("id_task.json", "r"))
 transform = T.Compose([T.ToTensor()])
 
-class SingleLayerMLP(th.nn.Module):
-    '''
-    A linear transformation layer. The output will norm to 1, if normalize is set to True.
-    '''
-    def __init__(self, input_dim, output_dim, normalize=True):
-        super(SingleLayerMLP, self).__init__()
-        self.linear = th.nn.Linear(input_dim, output_dim)
-        self.normalize = normalize
+class RunningMeanStd:
+    """跟踪值的均值、方差和计数。"""
 
-    def forward(self, x):
-        x = self.linear(x)
-        if self.normalize:
-            x = F.normalize(x, p=2, dim=1)
-        return x
+    # 参考：https://en.wikipedia.org/wiki/Algorithms_for_calculating_variance#Parallel_algorithm
+    def __init__(self, epsilon=1e-8, shape=()):
+        """初始化均值、方差和计数。"""
+        self.mean = np.zeros(shape, dtype=np.float32)
+        self.var = np.ones(shape, dtype=np.float32)
+        self.count = epsilon
+
+    def update(self, x):
+        """使用一批样本更新均值、方差和计数。"""
+        batch_mean = np.mean(x, axis=0)
+        batch_var = np.var(x, axis=0)
+        batch_count = x.shape[0]
+        self.update_from_moments(batch_mean, batch_var, batch_count)
+
+    def update_from_moments(self, batch_mean, batch_var, batch_count):
+        """使用批量的均值、方差和计数更新统计信息。"""
+        delta = batch_mean - self.mean
+        tot_count = self.count + batch_count
+
+        new_mean = self.mean + delta * batch_count / tot_count
+        m_a = self.var * self.count
+        m_b = batch_var * batch_count
+        M2 = m_a + m_b + delta ** 2 * self.count * batch_count / tot_count
+        new_var = M2 / tot_count
+        new_count = tot_count
+
+        self.mean = new_mean
+        self.var = new_var
+        self.count = new_count
+
+def save_video(frames, output_path, fps=30):
+    """
+    将帧列表保存为视频文件。
+
+    参数:
+    - frames: 裁剪后的帧列表，形状为 [N, H, W, 3]。
+    - output_path: 输出视频的保存路径。
+    - fps: 视频帧率，默认为 30。
+    """
+    if len(frames) == 0:
+        print("没有帧可保存！")
+        return
+
+    # 获取帧的宽度和高度
+    height, width, _ = frames[0].shape
+
+    # 定义视频编解码器和输出格式
+    fourcc = cv2.VideoWriter_fourcc(*'mp4v')  # 使用 MP4 编码
+    video_writer = cv2.VideoWriter(output_path, fourcc, fps, (width, height))
+
+    # 将每帧写入视频
+    for frame in frames:
+        # 确保帧的类型为 uint8
+        frame_bgr = cv2.cvtColor(frame, cv2.COLOR_RGB2BGR)
+        # 确保帧的类型为 uint8
+        frame_bgr = frame_bgr.astype(np.uint8)
+        video_writer.write(frame_bgr)
+
+    # 释放资源
+    video_writer.release()
+    print(f"视频保存完成: {output_path}")
 
 def parse_entropy_term(value):
     try:
@@ -172,6 +222,7 @@ class MetaworldSparseAtt(Env):
             self.env_class = ALL_V2_ENVIRONMENTS_GOAL_OBSERVABLE[args.env_id]
         else:
             self.env_class = ALL_V2_ENVIRONMENTS_GOAL_HIDDEN[args.env_id]
+        os.makedirs(f"debug_video/{args.env_id}/{args.seed}", exist_ok=True)
         self.rank = args.seed
         self.baseEnv = self.env_class(seed=self.rank)
         self.env = TimeLimit(self.baseEnv, max_episode_steps=args.ep_length)
@@ -189,6 +240,12 @@ class MetaworldSparseAtt(Env):
         self.past_dense_reward = []
         self.frame_length = args.frame_length
 
+        self.gamma = args.gamma if hasattr(args, 'gamma') else 0.99
+        self.epsilon = 1e-8
+        self.return_rms = RunningMeanStd(shape=())
+        self.offset = None
+
+        self.ep_count = 0
         # if only use sparse reward, we don't need to load the VLM and compute the similarity reward
         if not args.sparse_only:
             with th.no_grad():
@@ -212,7 +269,7 @@ class MetaworldSparseAtt(Env):
                     #self.target_embedding = self.encoder.encode_text(args.text_string)
                     self.target_embedding = embedding_text(self.model, self.tokenizer, args.text_string)
                     if args.pca:
-                        self.target_embedding = th.from_numpy(self.pca_text_model.transform(self.target_embedding.cpu())).cuda()
+                        self.target_embedding = th.from_numpy(self.pca_text_model.transform(self.target_embedding.cpu())).cuda().float()
 
     def get_obs(self):
         return self.baseEnv._get_obs(self.baseEnv.prev_time_step)
@@ -240,6 +297,7 @@ class MetaworldSparseAtt(Env):
                 done = True
 
         if done:
+            self.ep_count += 1
             if self.args.sparse_only:
                 if info['success']:
                     reward = 1.0 * self.args.time_reward
@@ -268,7 +326,7 @@ class MetaworldSparseAtt(Env):
 
                     if self.args.pca:
                         video_embeddings = video_embeddings.detach().cpu().numpy()
-                        video_embeddings = th.from_numpy(self.pca_video_model.transform(video_embeddings.cpu())).float().cuda()
+                        video_embeddings = th.from_numpy(self.pca_video_model.transform(video_embeddings)).float().cuda()
 
                     video_embeddings = (video_embeddings.view(1, -1, video_embeddings.shape[-1])).float()
 
@@ -276,23 +334,53 @@ class MetaworldSparseAtt(Env):
                     #     video_embedding = self.transform_model(video_embedding)
 
                     reward = (self.transform_model(video_embeddings, None, self.target_embedding)).item()
-                    #reward = 0 
-
                     if self.args.time_reward != 1.0:
                         reward = reward * self.args.time_reward
+                    og_reward = reward
+                    #reward = 0
+
+                    # if og_reward > 85:
+                    #     output_video_path = f"debug_video/{args.env_id}/output_video_{reward}.mp4"  # 设置输出视频文件名
+                    #     save_video(frames, output_video_path)
+
+                    if self.args.reward_normalization_offset:
+                        if self.offset is None:
+                            self.offset = reward  # 第一次设置偏移量
+                        reward -= self.offset  # 奖励减去偏移量
+
+                    if self.args.reward_normalization_gymnasium:
+                        returns = reward  # 因为只有一个奖励值
+                        self.return_rms.update(np.array([returns]))
+                        reward = reward / np.sqrt(self.return_rms.var + self.epsilon)
+
+                    
                     info['roboclip_reward'] = reward
+                    info['og_reward'] = og_reward
                     info['dense_return'] = sum(self.past_dense_reward)
                     info['dense_reward'] = dense_reward
                     info['ep_length'] = len(self.past_dense_reward)
                     if self.args.succ_bonus > 0:
                         if info['success']:
                             reward += self.args.succ_bonus
-
+                            if args.pca:
+                                output_video_path = f"debug_video/{args.env_id}/{args.seed}/output_video_ep_{self.ep_count}_{og_reward}_{reward}_pca.mp4"  # 设置输出视频文件名
+                            else:
+                                output_video_path = f"debug_video/{args.env_id}/{args.seed}/output_video_ep_{self.ep_count}_{og_reward}_{reward}.mp4"
+                            save_video(frames, output_video_path)
+                        else:
+                            if self.ep_count % 120 == 0:
+                                if args.pca:
+                                    output_video_path = f"debug_video/{args.env_id}/{args.seed}/output_video_unsuccessful_ep_{self.ep_count}_{og_reward}_{reward}_pca.mp4"
+                                else:
+                                    output_video_path = f"debug_video/{args.env_id}/{args.seed}/output_video_unsuccessful_ep_{self.ep_count}_{og_reward}_{reward}.mp4"
+                                save_video(frames, output_video_path)
+                        
                     info["total_reward"] = reward
 
             return obs, reward, done, info
 
         info['roboclip_reward'] = 0.0
+        info['og_reward'] = 0.0
         info['dense_return'] = 0.0
         info['ep_length'] = 0.0
         info['dense_reward'] = dense_reward
@@ -407,6 +495,7 @@ class CustomWandbCallback(WandbCallback):
 
                 succ = infos[i].get('success', 0)
                 roboclip_reward = infos[i].get('roboclip_reward', 0)
+                wdb_og_reward = infos[i].get('og_reward', 0)
                 total_reward = infos[i].get('total_reward', 0)
                 dense_return = infos[i].get('dense_return', 0)
                 dense_reward = infos[i].get('dense_reward', 0)
@@ -414,6 +503,7 @@ class CustomWandbCallback(WandbCallback):
                 print("episode logged", self.num_timesteps)
                 wandb.log({"episode_info/episode_success": succ,
                             "episode_info/roboclip_reward": roboclip_reward,
+                            "episode_info/og_reward": wdb_og_reward,
                             "episode_info/RoboCLIP_bonus_reward": total_reward,
                             "episode_info/dense_return": dense_return,
                             "episode_info/dense_reward": dense_reward,
@@ -537,6 +627,9 @@ def main():
         experiment_name = "ep" + str(args.ep_length) + "_PCA_" + "xclip_textTRANS_" + args.env_id
     else:
         experiment_name = "ep" + str(args.ep_length) + "_NOPCA_" +"xclip_textTRANS_" + args.env_id
+
+    if args.reward_normalization_offset:
+        experiment_name = experiment_name + "_norm_offset"
 
     if args.succ_end:
         experiment_name = experiment_name + "_SuccEnd"
