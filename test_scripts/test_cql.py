@@ -428,6 +428,15 @@ def main():
     else:
         envs = DummyVecEnv([create_wrapped_env(args.env_id,  language_features=lang_feat, success_bonus=args.succ_bonus, use_simulator_reward=True)])
 
+    # We don't need as large of a network there is no language
+    if ignore_language:
+        policy_kwargs = {
+            "net_arch": [32, 32],
+        }
+    else:
+        policy_kwargs = None
+
+
     if args.algo.lower() == 'ppo':
         model_class = PPO
         if not args.pretrained:
@@ -458,9 +467,6 @@ def main():
         action_noise = stable_baselines3.common.noise.OrnsteinUhlenbeckActionNoise(mean=np.ones(4)*5, sigma=1)
         # action_noise = None
         # policy = SACPolicy(observation_space=envs.observation_space, action_space=envs.action_space, net_arch=[32, 32], lr_schedule=None)
-        policy_kwargs = {
-            "net_arch": [32, 32],
-        }
         if not args.pretrained:
             model = model_class("MlpPolicy", envs, verbose=1, tensorboard_log=log_dir, 
                         buffer_size=args.total_time_steps, learning_starts=4000, seed=args.seed, action_noise=action_noise, policy_kwargs=policy_kwargs)
