@@ -68,34 +68,20 @@ class RunningMeanStd:
         self.count = new_count
 
 def save_video(frames, output_path, fps=30):
-    """
-    将帧列表保存为视频文件。
-
-    参数:
-    - frames: 裁剪后的帧列表，形状为 [N, H, W, 3]。
-    - output_path: 输出视频的保存路径。
-    - fps: 视频帧率，默认为 30。
-    """
     if len(frames) == 0:
-        print("没有帧可保存！")
+        print("Frames list is empty, no video will be saved.")
         return
 
-    # 获取帧的宽度和高度
     height, width, _ = frames[0].shape
 
-    # 定义视频编解码器和输出格式
-    fourcc = cv2.VideoWriter_fourcc(*'mp4v')  # 使用 MP4 编码
+    fourcc = cv2.VideoWriter_fourcc(*'mp4v')
     video_writer = cv2.VideoWriter(output_path, fourcc, fps, (width, height))
 
-    # 将每帧写入视频
     for frame in frames:
-        # 确保帧的类型为 uint8
         frame_bgr = cv2.cvtColor(frame, cv2.COLOR_RGB2BGR)
-        # 确保帧的类型为 uint8
         frame_bgr = frame_bgr.astype(np.uint8)
         video_writer.write(frame_bgr)
 
-    # 释放资源
     video_writer.release()
     print(f"视频保存完成: {output_path}")
 
@@ -303,7 +289,7 @@ class MetaworldSparseAtt(Env):
                     reward = 1.0 * self.args.time_reward
                 else:
                     reward = 0.0
-                info['roboclip_reward'] = reward
+                info['roboclip_reward'] = 0.0
                 info['dense_return'] = sum(self.past_dense_reward)
                 info['dense_reward'] = dense_reward
                 info['ep_length'] = len(self.past_dense_reward)
@@ -313,10 +299,10 @@ class MetaworldSparseAtt(Env):
                 with th.no_grad():
                     #video_embedding = self.encoder.encode_video(self.past_observations)
                     frames = [
-                        frame[   # 原帧
-                            (frame.shape[0] - 224) // 2 : (frame.shape[0] + 224) // 2,  # 高度裁剪
-                            (frame.shape[1] - 224) // 2 : (frame.shape[1] + 224) // 2,  # 宽度裁剪
-                            :3  # 只保留前 3 个通道（如果是 RGBA 图像，则去掉 A 通道）
+                        frame[ 
+                            (frame.shape[0] - 224) // 2 : (frame.shape[0] + 224) // 2,
+                            (frame.shape[1] - 224) // 2 : (frame.shape[1] + 224) // 2,
+                            :3 
                         ]
                         for frame in self.past_observations
                     ]
@@ -334,22 +320,22 @@ class MetaworldSparseAtt(Env):
                     #     video_embedding = self.transform_model(video_embedding)
 
                     reward = (self.transform_model(video_embeddings, None, self.target_embedding)).item()
-                    if self.args.time_reward != 1.0:
-                        reward = reward * self.args.time_reward
                     og_reward = reward
+                    if self.args.time_reward != 1.0:
+                        reward = reward * self.args.time_reward      
                     #reward = 0
 
                     # if og_reward > 85:
-                    #     output_video_path = f"debug_video/{args.env_id}/output_video_{reward}.mp4"  # 设置输出视频文件名
+                    #     output_video_path = f"debug_video/{args.env_id}/output_video_{reward}.mp4"
                     #     save_video(frames, output_video_path)
 
                     if self.args.reward_normalization_offset:
                         if self.offset is None:
-                            self.offset = reward  # 第一次设置偏移量
-                        reward -= self.offset  # 奖励减去偏移量
+                            self.offset = reward
+                        reward -= self.offset
 
                     if self.args.reward_normalization_gymnasium:
-                        returns = reward  # 因为只有一个奖励值
+                        returns = reward
                         self.return_rms.update(np.array([returns]))
                         reward = reward / np.sqrt(self.return_rms.var + self.epsilon)
 
@@ -368,7 +354,7 @@ class MetaworldSparseAtt(Env):
                                 output_video_path = f"debug_video/{args.env_id}/{args.seed}/output_video_ep_{self.ep_count}_{og_reward}_{reward}.mp4"
                             save_video(frames, output_video_path)
                         else:
-                            if self.ep_count % 120 == 0:
+                            if self.ep_count % 100 == 0:
                                 if args.pca:
                                     output_video_path = f"debug_video/{args.env_id}/{args.seed}/output_video_unsuccessful_ep_{self.ep_count}_{og_reward}_{reward}_pca.mp4"
                                 else:
