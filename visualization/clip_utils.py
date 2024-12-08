@@ -56,15 +56,15 @@ def embedding_text(model, tokenizer, text):
 
 def embedding_image(model, processor, image):
     device = "cuda" if torch.cuda.is_available() else "cpu"
-    if type(image) != Image.Image:
-        image = Image.fromarray(image.astype(np.uint8))
+    # if type(image) != Image.Image:
+    #     image = Image.fromarray(image.astype(np.uint8))
     if processor is not None:
         inputs = processor(images=image, return_tensors="pt", padding=True).to(device)
         with torch.no_grad():
             image_embeddings = model.get_image_features(**inputs)
         image_embeddings = image_embeddings / image_embeddings.norm(dim=-1, keepdim=True)
     else:
-        image = T.ToTensor()(image).unsqueeze(0).to(device)
+        #image = T.ToTensor()(image).unsqueeze(0).to(device)
         with torch.no_grad():
             image_embeddings = model(input=image, modality="vision")
     return image_embeddings
