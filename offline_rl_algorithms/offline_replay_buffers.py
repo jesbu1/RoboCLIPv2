@@ -75,7 +75,7 @@ class H5ReplayBuffer(ReplayBuffer):
         :param use_language_embeddings: Whether to specifically incorporate language embeddings into the observations
         :param calculate_mc_returns: Whether to calculate the Monte-Carlo returns
         :param mc_return_gamma: The discount factor for the Monte-Carlo returns
-        :param clip_actions: Whether to clip the actions to the action space to [0, 1]
+        :param clip_actions: Whether to clip the actions to the action space to [-1, 1]
         """
         with h5py.File(h5_path, "r") as f:
             observations = f["state"][()]
@@ -83,7 +83,7 @@ class H5ReplayBuffer(ReplayBuffer):
             next_observations = observations
             actions = f["action"][()]
             if clip_actions:
-                actions = np.clip(actions, 0, 1)
+                actions = np.clip(actions, -1, 1)
             rewards = f["rewards"][()]
             # rewards = f["done"][()]
             dones = f["done"][()]
