@@ -20,6 +20,8 @@ from stable_baselines3.sac.policies import (
     SACPolicy,
 )
 
+from offline_rl_algorithms.offline_replay_buffers import CombinedBuffer
+
 
 class OfflineRLAlgorithm(OffPolicyAlgorithm):
     """
@@ -70,9 +72,8 @@ class OfflineRLAlgorithm(OffPolicyAlgorithm):
     :param device: Device (cpu, cuda, ...) on which the code should be run.
         Setting it to auto, the code will be run on the GPU if possible.
     :param _init_setup_model: Whether or not to build the network at the creation of the instance
-    :param min_q_weight: Weight for the min_q loss for CQL
-    :param min_q_temp: Temperature parameter for the min_q loss for CQL
-    :param use_calibrated_q: Whether to use calibrated Q for CQL (Cal-QL algorithm)
+    :param support_multi_env: Whether to support training with multiple environments
+    :param mix_offline_online_buffers: If true, the online replay buffer used during `learn` will be a combination of the offline (from `learn_offline`) and online buffers.
     """
 
     policy_aliases: ClassVar[Dict[str, Type[BasePolicy]]] = {
@@ -116,6 +117,7 @@ class OfflineRLAlgorithm(OffPolicyAlgorithm):
         _init_setup_model: bool = True,
         supported_action_spaces: Optional[Tuple[spaces.Space]] = (spaces.Box,),
         support_multi_env: bool = True,
+        mix_offline_online_buffers: bool = False,
     ):
         super().__init__(
             policy,
@@ -155,6 +157,8 @@ class OfflineRLAlgorithm(OffPolicyAlgorithm):
         
         self.offline_num_timesteps = 0
 
+        self.mix_offline_online_buffers = mix_offline_online_buffers
+
         if _init_setup_model:
             self._setup_model()
 
@@ -192,7 +196,6 @@ class OfflineRLAlgorithm(OffPolicyAlgorithm):
         self.replay_buffer = offline_replay_buffer
 
         print('learning offline')
-        # divide train_steps by 100 and call train 100 times
         for _ in range(train_steps):
             metrics = self.train(1, batch_size=batch_size, logging_prefix="offline_")
             # rollout_metrics = 
@@ -204,8 +207,12 @@ class OfflineRLAlgorithm(OffPolicyAlgorithm):
 
 
         callback.on_training_end()
-
-        self.replay_buffer = old_replay_buffer
+        if self.mix_offline_online_buffers:
+            # make a new combined replay buffer with partial sampling of both old and new data
+            # for online RL learning
+            self.replay_buffer = CombinedBuffer(old_buffer=offline_replay_buffer, new_buffer=old_replay_buffer)
+        else:
+            self.replay_buffer = old_replay_buffer
 
     def train(
         self, gradient_steps: int, batch_size: int = 64, callback: MaybeCallback = None

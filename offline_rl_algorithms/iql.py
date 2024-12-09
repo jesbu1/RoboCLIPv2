@@ -379,7 +379,7 @@ class IQL(OfflineRLAlgorithm):
             f"{logging_prefix}/average_q1_values": np.mean(q1_values),
             f"{logging_prefix}/average_q2_values": np.mean(q2_values),
             f"{logging_prefix}/average_v_next_values": np.mean(v_next_values),
-            f"{logging_prefix}/average_reward": replay_data.rewards.mean().item,
+            f"{logging_prefix}/average_reward": replay_data.rewards.mean().item(),
             f"{logging_prefix}/average_v_values": np.mean(v_values),
             f"{logging_prefix}/average_q1_target_values": np.mean(q1_target_values),
             f"{logging_prefix}/average_q2_target_values": np.mean(q2_target_values),
