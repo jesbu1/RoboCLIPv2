@@ -345,12 +345,14 @@ def main():
 
     WANDB_ENTITY_NAME = "clvr"
     WANDB_PROJECT_NAME = "roboclip-v2"
+
+    experiment_name = f"test_offline_rl_{args.algo}"
     # if args.pca_path != None:
     #     experiment_name = "ep500_PCA_" + "xclip_textTRANS_" + args.algo + "_" + args.env_id
     # else:
     #     experiment_name = "ep500_NOPCA_" +"xclip_textTRANS_" + args.algo + "_" + args.env_id
 
-    experiment_name = args.algo + "_" + args.env_id
+    #experiment_name = args.algo + "_" + args.env_id
     if args.train_orcale:
         experiment_name = experiment_name + "_Oracle"
     if args.threshold_reward:
@@ -434,7 +436,9 @@ def main():
             "net_arch": [32, 32],
         }
     else:
-        policy_kwargs = None
+        policy_kwargs = {
+            "net_arch": [128, 64],
+        }
 
 
     if args.algo.lower() == 'ppo':
@@ -464,8 +468,10 @@ def main():
     elif args.algo.lower() == 'iql':
         model_class = IQL
         import stable_baselines3
-        action_noise = stable_baselines3.common.noise.OrnsteinUhlenbeckActionNoise(mean=np.ones(4)*5, sigma=1)
-        # action_noise = None
+        # action_noise = stable_baselines3.common.noise.OrnsteinUhlenbeckActionNoise(mean=np.ones(4)*5, sigma=1)
+        n_actions = envs.action_space.shape[-1]
+        action_noise = stable_baselines3.common.noise.NormalActionNoise(mean=np.zeros(n_actions), sigma=0.1 * n_actions)
+        #action_noise = None
         # policy = SACPolicy(observation_space=envs.observation_space, action_space=envs.action_space, net_arch=[32, 32], lr_schedule=None)
         if not args.pretrained:
             model = model_class("MlpPolicy", envs, verbose=1, tensorboard_log=log_dir, 

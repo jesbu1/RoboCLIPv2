@@ -2,7 +2,7 @@ from stable_baselines3.common.buffers import ReplayBuffer, BaseBuffer
 import h5py
 import warnings
 from abc import ABC, abstractmethod
-from typing import Any, Dict, Generator, List, Optional, Tuple, Union
+from typing import Any, Dict, Generator, List, Optional, Tuple, Union, NamedTuple
 
 import numpy as np
 import torch as th
@@ -60,6 +60,8 @@ class H5ReplayBuffer(ReplayBuffer):
         success_bonus: float = 0.0,
         add_timestep: bool = False,
         use_language_embeddings: bool = True,
+        calculate_mc_returns: bool = False,
+        mc_return_gamma: float = 0.99,
     ):
         """
         Initialize the replay buffer.
@@ -70,6 +72,8 @@ class H5ReplayBuffer(ReplayBuffer):
         :param success_bonus: Success bonus added to the rewards
         :param add_timestep: Add a column with the timesteps to the transitions
         :param use_language_embeddings: Whether to specifically incorporate language embeddings into the observations
+        :param calculate_mc_returns: Whether to calculate the Monte-Carlo returns
+        :param mc_return_gamma: The discount factor for the Monte-Carlo returns
         """
         with h5py.File(h5_path, "r") as f:
             observations = f["state"][()]
@@ -80,6 +84,15 @@ class H5ReplayBuffer(ReplayBuffer):
             # rewards = f["done"][()]
             dones = f["done"][()]
             # timesteps = f["timesteps"][()]
+
+        # calculate monte-carlo returns
+        if calculate_mc_returns:
+            # calculate discounted return-to-go for each timestep by using rewards and done
+            mc_returns = np.zeros_like(rewards)
+            prev_return = 0
+            for i in range(len(rewards)):
+                mc_returns[-i-1] = rewards[-i-1] + mc_return_gamma * prev_return * (1 - dones[-i-1])
+                prev_return = mc_returns[-i-1]
 
         # TODO: Temporary, but set timesteps to be going from 0-n until it hits a done of 1
         timesteps = np.zeros_like(rewards)
@@ -190,6 +203,14 @@ class H5ReplayBuffer(ReplayBuffer):
         return ReplayBufferSamples(*tuple(map(self.to_torch, data)))
 
 
+class CombinedBufferSamples(NamedTuple):
+    observations: th.Tensor
+    actions: th.Tensor
+    next_observations: th.Tensor
+    dones: th.Tensor
+    rewards: th.Tensor
+    offline_data_mask: th.Tensor
+
 class CombinedBuffer(BaseBuffer):
     def __init__(self, old_buffer: ReplayBuffer, new_buffer: ReplayBuffer):
         self.old_buffer = old_buffer
@@ -214,27 +235,38 @@ class CombinedBuffer(BaseBuffer):
         new_samples = self.new_buffer.sample(new_batch_size, env=env)
 
         # Concatenate the samples into old_samples
-        cat_names = ["observations", "actions", "next_observations", "dones", "rewards"]
+        cat_names = ["observations", "actions", "next_observations", "dones", "rewards", "offline_data_mask"]
         attributes = {}
         for name in cat_names:
-            old_data = getattr(old_samples, name)
-            new_data = getattr(new_samples, name)
 
+
+            if name == "offline_data_mask":
+                # 1 for the old data, 0 for the new data
+                old_data = th.ones(old_batch_size, 1)
+                new_data = th.zeros(new_batch_size, 1)
+            else:
+                old_data = getattr(old_samples, name)
+                new_data = getattr(new_samples, name)
             attributes[name] = th.cat((old_data, new_data), dim=0)
         
-        old_samples = ReplayBufferSamples(**attributes)
+        old_samples = CombinedBufferSamples(**attributes)
         return old_samples
 
     def size(self) -> int:
         """
         :return: The total size of the buffer
         """
-        return self.new_buffer.size + self.old_buffer.size
+        return self.new_buffer.size() + self.old_buffer.size()
 
 if __name__ == "__main__":
     # Test the H5ReplayBuffer
     h5_path = 'data/h5_buffers/updated_trajs/metaworld_dataset_sparse_only.h5'
     buffer = H5ReplayBuffer(h5_path, success_bonus=10)
+    print(buffer.size())
+    samples = buffer.sample(10)
+
+    # Test the CombinedBuffer
+    buffer = CombinedBuffer(buffer, buffer)
     print(buffer.size())
     samples = buffer.sample(10)
 
