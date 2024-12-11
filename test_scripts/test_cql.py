@@ -62,6 +62,7 @@ from offline_rl_algorithms.cql import CQL
 from offline_rl_algorithms.iql import IQL
 from offline_rl_algorithms.bc import BC
 from offline_rl_algorithms.base_offline_rl_algorithm import OfflineRLAlgorithm
+from offline_rl_algorithms.wandb_logger import WandBLogger
 
 from encoders.xclip_encoder import XCLIPEncoder
 
@@ -81,17 +82,25 @@ def parse_entropy_term(value):
         return float(value)
     except ValueError:
         return value
+    
+def generate_callback_list(args, eval_callback: EvalCallback):
+    if args.wandb:
+        customwandbcallback = CustomWandbCallback()
+        callback = CallbackList([eval_callback, customwandbcallback])
+    else:
+        callback = eval_callback
+    return callback
 
 class OfflineEvalCallback(EvalCallback):
     def __init__(self, *args, video_freq, **kwargs):
         super(OfflineEvalCallback, self).__init__(*args, **kwargs)
         self.video_freq = video_freq
+        # we need to overide num_timesteps as EvalCallback uses it to align the built in logger's x-axis
+        # we are using wandb so now we're using self.n_calls as the step for everything
+        self.num_timesteps = lambda x: self.n_calls # convert num_timst
 
     def _on_step(self) -> bool:
         # print(self.n_calls, self.n_calls % self.video_freq)
-        result = super(OfflineEvalCallback, self)._on_step()
-
-
         # Log policy gradients
         policy_gradients = [
             param.grad.view(-1).detach().cpu().numpy()  # Flatten each gradient tensor
@@ -101,7 +110,7 @@ class OfflineEvalCallback(EvalCallback):
         if len(policy_gradients) != 0:
 
             all_gradients = np.concatenate(policy_gradients)
-            wandb.log({"grad/policy_histogram": wandb.Histogram(all_gradients)}, step=self.n_calls)
+            self.logger.record("grad/policy_histogram", wandb.Histogram(all_gradients))
 
         # Log critic gradients
         critic_gradients = [
@@ -111,7 +120,7 @@ class OfflineEvalCallback(EvalCallback):
         ]
         if len(critic_gradients) != 0:
             all_gradients = np.concatenate(critic_gradients)
-            wandb.log({"grad/critic_histogram": wandb.Histogram(all_gradients)}, step=self.n_calls)
+            self.logger.record("grad/critic_histogram", wandb.Histogram(all_gradients))
 
         # Log critic_target gradients
         critic_target_gradients = [
@@ -121,7 +130,7 @@ class OfflineEvalCallback(EvalCallback):
         ]
         if len(critic_target_gradients) != 0:
             all_gradients = np.concatenate(critic_target_gradients)
-            wandb.log({"grad/critic_target_histogram": wandb.Histogram(all_gradients)}, step=self.n_calls)
+            self.logger.record("grad/critic_target_histogram", wandb.Histogram(all_gradients))
 
         # Log v_net gradients
         v_net_gradients = [
@@ -131,7 +140,7 @@ class OfflineEvalCallback(EvalCallback):
         ]
         if len(v_net_gradients) != 0:
             all_gradients = np.concatenate(v_net_gradients)
-            wandb.log({"grad/v_net_histogram": wandb.Histogram(all_gradients)}, step=self.n_calls)
+            self.logger.record("grad/v_net_histogram", wandb.Histogram(all_gradients))
 
         # Log policy weights
         actor_weights = [
@@ -140,7 +149,7 @@ class OfflineEvalCallback(EvalCallback):
         ]
         if len(actor_weights) != 0:
             all_weights = np.concatenate(actor_weights)
-            wandb.log({"weights/policy_histogram": wandb.Histogram(all_weights)}, step=self.n_calls)
+            self.logger.record("weights/policy_histogram", wandb.Histogram(all_weights))
 
         # Log critic weights
         critic_weights = [
@@ -149,7 +158,7 @@ class OfflineEvalCallback(EvalCallback):
         ]
         if len(critic_weights) != 0:
             all_weights = np.concatenate(critic_weights)
-            wandb.log({"weights/critic_histogram": wandb.Histogram(all_weights)}, step=self.n_calls)
+            self.logger.record("weights/critic_histogram", wandb.Histogram(all_weights))
 
         # Log critic_target weights
         critic_target_weights = [
@@ -158,7 +167,7 @@ class OfflineEvalCallback(EvalCallback):
         ]
         if len(critic_target_weights) != 0:
             all_weights = np.concatenate(critic_target_weights)
-            wandb.log({"weights/critic_target_histogram": wandb.Histogram(all_weights)}, step=self.n_calls)
+            self.logger.record("weights/critic_target_histogram", wandb.Histogram(all_weights))
 
         # Log v_net weights
         v_net_weights = [
@@ -167,15 +176,21 @@ class OfflineEvalCallback(EvalCallback):
         ]
         if len(v_net_weights) != 0:
             all_weights = np.concatenate(v_net_weights)
-            wandb.log({"weights/v_net_histogram": wandb.Histogram(all_weights)}, step=self.n_calls)
+            self.logger.record("weights/v_net_histogram", wandb.Histogram(all_weights))
 
         # breakpoint()
         if (self.video_freq > 0 and self.n_calls % self.video_freq == 0) or self.n_calls == 1:
             video_buffer = self.record_video()
-            # wandb.log({f"evaluation_video": wandb.Video(video_buffer, fps=20, format="mp4")}, commit=False)
-            wandb.log({"eval/evaluation_video": wandb.Video(video_buffer, fps=20, format="mp4")}, step = self.n_calls)
-            # wandb.log({f"eval/evaluate_succ": success}, step = self.n_calls)
+            # self.logger.record({f"evaluation_video": wandb.Video(video_buffer, fps=20, format="mp4")}, commit=False)
+            self.logger.record("eval/evaluation_video", wandb.Video(video_buffer, fps=20, format="mp4"))
+            # self.logger.record({f"eval/evaluate_succ": success}, step = self.n_calls)
             print("video logged")
+
+        self.logger.record("num_timesteps", self.num_timesteps)
+        
+        result = super(OfflineEvalCallback, self)._on_step()
+
+
 
         return result
 
@@ -196,7 +211,7 @@ class OfflineEvalCallback(EvalCallback):
             frames.append(frame)
             action, _ = self.model.predict(obs, deterministic=False)
             # action += np.random.normal(5, 0.1, size=action.shape)
-            action[0] += 5
+            # action[0] += 5
             # print(action)
             obs, _, _, info = self.eval_env.step(action)
             # print(type(info))
@@ -215,64 +230,11 @@ class OfflineEvalCallback(EvalCallback):
         return video_buffer
 
 
-class OfflineWandbCallback(WandbCallback):
-    # def _on_rollout_end(self):
-    #     # Log episode metrics with environment steps as x-axis
-    #     wandb.log({
-    #         'episode_reward': sum(self.locals['rewards']),  # Cumulative reward for the episode
-    #         'episode_length': len(self.locals['rewards'])   # Length of the episode
-    #     }, step=self.model.num_timesteps)
-
-    @property
-    def wandb_log_step(self) -> int:
-        if hasattr(self.model, "offline_num_timesteps"):
-            return self.num_timesteps + self.locals['self'].offline_num_timesteps
-
-        return self.num_timesteps
-
-    # def _on_rollout_end(self):
-    #     # Log episode metrics with environment steps as x-axis
-    #     wandb.log({
-    #         'episode_reward': sum(self.locals['rewards']),  # Cumulative reward for the episode
-    #         'episode_length': len(self.locals['rewards'])   # Length of the episode
-    #     }, step=self.model.num_timesteps)
-
+class CustomWandbCallback(WandbCallback):
     def _on_step(self):
-        # Log training metrics
-        # print done
-        # if done and done is True, log the info
         if 'metrics' in self.locals:
-            wandb.log(self.locals['metrics'], step = self.wandb_log_step)
-        # done_array = self.locals["dones"]
-        # infos = self.locals["infos"]
-
-    #     for i, done in enumerate(done_array):
-    #         if done:
-
-    #             succ = infos[i].get('success', 0)
-    #             roboclip_reward = infos[i].get('roboclip_reward', 0)
-    #             total_reward = infos[i].get('total_reward', 0)
-    #             dense_return = infos[i].get('dense_return', 0)
-    #             dense_reward = infos[i].get('dense_reward', 0)
-    #             ep_length = infos[i].get('ep_length', 0)
-    #             RMS_reward = infos[i].get('RMS_reward', 0)
-    #             RMS_total_reward = infos[i].get('RMS_total_reward', 0)
-    #             offset = infos[i].get('offset', 0)
-    #             print("episode logged", self.wandb_log_step)
-    #             wandb.log({"origin_episode_info/episode_success": succ,
-    #                         "origin_episode_info/roboclip_reward": roboclip_reward,
-    #                         "origin_episode_info/RoboCLIP_bonus_reward": total_reward,
-    #                         "origin_episode_info/dense_return": dense_return,
-    #                         "origin_episode_info/dense_reward": dense_reward,
-    #                         "origin_episode_info/ep_length": ep_length,
-
-    #                         "RMS/RMS_reward": RMS_reward,
-    #                         "RMS/RMS_total_reward": RMS_total_reward,
-    #                         "RMS/offset": offset
-
-    #                         }, step = self.wandb_log_step)
-
-    #     return True
+            self.logger.record_dict(self.locals['metrics'])
+        self.logger.dump(self.n_calls) # this ensures that dump gets called, otherwise it's only called in EvalCallback whenever an eval happens
 
 
 def get_args():
@@ -283,13 +245,13 @@ def get_args():
     parser.add_argument('--env_id', type=str, default='window-open-v2-goal-hidden')
     parser.add_argument('--offline_training_steps', type=int, default=1000000)
     parser.add_argument('--total_time_steps', type=int, default=1000000)
-    parser.add_argument('--n_envs', type=int, default=8)
-    parser.add_argument('--n_steps', type=int, default=500)
+    parser.add_argument('--n_envs', type=int, default=3)
+    parser.add_argument('--n_steps', type=int, default=128)
     parser.add_argument('--pretrained', type=str, default=None)
     parser.add_argument('--wandb', action="store_true")
     parser.add_argument('--seed', type=int, default=42)
-    parser.add_argument("--eval_freq", type=int, default=None)
-    parser.add_argument("--video_freq", type=int, default=None)
+    parser.add_argument("--eval_freq", default=50000, type=int, help="online eval frequency")
+    parser.add_argument("--video_freq", default=50000, type=int, help="online video frequency")
     parser.add_argument('--succ_end', action="store_true")
     parser.add_argument('--video_path', type=str, default=None)
     parser.add_argument('--pca_path', type=str, default=None)
@@ -403,7 +365,7 @@ def main():
         # column2 = ["env_id"]
         # table2 = wandb.Table(columns=column2)
         # table2.add_data([args.env_id])
-        # wandb.log({"text_string": table1, "env_id": table2})
+        # self.logger.record({"text_string": table1, "env_id": table2})
 
     # log_dir = f"/scr/jzhang96/logs/baseline_logs/{experiment_name}"
     log_dir = f"logs/baseline_logs/{experiment_name}"
@@ -426,9 +388,9 @@ def main():
         lang_feat = None
 
     if args.n_envs > 1:
-        envs = SubprocVecEnv([create_wrapped_env(args.env_id, language_features=lang_feat, success_bonus=args.succ_bonus, use_simulator_reward=True) for i in range(args.n_envs)])
+        envs = SubprocVecEnv([create_wrapped_env(args.env_id, language_features=lang_feat, success_bonus=args.succ_bonus, use_simulator_reward=False) for i in range(args.n_envs)])
     else:
-        envs = DummyVecEnv([create_wrapped_env(args.env_id,  language_features=lang_feat, success_bonus=args.succ_bonus, use_simulator_reward=True)])
+        envs = DummyVecEnv([create_wrapped_env(args.env_id,  language_features=lang_feat, success_bonus=args.succ_bonus, use_simulator_reward=False)])
 
     # We don't need as large of a network there is no language
     if ignore_language:
@@ -515,49 +477,56 @@ def main():
         )  # KitchenEnvDenseOriginalReward(time=True)
 
     # Set eval freq and video freq if not set
+    # eval will be done 10 times
     eval_freq = (
-        args.offline_training_steps // 100 if args.eval_freq is None else args.eval_freq
+        args.offline_training_steps * args.n_envs // 80 
     )
     video_freq = (
-        args.offline_training_steps // 100
-        if args.video_freq is None
-        else args.video_freq
-    )
+        args.offline_training_steps * args.n_envs // 10 
+    ) 
     # Use deterministic actions for evaluation
     eval_callback = OfflineEvalCallback(
         eval_env,
         best_model_save_path=log_dir,
         log_path=log_dir,
-        eval_freq=eval_freq,
+        eval_freq=eval_freq ,
         video_freq=video_freq,
         deterministic=True,
         render=False,
         n_eval_episodes=25,
     )
 
-    if args.wandb:
-        customwandbcallback = OfflineWandbCallback()
-        callback = CallbackList([eval_callback, customwandbcallback])
-    else:
-        callback = eval_callback
+
+    online_eval_freq=args.eval_freq // args.n_envs # // args.nenvsto
+    online_video_freq=args.video_freq // args.n_envs
+    eval_callback.eval_freq = online_eval_freq
+    eval_callback.video_freq = online_video_freq
+
+    callback_list = generate_callback_list(args, eval_callback)
+
+
+    # Create the logger
+    wandb_logger = WandBLogger()
+
+    model.set_logger(wandb_logger)
 
     # load the offline replay buffer
-    # if isinstance(model, OfflineRLAlgorithm):
-    if False:
+    if isinstance(model, OfflineRLAlgorithm):
+    # if False:
         # h5_path = "updated_trajs.h5"
         h5_path = 'data/h5_buffers/updated_trajs/metaworld_dataset_sparse_only.h5'
         buffer = H5ReplayBuffer(h5_path, use_language_embeddings=use_language, success_bonus=args.succ_bonus)
         model.learn_offline(
             offline_replay_buffer=buffer,
             train_steps=args.offline_training_steps,
-            callback=callback,
+            callback=callback_list,
             batch_size=256,
         )
-    # once learn offline is done, fix the eval callback
-    # eval_callback.eval_freq = args.eval_freq
-    # eval_callback.video_freq = args.video_freq
-    # import pdb; pdb.set_trace()
-    model.learn(total_timesteps=int(args.total_time_steps), callback=callback)
+
+
+    logger = model.logger
+
+    model.learn(total_timesteps=int(args.total_time_steps), callback=callback_list, logger=logger)
     model.save(f"{log_dir}/{experiment_name}")
 
     # Evaluate the agent
@@ -566,7 +535,7 @@ def main():
     # success_rate = eval_policys(args, MetaworldDense, model)
 
     # if args.wandb:
-    #     wandb.log({"eval_SR/evaluate_succ": success_rate}, step = 0)
+    #     self.logger.record({"eval_SR/evaluate_succ": success_rate}, step = 0)
 
 
 if __name__ == '__main__':

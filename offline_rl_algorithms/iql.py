@@ -176,7 +176,7 @@ class IQL(OfflineRLAlgorithm):
         advantage_temp: float = 5.0,
         expectile: float = 0.7,
         clip_score: float = 100,
-        policy_extraction: str = "ddpg",
+        policy_extraction: str = "awr",
         ddpg_bc_weight: float = 0,
     ):
         super().__init__(
@@ -387,7 +387,7 @@ class IQL(OfflineRLAlgorithm):
         }
 
         for metric in metrics_dict:
-            self.logger.record(logging_prefix + metric, metrics_dict[metric])
+            self.logger.record(metric, metrics_dict[metric])
 
         return metrics_dict
 
@@ -399,6 +399,7 @@ class IQL(OfflineRLAlgorithm):
         tb_log_name: str = "IQL",
         reset_num_timesteps: bool = True,
         progress_bar: bool = False,
+        logger: Optional = None
     ):
         return super().learn(
             total_timesteps=total_timesteps,
@@ -407,6 +408,7 @@ class IQL(OfflineRLAlgorithm):
             tb_log_name=tb_log_name,
             reset_num_timesteps=reset_num_timesteps,
             progress_bar=progress_bar,
+            logger=logger
         )
 
     def _excluded_save_params(self) -> List[str]:
