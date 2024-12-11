@@ -15,7 +15,7 @@ from envs.metaworld_envs.wrappers import *
 
 # Define a base environment for MetaWorld
 class MetaworldBase(Env):
-    def __init__(self, env_id, seed=0, goal_observable=False, random_reset=False):
+    def __init__(self, env_id, seed=0, goal_observable=False, random_reset=False, max_episode_steps=128):
         """
         Parameters
         ----------
@@ -40,7 +40,9 @@ class MetaworldBase(Env):
         else:
             self.base_env = self.all_env_types[env_id](seed=seed)
 
-        self.base_env = TimeLimit(self.base_env, max_episode_steps=500)
+        self.max_episode_steps = max_episode_steps
+
+        self.base_env = TimeLimit(self.base_env, max_episode_steps=self.max_episode_steps)
 
         self.action_space = self.base_env.action_space
         self.observation_space = self.base_env.observation_space
@@ -87,7 +89,7 @@ class MetaworldBase(Env):
         if self.random_reset:
             self.rank = random.randint(0, 400)
             self.base_env = self.all_env_types[self.env_id](seed=self.rank)
-            self.base_env = TimeLimit(self.base_env, max_episode_steps=500)
+            self.base_env = TimeLimit(self.base_env, max_episode_steps=self.max_episode_steps)
 
         return self.base_env.reset()
 

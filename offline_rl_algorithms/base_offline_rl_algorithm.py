@@ -12,6 +12,8 @@ from stable_baselines3.common.policies import BasePolicy, ContinuousCritic
 from metaworld_runs.eval_utils import evaluate_policy
 from stable_baselines3.common.type_aliases import GymEnv, MaybeCallback, Schedule
 from stable_baselines3.common.utils import get_parameters_by_name, polyak_update
+from stable_baselines3.common.logger import Logger
+
 from stable_baselines3.sac.policies import (
     Actor,
     CnnPolicy,
@@ -155,8 +157,6 @@ class OfflineRLAlgorithm(OffPolicyAlgorithm):
         self.target_update_interval = target_update_interval
         self.ent_coef_optimizer: Optional[th.optim.Adam] = None
         
-        self.offline_num_timesteps = 0
-
         self.mix_offline_online_buffers = mix_offline_online_buffers
 
         if _init_setup_model:
@@ -188,6 +188,7 @@ class OfflineRLAlgorithm(OffPolicyAlgorithm):
             tb_log_name="offline",
             progress_bar=False,
         )
+        total_timesteps *= self.n_envs # because of a progress bar issue
 
         callback = self._init_callback(callback, True)
         callback.on_training_start(locals(), globals())
@@ -198,10 +199,7 @@ class OfflineRLAlgorithm(OffPolicyAlgorithm):
         print('learning offline')
         for _ in range(train_steps):
             metrics = self.train(1, batch_size=batch_size, logging_prefix="offline_")
-            # rollout_metrics = 
-            self.offline_num_timesteps += 1
-            metrics['num_timesteps'] = self.offline_num_timesteps + self.num_timesteps
-            metrics['offline_num_timesteps'] = self.offline_num_timesteps
+            # metrics is a local() which will be updated in callback.update_locals
             callback.update_locals(locals()) # a little hacky
             callback.on_step() # because of locals, we have access to self.locals['metrics']
 
@@ -227,7 +225,10 @@ class OfflineRLAlgorithm(OffPolicyAlgorithm):
         tb_log_name: str = "OfflineRL",
         reset_num_timesteps: bool = True,
         progress_bar: bool = False,
+        logger: Optional[Logger] = None,
     ):
+        if logger is not None:
+            super().set_logger(logger)
         # TODO: implement custom buffer and switch it here
         return super().learn(
             total_timesteps=total_timesteps,
