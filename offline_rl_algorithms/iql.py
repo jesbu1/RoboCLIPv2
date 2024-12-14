@@ -52,7 +52,7 @@ class ValueCritic(BaseModel):
         features_dim: int,
         activation_fn: Type[nn.Module] = nn.ReLU,
         normalize_images: bool = True,
-        share_features_extractor: bool = True,
+        share_features_extractor: bool = False,
         lr_schedule: Schedule = None,
         optimizer_class: Type[th.optim.Optimizer] = th.optim.Adam,
         optimizer_kwargs: Optional[Dict[str, Any]] = None,
@@ -150,7 +150,7 @@ class IQL(OfflineRLAlgorithm):
         self,
         policy: Union[str, Type[SACPolicy]],
         env: Union[GymEnv, str],
-        learning_rate: Union[float, Schedule] = 3e-4,
+        learning_rate: Union[float, Schedule] = 1e-3,
         buffer_size: int = 1_000_000,  # 1e6
         learning_starts: int = 100,
         batch_size: int = 256,
@@ -177,7 +177,8 @@ class IQL(OfflineRLAlgorithm):
         expectile: float = 0.7,
         clip_score: float = 100,
         policy_extraction: str = "awr",
-        ddpg_bc_weight: float = 0,
+        ddpg_bc_weight: float = 1.0,
+        mix_offline_online_buffers: bool = True,
     ):
         super().__init__(
             policy,
@@ -205,6 +206,7 @@ class IQL(OfflineRLAlgorithm):
             optimize_memory_usage=optimize_memory_usage,
             supported_action_spaces=(spaces.Box,),
             support_multi_env=True,
+            mix_offline_online_buffers=mix_offline_online_buffers,
         )
 
         # Entropy coefficient / Entropy temperature
@@ -236,7 +238,7 @@ class IQL(OfflineRLAlgorithm):
         self.v_net = ValueCritic(
             self.observation_space,
             self.action_space,
-            self.policy.net_arch,
+            self.policy.critic_kwargs["net_arch"],
             deepcopy(self.policy.critic.features_extractor),
             features_dim=self.policy.actor.latent_pi[0].in_features,
             activation_fn=self.policy.net_args["activation_fn"],
@@ -261,7 +263,7 @@ class IQL(OfflineRLAlgorithm):
         optimizers = [self.actor.optimizer, self.critic.optimizer]
         # Update learning rate according to lr schedule
         self._update_learning_rate(optimizers)
-        th.autograd.set_detect_anomaly(True)
+
         actor_losses, q_losses, v_losses = [], [], []
         actor_log_pis = []
         q1_values, q2_values = [], []
@@ -284,7 +286,7 @@ class IQL(OfflineRLAlgorithm):
             )
             with th.no_grad():
                 target_q1_pred, target_q2_pred = self.critic_target(
-                    replay_data.next_observations, replay_data.actions
+                    replay_data.observations, replay_data.actions
                 )
                 target_q_pred = th.min(target_q1_pred, target_q2_pred)
                 next_vf_pred = self.v_net(replay_data.next_observations)
@@ -323,6 +325,8 @@ class IQL(OfflineRLAlgorithm):
             q_losses.append(q_loss.item())
             v_losses.append(vf_loss.item())
 
+
+
             # Optimize the critic Q
             self.critic.optimizer.zero_grad()
             q_loss.backward()
@@ -333,27 +337,45 @@ class IQL(OfflineRLAlgorithm):
             vf_loss.backward()
             self.v_net.optimizer.step()
 
+
             # Policy loss
             if self.policy_extraction == "awr":
                 advantage = target_q_pred - vf_pred.detach()
                 weights = th.clamp(
-                    th.exp(advantage / self.advantage_temp), 0, self.clip_score
+                    th.exp(advantage * self.advantage_temp), 0, self.clip_score
                 )
-                _, log_prob = self.actor.action_log_prob(replay_data.observations)
+
+                mean_actions, log_std, kwargs = self.actor.get_action_dist_params(replay_data.observations)
+                distribution = self.actor.action_dist.proba_distribution(mean_actions, log_std)
+                log_prob = distribution.log_prob(replay_data.actions)
+
                 log_prob = log_prob.reshape(-1, 1)
                 policy_loss = -th.mean(weights * log_prob)
             elif self.policy_extraction == "ddpg":
-                actions_pi, log_prob = self.actor.action_log_prob(
-                    replay_data.observations
-                )
-                q_values_pi = th.cat(
-                    self.critic(replay_data.observations, actions_pi), dim=1
-                )
-                min_qf_pi, _ = th.min(q_values_pi, dim=1, keepdim=True)
-                policy_loss = -th.mean(min_qf_pi + self.ddpg_bc_weight * log_prob)
+                # autoscale the bc weight based on the average q value
+                with th.no_grad():
+                    average_q_value = th.abs(th.min(q1_pred, q2_pred)).mean() 
+                    scaled_ddpg_bc_weight = self.ddpg_bc_weight / average_q_value
+                mean_actions, log_std, _ = self.actor.get_action_dist_params(replay_data.observations)
+                distribution = self.actor.action_dist.proba_distribution(mean_actions, log_std)
+                log_prob = distribution.log_prob(replay_data.actions)
+
+                actions_pi = distribution.actions_from_params(mean_actions, log_std)
+ 
+                q_values_pi = self.critic(replay_data.observations, actions_pi)
+                # breakpoint() 
+                min_qf_pi = th.min(*q_values_pi).squeeze(-1)
+                assert min_qf_pi.shape == log_prob.shape, f"{min_qf_pi.shape} != {log_prob.shape}"
+                policy_loss = -th.mean(min_qf_pi + scaled_ddpg_bc_weight * log_prob)
+                # print proportion of policy loss contributed to by each term
+                print(f"min_qf_pi: {th.mean(min_qf_pi).item()}, log_prob: {th.mean(scaled_ddpg_bc_weight * log_prob).item()}")
+                #policy_loss = -th.mean(min_qf_pi + self.ddpg_bc_weight * log_prob)
 
             # log average in batch reward
             reward_values.append(replay_data.rewards.mean().item())
+
+
+
 
             # Optimize the policy
             self.actor.optimizer.zero_grad()

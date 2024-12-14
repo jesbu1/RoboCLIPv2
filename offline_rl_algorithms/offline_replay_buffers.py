@@ -63,6 +63,7 @@ class H5ReplayBuffer(ReplayBuffer):
         calculate_mc_returns: bool = False,
         mc_return_gamma: float = 0.99,
         clip_actions: bool = True,
+        sparsify_rewards: bool = False,
     ):
         """
         Initialize the replay buffer.
@@ -76,6 +77,7 @@ class H5ReplayBuffer(ReplayBuffer):
         :param calculate_mc_returns: Whether to calculate the Monte-Carlo returns
         :param mc_return_gamma: The discount factor for the Monte-Carlo returns
         :param clip_actions: Whether to clip the actions to the action space to [-1, 1]
+        :param sparsify_rewards: Converts reward to done
         """
         with h5py.File(h5_path, "r") as f:
             observations = f["state"][()]
@@ -84,8 +86,10 @@ class H5ReplayBuffer(ReplayBuffer):
             actions = f["action"][()]
             if clip_actions:
                 actions = np.clip(actions, -1, 1)
-            rewards = f["rewards"][()]
-            # rewards = f["done"][()]
+            if sparsify_rewards:
+                rewards = f["done"][()]
+            else:
+                rewards = f["rewards"][()]
             dones = f["done"][()]
             # timesteps = f["timesteps"][()]
 
@@ -109,7 +113,7 @@ class H5ReplayBuffer(ReplayBuffer):
                 timesteps[i] = current_timestep
                 current_timestep += 1
 
-        self.optimize_memory_usage = True
+        self.optimize_memory_usage = False
 
         self.observations = observations
         self.next_observations = next_observations
@@ -195,6 +199,8 @@ class H5ReplayBuffer(ReplayBuffer):
             )
             rewards = rewards + self.success_bonus * success
 
+        # # set rewards to have all zeros
+        # rewards = np.zeros_like(rewards)
         data = (
             observation,
             self.actions[batch_inds, :].astype(np.float32),
@@ -215,16 +221,29 @@ class CombinedBufferSamples(NamedTuple):
     rewards: th.Tensor
     offline_data_mask: th.Tensor
 
-class CombinedBuffer(BaseBuffer):
-    def __init__(self, old_buffer: ReplayBuffer, new_buffer: ReplayBuffer):
+class CombinedBuffer(ReplayBuffer):
+    def __init__(self, old_buffer: ReplayBuffer, new_buffer: ReplayBuffer, ratio: float = 0.5):
         self.old_buffer = old_buffer
         self.new_buffer = new_buffer
+        self.ratio = ratio
 
     def _get_samples(
         self,
         batch_inds: np.ndarray,
     ) -> ReplayBufferSamples:
         return
+    
+    def add(
+        self,
+        obs: np.ndarray,
+        next_obs: np.ndarray,
+        action: np.ndarray,
+        reward: np.ndarray,
+        done: np.ndarray,
+        infos: List[Dict[str, Any]],
+    ) -> None:
+        # Add to new buffer
+        self.new_buffer.add(obs, next_obs, action, reward, done, infos)
 
     def sample(self, batch_size: int, env: Optional[VecNormalize] = None):
         """
@@ -233,8 +252,9 @@ class CombinedBuffer(BaseBuffer):
             to normalize the observations/rewards when sampling
         :return:
         """
-        old_batch_size = batch_size // 2
+        old_batch_size = int(batch_size * self.ratio)
         new_batch_size = batch_size - old_batch_size
+
         old_samples = self.old_buffer.sample(old_batch_size, env=env)
         new_samples = self.new_buffer.sample(new_batch_size, env=env)
 

@@ -119,7 +119,7 @@ class OfflineRLAlgorithm(OffPolicyAlgorithm):
         _init_setup_model: bool = True,
         supported_action_spaces: Optional[Tuple[spaces.Space]] = (spaces.Box,),
         support_multi_env: bool = True,
-        mix_offline_online_buffers: bool = False,
+        mix_offline_online_buffers: bool = True,
     ):
         super().__init__(
             policy,
@@ -156,9 +156,8 @@ class OfflineRLAlgorithm(OffPolicyAlgorithm):
         self.ent_coef = ent_coef
         self.target_update_interval = target_update_interval
         self.ent_coef_optimizer: Optional[th.optim.Adam] = None
-        
         self.mix_offline_online_buffers = mix_offline_online_buffers
-
+        
         if _init_setup_model:
             self._setup_model()
 
@@ -202,7 +201,6 @@ class OfflineRLAlgorithm(OffPolicyAlgorithm):
             # metrics is a local() which will be updated in callback.update_locals
             callback.update_locals(locals()) # a little hacky
             callback.on_step() # because of locals, we have access to self.locals['metrics']
-
 
         callback.on_training_end()
         if self.mix_offline_online_buffers:

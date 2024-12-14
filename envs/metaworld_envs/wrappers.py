@@ -130,7 +130,7 @@ class LanguageWrapper(gym.Wrapper):
         self.observation_space = spaces.Box(
             low=-np.inf,
             high=np.inf,
-            shape=(self.env.observation_space.shape[0] + len(language_feature),),
+            shape=(self.env.observation_space.shape[0] + len(self.language_features),),
             dtype=np.float32,
         )
 
