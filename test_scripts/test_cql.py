@@ -77,6 +77,8 @@ from stable_baselines3.sac.policies import (
     SACPolicy,
 )
 
+from stable_baselines3.common.policies import ActorCriticPolicy
+
 def parse_entropy_term(value):
     try:
         return float(value)
@@ -111,36 +113,62 @@ class OfflineEvalCallback(EvalCallback):
 
             all_gradients = np.concatenate(policy_gradients)
             self.logger.record("grad/policy_histogram", wandb.Histogram(all_gradients))
+        if hasattr(self.model, "v_net"):
+            # Log critic gradients
+            critic_gradients = [
+                param.grad.view(-1).detach().cpu().numpy()  # Flatten each gradient tensor
+                for param in self.model.policy.critic.parameters()
+                if param.grad is not None
+            ]
+            if len(critic_gradients) != 0:
+                all_gradients = np.concatenate(critic_gradients)
+                self.logger.record("grad/critic_histogram", wandb.Histogram(all_gradients))
 
-        # Log critic gradients
-        critic_gradients = [
-            param.grad.view(-1).detach().cpu().numpy()  # Flatten each gradient tensor
-            for param in self.model.policy.critic.parameters()
-            if param.grad is not None
-        ]
-        if len(critic_gradients) != 0:
-            all_gradients = np.concatenate(critic_gradients)
-            self.logger.record("grad/critic_histogram", wandb.Histogram(all_gradients))
+            # Log critic_target gradients
+            critic_target_gradients = [
+                param.grad.view(-1).detach().cpu().numpy()  # Flatten each gradient tensor
+                for param in self.model.policy.critic_target.parameters()
+                if param.grad is not None
+            ]
+            if len(critic_target_gradients) != 0:
+                all_gradients = np.concatenate(critic_target_gradients)
+                self.logger.record("grad/critic_target_histogram", wandb.Histogram(all_gradients))
 
-        # Log critic_target gradients
-        critic_target_gradients = [
-            param.grad.view(-1).detach().cpu().numpy()  # Flatten each gradient tensor
-            for param in self.model.policy.critic_target.parameters()
-            if param.grad is not None
-        ]
-        if len(critic_target_gradients) != 0:
-            all_gradients = np.concatenate(critic_target_gradients)
-            self.logger.record("grad/critic_target_histogram", wandb.Histogram(all_gradients))
+            # Log v_net gradients
+            v_net_gradients = [
+                param.grad.view(-1).detach().cpu().numpy()  # Flatten each gradient tensor
+                for param in self.model.v_net.parameters()
+                if param.grad is not None
+            ]
+            if len(v_net_gradients) != 0:
+                all_gradients = np.concatenate(v_net_gradients)
+                self.logger.record("grad/v_net_histogram", wandb.Histogram(all_gradients))
+            # Log critic weights
+            critic_weights = [
+                param.data.view(-1).detach().cpu().numpy()  # Flatten each weight tensor
+                for param in self.model.policy.critic.parameters()
+            ]
+            if len(critic_weights) != 0:
+                all_weights = np.concatenate(critic_weights)
+                self.logger.record("weights/critic_histogram", wandb.Histogram(all_weights))
 
-        # Log v_net gradients
-        v_net_gradients = [
-            param.grad.view(-1).detach().cpu().numpy()  # Flatten each gradient tensor
-            for param in self.model.v_net.parameters()
-            if param.grad is not None
-        ]
-        if len(v_net_gradients) != 0:
-            all_gradients = np.concatenate(v_net_gradients)
-            self.logger.record("grad/v_net_histogram", wandb.Histogram(all_gradients))
+            # Log critic_target weights
+            critic_target_weights = [
+                param.data.view(-1).detach().cpu().numpy()  # Flatten each weight tensor
+                for param in self.model.policy.critic_target.parameters()
+            ]
+            if len(critic_target_weights) != 0:
+                all_weights = np.concatenate(critic_target_weights)
+                self.logger.record("weights/critic_target_histogram", wandb.Histogram(all_weights))
+
+            # Log v_net weights
+            v_net_weights = [
+                param.data.view(-1).detach().cpu().numpy()  # Flatten each weight tensor
+                for param in self.model.v_net.parameters()
+            ]
+            if len(v_net_weights) != 0:
+                all_weights = np.concatenate(v_net_weights)
+                self.logger.record("weights/v_net_histogram", wandb.Histogram(all_weights))
 
         # Log policy weights
         actor_weights = [
@@ -150,33 +178,6 @@ class OfflineEvalCallback(EvalCallback):
         if len(actor_weights) != 0:
             all_weights = np.concatenate(actor_weights)
             self.logger.record("weights/policy_histogram", wandb.Histogram(all_weights))
-
-        # Log critic weights
-        critic_weights = [
-            param.data.view(-1).detach().cpu().numpy()  # Flatten each weight tensor
-            for param in self.model.policy.critic.parameters()
-        ]
-        if len(critic_weights) != 0:
-            all_weights = np.concatenate(critic_weights)
-            self.logger.record("weights/critic_histogram", wandb.Histogram(all_weights))
-
-        # Log critic_target weights
-        critic_target_weights = [
-            param.data.view(-1).detach().cpu().numpy()  # Flatten each weight tensor
-            for param in self.model.policy.critic_target.parameters()
-        ]
-        if len(critic_target_weights) != 0:
-            all_weights = np.concatenate(critic_target_weights)
-            self.logger.record("weights/critic_target_histogram", wandb.Histogram(all_weights))
-
-        # Log v_net weights
-        v_net_weights = [
-            param.data.view(-1).detach().cpu().numpy()  # Flatten each weight tensor
-            for param in self.model.v_net.parameters()
-        ]
-        if len(v_net_weights) != 0:
-            all_weights = np.concatenate(v_net_weights)
-            self.logger.record("weights/v_net_histogram", wandb.Histogram(all_weights))
 
         # breakpoint()
         if (self.video_freq > 0 and self.n_calls % self.video_freq == 0) or self.n_calls == 1:
@@ -242,8 +243,8 @@ def get_args():
     parser.add_argument('--algo', type=str, default='iql', choices=['ppo', 'sac', 'cql', 'calibrated_cql', 'iql', 'bc'])
     parser.add_argument('--text_string', type=str, default='opening window')
     parser.add_argument('--dir_add', type=str, default='')
-    parser.add_argument('--env_id', type=str, default='window-open-v2-goal-hidden')
-    parser.add_argument('--offline_training_steps', type=int, default=1000000)
+    parser.add_argument('--env_id', type=str, default='window-open-v2')
+    parser.add_argument('--offline_training_steps', type=int, default=100000)
     parser.add_argument('--total_time_steps', type=int, default=1000000)
     parser.add_argument('--n_envs', type=int, default=3)
     parser.add_argument('--n_steps', type=int, default=128)
@@ -260,6 +261,9 @@ def get_args():
     parser.add_argument('--random_reset', action="store_true")
     parser.add_argument('--time', action="store_false")
     parser.add_argument('--ignore_language', action="store_true")
+    parser.add_argument('--mix_buffers', action="store_true")
+    parser.add_argument("--offline_h5_path", type=str, default=None)
+
 
     parser.add_argument('--train_orcale', action="store_true") # load latent from h5 file
     parser.add_argument('--warm_up_runs', type=int, default=0)
@@ -388,19 +392,29 @@ def main():
         lang_feat = None
 
     if args.n_envs > 1:
-        envs = SubprocVecEnv([create_wrapped_env(args.env_id, language_features=lang_feat, success_bonus=args.succ_bonus, use_simulator_reward=False) for i in range(args.n_envs)])
+        envs = SubprocVecEnv([create_wrapped_env(args.env_id, language_features=lang_feat, 
+                                                 success_bonus=args.succ_bonus, 
+                                                 use_simulator_reward=True,
+                                                goal_observable=True) for i in range(args.n_envs)])
     else:
-        envs = DummyVecEnv([create_wrapped_env(args.env_id,  language_features=lang_feat, success_bonus=args.succ_bonus, use_simulator_reward=False)])
+        envs = DummyVecEnv([create_wrapped_env(args.env_id, language_features=lang_feat, 
+                                               success_bonus=args.succ_bonus, 
+                                               use_simulator_reward=True,
+                                               goal_observable=True)])
 
     # We don't need as large of a network there is no language
     if ignore_language:
         policy_kwargs = {
-            "net_arch": [32, 32],
+            "net_arch": [256, 256],
         }
     else:
         policy_kwargs = {
-            "net_arch": [128, 64],
+            "net_arch": [512, 512, 512],
         }
+        # policy_kwargs = {
+        #     "net_arch": dict(pi=[256, 256], qf=[256, 256]),
+        #     'activation_fn': nn.Sequential(nn.ReLU(), nn.LayerNorm(256))
+        # }
 
 
     if args.algo.lower() == 'ppo':
@@ -430,21 +444,25 @@ def main():
     elif args.algo.lower() == 'iql':
         model_class = IQL
         import stable_baselines3
-        # action_noise = stable_baselines3.common.noise.OrnsteinUhlenbeckActionNoise(mean=np.ones(4)*5, sigma=1)
+        action_noise = stable_baselines3.common.noise.OrnsteinUhlenbeckActionNoise(mean=np.ones(4)*5, sigma=1)
         n_actions = envs.action_space.shape[-1]
         action_noise = stable_baselines3.common.noise.NormalActionNoise(mean=np.zeros(n_actions), sigma=0.1 * n_actions)
-        #action_noise = None
+        # action_noise = None
         # policy = SACPolicy(observation_space=envs.observation_space, action_space=envs.action_space, net_arch=[32, 32], lr_schedule=None)
+        
         if not args.pretrained:
             model = model_class("MlpPolicy", envs, verbose=1, tensorboard_log=log_dir, 
-                        buffer_size=args.total_time_steps, learning_starts=4000, seed=args.seed, action_noise=action_noise, policy_kwargs=policy_kwargs)
+                        buffer_size=args.total_time_steps, learning_starts=4000, seed=args.seed,
+                          action_noise=action_noise, policy_kwargs=policy_kwargs,
+                          mix_offline_online_buffers=args.mix_buffers)
         else:
             model = model_class.load(args.pretrained, env=envs, tensorboard_log=log_dir)
     elif args.algo.lower() == 'bc':
         model_class = BC
         if not args.pretrained:
             model = model_class("MlpPolicy", envs, verbose=1, tensorboard_log=log_dir, 
-                        buffer_size=args.total_time_steps, learning_starts=4000, seed=args.seed)
+                        buffer_size=args.total_time_steps, learning_starts=4000, seed=args.seed,
+                        policy_kwargs=policy_kwargs)
         else:
             model = model_class.load(args.pretrained, env=envs, tensorboard_log=log_dir)
     else:
@@ -459,6 +477,7 @@ def main():
                     success_bonus=args.succ_bonus,
                     use_simulator_reward=True,
                     monitor=True,
+                    goal_observable=True
                 )
                 for i in range(args.n_envs)
             ]
@@ -472,6 +491,7 @@ def main():
                     success_bonus=args.succ_bonus,
                     use_simulator_reward=True,
                     monitor=True,
+                    goal_observable=True
                 )
             ]
         )  # KitchenEnvDenseOriginalReward(time=True)
@@ -479,7 +499,7 @@ def main():
     # Set eval freq and video freq if not set
     # eval will be done 10 times
     eval_freq = (
-        args.offline_training_steps * args.n_envs // 80 
+        args.offline_training_steps * args.n_envs // (80*5)
     )
     video_freq = (
         args.offline_training_steps * args.n_envs // 10 
@@ -497,10 +517,7 @@ def main():
     )
 
 
-    online_eval_freq=args.eval_freq // args.n_envs # // args.nenvsto
-    online_video_freq=args.video_freq // args.n_envs
-    eval_callback.eval_freq = online_eval_freq
-    eval_callback.video_freq = online_video_freq
+
 
     callback_list = generate_callback_list(args, eval_callback)
 
@@ -510,24 +527,44 @@ def main():
 
     model.set_logger(wandb_logger)
 
+
+
     # load the offline replay buffer
     if isinstance(model, OfflineRLAlgorithm):
     # if False:
         # h5_path = "updated_trajs.h5"
-        h5_path = 'data/h5_buffers/updated_trajs/metaworld_dataset_sparse_only.h5'
-        buffer = H5ReplayBuffer(h5_path, use_language_embeddings=use_language, success_bonus=args.succ_bonus)
+        # h5_path = 'data/h5_buffers/updated_trajs/metaworld_dataset_sparse_only.h5'
+        # h5_path = 'data/h5_buffers/updated_trajs/metaworld_window_traj_sparse_only.h5'
+        # h5_path = 'data/h5_buffers/updated_trajs/metaworld_window_traj_orig_reward.h5'
+        if args.offline_h5_path is None:
+            default_h5_path = 'data/h5_buffers/updated_trajs/metaworld_traj_100_demos_orig_reward.h5'
+            print("There is no h5 path provided. Defaulting to", default_h5_path)
+            h5_path = default_h5_path
+        else:
+            h5_path = args.offline_h5_path
+        buffer = H5ReplayBuffer(h5_path, use_language_embeddings=use_language, success_bonus=args.succ_bonus, sparsify_rewards=True)
         model.learn_offline(
             offline_replay_buffer=buffer,
             train_steps=args.offline_training_steps,
             callback=callback_list,
             batch_size=256,
         )
+        logger = model.logger
 
 
-    logger = model.logger
+    online_eval_freq=args.eval_freq // args.n_envs # // args.nenvsto
+    online_video_freq=args.video_freq // args.n_envs
+    eval_callback.eval_freq = online_eval_freq
+    eval_callback.video_freq = online_video_freq
 
-    model.learn(total_timesteps=int(args.total_time_steps), callback=callback_list, logger=logger)
-    model.save(f"{log_dir}/{experiment_name}")
+
+    if isinstance(model, SAC):
+        model.learn(total_timesteps=int(args.total_time_steps), callback=callback_list, progress_bar=False)
+        model.save(f"{log_dir}/{experiment_name}")
+        return
+
+    model.learn(total_timesteps=int(args.total_time_steps), callback=callback_list, logger=logger, progress_bar=True)
+    # model.save(f"{log_dir}/{experiment_name}")
 
     # Evaluate the agent
     # load the best model

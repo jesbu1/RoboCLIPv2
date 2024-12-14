@@ -48,3 +48,15 @@ Please use the older version of Metaworld, i.e., pre Farama Foundation. Also ren
 ```sh
 export MUJOCO_GL=egl
 ```
+
+
+
+Generate demos:
+```
+python scripts/generate_demos.py
+```
+
+Label rewards:
+```
+python scripts/label_rewards.py --trajs_to_label data/h5_buffers/orig/metaworld_window_traj.h5 --encoder_type xclip --out data/h5_buffers/updated_trajs/metaworld_window_traj_xclip.h5 --sparse_only
+```
