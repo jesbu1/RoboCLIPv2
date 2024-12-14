@@ -35,9 +35,12 @@ class MetaworldBase(Env):
             if goal_observable
             else ALL_V2_ENVIRONMENTS_GOAL_HIDDEN
         )
+        # print(self.all_env_types, env_id)
         if goal_observable:
+            env_id = env_id + "-goal-observable"
             self.base_env = self.all_env_types[env_id](seed=seed)
         else:
+            env_id = env_id + "-goal-hidden"
             self.base_env = self.all_env_types[env_id](seed=seed)
 
         self.max_episode_steps = max_episode_steps
@@ -142,6 +145,7 @@ def create_wrapped_env(
     use_simulator_reward=False,
     use_time=False,
     monitor=False,
+    goal_observable=False
 ):
     """
     Creates a wrapped MetaWorld environment with the given options.
@@ -159,7 +163,7 @@ def create_wrapped_env(
         A function that returns the wrapped environment when called.
     """
     def _init():
-        base_env = MetaworldBase(env_id)
+        base_env = MetaworldBase(env_id, goal_observable=goal_observable)
 
         if pca_model is not None:
             base_env = PCAReducerWrapper(base_env, pca_model)
