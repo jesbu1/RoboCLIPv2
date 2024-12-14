@@ -9,13 +9,15 @@ from stable_baselines3.common.noise import ActionNoise
 from offline_rl_algorithms.base_offline_rl_algorithm import OfflineRLAlgorithm
 from stable_baselines3.common.policies import BasePolicy
 from stable_baselines3.common.type_aliases import GymEnv, MaybeCallback, Schedule
-from stable_baselines3.sac.policies import (
-    Actor,
-    CnnPolicy,
-    MlpPolicy,
-    MultiInputPolicy,
-    SACPolicy,
+from offline_rl_algorithms.custom_policies import (
+    CustomActor,
+    CustomSACPolicy,
+    CustomCnnPolicy,
+    CustomMlpPolicy,
+    CustomMultiInputPolicy,
 )
+
+
 class BC(OfflineRLAlgorithm):
     """
     Behavior Cloning
@@ -64,23 +66,23 @@ class BC(OfflineRLAlgorithm):
     """
 
     policy_aliases: ClassVar[Dict[str, Type[BasePolicy]]] = {
-        "MlpPolicy": MlpPolicy,
-        "CnnPolicy": CnnPolicy,
-        "MultiInputPolicy": MultiInputPolicy,
+        "MlpPolicy": CustomMlpPolicy,
+        "CnnPolicy": CustomCnnPolicy,
+        "MultiInputPolicy": CustomMultiInputPolicy,
     }
-    policy: SACPolicy
-    actor: Actor
+    policy: CustomSACPolicy
+    actor: CustomActor
 
     def __init__(
         self,
-        policy: Union[str, Type[SACPolicy]],
+        policy: Union[str, Type[CustomSACPolicy]],
         env: Union[GymEnv, str],
         learning_rate: Union[float, Schedule] = 3e-4,
         buffer_size: int = 1_000_000,  # 1e6
         learning_starts: int = 100,
         batch_size: int = 256,
-        tau: float = 0.005, # just to keep it consistent with other offline RL algs
-        gamma: float = 0.99, # just to keep it consistent with other offline RL algs
+        tau: float = 0.005,  # just to keep it consistent with other offline RL algs
+        gamma: float = 0.99,  # just to keep it consistent with other offline RL algs
         train_freq: Union[int, Tuple[int, str]] = 1,
         gradient_steps: int = 1,
         action_noise: Optional[ActionNoise] = None,
@@ -130,10 +132,9 @@ class BC(OfflineRLAlgorithm):
         # Entropy coefficient / Entropy temperature
         # Inverse of the reward scale
         self.target_update_interval = target_update_interval
-    
+
         if _init_setup_model:
             self._setup_model()
-
 
     def _setup_model(self) -> None:
         super()._setup_model()

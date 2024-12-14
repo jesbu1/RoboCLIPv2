@@ -7,17 +7,16 @@ from torch.nn import functional as F
 
 from stable_baselines3.common.buffers import ReplayBuffer
 from stable_baselines3.common.noise import ActionNoise
-from stable_baselines3.common.off_policy_algorithm import OffPolicyAlgorithm
 from offline_rl_algorithms.base_offline_rl_algorithm import OfflineRLAlgorithm
-from stable_baselines3.common.policies import BasePolicy, ContinuousCritic
+from stable_baselines3.common.policies import BasePolicy
 from stable_baselines3.common.type_aliases import GymEnv, MaybeCallback, Schedule
 from stable_baselines3.common.utils import get_parameters_by_name, polyak_update
-from stable_baselines3.sac.policies import (
-    Actor,
-    CnnPolicy,
-    MlpPolicy,
-    MultiInputPolicy,
-    SACPolicy,
+from offline_rl_algorithms.custom_policies import (
+    CustomActor,
+    CustomSACPolicy,
+    CustomCnnPolicy,
+    CustomMlpPolicy,
+    CustomMultiInputPolicy,
 )
 
 
@@ -76,14 +75,14 @@ class CQL(OfflineRLAlgorithm):
     """
 
     policy_aliases: ClassVar[Dict[str, Type[BasePolicy]]] = {
-        "MlpPolicy": MlpPolicy,
-        "CnnPolicy": CnnPolicy,
-        "MultiInputPolicy": MultiInputPolicy,
+        "MlpPolicy": CustomMlpPolicy,
+        "CnnPolicy": CustomCnnPolicy,
+        "MultiInputPolicy": CustomMultiInputPolicy,
     }
-    policy: SACPolicy
-    actor: Actor
-    critic: ContinuousCritic
-    critic_target: ContinuousCritic
+    policy: CustomSACPolicy
+    actor: CustomActor
+    # critic: CustomContinuousCritic
+    # critic_target: CustomContinuousCritic
 
     def __init__(
         self,
@@ -303,7 +302,9 @@ class CQL(OfflineRLAlgorithm):
             )
 
             # Compute the Q values of random actions
-            q1_rand, q2_rand = self.critic(replay_data.observations, random_actions.to(th.float32))
+            q1_rand, q2_rand = self.critic(
+                replay_data.observations, random_actions.to(th.float32)
+            )
             q1_current_actions, q2_current_actions = self.critic(
                 replay_data.observations, current_actions.to(th.float32)
             )
