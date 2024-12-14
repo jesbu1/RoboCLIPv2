@@ -77,7 +77,7 @@ class BC(OfflineRLAlgorithm):
         self,
         policy: Union[str, Type[CustomSACPolicy]],
         env: Union[GymEnv, str],
-        learning_rate: Union[float, Schedule] = 3e-4,
+        learning_rate: Union[float, Schedule] = 1e-3,
         buffer_size: int = 1_000_000,  # 1e6
         learning_starts: int = 100,
         batch_size: int = 256,
@@ -165,9 +165,15 @@ class BC(OfflineRLAlgorithm):
                 self.actor.reset_noise()
 
             # Policy loss
-            _, log_prob = self.actor.action_log_prob(replay_data.observations)
-            log_prob = log_prob.reshape(-1, 1)
-            policy_loss = -th.mean(log_prob)
+            # _, log_prob = self.actor.action_log_prob(replay_data.observations)
+            # log_prob = log_prob.reshape(-1, 1)
+            # policy_loss = -th.mean(log_prob)
+
+            mean_actions, log_std, kwargs = self.actor.get_action_dist_params(replay_data.observations)
+            distribution = self.actor.action_dist.proba_distribution(mean_actions, log_std)
+            log_prob = distribution.log_prob(replay_data.actions)
+            policy_loss = -log_prob.mean()
+
 
             # Optimize the policy
             self.actor.optimizer.zero_grad()
@@ -178,8 +184,10 @@ class BC(OfflineRLAlgorithm):
             actor_losses.append(policy_loss.item())
             actor_log_pis.append(log_prob.mean().item())
 
-        self._n_updates += gradient_steps
+            # print(f"Actor loss: {policy_loss.item()}")
 
+        self._n_updates += gradient_steps
+        # print(np.mean(actor_losses))
         metrics_dict = {
             f"{logging_prefix}/actor_loss": np.mean(actor_losses),
             f"{logging_prefix}/average_reward": replay_data.rewards.mean().item,
