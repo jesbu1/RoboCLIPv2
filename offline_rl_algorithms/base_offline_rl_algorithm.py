@@ -1,25 +1,21 @@
 from typing import Any, ClassVar, Dict, List, Optional, Tuple, Type, TypeVar, Union
 
-import numpy as np
 import torch as th
 from gym import spaces
-from torch.nn import functional as F
 
 from stable_baselines3.common.buffers import ReplayBuffer
 from stable_baselines3.common.noise import ActionNoise
 from stable_baselines3.common.off_policy_algorithm import OffPolicyAlgorithm
 from stable_baselines3.common.policies import BasePolicy, ContinuousCritic
-from metaworld_runs.eval_utils import evaluate_policy
 from stable_baselines3.common.type_aliases import GymEnv, MaybeCallback, Schedule
-from stable_baselines3.common.utils import get_parameters_by_name, polyak_update
 from stable_baselines3.common.logger import Logger
 
-from stable_baselines3.sac.policies import (
-    Actor,
-    CnnPolicy,
-    MlpPolicy,
-    MultiInputPolicy,
-    SACPolicy,
+from offline_rl_algorithms.custom_policies import (
+    CustomActor,
+    CustomSACPolicy,
+    CustomCnnPolicy,
+    CustomMlpPolicy,
+    CustomMultiInputPolicy,
 )
 
 from offline_rl_algorithms.offline_replay_buffers import CombinedBuffer
@@ -79,18 +75,18 @@ class OfflineRLAlgorithm(OffPolicyAlgorithm):
     """
 
     policy_aliases: ClassVar[Dict[str, Type[BasePolicy]]] = {
-        "MlpPolicy": MlpPolicy,
-        "CnnPolicy": CnnPolicy,
-        "MultiInputPolicy": MultiInputPolicy,
+        "MlpPolicy": CustomMlpPolicy,
+        "CnnPolicy": CustomCnnPolicy,
+        "MultiInputPolicy": CustomMultiInputPolicy,
     }
-    policy: SACPolicy
-    actor: Actor
+    policy: CustomSACPolicy
+    actor: CustomActor
     critic: ContinuousCritic
     critic_target: ContinuousCritic
 
     def __init__(
         self,
-        policy: Union[str, Type[SACPolicy]],
+        policy: Union[str, Type[CustomSACPolicy]],
         env: Union[GymEnv, str],
         learning_rate: Union[float, Schedule] = 3e-4,
         buffer_size: int = 1_000_000,  # 1e6
@@ -156,7 +152,7 @@ class OfflineRLAlgorithm(OffPolicyAlgorithm):
         self.ent_coef = ent_coef
         self.target_update_interval = target_update_interval
         self.ent_coef_optimizer: Optional[th.optim.Adam] = None
-        
+
         self.mix_offline_online_buffers = mix_offline_online_buffers
 
         if _init_setup_model:
@@ -188,7 +184,7 @@ class OfflineRLAlgorithm(OffPolicyAlgorithm):
             tb_log_name="offline",
             progress_bar=False,
         )
-        total_timesteps *= self.n_envs # because of a progress bar issue
+        total_timesteps *= self.n_envs  # because of a progress bar issue
 
         callback = self._init_callback(callback, True)
         callback.on_training_start(locals(), globals())
@@ -196,19 +192,20 @@ class OfflineRLAlgorithm(OffPolicyAlgorithm):
         old_replay_buffer = self.replay_buffer
         self.replay_buffer = offline_replay_buffer
 
-        print('learning offline')
+        print("learning offline")
         for _ in range(train_steps):
             metrics = self.train(1, batch_size=batch_size, logging_prefix="offline_")
             # metrics is a local() which will be updated in callback.update_locals
-            callback.update_locals(locals()) # a little hacky
-            callback.on_step() # because of locals, we have access to self.locals['metrics']
-
+            callback.update_locals(locals())  # a little hacky
+            callback.on_step()  # because of locals, we have access to self.locals['metrics']
 
         callback.on_training_end()
         if self.mix_offline_online_buffers:
             # make a new combined replay buffer with partial sampling of both old and new data
             # for online RL learning
-            self.replay_buffer = CombinedBuffer(old_buffer=offline_replay_buffer, new_buffer=old_replay_buffer)
+            self.replay_buffer = CombinedBuffer(
+                old_buffer=offline_replay_buffer, new_buffer=old_replay_buffer
+            )
         else:
             self.replay_buffer = old_replay_buffer
 

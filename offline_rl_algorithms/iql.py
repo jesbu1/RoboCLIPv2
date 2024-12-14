@@ -1,4 +1,4 @@
-from typing import Any, ClassVar, Dict, List, Optional, Tuple, Type, TypeVar, Union
+from typing import Any, ClassVar, Dict, List, Optional, Tuple, Type, Union
 
 import numpy as np
 import torch as th
@@ -9,16 +9,17 @@ from torch import nn
 from stable_baselines3.common.buffers import ReplayBuffer
 from stable_baselines3.common.noise import ActionNoise
 from offline_rl_algorithms.base_offline_rl_algorithm import OfflineRLAlgorithm
-from stable_baselines3.common.policies import BasePolicy, ContinuousCritic, BaseModel
-from stable_baselines3.common.torch_layers import BaseFeaturesExtractor, create_mlp
+from offline_rl_algorithms.custom_policies import create_mlp
+from stable_baselines3.common.policies import BasePolicy, BaseModel
+from stable_baselines3.common.torch_layers import BaseFeaturesExtractor
 from stable_baselines3.common.type_aliases import GymEnv, MaybeCallback, Schedule
 from stable_baselines3.common.utils import get_parameters_by_name, polyak_update
-from stable_baselines3.sac.policies import (
-    Actor,
-    CnnPolicy,
-    MlpPolicy,
-    MultiInputPolicy,
-    SACPolicy,
+from offline_rl_algorithms.custom_policies import (
+    CustomActor,
+    CustomSACPolicy,
+    CustomCnnPolicy,
+    CustomMlpPolicy,
+    CustomMultiInputPolicy,
 )
 
 from copy import deepcopy
@@ -56,6 +57,7 @@ class ValueCritic(BaseModel):
         lr_schedule: Schedule = None,
         optimizer_class: Type[th.optim.Optimizer] = th.optim.Adam,
         optimizer_kwargs: Optional[Dict[str, Any]] = None,
+        use_layer_norm: bool = False,
     ):
         super().__init__(
             observation_space,
@@ -65,7 +67,9 @@ class ValueCritic(BaseModel):
         )
 
         self.share_features_extractor = share_features_extractor
-        v_net_list = create_mlp(features_dim, 1, net_arch, activation_fn)
+        v_net_list = create_mlp(
+            features_dim, 1, net_arch, activation_fn, use_layer_norm=use_layer_norm
+        )
         v_net = nn.Sequential(*v_net_list)
         self.add_module(f"vf", v_net)
         self.optimizer = optimizer_class(
@@ -136,19 +140,19 @@ class IQL(OfflineRLAlgorithm):
     """
 
     policy_aliases: ClassVar[Dict[str, Type[BasePolicy]]] = {
-        "MlpPolicy": MlpPolicy,
-        "CnnPolicy": CnnPolicy,
-        "MultiInputPolicy": MultiInputPolicy,
+        "MlpPolicy": CustomMlpPolicy,
+        "CnnPolicy": CustomCnnPolicy,
+        "MultiInputPolicy": CustomMultiInputPolicy,
     }
-    policy: SACPolicy
-    actor: Actor
+    policy: CustomSACPolicy
+    actor: CustomActor
     # q_nets: ContinuousCritic
     # q_targets: ContinuousCritic
     v_net: ValueCritic
 
     def __init__(
         self,
-        policy: Union[str, Type[SACPolicy]],
+        policy: Union[str, Type[CustomSACPolicy]],
         env: Union[GymEnv, str],
         learning_rate: Union[float, Schedule] = 3e-4,
         buffer_size: int = 1_000_000,  # 1e6
@@ -245,6 +249,7 @@ class IQL(OfflineRLAlgorithm):
             lr_schedule=self.lr_schedule,
             optimizer_class=self.policy.optimizer_class,
             optimizer_kwargs=self.policy.optimizer_kwargs,
+            use_layer_norm=self.policy.critic.kwargs["use_layer_norm"],
         ).to(self.device)
 
     def _create_aliases(self) -> None:

@@ -5,58 +5,34 @@ import torch.nn as nn
 import numpy as np
 from stable_baselines3 import PPO, SAC
 import torch as th
-from gym.wrappers.time_limit import TimeLimit
 from stable_baselines3.common.vec_env.subproc_vec_env import SubprocVecEnv
-from stable_baselines3.common.callbacks import CheckpointCallback
-from PIL import Image, ImageSequence
 import torch as th
 import numpy as np
-from PIL import Image, ImageSequence
-import cv2
-import gif2numpy
-import PIL
 import os
-import seaborn as sns
-import matplotlib.pylab as plt
-from stable_baselines3.common.vec_env import DummyVecEnv, VecVideoRecorder
+from stable_baselines3.common.vec_env import DummyVecEnv
 
 from typing import Any, Dict
 
-import gym
-from gym.spaces import Box
 import torch as th
 
-from stable_baselines3.common.callbacks import BaseCallback
-from stable_baselines3.common.evaluation import evaluate_policy
-from stable_baselines3.common.logger import Video
 import os
-from stable_baselines3.common.monitor import Monitor
-from memory_profiler import profile
 import argparse
 from stable_baselines3.common.callbacks import EvalCallback, CallbackList
 
 import metaworld
-from metaworld.envs import (ALL_V2_ENVIRONMENTS_GOAL_OBSERVABLE,
-                            ALL_V2_ENVIRONMENTS_GOAL_HIDDEN)
+from metaworld.envs import (
+    ALL_V2_ENVIRONMENTS_GOAL_OBSERVABLE,
+    ALL_V2_ENVIRONMENTS_GOAL_HIDDEN,
+)
 
 # from kitchen_env_wrappers import readGif
-from matplotlib import animation
-import matplotlib.pyplot as plt
-
-from gym.wrappers import RecordVideo
 import imageio
 import wandb
 from wandb.integration.sb3 import WandbCallback
 import io
 import random
 import torch.nn.functional as F
-import h5py
-import json
-from transformers import AutoTokenizer, AutoModel, AutoProcessor 
-import sys
 
-# sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from metaworld_runs.eval_utils import eval_policys
 
 from offline_rl_algorithms.cql import CQL
 from offline_rl_algorithms.iql import IQL
@@ -69,20 +45,14 @@ from encoders.xclip_encoder import XCLIPEncoder
 
 from envs.metaworld_envs.metaworld import create_wrapped_env
 
-from stable_baselines3.sac.policies import (
-    Actor,
-    CnnPolicy,
-    MlpPolicy,
-    MultiInputPolicy,
-    SACPolicy,
-)
 
 def parse_entropy_term(value):
     try:
         return float(value)
     except ValueError:
         return value
-    
+
+
 def generate_callback_list(args, eval_callback: EvalCallback):
     if args.wandb:
         customwandbcallback = CustomWandbCallback()
@@ -91,13 +61,14 @@ def generate_callback_list(args, eval_callback: EvalCallback):
         callback = eval_callback
     return callback
 
+
 class OfflineEvalCallback(EvalCallback):
     def __init__(self, *args, video_freq, **kwargs):
         super(OfflineEvalCallback, self).__init__(*args, **kwargs)
         self.video_freq = video_freq
         # we need to overide num_timesteps as EvalCallback uses it to align the built in logger's x-axis
         # we are using wandb so now we're using self.n_calls as the step for everything
-        self.num_timesteps = lambda x: self.n_calls # convert num_timst
+        self.num_timesteps = lambda x: self.n_calls  # convert num_timst
 
     def _on_step(self) -> bool:
         # print(self.n_calls, self.n_calls % self.video_freq)
@@ -130,7 +101,9 @@ class OfflineEvalCallback(EvalCallback):
         ]
         if len(critic_target_gradients) != 0:
             all_gradients = np.concatenate(critic_target_gradients)
-            self.logger.record("grad/critic_target_histogram", wandb.Histogram(all_gradients))
+            self.logger.record(
+                "grad/critic_target_histogram", wandb.Histogram(all_gradients)
+            )
 
         # Log v_net gradients
         v_net_gradients = [
@@ -167,7 +140,9 @@ class OfflineEvalCallback(EvalCallback):
         ]
         if len(critic_target_weights) != 0:
             all_weights = np.concatenate(critic_target_weights)
-            self.logger.record("weights/critic_target_histogram", wandb.Histogram(all_weights))
+            self.logger.record(
+                "weights/critic_target_histogram", wandb.Histogram(all_weights)
+            )
 
         # Log v_net weights
         v_net_weights = [
@@ -179,18 +154,20 @@ class OfflineEvalCallback(EvalCallback):
             self.logger.record("weights/v_net_histogram", wandb.Histogram(all_weights))
 
         # breakpoint()
-        if (self.video_freq > 0 and self.n_calls % self.video_freq == 0) or self.n_calls == 1:
+        if (
+            self.video_freq > 0 and self.n_calls % self.video_freq == 0
+        ) or self.n_calls == 1:
             video_buffer = self.record_video()
             # self.logger.record({f"evaluation_video": wandb.Video(video_buffer, fps=20, format="mp4")}, commit=False)
-            self.logger.record("eval/evaluation_video", wandb.Video(video_buffer, fps=20, format="mp4"))
+            self.logger.record(
+                "eval/evaluation_video", wandb.Video(video_buffer, fps=20, format="mp4")
+            )
             # self.logger.record({f"eval/evaluate_succ": success}, step = self.n_calls)
             print("video logged")
 
         self.logger.record("num_timesteps", self.num_timesteps)
-        
+
         result = super(OfflineEvalCallback, self)._on_step()
-
-
 
         return result
 
@@ -202,10 +179,9 @@ class OfflineEvalCallback(EvalCallback):
 
         # print the first layer's weight of self.model.policy
         print(self.model.policy.actor.latent_pi[0].weight[0][:10])
-        
-        
+
         for _ in range(128):  # You can adjust the number of steps for recording
-            frame = self.eval_env.render(mode='rgb_array')
+            frame = self.eval_env.render(mode="rgb_array")
             # downsample frame
             frame = frame[::3, ::3, :3]
             frames.append(frame)
@@ -222,7 +198,7 @@ class OfflineEvalCallback(EvalCallback):
 
         video_buffer = io.BytesIO()
 
-        with imageio.get_writer(video_buffer, format='mp4', fps=20) as writer:
+        with imageio.get_writer(video_buffer, format="mp4", fps=20) as writer:
             for frame in frames:
                 writer.append_data(frame)
 
@@ -232,47 +208,62 @@ class OfflineEvalCallback(EvalCallback):
 
 class CustomWandbCallback(WandbCallback):
     def _on_step(self):
-        if 'metrics' in self.locals:
-            self.logger.record_dict(self.locals['metrics'])
-        self.logger.dump(self.n_calls) # this ensures that dump gets called, otherwise it's only called in EvalCallback whenever an eval happens
+        if "metrics" in self.locals:
+            self.logger.record_dict(self.locals["metrics"])
+        self.logger.dump(
+            self.n_calls
+        )  # this ensures that dump gets called, otherwise it's only called in EvalCallback whenever an eval happens
 
 
 def get_args():
-    parser = argparse.ArgumentParser(description='RL')
-    parser.add_argument('--algo', type=str, default='iql', choices=['ppo', 'sac', 'cql', 'calibrated_cql', 'iql', 'bc'])
-    parser.add_argument('--text_string', type=str, default='opening window')
-    parser.add_argument('--dir_add', type=str, default='')
-    parser.add_argument('--env_id', type=str, default='window-open-v2-goal-hidden')
-    parser.add_argument('--offline_training_steps', type=int, default=1000000)
-    parser.add_argument('--total_time_steps', type=int, default=1000000)
-    parser.add_argument('--n_envs', type=int, default=3)
-    parser.add_argument('--n_steps', type=int, default=128)
-    parser.add_argument('--pretrained', type=str, default=None)
-    parser.add_argument('--wandb', action="store_true")
-    parser.add_argument('--seed', type=int, default=42)
-    parser.add_argument("--eval_freq", default=50000, type=int, help="online eval frequency")
-    parser.add_argument("--video_freq", default=50000, type=int, help="online video frequency")
-    parser.add_argument('--succ_end', action="store_true")
-    parser.add_argument('--video_path', type=str, default=None)
-    parser.add_argument('--pca_path', type=str, default=None)
-    parser.add_argument('--transform_base_path', type=str, default=None)
-    parser.add_argument('--transform_model_path', type=str, default=None)
-    parser.add_argument('--random_reset', action="store_true")
-    parser.add_argument('--time', action="store_false")
-    parser.add_argument('--ignore_language', action="store_true")
+    parser = argparse.ArgumentParser(description="RL")
+    parser.add_argument(
+        "--algo",
+        type=str,
+        default="iql",
+        choices=["ppo", "sac", "cql", "calibrated_cql", "iql", "bc"],
+    )
+    parser.add_argument("--text_string", type=str, default="opening window")
+    parser.add_argument("--dir_add", type=str, default="")
+    parser.add_argument("--env_id", type=str, default="window-open-v2-goal-hidden")
+    parser.add_argument("--offline_training_steps", type=int, default=1000000)
+    parser.add_argument("--total_time_steps", type=int, default=1000000)
+    parser.add_argument("--n_envs", type=int, default=3)
+    parser.add_argument("--n_steps", type=int, default=128)
+    parser.add_argument("--pretrained", type=str, default=None)
+    parser.add_argument("--wandb", action="store_true")
+    parser.add_argument("--seed", type=int, default=42)
+    parser.add_argument(
+        "--eval_freq", default=50000, type=int, help="online eval frequency"
+    )
+    parser.add_argument(
+        "--video_freq", default=50000, type=int, help="online video frequency"
+    )
+    parser.add_argument("--succ_end", action="store_true")
+    parser.add_argument("--video_path", type=str, default=None)
+    parser.add_argument("--pca_path", type=str, default=None)
+    parser.add_argument("--transform_base_path", type=str, default=None)
+    parser.add_argument("--transform_model_path", type=str, default=None)
+    parser.add_argument("--random_reset", action="store_true")
+    parser.add_argument("--time", action="store_false")
+    parser.add_argument("--ignore_language", action="store_true")
 
-    parser.add_argument('--train_orcale', action="store_true") # load latent from h5 file
-    parser.add_argument('--warm_up_runs', type=int, default=0)
-    parser.add_argument('--project_reward', action="store_true")
-    parser.add_argument('--norm_input', action="store_true")
-    parser.add_argument('--norm_output', action="store_true")
-    parser.add_argument('--time_reward', type=float, default=1.0)
-    parser.add_argument('--threshold_reward', action="store_true")
-    parser.add_argument('--entropy_term', type=parse_entropy_term, default="auto")
-    parser.add_argument('--time_penalty', type=float, default=0.0)
-    parser.add_argument('--succ_bonus', type=float, default=0.0)
-    parser.add_argument('--xclip_model', type=str, default='microsoft/xclip-base-patch16-zero-shot')
-    parser.add_argument('--frame_length', type=int, default=32)
+    parser.add_argument(
+        "--train_orcale", action="store_true"
+    )  # load latent from h5 file
+    parser.add_argument("--warm_up_runs", type=int, default=0)
+    parser.add_argument("--project_reward", action="store_true")
+    parser.add_argument("--norm_input", action="store_true")
+    parser.add_argument("--norm_output", action="store_true")
+    parser.add_argument("--time_reward", type=float, default=1.0)
+    parser.add_argument("--threshold_reward", action="store_true")
+    parser.add_argument("--entropy_term", type=parse_entropy_term, default="auto")
+    parser.add_argument("--time_penalty", type=float, default=0.0)
+    parser.add_argument("--succ_bonus", type=float, default=0.0)
+    parser.add_argument(
+        "--xclip_model", type=str, default="microsoft/xclip-base-patch16-zero-shot"
+    )
+    parser.add_argument("--frame_length", type=int, default=32)
     parser.add_argument("--exp_name_end", type=str, default="triplet_hard_neg")
     parser.add_argument("--sparse_only", action="store_true")
     parser.add_argument("--baseline", action="store_true")
@@ -280,6 +271,7 @@ def get_args():
 
     args = parser.parse_args()
     return args
+
 
 class SingleLayerMLP(th.nn.Module):
     def __init__(self, input_dim, output_dim, normalize=True):
@@ -314,7 +306,7 @@ def main():
     # else:
     #     experiment_name = "ep500_NOPCA_" +"xclip_textTRANS_" + args.algo + "_" + args.env_id
 
-    #experiment_name = args.algo + "_" + args.env_id
+    # experiment_name = args.algo + "_" + args.env_id
     if args.train_orcale:
         experiment_name = experiment_name + "_Oracle"
     if args.threshold_reward:
@@ -379,7 +371,7 @@ def main():
     # compute a language feature
     encoder = XCLIPEncoder()
     lang_feat = encoder.encode_text(args.text_string)
-    lang_feat = lang_feat.to('cpu').detach().squeeze()
+    lang_feat = lang_feat.to("cpu").detach().squeeze()
 
     ignore_language = args.ignore_language
     use_language = not ignore_language
@@ -388,9 +380,28 @@ def main():
         lang_feat = None
 
     if args.n_envs > 1:
-        envs = SubprocVecEnv([create_wrapped_env(args.env_id, language_features=lang_feat, success_bonus=args.succ_bonus, use_simulator_reward=False) for i in range(args.n_envs)])
+        envs = SubprocVecEnv(
+            [
+                create_wrapped_env(
+                    args.env_id,
+                    language_features=lang_feat,
+                    success_bonus=args.succ_bonus,
+                    use_simulator_reward=False,
+                )
+                for i in range(args.n_envs)
+            ]
+        )
     else:
-        envs = DummyVecEnv([create_wrapped_env(args.env_id,  language_features=lang_feat, success_bonus=args.succ_bonus, use_simulator_reward=False)])
+        envs = DummyVecEnv(
+            [
+                create_wrapped_env(
+                    args.env_id,
+                    language_features=lang_feat,
+                    success_bonus=args.succ_bonus,
+                    use_simulator_reward=False,
+                )
+            ]
+        )
 
     # We don't need as large of a network there is no language
     if ignore_language:
@@ -402,49 +413,95 @@ def main():
             "net_arch": [128, 64],
         }
 
-
-    if args.algo.lower() == 'ppo':
+    if args.algo.lower() == "ppo":
         model_class = PPO
         if not args.pretrained:
-            model = model_class("MlpPolicy", envs, verbose=1, tensorboard_log=log_dir, n_steps=args.n_steps,
-                        batch_size=args.n_steps * args.n_envs, n_epochs=1, ent_coef=args.entropy_term)
+            model = model_class(
+                "MlpPolicy",
+                envs,
+                verbose=1,
+                tensorboard_log=log_dir,
+                n_steps=args.n_steps,
+                batch_size=args.n_steps * args.n_envs,
+                n_epochs=1,
+                ent_coef=args.entropy_term,
+            )
         else:
             model = model_class.load(args.pretrained, env=envs, tensorboard_log=log_dir)
-    elif args.algo.lower() == 'sac':
+    elif args.algo.lower() == "sac":
         model_class = SAC
         if not args.pretrained:
-            model = model_class("MlpPolicy", envs, verbose=1, tensorboard_log=log_dir, 
-                        # batch_size=args.n_steps * args.n_envs,
-                        ent_coef="auto", buffer_size=args.total_time_steps, learning_starts=4000, seed=args.seed)
+            model = model_class(
+                "MlpPolicy",
+                envs,
+                verbose=1,
+                tensorboard_log=log_dir,
+                # batch_size=args.n_steps * args.n_envs,
+                ent_coef="auto",
+                buffer_size=args.total_time_steps,
+                learning_starts=4000,
+                seed=args.seed,
+            )
         else:
             model = model_class.load(args.pretrained, env=envs, tensorboard_log=log_dir)
-    elif args.algo.lower() in ['cql', 'calibrated_ql']:
-        use_calibrated_cql = args.algo.lower() == 'calibrated_ql'
+    elif args.algo.lower() in ["cql", "calibrated_ql"]:
+        use_calibrated_cql = args.algo.lower() == "calibrated_ql"
         model_class = CQL
         if not args.pretrained:
-            model = model_class("MlpPolicy", envs, verbose=1, tensorboard_log=log_dir, 
-                        ent_coef="auto", buffer_size=args.total_time_steps, learning_starts=4000, seed=args.seed, min_q_weight=5.0, min_q_temp=1.0, use_calibrated_q=use_calibrated_cql, learning_rate=0.0001)
+            model = model_class(
+                "MlpPolicy",
+                envs,
+                verbose=1,
+                tensorboard_log=log_dir,
+                ent_coef="auto",
+                buffer_size=args.total_time_steps,
+                learning_starts=4000,
+                seed=args.seed,
+                min_q_weight=5.0,
+                min_q_temp=1.0,
+                use_calibrated_q=use_calibrated_cql,
+                learning_rate=0.0001,
+            )
         else:
             model = model_class.load(args.pretrained, env=envs, tensorboard_log=log_dir)
 
-    elif args.algo.lower() == 'iql':
+    elif args.algo.lower() == "iql":
         model_class = IQL
         import stable_baselines3
+
         # action_noise = stable_baselines3.common.noise.OrnsteinUhlenbeckActionNoise(mean=np.ones(4)*5, sigma=1)
         n_actions = envs.action_space.shape[-1]
-        action_noise = stable_baselines3.common.noise.NormalActionNoise(mean=np.zeros(n_actions), sigma=0.1 * n_actions)
-        #action_noise = None
+        action_noise = stable_baselines3.common.noise.NormalActionNoise(
+            mean=np.zeros(n_actions), sigma=0.1 * n_actions
+        )
+        # action_noise = None
         # policy = SACPolicy(observation_space=envs.observation_space, action_space=envs.action_space, net_arch=[32, 32], lr_schedule=None)
         if not args.pretrained:
-            model = model_class("MlpPolicy", envs, verbose=1, tensorboard_log=log_dir, 
-                        buffer_size=args.total_time_steps, learning_starts=4000, seed=args.seed, action_noise=action_noise, policy_kwargs=policy_kwargs)
+            model = model_class(
+                "MlpPolicy",
+                envs,
+                verbose=1,
+                tensorboard_log=log_dir,
+                buffer_size=args.total_time_steps,
+                learning_starts=4000,
+                seed=args.seed,
+                action_noise=action_noise,
+                policy_kwargs=policy_kwargs,
+            )
         else:
             model = model_class.load(args.pretrained, env=envs, tensorboard_log=log_dir)
-    elif args.algo.lower() == 'bc':
+    elif args.algo.lower() == "bc":
         model_class = BC
         if not args.pretrained:
-            model = model_class("MlpPolicy", envs, verbose=1, tensorboard_log=log_dir, 
-                        buffer_size=args.total_time_steps, learning_starts=4000, seed=args.seed)
+            model = model_class(
+                "MlpPolicy",
+                envs,
+                verbose=1,
+                tensorboard_log=log_dir,
+                buffer_size=args.total_time_steps,
+                learning_starts=4000,
+                seed=args.seed,
+            )
         else:
             model = model_class.load(args.pretrained, env=envs, tensorboard_log=log_dir)
     else:
@@ -478,32 +535,26 @@ def main():
 
     # Set eval freq and video freq if not set
     # eval will be done 10 times
-    eval_freq = (
-        args.offline_training_steps * args.n_envs // 80 
-    )
-    video_freq = (
-        args.offline_training_steps * args.n_envs // 10 
-    ) 
+    eval_freq = args.offline_training_steps * args.n_envs // 80
+    video_freq = args.offline_training_steps * args.n_envs // 10
     # Use deterministic actions for evaluation
     eval_callback = OfflineEvalCallback(
         eval_env,
         best_model_save_path=log_dir,
         log_path=log_dir,
-        eval_freq=eval_freq ,
+        eval_freq=eval_freq,
         video_freq=video_freq,
         deterministic=True,
         render=False,
         n_eval_episodes=25,
     )
 
-
-    online_eval_freq=args.eval_freq // args.n_envs # // args.nenvsto
-    online_video_freq=args.video_freq // args.n_envs
+    online_eval_freq = args.eval_freq // args.n_envs  # // args.nenvsto
+    online_video_freq = args.video_freq // args.n_envs
     eval_callback.eval_freq = online_eval_freq
     eval_callback.video_freq = online_video_freq
 
     callback_list = generate_callback_list(args, eval_callback)
-
 
     # Create the logger
     wandb_logger = WandBLogger()
@@ -512,10 +563,12 @@ def main():
 
     # load the offline replay buffer
     if isinstance(model, OfflineRLAlgorithm):
-    # if False:
+        # if False:
         # h5_path = "updated_trajs.h5"
-        h5_path = 'data/h5_buffers/updated_trajs/metaworld_dataset_sparse_only.h5'
-        buffer = H5ReplayBuffer(h5_path, use_language_embeddings=use_language, success_bonus=args.succ_bonus)
+        h5_path = "data/h5_buffers/updated_trajs/metaworld_dataset_sparse_only.h5"
+        buffer = H5ReplayBuffer(
+            h5_path, use_language_embeddings=use_language, success_bonus=args.succ_bonus
+        )
         model.learn_offline(
             offline_replay_buffer=buffer,
             train_steps=args.offline_training_steps,
@@ -523,10 +576,13 @@ def main():
             batch_size=256,
         )
 
-
     logger = model.logger
 
-    model.learn(total_timesteps=int(args.total_time_steps), callback=callback_list, logger=logger)
+    model.learn(
+        total_timesteps=int(args.total_time_steps),
+        callback=callback_list,
+        logger=logger,
+    )
     model.save(f"{log_dir}/{experiment_name}")
 
     # Evaluate the agent
@@ -538,5 +594,5 @@ def main():
     #     self.logger.record({"eval_SR/evaluate_succ": success_rate}, step = 0)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()
