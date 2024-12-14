@@ -236,7 +236,7 @@ class IQL(OfflineRLAlgorithm):
         self.v_net = ValueCritic(
             self.observation_space,
             self.action_space,
-            self.policy.net_arch,
+            self.policy.critic_kwargs["net_arch"],
             deepcopy(self.policy.critic.features_extractor),
             features_dim=self.policy.actor.latent_pi[0].in_features,
             activation_fn=self.policy.net_args["activation_fn"],
@@ -399,7 +399,7 @@ class IQL(OfflineRLAlgorithm):
         tb_log_name: str = "IQL",
         reset_num_timesteps: bool = True,
         progress_bar: bool = False,
-        logger: Optional = None
+        logger: Optional = None,
     ):
         return super().learn(
             total_timesteps=total_timesteps,
@@ -408,7 +408,7 @@ class IQL(OfflineRLAlgorithm):
             tb_log_name=tb_log_name,
             reset_num_timesteps=reset_num_timesteps,
             progress_bar=progress_bar,
-            logger=logger
+            logger=logger,
         )
 
     def _excluded_save_params(self) -> List[str]:
