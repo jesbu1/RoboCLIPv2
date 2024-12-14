@@ -409,12 +409,9 @@ def main():
         }
     else:
         policy_kwargs = {
-            "net_arch": [512, 512, 512],
+            "net_arch": dict(pi=[512, 256], qf=[512, 256, 256]),
+            # 'activation_fn': nn.Sequential(nn.ReLU(), nn.LayerNorm(256))
         }
-        # policy_kwargs = {
-        #     "net_arch": dict(pi=[256, 256], qf=[256, 256]),
-        #     'activation_fn': nn.Sequential(nn.ReLU(), nn.LayerNorm(256))
-        # }
 
 
     if args.algo.lower() == 'ppo':
