@@ -86,7 +86,7 @@ class CQL(OfflineRLAlgorithm):
 
     def __init__(
         self,
-        policy: Union[str, Type[SACPolicy]],
+        policy: Union[str, Type[CustomSACPolicy]],
         env: Union[GymEnv, str],
         learning_rate: Union[float, Schedule] = 3e-4,
         buffer_size: int = 1_000_000,  # 1e6

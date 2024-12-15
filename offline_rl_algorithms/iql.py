@@ -251,7 +251,7 @@ class IQL(OfflineRLAlgorithm):
             lr_schedule=self.lr_schedule,
             optimizer_class=self.policy.optimizer_class,
             optimizer_kwargs=self.policy.optimizer_kwargs,
-            use_layer_norm=self.policy.critic.kwargs["use_layer_norm"],
+            use_layer_norm=self.policy.critic_kwargs["use_layer_norm"],
         ).to(self.device)
 
     def _create_aliases(self) -> None:
