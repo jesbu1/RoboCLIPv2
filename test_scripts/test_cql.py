@@ -443,6 +443,8 @@ def main():
     else:
         policy_kwargs = {
             "net_arch": dict(pi=[512, 256], qf=[512, 256, 256]),
+            "policy_layer_norm": True,
+            "critic_layer_norm": True,
             # 'activation_fn': nn.Sequential(nn.ReLU(), nn.LayerNorm(256))
         }
 
@@ -511,10 +513,9 @@ def main():
         # )
         action_noise = None
         # policy = SACPolicy(observation_space=envs.observation_space, action_space=envs.action_space, net_arch=[32, 32], lr_schedule=None)
-
         if not args.pretrained:
             model = model_class(
-                "MlpPolicy",
+                'MlpPolicy',
                 envs,
                 verbose=1,
                 tensorboard_log=log_dir,
@@ -574,7 +575,7 @@ def main():
 
     # Set eval freq and video freq if not set
     # eval will be done 10 times
-    eval_freq = args.offline_training_steps * args.n_envs // 80
+    eval_freq = args.offline_training_steps * args.n_envs // (80*5)
     video_freq = args.offline_training_steps * args.n_envs // 10
     # Use deterministic actions for evaluation
     eval_callback = OfflineEvalCallback(

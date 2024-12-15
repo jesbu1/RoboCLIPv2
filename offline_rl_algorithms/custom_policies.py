@@ -9,7 +9,6 @@ from stable_baselines3.common.distributions import (
 from stable_baselines3.common.preprocessing import get_action_dim
 from torch import nn
 from typing import Optional, Union, Type, Dict, Any, List
-from gymnasium import spaces
 
 from stable_baselines3.common.policies import (
     BasePolicy,
@@ -376,7 +375,7 @@ class CustomSACPolicy(SACPolicy):
         return CustomContinuousCritic(**critic_kwargs).to(self.device)
 
 
-CustomMlpPolicy = SACPolicy
+CustomMlpPolicy = CustomSACPolicy
 
 
 class CustomCnnPolicy(CustomSACPolicy):
