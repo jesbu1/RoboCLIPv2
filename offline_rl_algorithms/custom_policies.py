@@ -12,6 +12,8 @@ from typing import Optional, Union, Type, Dict, Any, List
 from gymnasium import spaces
 
 from stable_baselines3.common.policies import (
+    BasePolicy,
+    BaseModel,
     ContinuousCritic,
 )
 from stable_baselines3.sac.policies import SACPolicy, get_actor_critic_arch, Actor
@@ -110,7 +112,8 @@ class CustomActor(Actor):
         normalize_images: bool = True,
         use_layer_norm: bool = False,
     ):
-        super().__init__(
+        BasePolicy.__init__(
+            self,
             observation_space,
             action_space,
             features_extractor=features_extractor,
@@ -213,7 +216,8 @@ class CustomContinuousCritic(ContinuousCritic):
         share_features_extractor: bool = True,
         use_layer_norm: bool = True,
     ):
-        super().__init__(
+        BaseModel.__init__(
+            self,
             observation_space,
             action_space,
             features_extractor=features_extractor,
@@ -288,7 +292,8 @@ class CustomSACPolicy(SACPolicy):
         policy_layer_norm: bool = False,
         critic_layer_norm: bool = False,
     ):
-        super().__init__(
+        BasePolicy.__init__(
+            self,
             observation_space,
             action_space,
             features_extractor_class,
@@ -516,3 +521,15 @@ class CustomMultiInputPolicy(CustomSACPolicy):
             policy_layer_norm,
             critic_layer_norm,
         )
+
+
+if __name__ == "__main__":
+    # test that it works
+    import gym
+
+    env = gym.make("Pendulum-v1")
+    policy_test = CustomSACPolicy(
+        env.observation_space,
+        env.action_space,
+        lambda x: 1e-3,
+    )

@@ -493,23 +493,23 @@ def main():
                 min_q_weight=5.0,
                 min_q_temp=1.0,
                 use_calibrated_q=use_calibrated_cql,
-                learning_rate=0.0001,
+                # learning_rate=0.0001,
             )
         else:
             model = model_class.load(args.pretrained, env=envs, tensorboard_log=log_dir)
 
     elif args.algo.lower() == "iql":
         model_class = IQL
-        import stable_baselines3
+        # import stable_baselines3
 
-        action_noise = stable_baselines3.common.noise.OrnsteinUhlenbeckActionNoise(
-            mean=np.ones(4) * 5, sigma=1
-        )
-        n_actions = envs.action_space.shape[-1]
-        action_noise = stable_baselines3.common.noise.NormalActionNoise(
-            mean=np.zeros(n_actions), sigma=0.1 * n_actions
-        )
-        # action_noise = None
+        # action_noise = stable_baselines3.common.noise.OrnsteinUhlenbeckActionNoise(
+        #    mean=np.ones(4) * 5, sigma=1
+        # )
+        # n_actions = envs.action_space.shape[-1]
+        # action_noise = stable_baselines3.common.noise.NormalActionNoise(
+        #    mean=np.zeros(n_actions), sigma=0.1 * n_actions
+        # )
+        action_noise = None
         # policy = SACPolicy(observation_space=envs.observation_space, action_space=envs.action_space, net_arch=[32, 32], lr_schedule=None)
 
         if not args.pretrained:
@@ -588,11 +588,6 @@ def main():
         n_eval_episodes=25,
     )
 
-    online_eval_freq = args.eval_freq // args.n_envs  # // args.nenvsto
-    online_video_freq = args.video_freq // args.n_envs
-    eval_callback.eval_freq = online_eval_freq
-    eval_callback.video_freq = online_video_freq
-
     callback_list = generate_callback_list(args, eval_callback)
 
     # Create the logger
@@ -629,6 +624,11 @@ def main():
         )
 
     logger = model.logger
+
+    online_eval_freq = args.eval_freq // args.n_envs  # // args.nenvsto
+    online_video_freq = args.video_freq // args.n_envs
+    eval_callback.eval_freq = online_eval_freq
+    eval_callback.video_freq = online_video_freq
 
     model.learn(
         total_timesteps=int(args.total_time_steps),
