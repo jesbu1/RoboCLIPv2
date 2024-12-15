@@ -9,6 +9,8 @@ from stable_baselines3.common.vec_env.subproc_vec_env import SubprocVecEnv
 import torch as th
 import numpy as np
 import os
+
+os.environ["TOKENIZERS_PARALLELISM"] = "false"  # to get rid of the warning message
 from stable_baselines3.common.vec_env import DummyVecEnv
 
 from typing import Any, Dict
@@ -515,7 +517,7 @@ def main():
         # policy = SACPolicy(observation_space=envs.observation_space, action_space=envs.action_space, net_arch=[32, 32], lr_schedule=None)
         if not args.pretrained:
             model = model_class(
-                'MlpPolicy',
+                "MlpPolicy",
                 envs,
                 verbose=1,
                 tensorboard_log=log_dir,
@@ -575,7 +577,7 @@ def main():
 
     # Set eval freq and video freq if not set
     # eval will be done 10 times
-    eval_freq = args.offline_training_steps * args.n_envs // (80*5)
+    eval_freq = args.offline_training_steps * args.n_envs // (80 * 5)
     video_freq = args.offline_training_steps * args.n_envs // 10
     # Use deterministic actions for evaluation
     eval_callback = OfflineEvalCallback(
