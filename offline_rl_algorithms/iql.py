@@ -282,14 +282,14 @@ class IQL(OfflineRLAlgorithm):
         reward_values = []
 
         for gradient_step in range(gradient_steps):
-            # Sample replay buffer
-            replay_data = self.replay_buffer.sample(batch_size, env=self._vec_normalize_env)  # type: ignore[union-attr]
-
             # We need to sample because `log_std` may have changed between two gradient steps
             if self.use_sde:
                 self.actor.reset_noise()
 
             for _ in range(int(self.critic_update_ratio)):
+                # Sample replay buffer
+                replay_data = self.replay_buffer.sample(batch_size, env=self._vec_normalize_env)  # type: ignore[union-attr]
+
                 # Compute necessary values for the training update
                 q1_pred, q2_pred = self.critic(
                     replay_data.observations, replay_data.actions
@@ -347,6 +347,17 @@ class IQL(OfflineRLAlgorithm):
                 vf_loss.backward()
                 self.v_net.optimizer.step()
 
+                # Target network update
+                if gradient_step % self.target_update_interval == 0:
+                    polyak_update(
+                        self.critic.parameters(),
+                        self.critic_target.parameters(),
+                        self.tau,
+                    )
+                    polyak_update(
+                        self.batch_norm_stats, self.batch_norm_stats_target, 1.0
+                    )
+
             # Policy loss
             if self.policy_extraction == "awr":
                 advantage = target_q_pred - vf_pred.detach()
@@ -390,13 +401,6 @@ class IQL(OfflineRLAlgorithm):
             # log actor stuff
             actor_losses.append(policy_loss.item())
             actor_log_pis.append(log_prob.mean().item())
-
-            if gradient_step % self.target_update_interval == 0:
-                polyak_update(
-                    self.critic.parameters(), self.critic_target.parameters(), self.tau
-                )
-                polyak_update(self.batch_norm_stats, self.batch_norm_stats_target, 1.0)
-
         self._n_updates += gradient_steps
 
         metrics_dict = {
@@ -406,7 +410,7 @@ class IQL(OfflineRLAlgorithm):
             f"{logging_prefix}/average_q1_values": np.mean(q1_values),
             f"{logging_prefix}/average_q2_values": np.mean(q2_values),
             f"{logging_prefix}/average_v_next_values": np.mean(v_next_values),
-            f"{logging_prefix}/average_reward": replay_data.rewards.mean().item(),
+            f"{logging_prefix}/average_reward": np.mean(reward_values),
             f"{logging_prefix}/average_v_values": np.mean(v_values),
             f"{logging_prefix}/average_q1_target_values": np.mean(q1_target_values),
             f"{logging_prefix}/average_q2_target_values": np.mean(q2_target_values),

@@ -1,4 +1,3 @@
-# TODO: add support for more critics than 1
 # TODO: if offline, just do BC. if online, do SAC
 from typing import Any, ClassVar, Dict, List, Optional, Tuple, Type, TypeVar, Union
 
@@ -13,6 +12,7 @@ from offline_rl_algorithms.base_offline_rl_algorithm import OfflineRLAlgorithm
 from stable_baselines3.common.policies import BasePolicy
 from stable_baselines3.common.type_aliases import GymEnv, MaybeCallback, Schedule
 from stable_baselines3.common.utils import get_parameters_by_name, polyak_update
+from offline_rl_algorithms.bc import BC
 from offline_rl_algorithms.custom_policies import (
     CustomActor,
     CustomSACPolicy,
@@ -24,7 +24,7 @@ from offline_rl_algorithms.custom_policies import (
 
 class RLPD(OfflineRLAlgorithm):
     """
-    RLPD https://arxiv.org/abs/2302.02948
+    RLPD https://arxiv.org/abs/2302.02948. This implementation uses BC for train_offline.
 
     :param policy: The policy model to use (MlpPolicy, CnnPolicy, ...)
     :param env: The environment to learn from (if registered in Gym, can be str)
@@ -217,6 +217,35 @@ class RLPD(OfflineRLAlgorithm):
         self.critic = self.policy.critic.to(th.float32)
         self.critic_target = self.policy.critic_target
 
+    def learn_offline(
+        self,
+        train_steps: int,
+        offline_replay_buffer: ReplayBuffer,
+        batch_size: int = 64,
+        callback: MaybeCallback = None,
+    ) -> None:
+        # override train function to use BC offline training
+        old_train_function = self.train
+        RLPD.train = self._train_offline
+        super().learn_offline(
+            train_steps=train_steps,
+            offline_replay_buffer=offline_replay_buffer,
+            batch_size=batch_size,
+            callback=callback,
+        )
+        # for online training we use RLPD's train function
+        RLPD.train = old_train_function
+
+    def _train_offline(
+        self, gradient_steps: int, batch_size: int = 64, logging_prefix: str = ""
+    ) -> None:
+        return BC.train(
+            self,
+            gradient_steps=gradient_steps,
+            batch_size=batch_size,
+            logging_prefix=logging_prefix,
+        )
+
     def train(
         self, gradient_steps: int, batch_size: int = 64, logging_prefix: str = ""
     ) -> None:
@@ -232,89 +261,125 @@ class RLPD(OfflineRLAlgorithm):
 
         ent_coef_losses, ent_coefs = [], []
         actor_losses, critic_losses = [], []
-        q_values = []
-        q_next_values = []
+        q_values_list = []
+        q_next_values_list = []
         reward_values = []
-        cql_losses = []
 
         for gradient_step in range(gradient_steps):
-            # Sample replay buffer
-            replay_data = self.replay_buffer.sample(batch_size, env=self._vec_normalize_env)  # type: ignore[union-attr]
 
             # We need to sample because `log_std` may have changed between two gradient steps
             if self.use_sde:
                 self.actor.reset_noise()
 
-            # Action by the current actor for the sampled state
-            actions_pi, log_prob = self.actor.action_log_prob(replay_data.observations)
-            log_prob = log_prob.reshape(-1, 1)
+            for critic_update in range(self.critic_update_ratio):
+                # Sample replay buffer
+                replay_data = self.replay_buffer.sample(batch_size, env=self._vec_normalize_env)  # type: ignore[union-attr]
 
-            ent_coef_loss = None
-            if self.ent_coef_optimizer is not None and self.log_ent_coef is not None:
-                # Important: detach the variable from the graph
-                # so we don't change it with other losses
-                # see https://github.com/rail-berkeley/softlearning/issues/60
-                ent_coef = th.exp(self.log_ent_coef.detach())
-                ent_coef_loss = -(
-                    self.log_ent_coef * (log_prob + self.target_entropy).detach()
-                ).mean()
-                ent_coef_losses.append(ent_coef_loss.item())
-            else:
-                ent_coef = self.ent_coef_tensor
-
-            ent_coefs.append(ent_coef.item())
-
-            # Optimize entropy coefficient, also called
-            # entropy temperature or alpha in the paper
-            if ent_coef_loss is not None and self.ent_coef_optimizer is not None:
-                self.ent_coef_optimizer.zero_grad()
-                ent_coef_loss.backward()
-                self.ent_coef_optimizer.step()
-
-            with th.no_grad():
-                # Select action according to policy
-                next_actions, next_log_prob = self.actor.action_log_prob(
-                    replay_data.next_observations
-                )
-                # Compute the next Q values: min over all critics targets
-                next_q_values = th.cat(
-                    self.critic_target(replay_data.next_observations, next_actions),
-                    dim=1,
-                )
-                # sample a random subset of self.n_critics_to_sample critics
-                critic_indices = th.randint(
-                    0, self.policy_kwargs["n_critics"], (self.n_critics_to_sample,)
-                )
-                next_q_values = next_q_values[critic_indices]
-                next_q_values, _ = th.min(next_q_values, dim=1, keepdim=True)
-                # add entropy term
-                if self.train_critic_with_entropy:
-                    next_q_values = next_q_values - ent_coef * next_log_prob.reshape(
-                        -1, 1
+                if critic_update == 0:
+                    # Action by the current actor for the sampled state
+                    actions_pi, log_prob = self.actor.action_log_prob(
+                        replay_data.observations
                     )
-                # td error + entropy term
-                target_q_values = (
-                    replay_data.rewards
-                    + (1 - replay_data.dones) * self.gamma * next_q_values
+                    log_prob = log_prob.reshape(-1, 1)
+
+                    ent_coef_loss = None
+                    if (
+                        self.ent_coef_optimizer is not None
+                        and self.log_ent_coef is not None
+                    ):
+                        # Important: detach the variable from the graph
+                        # so we don't change it with other losses
+                        # see https://github.com/rail-berkeley/softlearning/issues/60
+                        ent_coef = th.exp(self.log_ent_coef.detach())
+                        ent_coef_loss = -(
+                            self.log_ent_coef
+                            * (log_prob + self.target_entropy).detach()
+                        ).mean()
+                        ent_coef_losses.append(ent_coef_loss.item())
+                    else:
+                        ent_coef = self.ent_coef_tensor
+
+                    ent_coefs.append(ent_coef.item())
+
+                    # Optimize entropy coefficient, also called
+                    # entropy temperature or alpha in the paper
+                    if (
+                        ent_coef_loss is not None
+                        and self.ent_coef_optimizer is not None
+                    ):
+                        self.ent_coef_optimizer.zero_grad()
+                        ent_coef_loss.backward()
+                        self.ent_coef_optimizer.step()
+
+                with th.no_grad():
+                    # Select action according to policy
+                    next_actions, next_log_prob = self.actor.action_log_prob(
+                        replay_data.next_observations
+                    )
+                    # Compute the next Q values: min over all critics targets
+                    next_q_values = th.cat(
+                        self.critic_target(replay_data.next_observations, next_actions),
+                        dim=1,
+                    )
+                    # sample a random subset of self.n_critics_to_sample critics
+                    critic_indices = th.randint(
+                        0, self.policy_kwargs["n_critics"], (self.n_critics_to_sample,)
+                    )
+                    next_q_values = next_q_values[critic_indices]
+                    next_q_values, _ = th.min(next_q_values, dim=1, keepdim=True)
+
+                    # add entropy term
+                    if self.train_critic_with_entropy:
+                        next_q_values = (
+                            next_q_values - ent_coef * next_log_prob.reshape(-1, 1)
+                        )
+
+                    # td error + entropy term
+                    target_q_values = (
+                        replay_data.rewards
+                        + (1 - replay_data.dones) * self.gamma * next_q_values
+                    )
+
+                # Get current Q-values estimates for each critic network
+                # using action from the replay buffer
+                current_q_values = self.critic(
+                    replay_data.observations, replay_data.actions
                 )
 
-            # Get current Q-values estimates for each critic network
-            # using action from the replay buffer
-            current_q_values = self.critic(
-                replay_data.observations, replay_data.actions
-            )
+                # Compute critic loss
+                critic_loss = 0.5 * sum(
+                    F.mse_loss(current_q, target_q_values)
+                    for current_q in current_q_values
+                )
+                assert isinstance(critic_loss, th.Tensor)  # for type checker
+                critic_losses.append(critic_loss.item())  # type: ignore[union-attr]
 
-            # Compute critic loss
-            critic_loss = 0.5 * sum(
-                F.mse_loss(current_q, target_q_values) for current_q in current_q_values
-            )
-            assert isinstance(critic_loss, th.Tensor)  # for type checker
-            critic_losses.append(critic_loss.item())  # type: ignore[union-attr]
+                # Optimize the critic
+                self.critic.optimizer.zero_grad()
+                critic_loss.backward()
+                self.critic.optimizer.step()
 
-            # Optimize the critic
-            self.critic.optimizer.zero_grad()
-            critic_loss.backward()
-            self.critic.optimizer.step()
+                # target network update
+                if gradient_step % self.target_update_interval == 0:
+                    polyak_update(
+                        self.critic.parameters(),
+                        self.critic_target.parameters(),
+                        self.tau,
+                    )
+                    polyak_update(
+                        self.batch_norm_stats, self.batch_norm_stats_target, 1.0
+                    )
+
+                # log average in batch reward
+                reward_values.append(replay_data.rewards.mean().item())
+
+                # log average q values
+                q_values_list.append(
+                    np.mean([q.mean().item() for q in current_q_values])
+                )
+
+                # log average next q values
+                q_next_values_list.append(next_q_values.mean().item())
 
             # Compute actor loss
             # Alternative: actor_loss = th.mean(log_prob - qf1_pi)
@@ -331,24 +396,15 @@ class RLPD(OfflineRLAlgorithm):
             actor_loss.backward()
             self.actor.optimizer.step()
 
-            if gradient_step % self.target_update_interval == 0:
-                polyak_update(
-                    self.critic.parameters(), self.critic_target.parameters(), self.tau
-                )
-                polyak_update(self.batch_norm_stats, self.batch_norm_stats_target, 1.0)
-
         self._n_updates += gradient_steps
 
         metrics_dict = {
             f"{logging_prefix}/ent_coef": np.mean(ent_coefs),
             f"{logging_prefix}/actor_loss": np.mean(actor_losses),
             f"{logging_prefix}/critic_loss": np.mean(critic_losses),
-            f"{logging_prefix}/cql_loss": np.mean(cql_losses),
-            f"{logging_prefix}/average_q1_values": q1_current_actions.mean().item(),
-            f"{logging_prefix}/average_q2_values": q2_current_actions.mean().item(),
-            f"{logging_prefix}/average_q1_next_values": q1_next_actions.mean().item(),
-            f"{logging_prefix}/average_q2_next_values": q2_next_actions.mean().item(),
-            f"{logging_prefix}/average_reward": replay_data.rewards.mean().item,
+            f"{logging_prefix}/average_q_values": np.mean(q_values_list),
+            f"{logging_prefix}/average_q_next_values": np.mean(q_next_values_list),
+            f"{logging_prefix}/average_reward": np.mean(reward_values),
         }
 
         if len(ent_coef_losses) > 0:
