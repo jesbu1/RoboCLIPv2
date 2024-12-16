@@ -336,6 +336,8 @@ def get_policy_algorithm(cfg, envs, log_dir):
                 policy_extraction=cfg.general_training.policy_extraction,
                 advantage_temp=cfg.general_training.awr_advantage_temp,
                 ddpg_bc_weight=cfg.general_training.ddpg_bc_weight,
+                train_freq=(cfg.environment.train_freq_num, cfg.environment.train_freq_type),
+                critic_update_ratio=cfg.general_training.critic_update_ratio,
             )
         else:
             model = model_class.load(args.pretrained, env=envs, tensorboard_log=log_dir)
