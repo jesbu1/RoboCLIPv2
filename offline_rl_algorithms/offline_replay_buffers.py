@@ -64,6 +64,8 @@ class H5ReplayBuffer(ReplayBuffer):
         mc_return_gamma: float = 0.99,
         clip_actions: bool = True,
         sparsify_rewards: bool = False,
+        dense_rewards_at_end: bool = False,
+        filter_instructions: List[str] = None,
     ):
         """
         Initialize the replay buffer.
@@ -78,7 +80,9 @@ class H5ReplayBuffer(ReplayBuffer):
         :param mc_return_gamma: The discount factor for the Monte-Carlo returns
         :param clip_actions: Whether to clip the actions to the action space to [-1, 1]
         :param sparsify_rewards: Converts reward to done
+        :param dense_rewards_at_end: Whether to use the reward sum at the end of the episode instead.
         """
+        assert not (dense_rewards_at_end and sparsify_rewards), "Cannot use both dense rewards at end and sparsify as a precaution"
         with h5py.File(h5_path, "r") as f:
             observations = f["state"][()]
             lang_embeddings = f["lang_embedding"][()]
@@ -92,6 +96,29 @@ class H5ReplayBuffer(ReplayBuffer):
                 rewards = f["rewards"][()]
             dones = f["done"][()]
             # timesteps = f["timesteps"][()]
+
+            # Look at the instructions and only keep the ones that are in the filter_instructions
+
+            if filter_instructions is not None:
+                instructions = f["string"][()]
+                indices_to_keep = []
+                for i in range(len(instructions)):
+                    if instructions[i].decode("utf-8") in filter_instructions:
+                        indices_to_keep.append(i)
+                observations = observations[indices_to_keep]
+                lang_embeddings = lang_embeddings[indices_to_keep]
+                next_observations = next_observations[indices_to_keep]
+                actions = actions[indices_to_keep]
+                rewards = rewards[indices_to_keep]
+                dones = dones[indices_to_keep]
+
+        if dense_rewards_at_end:
+            rewards = np.zeros_like(rewards)
+            prev_start = 0
+            for i in range(len(rewards)):
+                if dones[i] == 1:
+                    rewards[i] = np.sum(rewards[prev_start:i])
+                    prev_start = i
 
         # calculate monte-carlo returns
         if calculate_mc_returns:

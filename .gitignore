@@ -1,4 +1,4 @@
-
+outputs/
 mjrl
 data
 *.h5

@@ -41,14 +41,16 @@ from offline_rl_algorithms.iql import IQL
 from offline_rl_algorithms.bc import BC
 from offline_rl_algorithms.base_offline_rl_algorithm import OfflineRLAlgorithm
 from offline_rl_algorithms.wandb_logger import WandBLogger
+from offline_rl_algorithms.callbacks import CustomWandbCallback, OfflineEvalCallback
 
 from encoders.xclip_encoder import XCLIPEncoder
 
 
-from envs.metaworld_envs.metaworld import create_wrapped_env
+from envs.metaworld_envs.metaworld import create_wrapped_env, instruction_to_environment, environment_to_instruction
 
 
 from stable_baselines3.common.policies import ActorCriticPolicy
+
 
 
 def parse_entropy_term(value):
@@ -67,184 +69,18 @@ def generate_callback_list(args, eval_callback: EvalCallback):
     return callback
 
 
-class OfflineEvalCallback(EvalCallback):
-    def __init__(self, *args, video_freq, **kwargs):
-        super(OfflineEvalCallback, self).__init__(*args, **kwargs)
-        self.video_freq = video_freq
-        # we need to overide num_timesteps as EvalCallback uses it to align the built in logger's x-axis
-        # we are using wandb so now we're using self.n_calls as the step for everything
-        self.num_timesteps = lambda x: self.n_calls  # convert num_timst
 
-    def _on_step(self) -> bool:
-        # print(self.n_calls, self.n_calls % self.video_freq)
-        # Log policy gradients
-        policy_gradients = [
-            param.grad.view(-1).detach().cpu().numpy()  # Flatten each gradient tensor
-            for param in self.model.policy.actor.parameters()
-            if param.grad is not None
-        ]
-        if len(policy_gradients) != 0:
-
-            all_gradients = np.concatenate(policy_gradients)
-            self.logger.record("grad/policy_histogram", wandb.Histogram(all_gradients))
-        if hasattr(self.model, "v_net"):
-            # Log critic gradients
-            critic_gradients = [
-                param.grad.view(-1)
-                .detach()
-                .cpu()
-                .numpy()  # Flatten each gradient tensor
-                for param in self.model.policy.critic.parameters()
-                if param.grad is not None
-            ]
-            if len(critic_gradients) != 0:
-                all_gradients = np.concatenate(critic_gradients)
-                self.logger.record(
-                    "grad/critic_histogram", wandb.Histogram(all_gradients)
-                )
-
-            # Log critic_target gradients
-            critic_target_gradients = [
-                param.grad.view(-1)
-                .detach()
-                .cpu()
-                .numpy()  # Flatten each gradient tensor
-                for param in self.model.policy.critic_target.parameters()
-                if param.grad is not None
-            ]
-            if len(critic_target_gradients) != 0:
-                all_gradients = np.concatenate(critic_target_gradients)
-                self.logger.record(
-                    "grad/critic_target_histogram", wandb.Histogram(all_gradients)
-                )
-
-            # Log v_net gradients
-            v_net_gradients = [
-                param.grad.view(-1)
-                .detach()
-                .cpu()
-                .numpy()  # Flatten each gradient tensor
-                for param in self.model.v_net.parameters()
-                if param.grad is not None
-            ]
-            if len(v_net_gradients) != 0:
-                all_gradients = np.concatenate(v_net_gradients)
-                self.logger.record(
-                    "grad/v_net_histogram", wandb.Histogram(all_gradients)
-                )
-            # Log critic weights
-            critic_weights = [
-                param.data.view(-1).detach().cpu().numpy()  # Flatten each weight tensor
-                for param in self.model.policy.critic.parameters()
-            ]
-            if len(critic_weights) != 0:
-                all_weights = np.concatenate(critic_weights)
-                self.logger.record(
-                    "weights/critic_histogram", wandb.Histogram(all_weights)
-                )
-
-        # Log critic_target weights
-        critic_target_weights = [
-            param.data.view(-1).detach().cpu().numpy()  # Flatten each weight tensor
-            for param in self.model.policy.critic_target.parameters()
-        ]
-        if len(critic_target_weights) != 0:
-            all_weights = np.concatenate(critic_target_weights)
-            self.logger.record(
-                "weights/critic_target_histogram", wandb.Histogram(all_weights)
-            )
-            # Log critic_target weights
-            critic_target_weights = [
-                param.data.view(-1).detach().cpu().numpy()  # Flatten each weight tensor
-                for param in self.model.policy.critic_target.parameters()
-            ]
-            if len(critic_target_weights) != 0:
-                all_weights = np.concatenate(critic_target_weights)
-                self.logger.record(
-                    "weights/critic_target_histogram", wandb.Histogram(all_weights)
-                )
-
-            # Log v_net weights
-            v_net_weights = [
-                param.data.view(-1).detach().cpu().numpy()  # Flatten each weight tensor
-                for param in self.model.v_net.parameters()
-            ]
-            if len(v_net_weights) != 0:
-                all_weights = np.concatenate(v_net_weights)
-                self.logger.record(
-                    "weights/v_net_histogram", wandb.Histogram(all_weights)
-                )
-
-        # Log policy weights
-        actor_weights = [
-            param.data.view(-1).detach().cpu().numpy()  # Flatten each weight tensor
-            for param in self.model.policy.actor.parameters()
-        ]
-        if len(actor_weights) != 0:
-            all_weights = np.concatenate(actor_weights)
-            self.logger.record("weights/policy_histogram", wandb.Histogram(all_weights))
-
-        # breakpoint()
-        if (
-            self.video_freq > 0 and self.n_calls % self.video_freq == 0
-        ) or self.n_calls == 1:
-            video_buffer = self.record_video()
-            # self.logger.record({f"evaluation_video": wandb.Video(video_buffer, fps=20, format="mp4")}, commit=False)
-            self.logger.record(
-                "eval/evaluation_video", wandb.Video(video_buffer, fps=20, format="mp4")
-            )
-            # self.logger.record({f"eval/evaluate_succ": success}, step = self.n_calls)
-            print("video logged")
-
-        self.logger.record("num_timesteps", self.num_timesteps)
-
-        result = super(OfflineEvalCallback, self)._on_step()
-
-        return result
-
-    def record_video(self):
-        frames = []
-        obs = self.eval_env.reset()
-        # success = 0
-        # breakpoint()
-
-        # print the first layer's weight of self.model.policy
-        print(self.model.policy.actor.latent_pi[0].weight[0][:10])
-
-        for _ in range(128):  # You can adjust the number of steps for recording
-            frame = self.eval_env.render(mode="rgb_array")
-            # downsample frame
-            frame = frame[::3, ::3, :3]
-            frames.append(frame)
-            action, _ = self.model.predict(obs, deterministic=False)
-            # action += np.random.normal(5, 0.1, size=action.shape)
-            # action[0] += 5
-            # print(action)
-            obs, _, _, info = self.eval_env.step(action)
-            # print(type(info))
-            # print(info)
-            # if info['success']:
-            #     success = 1
-            #     break
-
-        video_buffer = io.BytesIO()
-
-        with imageio.get_writer(video_buffer, format="mp4", fps=20) as writer:
-            for frame in frames:
-                writer.append_data(frame)
-
-        video_buffer.seek(0)
-        return video_buffer
-
-
-class CustomWandbCallback(WandbCallback):
-    def _on_step(self):
-        if "metrics" in self.locals:
-            self.logger.record_dict(self.locals["metrics"])
-        self.logger.dump(
-            self.n_calls
-        )  # this ensures that dump gets called, otherwise it's only called in EvalCallback whenever an eval happens
-
+def str2bool(v):
+    # because argparse is trash
+    # used for parsing boolean arguments
+    if isinstance(v, bool):
+        return v
+    if v.lower() in ("yes", "true", "t", "y", "1"):
+        return True
+    elif v.lower() in ("no", "false", "f", "n", "0"):
+        return False
+    else:
+        raise argparse.ArgumentTypeError("Boolean value expected.")
 
 def get_args():
     parser = argparse.ArgumentParser(description="RL")
@@ -256,13 +92,14 @@ def get_args():
     )
     parser.add_argument("--text_string", type=str, default="opening window")
     parser.add_argument("--dir_add", type=str, default="")
-    parser.add_argument("--env_id", type=str, default="window-open-v2")
+    # parser.add_argument("--env_id", type=str, default="window-open-v2")
     parser.add_argument("--offline_training_steps", type=int, default=100000)
     parser.add_argument("--total_time_steps", type=int, default=1000000)
     parser.add_argument("--n_envs", type=int, default=3)
     parser.add_argument("--n_steps", type=int, default=128)
     parser.add_argument("--pretrained", type=str, default=None)
     parser.add_argument("--wandb", action="store_true")
+    parser.add_argument("--wandb_note", type=str, default=None)
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument(
         "--eval_freq", default=50000, type=int, help="online eval frequency"
@@ -278,14 +115,17 @@ def get_args():
     parser.add_argument("--random_reset", action="store_true")
     parser.add_argument("--time", action="store_false")
     parser.add_argument("--ignore_language", action="store_true")
-    parser.add_argument("--mix_buffers", action="store_true")
+    parser.add_argument("--mix_buffers", 
+                                type=str2bool,
+        default=True,
+        const=True,
+        nargs="?",)
     parser.add_argument("--offline_h5_path", type=str, default=None)
 
     parser.add_argument(
         "--train_orcale", action="store_true"
     )  # load latent from h5 file
     parser.add_argument("--warm_up_runs", type=int, default=0)
-    parser.add_argument("--project_reward", action="store_true")
     parser.add_argument("--norm_input", action="store_true")
     parser.add_argument("--norm_output", action="store_true")
     parser.add_argument("--time_reward", type=float, default=1.0)
@@ -298,7 +138,11 @@ def get_args():
     )
     parser.add_argument("--frame_length", type=int, default=32)
     parser.add_argument("--exp_name_end", type=str, default="triplet_hard_neg")
-    parser.add_argument("--sparse_only", action="store_true")
+    parser.add_argument("--sparse_only", 
+                                type=str2bool,
+        default=True,
+        const=True,
+        nargs="?",)
     parser.add_argument("--baseline", action="store_true")
     parser.add_argument("--obs_env", action="store_true")
 
@@ -306,108 +150,16 @@ def get_args():
     return args
 
 
-class SingleLayerMLP(th.nn.Module):
-    def __init__(self, input_dim, output_dim, normalize=True):
-        super(SingleLayerMLP, self).__init__()
-        self.linear = th.nn.Linear(input_dim, output_dim)
-        self.normalize = normalize
 
-    def forward(self, x):
-        x = self.linear(x)
-        # Apply L2 normalization to each embedding
-        if self.normalize:
-            x = F.normalize(x, p=2, dim=1)
-        return x
-
-
-def main():
-    global args
-    global log_dir
-    args = get_args()
-
-    # set seed
-    th.manual_seed(args.seed)
-    np.random.seed(args.seed)
-    random.seed(args.seed)
-
-    WANDB_ENTITY_NAME = "clvr"
-    WANDB_PROJECT_NAME = "roboclip-v2"
-
-    experiment_name = f"test_offline_rl_{args.algo}"
-    # if args.pca_path != None:
-    #     experiment_name = "ep500_PCA_" + "xclip_textTRANS_" + args.algo + "_" + args.env_id
-    # else:
-    #     experiment_name = "ep500_NOPCA_" +"xclip_textTRANS_" + args.algo + "_" + args.env_id
-
-    # experiment_name = args.algo + "_" + args.env_id
-    if args.train_orcale:
-        experiment_name = experiment_name + "_Oracle"
-    if args.threshold_reward:
-        experiment_name = experiment_name + "_Thld"
-    if args.project_reward:
-        experiment_name = experiment_name + "_ProjReward"
-    # if args.norm_input:
-    #     experiment_name = experiment_name + "_NormIn"
-    # if args.norm_output:
-    #     experiment_name = experiment_name + "_NormOut"
-    # if args.time_reward != 1.0:
-    #     experiment_name = experiment_name + "_XReward" + str(args.time_reward)
-    # if args.time:
-    #     experiment_name = experiment_name + "_Time"
-    # else:
-    #     experiment_name = experiment_name + "_NoTime"
-    if args.succ_end:
-        experiment_name = experiment_name + "_SuccEnd"
-    # if args.random_reset:
-    #     experiment_name = experiment_name + "_RandReset"
-
-    # if args.succ_bonus > 0:
-    #     experiment_name = experiment_name + "_SuccBonus" + str(args.succ_bonus)
-    # if args.time_penalty > 0:
-    #     experiment_name = experiment_name + "_TimePenalty" + str(args.time_penalty)
-    # if args.algo.lower() == 'sac':
-    # experiment_name = experiment_name + "_Entropy" + str(args.entropy_term)
-    experiment_name = experiment_name + args.exp_name_end
-    run_group = experiment_name + "NEW"
-    # experiment_name = experiment_name + "_" + str(args.seed) + "NEW"
-    wandb.disabled = True
-
-    if args.wandb:
-        run = wandb.init(
-            entity=WANDB_ENTITY_NAME,
-            project=WANDB_PROJECT_NAME,
-            group=run_group,
-            config=args,
-            name=experiment_name,
-            monitor_gym=True,
-            sync_tensorboard=True,
-        )
-
-        # column1 = ["text_string"]
-        # table1 = wandb.Table(columns=column1)
-        # table1.add_data([args.text_string])
-
-        # column2 = ["env_id"]
-        # table2 = wandb.Table(columns=column2)
-        # table2.add_data([args.env_id])
-        # self.logger.record({"text_string": table1, "env_id": table2})
-
-    # log_dir = f"/scr/jzhang96/logs/baseline_logs/{experiment_name}"
-    log_dir = f"logs/baseline_logs/{experiment_name}"
-    # log_dir = f"/home/jzhang96/logs/baseline_logs/{experiment_name}"
-
-    args.log_dir = log_dir
-
-    if not os.path.exists(log_dir):
-        os.makedirs(log_dir)
+# Return training and evaluation envs
+def create_envs(args, env_id, text_instruction, use_simulator_reward):
 
     # compute a language feature
     encoder = XCLIPEncoder()
-    lang_feat = encoder.encode_text(args.text_string)
+    lang_feat = encoder.encode_text(text_instruction)
     lang_feat = lang_feat.to("cpu").detach().squeeze()
 
     ignore_language = args.ignore_language
-    use_language = not ignore_language
 
     if ignore_language:
         lang_feat = None
@@ -416,10 +168,10 @@ def main():
         envs = SubprocVecEnv(
             [
                 create_wrapped_env(
-                    args.env_id,
+                    env_id,
                     language_features=lang_feat,
                     success_bonus=args.succ_bonus,
-                    use_simulator_reward=True,
+                    use_simulator_reward=use_simulator_reward,
                     goal_observable=True,
                 )
                 for i in range(args.n_envs)
@@ -429,22 +181,60 @@ def main():
         envs = DummyVecEnv(
             [
                 create_wrapped_env(
-                    args.env_id,
+                    env_id,
                     language_features=lang_feat,
                     success_bonus=args.succ_bonus,
-                    use_simulator_reward=False,
+                    use_simulator_reward=use_simulator_reward,
+                    goal_observable=True,
                 )
             ]
         )
 
+
+
+    if args.n_envs > 1:
+        eval_env = SubprocVecEnv(
+            [
+                create_wrapped_env(
+                    env_id,
+                    language_features=lang_feat,
+                    success_bonus=args.succ_bonus,
+                    use_simulator_reward=True,
+                    monitor=True,
+                    goal_observable=True,
+                )
+                for i in range(args.n_envs)
+            ]
+        )  # KitchenEnvDenseOriginalReward(time=True)
+    else:
+        eval_env = DummyVecEnv(
+            [
+                create_wrapped_env(
+                    env_id,
+                    language_features=lang_feat,
+                    success_bonus=args.succ_bonus,
+                    use_simulator_reward=True,
+                    monitor=True,
+                    goal_observable=True,
+                )
+            ]
+        )  # KitchenEnvDenseOriginalReward(time=True)
+
+    return envs, eval_env
+
+
+def get_policy_algorithm(args, envs, log_dir):
+
+
     # We don't need as large of a network there is no language
-    if ignore_language:
+    if args.ignore_language:
         policy_kwargs = {
             "net_arch": [256, 256],
         }
     else:
         policy_kwargs = {
-            "net_arch": dict(pi=[512, 256], qf=[512, 256, 256]),
+            "net_arch": dict(pi=[256, 256], qf=[256, 256]),
+            #"net_arch": dict(pi=[128, 128], qf=[256, 128]),
             "policy_layer_norm": True,
             "critic_layer_norm": True,
             # 'activation_fn': nn.Sequential(nn.ReLU(), nn.LayerNorm(256))
@@ -492,7 +282,7 @@ def main():
                 tensorboard_log=log_dir,
                 ent_coef="auto",
                 buffer_size=args.total_time_steps,
-                learning_starts=4000,
+                learning_starts=0,
                 seed=args.seed,
                 min_q_weight=5.0,
                 min_q_temp=1.0,
@@ -522,7 +312,7 @@ def main():
                 verbose=1,
                 tensorboard_log=log_dir,
                 buffer_size=args.total_time_steps,
-                learning_starts=4000,
+                learning_starts=0,
                 seed=args.seed,
                 action_noise=action_noise,
                 policy_kwargs=policy_kwargs,
@@ -539,7 +329,7 @@ def main():
                 verbose=1,
                 tensorboard_log=log_dir,
                 buffer_size=args.total_time_steps,
-                learning_starts=4000,
+                learning_starts=0,
                 seed=args.seed,
             )
         else:
@@ -547,37 +337,86 @@ def main():
     else:
         raise ValueError("Unsupported algorithm. Choose either 'ppo' or 'sac'.")
 
-    if args.n_envs > 1:
-        eval_env = SubprocVecEnv(
-            [
-                create_wrapped_env(
-                    args.env_id,
-                    language_features=lang_feat,
-                    success_bonus=args.succ_bonus,
-                    use_simulator_reward=True,
-                    monitor=True,
-                    goal_observable=True,
-                )
-                for i in range(args.n_envs)
-            ]
-        )  # KitchenEnvDenseOriginalReward(time=True)
-    else:
-        eval_env = DummyVecEnv(
-            [
-                create_wrapped_env(
-                    args.env_id,
-                    language_features=lang_feat,
-                    success_bonus=args.succ_bonus,
-                    use_simulator_reward=True,
-                    monitor=True,
-                    goal_observable=True,
-                )
-            ]
-        )  # KitchenEnvDenseOriginalReward(time=True)
+
+    return model, model_class
+
+
+def main():
+
+    global args
+    global log_dir
+    args = get_args()
+
+    # set seed
+    th.manual_seed(args.seed)
+    np.random.seed(args.seed)
+    random.seed(args.seed)
+
+    WANDB_ENTITY_NAME = "clvr"
+    WANDB_PROJECT_NAME = "roboclip-v2"
+
+    experiment_name = f"test_offline_rl_{args.algo}"
+    # if args.pca_path != None:
+    #     experiment_name = "ep500_PCA_" + "xclip_textTRANS_" + args.algo + "_" + args.env_id
+    # else:
+    #     experiment_name = "ep500_NOPCA_" +"xclip_textTRANS_" + args.algo + "_" + args.env_id
+
+    # experiment_name = args.algo + "_" + args.env_id
+    if args.train_orcale:
+        experiment_name = experiment_name + "_Oracle"
+    if args.threshold_reward:
+        experiment_name = experiment_name + "_Thld"
+    if args.succ_end:
+        experiment_name = experiment_name + "_SuccEnd"
+    experiment_name = experiment_name + args.exp_name_end
+    run_group = experiment_name + "NEW"
+    wandb.disabled = True
+
+    if args.wandb:
+        run = wandb.init(
+            entity=WANDB_ENTITY_NAME,
+            project=WANDB_PROJECT_NAME,
+            group=run_group,
+            config=args,
+            name=experiment_name,
+            monitor_gym=True,
+            sync_tensorboard=True,
+            notes=args.wandb_note,
+        )
+
+        # column1 = ["text_string"]
+        # table1 = wandb.Table(columns=column1)
+        # table1.add_data([args.text_string])
+
+        # column2 = ["env_id"]
+        # table2 = wandb.Table(columns=column2)
+        # table2.add_data([args.env_id])
+        # self.logger.record({"text_string": table1, "env_id": table2})
+
+    log_dir = f"logs/baseline_logs/{experiment_name}"
+
+
+    # args.log_dir = log_dir # temporary hopefully
+
+    if not os.path.exists(log_dir):
+        os.makedirs(log_dir)
+
+
+    # Set training and test tasks, by language instruction (for now)
+    # offline_tasks = ["assembling", "picking bin", "closing box", "pressing button", "opening window"]
+    offline_tasks = ["opening window"]
+
+    online_task_env_id = instruction_to_environment[args.text_string]
+    online_task_string = args.text_string
+
+    envs, eval_env = create_envs(args, online_task_env_id, online_task_string, use_simulator_reward=(not args.sparse_only))
+
+
+    model, model_class = get_policy_algorithm(args, envs, log_dir)
+
 
     # Set eval freq and video freq if not set
-    # eval will be done 10 times
-    eval_freq = args.offline_training_steps * args.n_envs // (80 * 5)
+    eval_freq = args.offline_training_steps * args.n_envs // (10)
     video_freq = args.offline_training_steps * args.n_envs // 10
     # Use deterministic actions for evaluation
     eval_callback = OfflineEvalCallback(
@@ -595,12 +434,12 @@ def main():
 
     # Create the logger
     wandb_logger = WandBLogger()
-
     model.set_logger(wandb_logger)
 
-    # load the offline replay buffer
-    if isinstance(model, OfflineRLAlgorithm):
-        # if False:
+
+    ### Learn offline ###
+    # if isinstance(model, OfflineRLAlgorithm):
+    if False:
         # h5_path = "updated_trajs.h5"
         # h5_path = 'data/h5_buffers/updated_trajs/metaworld_dataset_sparse_only.h5'
         # h5_path = 'data/h5_buffers/updated_trajs/metaworld_window_traj_sparse_only.h5'
@@ -613,11 +452,15 @@ def main():
             h5_path = default_h5_path
         else:
             h5_path = args.offline_h5_path
+
+        use_language = not args.ignore_language
+
         buffer = H5ReplayBuffer(
             h5_path,
             use_language_embeddings=use_language,
             success_bonus=args.succ_bonus,
-            sparsify_rewards=True,
+            sparsify_rewards=args.sparse_only,
+            filter_instructions=offline_tasks,
         )
         model.learn_offline(
             offline_replay_buffer=buffer,
@@ -637,6 +480,7 @@ def main():
         total_timesteps=int(args.total_time_steps),
         callback=callback_list,
         logger=logger,
+        progress_bar=True
     )
     model.save(f"{log_dir}/{experiment_name}")
 
@@ -647,7 +491,8 @@ def main():
 
     # if args.wandb:
     #     self.logger.record({"eval_SR/evaluate_succ": success_rate}, step = 0)
-
+    if args.wandb:
+        run.finish()
 
 if __name__ == "__main__":
     main()

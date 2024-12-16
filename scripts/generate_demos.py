@@ -9,65 +9,13 @@ import imageio
 from tqdm import tqdm
 import h5py
 
-from envs.metaworld_envs.metaworld import create_wrapped_env
+from envs.metaworld_envs.metaworld import create_wrapped_env, environment_to_instruction
 
 
 resolution = (640, 480)
 camera = 'corner2' # one of ['corner', 'topview', 'behindGripper', 'gripperPOV']
 flip = False # if True, flips output image 180 degrees
 
-environment_to_instruction = {
-    'assembly-v2': 'assembling',
-    'basketball-v2': 'playing basketball',
-    'bin-picking-v2': 'picking bin',
-    'box-close-v2': 'closing box',
-    'button-press-topdown-v2': 'pressing button',
-    'button-press-topdown-wall-v2': 'pressing button',
-    'button-press-v2': 'pressing button',
-    'button-press-wall-v2': 'pressing button',
-    'coffee-button-v2': 'pressing button',
-    'coffee-pull-v2': 'pulling cup',
-    'coffee-push-v2': 'pushing cup',
-    'dial-turn-v2': 'turning dial.',
-    'disassemble-v2': 'disassembling',
-    'door-close-v2': 'closing door',
-    'door-lock-v2': 'locking door',
-    'door-open-v2': 'opening door',
-    'door-unlock-v2': 'unlocking door',
-    'hand-insert-v2': 'inserting bin',
-    'drawer-close-v2': 'closing drawer',
-    'drawer-open-v2': 'opening drawer',
-    'faucet-open-v2': 'opening faucet',
-    'faucet-close-v2': 'closing faucet',
-    'hammer-v2': 'hammering nail',
-    'handle-press-side-v2': 'pressing handle',
-    'handle-press-v2': 'pressing handle',
-    'handle-pull-side-v2': 'pulling handle',
-    'handle-pull-v2': 'pulling handle',
-    'lever-pull-v2': 'pulling lever.',
-    'peg-insert-side-v2': 'inserting peg',
-    'pick-place-wall-v2': 'placing bin to shelf',
-    'pick-out-of-hole-v2': 'picking bin',
-    'reach-v2': 'reaching red',
-    'push-back-v2': 'pushing bin back.',
-    'push-v2': 'pushing bin',
-    'pick-place-v2': 'placing bin to shelf',
-    'plate-slide-v2': 'sliding plate',
-    'plate-slide-side-v2': 'sliding plate',
-    'plate-slide-back-v2': 'sliding plate',
-    'plate-slide-back-side-v2': 'sliding plate',
-    'peg-unplug-side-v2': 'unpluging peg',
-    'soccer-v2': 'kicking soccer ball',
-    'stick-push-v2': 'pushing stick',
-    'stick-pull-v2': 'pulling stick',
-    'push-wall-v2': 'pushing bin',
-    'reach-wall-v2': 'reaching red',
-    'shelf-place-v2': 'placing bin to shelf',
-    'sweep-into-v2': 'sweeping bin',
-    'sweep-v2': 'sweeping bin',
-    'window-open-v2': 'opening window',
-    'window-close-v2': 'closing window'
-}
 
 config = [
     # env, action noise pct, cycles, quit on success
@@ -155,14 +103,14 @@ def writer_for_gif(tag, fps, res):
 
 
 def main():
-    collect_num = 50
+    collect_num = 15
     config_range = (0,len(config))
     
     base_path = './data/h5_buffers/orig/'
     if not os.path.exists(base_path):
         os.makedirs(base_path)
 
-    h5_traj = h5py.File(os.path.join(base_path, 'metaworld_traj_50_demos.h5'), 'w')
+    h5_traj = h5py.File(os.path.join(base_path, 'metaworld_traj_15_demos.h5'), 'w')
     # h5_video = h5py.File(os.path.join(base_path, 'metaworld_window_video.h5'), 'w')
 
     state_list = []

@@ -1,0 +1,29 @@
+# @package _group_
+
+defaults:
+  - base_config
+  - _self_
+
+general_training:
+  algo: iql
+  action_noise: 0.1 # sigma
+  sparse_only: false
+  awr_advantage_temp: 5.0
+
+model:
+  policy_layer_norm: false
+  critic_layer_norm: false
+  pi_net_arch: [512, 256]
+  qf_net_arch: [512, 256]
+
+offline_training:
+  offline_h5_path: 'data/h5_buffers/updated_trajs/metaworld_window_traj_orig_reward.h5'
+  offline_tasks: ["opening window"]
+  offline_training_steps: 0
+
+online_training:
+  total_time_steps: 1000000
+
+environment:
+  text_string: "opening window"
+  ignore_language: true
