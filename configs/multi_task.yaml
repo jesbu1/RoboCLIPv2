@@ -1,0 +1,22 @@
+# @package _group_
+
+defaults:
+  - base_config
+  - _self_
+
+model:
+  policy_layer_norm: true
+  critic_layer_norm: true
+  pi_net_arch: [128, 128]
+  qf_net_arch: [128, 128]
+
+
+offline_training:
+  offline_tasks: ["opening window"]
+  offline_training_steps: 1000
+
+online_training:
+  total_time_steps: 100000
+
+environment:
+  text_string: "opening window"

@@ -90,7 +90,7 @@ class OfflineRLAlgorithm(OffPolicyAlgorithm):
         env: Union[GymEnv, str],
         learning_rate: Union[float, Schedule] = 3e-4,
         buffer_size: int = 1_000_000,  # 1e6
-        learning_starts: int = 100,
+        learning_starts: int = 0,
         batch_size: int = 256,
         tau: float = 0.005,
         gamma: float = 0.99,
@@ -188,6 +188,7 @@ class OfflineRLAlgorithm(OffPolicyAlgorithm):
         callback = self._init_callback(callback, True)
         callback.on_training_start(locals(), globals())
 
+        # Swap replay buffer for offline training
         old_replay_buffer = self.replay_buffer
         self.replay_buffer = offline_replay_buffer
 
@@ -199,6 +200,8 @@ class OfflineRLAlgorithm(OffPolicyAlgorithm):
             callback.on_step()  # because of locals, we have access to self.locals['metrics']
 
         callback.on_training_end()
+
+        # Set the replay buffer back to the original one
         if self.mix_offline_online_buffers:
             # make a new combined replay buffer with partial sampling of both old and new data
             # for online RL learning

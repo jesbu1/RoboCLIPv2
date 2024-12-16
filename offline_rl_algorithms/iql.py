@@ -180,8 +180,8 @@ class IQL(OfflineRLAlgorithm):
         advantage_temp: float = 5.0,
         expectile: float = 0.7,
         clip_score: float = 100,
-        policy_extraction: str = "awr",
-        ddpg_bc_weight: float = 1.0,
+        policy_extraction: str = "ddpg",
+        ddpg_bc_weight: float = 0.1,
         mix_offline_online_buffers: bool = True,
     ):
         super().__init__(
@@ -373,7 +373,6 @@ class IQL(OfflineRLAlgorithm):
                 assert min_qf_pi.shape == log_prob.shape, f"{min_qf_pi.shape} != {log_prob.shape}"
                 policy_loss = -th.mean(min_qf_pi + scaled_ddpg_bc_weight * log_prob)
                 # print proportion of policy loss contributed to by each term
-                print(f"min_qf_pi: {th.mean(min_qf_pi).item()}, log_prob: {th.mean(scaled_ddpg_bc_weight * log_prob).item()}")
                 #policy_loss = -th.mean(min_qf_pi + self.ddpg_bc_weight * log_prob)
 
             # log average in batch reward
