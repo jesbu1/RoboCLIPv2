@@ -26,6 +26,7 @@ general_training:
   policy_extraction: 'awr' # awr or ddpg
   awr_advantage_temp: 5.0 # iql only
   ddpg_bc_weight: 0.1 # iql only
+  critic_update_ratio: 1 # iql and cql
 
   # below not used for now
   succ_end: false
@@ -46,7 +47,7 @@ offline_training:
   offline_h5_path: "data/h5_buffers/updated_trajs/metaworld_traj_100_demos_orig_reward.h5"
   offline_training_steps: 100000
   offline_tasks: ["opening window"]
-  succ_bonus: 0.0
+  succ_bonus: 10.0
 
 model:
   policy_layer_norm: true
@@ -56,6 +57,8 @@ model:
 
 environment:
   n_envs: 3
+  train_freq_num: 1
+  train_freq_type: 'step'
   text_string: "opening window"
   dir_add: ""
   video_path: null
@@ -64,4 +67,4 @@ environment:
   transform_model_path: null
   ignore_language: false
   use_simulator_reward: true
-  succ_bonus: 0.0
+  succ_bonus: 10.0

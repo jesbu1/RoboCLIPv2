@@ -289,7 +289,7 @@ class IQL(OfflineRLAlgorithm):
             if self.use_sde:
                 self.actor.reset_noise()
 
-            for _ in range(self.critic_update_ratio):
+            for _ in range(int(self.critic_update_ratio)):
                 # Compute necessary values for the training update
                 q1_pred, q2_pred = self.critic(
                     replay_data.observations, replay_data.actions
