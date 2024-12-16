@@ -235,59 +235,72 @@ class CQL(OfflineRLAlgorithm):
         cql_losses = []
 
         for gradient_step in range(gradient_steps):
-            # Sample replay buffer
-            replay_data = self.replay_buffer.sample(batch_size, env=self._vec_normalize_env)  # type: ignore[union-attr]
-
             # We need to sample because `log_std` may have changed between two gradient steps
             if self.use_sde:
                 self.actor.reset_noise()
 
-            # Action by the current actor for the sampled state
-            actions_pi, log_prob = self.actor.action_log_prob(replay_data.observations)
-            log_prob = log_prob.reshape(-1, 1)
+            for critic_update in range(self.critic_update_ratio):
+                # Sample replay buffer
+                replay_data = self.replay_buffer.sample(batch_size, env=self._vec_normalize_env)  # type: ignore[union-attr]
 
-            ent_coef_loss = None
-            if self.ent_coef_optimizer is not None and self.log_ent_coef is not None:
-                # Important: detach the variable from the graph
-                # so we don't change it with other losses
-                # see https://github.com/rail-berkeley/softlearning/issues/60
-                ent_coef = th.exp(self.log_ent_coef.detach())
-                ent_coef_loss = -(
-                    self.log_ent_coef * (log_prob + self.target_entropy).detach()
-                ).mean()
-                ent_coef_losses.append(ent_coef_loss.item())
-            else:
-                ent_coef = self.ent_coef_tensor
+                # don't perform the below step for more than 1 critic update
+                if critic_update == 0:
+                    # Action by the current actor for the sampled state
+                    actions_pi, log_prob = self.actor.action_log_prob(
+                        replay_data.observations
+                    )
+                    log_prob = log_prob.reshape(-1, 1)
 
-            ent_coefs.append(ent_coef.item())
+                    ent_coef_loss = None
+                    if (
+                        self.ent_coef_optimizer is not None
+                        and self.log_ent_coef is not None
+                    ):
+                        # Important: detach the variable from the graph
+                        # so we don't change it with other losses
+                        # see https://github.com/rail-berkeley/softlearning/issues/60
+                        ent_coef = th.exp(self.log_ent_coef.detach())
+                        ent_coef_loss = -(
+                            self.log_ent_coef
+                            * (log_prob + self.target_entropy).detach()
+                        ).mean()
+                        ent_coef_losses.append(ent_coef_loss.item())
+                    else:
+                        ent_coef = self.ent_coef_tensor
 
-            # Optimize entropy coefficient, also called
-            # entropy temperature or alpha in the paper
-            if ent_coef_loss is not None and self.ent_coef_optimizer is not None:
-                self.ent_coef_optimizer.zero_grad()
-                ent_coef_loss.backward()
-                self.ent_coef_optimizer.step()
+                    ent_coefs.append(ent_coef.item())
 
-            with th.no_grad():
-                # Select action according to policy
-                next_actions, next_log_prob = self.actor.action_log_prob(
-                    replay_data.next_observations
-                )
-                # Compute the next Q values: min over all critics targets
-                next_q_values = th.cat(
-                    self.critic_target(replay_data.next_observations, next_actions),
-                    dim=1,
-                )
-                next_q_values, _ = th.min(next_q_values, dim=1, keepdim=True)
-                # add entropy term
-                next_q_values = next_q_values - ent_coef * next_log_prob.reshape(-1, 1)
-                # td error + entropy term
-                target_q_values = (
-                    replay_data.rewards
-                    + (1 - replay_data.dones) * self.gamma * next_q_values
-                )
+                    # Optimize entropy coefficient, also called
+                    # entropy temperature or alpha in the paper
+                    if (
+                        ent_coef_loss is not None
+                        and self.ent_coef_optimizer is not None
+                    ):
+                        self.ent_coef_optimizer.zero_grad()
+                        ent_coef_loss.backward()
+                        self.ent_coef_optimizer.step()
 
-            for _ in range(self.critic_update_ratio):
+                with th.no_grad():
+                    # Select action according to policy
+                    next_actions, next_log_prob = self.actor.action_log_prob(
+                        replay_data.next_observations
+                    )
+                    # Compute the next Q values: min over all critics targets
+                    next_q_values = th.cat(
+                        self.critic_target(replay_data.next_observations, next_actions),
+                        dim=1,
+                    )
+                    next_q_values, _ = th.min(next_q_values, dim=1, keepdim=True)
+                    # add entropy term
+                    next_q_values = next_q_values - ent_coef * next_log_prob.reshape(
+                        -1, 1
+                    )
+                    # td error + entropy term
+                    target_q_values = (
+                        replay_data.rewards
+                        + (1 - replay_data.dones) * self.gamma * next_q_values
+                    )
+
                 # Get current Q-values estimates for each critic network
                 # using action from the replay buffer
                 q1_current_actions, q2_current_actions = self.critic(
@@ -380,6 +393,17 @@ class CQL(OfflineRLAlgorithm):
                 critic_loss.backward()
                 self.critic.optimizer.step()
 
+                # target network update
+                if gradient_step % self.target_update_interval == 0:
+                    polyak_update(
+                        self.critic.parameters(),
+                        self.critic_target.parameters(),
+                        self.tau,
+                    )
+                    polyak_update(
+                        self.batch_norm_stats, self.batch_norm_stats_target, 1.0
+                    )
+
             q_values_pi = th.cat(
                 self.critic(replay_data.observations, actions_pi), dim=1
             )
@@ -391,12 +415,6 @@ class CQL(OfflineRLAlgorithm):
             actor_loss.backward()
             self.actor.optimizer.step()
 
-            if gradient_step % self.target_update_interval == 0:
-                polyak_update(
-                    self.critic.parameters(), self.critic_target.parameters(), self.tau
-                )
-                polyak_update(self.batch_norm_stats, self.batch_norm_stats_target, 1.0)
-
         self._n_updates += gradient_steps
 
         metrics_dict = {
@@ -404,11 +422,11 @@ class CQL(OfflineRLAlgorithm):
             f"{logging_prefix}/actor_loss": np.mean(actor_losses),
             f"{logging_prefix}/critic_loss": np.mean(critic_losses),
             f"{logging_prefix}/cql_loss": np.mean(cql_losses),
-            f"{logging_prefix}/average_q1_values": q1_current_actions.mean().item(),
-            f"{logging_prefix}/average_q2_values": q2_current_actions.mean().item(),
-            f"{logging_prefix}/average_q1_next_values": q1_next_actions.mean().item(),
-            f"{logging_prefix}/average_q2_next_values": q2_next_actions.mean().item(),
-            f"{logging_prefix}/average_reward": replay_data.rewards.mean().item,
+            f"{logging_prefix}/average_q1_values": np.mean(q1_values),
+            f"{logging_prefix}/average_q2_values": np.mean(q2_values),
+            f"{logging_prefix}/average_q1_next_values": np.mean(q1_next_values),
+            f"{logging_prefix}/average_q2_next_values": np.mean(q2_next_values),
+            f"{logging_prefix}/average_reward": np.mean(reward_values),
         }
 
         if len(ent_coef_losses) > 0:
