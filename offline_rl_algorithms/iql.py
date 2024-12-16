@@ -137,6 +137,8 @@ class IQL(OfflineRLAlgorithm):
     :param clip_score: Clipping term on the advantage temp
     :param policy_extraction: ["awr", "ddpg"] policy extraction algorithm
     :param ddpg_bc_weight: DDPG's behavior cloning weight, only used when policy_extraction is "ddpg"
+    :param mix_offline_online_buffers: Whether to mix offline and online buffers
+    :param critic_update_ratio: Number of critic updates per actor update
     """
 
     policy_aliases: ClassVar[Dict[str, Type[BasePolicy]]] = {
@@ -183,6 +185,7 @@ class IQL(OfflineRLAlgorithm):
         policy_extraction: str = "ddpg",
         ddpg_bc_weight: float = 0.1,
         mix_offline_online_buffers: bool = True,
+        critic_update_ratio: int = 1,  # number of critic updates per actor update
     ):
         super().__init__(
             policy,
@@ -229,6 +232,7 @@ class IQL(OfflineRLAlgorithm):
         ], "Policy extraction algorithm must be either 'awr' or 'ddpg'"
         self.policy_extraction = policy_extraction
         self.ddpg_bc_weight = ddpg_bc_weight
+        self.critic_update_ratio = critic_update_ratio
 
     def _setup_model(self) -> None:
         super()._setup_model()
@@ -285,63 +289,63 @@ class IQL(OfflineRLAlgorithm):
             if self.use_sde:
                 self.actor.reset_noise()
 
-            # Compute necessary values for the training update
-            q1_pred, q2_pred = self.critic(
-                replay_data.observations, replay_data.actions
-            )
-            with th.no_grad():
-                target_q1_pred, target_q2_pred = self.critic_target(
+            for _ in range(self.critic_update_ratio):
+                # Compute necessary values for the training update
+                q1_pred, q2_pred = self.critic(
                     replay_data.observations, replay_data.actions
                 )
-                target_q_pred = th.min(target_q1_pred, target_q2_pred)
-                next_vf_pred = self.v_net(replay_data.next_observations)
-            vf_pred = self.v_net(replay_data.observations)
+                with th.no_grad():
+                    target_q1_pred, target_q2_pred = self.critic_target(
+                        replay_data.observations, replay_data.actions
+                    )
+                    target_q_pred = th.min(target_q1_pred, target_q2_pred)
+                    next_vf_pred = self.v_net(replay_data.next_observations)
+                vf_pred = self.v_net(replay_data.observations)
 
-            # Q value loss
-            target_q_values = (
-                replay_data.rewards
-                + (1 - replay_data.dones) * self.gamma * next_vf_pred
-            )
-            q1_loss = F.mse_loss(q1_pred, target_q_values)
-            q2_loss = F.mse_loss(q2_pred, target_q_values)
-            q_loss = q1_loss + q2_loss
+                # Q value loss
+                target_q_values = (
+                    replay_data.rewards
+                    + (1 - replay_data.dones) * self.gamma * next_vf_pred
+                )
+                q1_loss = F.mse_loss(q1_pred, target_q_values)
+                q2_loss = F.mse_loss(q2_pred, target_q_values)
+                q_loss = q1_loss + q2_loss
 
-            # Value function expectile loss
-            vf_err = vf_pred - target_q_pred
-            vf_sign = (vf_err > 0).float()
-            vf_weight = (1 - vf_sign) * self.expectile + vf_sign * (1 - self.expectile)
-            vf_loss = (vf_weight * (vf_err**2)).mean()
+                # Value function expectile loss
+                vf_err = vf_pred - target_q_pred
+                vf_sign = (vf_err > 0).float()
+                vf_weight = (1 - vf_sign) * self.expectile + vf_sign * (
+                    1 - self.expectile
+                )
+                vf_loss = (vf_weight * (vf_err**2)).mean()
 
-            # log q1 and q2 values
-            q1_values.append(q1_pred.mean().item())
-            q2_values.append(q2_pred.mean().item())
+                # log q1 and q2 values
+                q1_values.append(q1_pred.mean().item())
+                q2_values.append(q2_pred.mean().item())
 
-            # log v
-            v_values.append(vf_pred.mean().item())
+                # log v
+                v_values.append(vf_pred.mean().item())
 
-            # log target
-            q1_target_values.append(target_q1_pred.mean().item())
-            q2_target_values.append(target_q2_pred.mean().item())
+                # log target
+                q1_target_values.append(target_q1_pred.mean().item())
+                q2_target_values.append(target_q2_pred.mean().item())
 
-            # log next v
-            v_next_values.append(next_vf_pred.mean().item())
+                # log next v
+                v_next_values.append(next_vf_pred.mean().item())
 
-            # log q and v losses
-            q_losses.append(q_loss.item())
-            v_losses.append(vf_loss.item())
+                # log q and v losses
+                q_losses.append(q_loss.item())
+                v_losses.append(vf_loss.item())
 
+                # Optimize the critic Q
+                self.critic.optimizer.zero_grad()
+                q_loss.backward()
+                self.critic.optimizer.step()
 
-
-            # Optimize the critic Q
-            self.critic.optimizer.zero_grad()
-            q_loss.backward()
-            self.critic.optimizer.step()
-
-            # Optimize the value function
-            self.v_net.optimizer.zero_grad()
-            vf_loss.backward()
-            self.v_net.optimizer.step()
-
+                # Optimize the value function
+                self.v_net.optimizer.zero_grad()
+                vf_loss.backward()
+                self.v_net.optimizer.step()
 
             # Policy loss
             if self.policy_extraction == "awr":
@@ -366,20 +370,17 @@ class IQL(OfflineRLAlgorithm):
                 log_prob = distribution.log_prob(replay_data.actions)
 
                 actions_pi = distribution.actions_from_params(mean_actions, log_std)
- 
+
                 q_values_pi = self.critic(replay_data.observations, actions_pi)
-                # breakpoint() 
+                # breakpoint()
                 min_qf_pi = th.min(*q_values_pi).squeeze(-1)
                 assert min_qf_pi.shape == log_prob.shape, f"{min_qf_pi.shape} != {log_prob.shape}"
                 policy_loss = -th.mean(min_qf_pi + scaled_ddpg_bc_weight * log_prob)
                 # print proportion of policy loss contributed to by each term
-                #policy_loss = -th.mean(min_qf_pi + self.ddpg_bc_weight * log_prob)
+                # policy_loss = -th.mean(min_qf_pi + self.ddpg_bc_weight * log_prob)
 
             # log average in batch reward
             reward_values.append(replay_data.rewards.mean().item())
-
-
-
 
             # Optimize the policy
             self.actor.optimizer.zero_grad()
