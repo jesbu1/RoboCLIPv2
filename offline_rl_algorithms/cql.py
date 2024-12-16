@@ -72,6 +72,8 @@ class CQL(OfflineRLAlgorithm):
     :param min_q_weight: Weight for the min_q loss for CQL
     :param min_q_temp: Temperature parameter for the min_q loss for CQL
     :param use_calibrated_q: Whether to use calibrated Q for CQL (Cal-QL algorithm)
+    :param mix_offline_online_buffers: Whether to mix offline and online buffers
+    :param critic_update_ratio: Number of critic updates per actor update
     """
 
     policy_aliases: ClassVar[Dict[str, Type[BasePolicy]]] = {
@@ -116,6 +118,8 @@ class CQL(OfflineRLAlgorithm):
         min_q_weight: float = 5.0,
         min_q_temp: float = 1.0,
         use_calibrated_q: bool = False,
+        mix_offline_online_buffers: bool = True,
+        critic_update_ratio: int = 1,  # number of critic updates per actor update
     ):
         super().__init__(
             policy,
@@ -143,6 +147,7 @@ class CQL(OfflineRLAlgorithm):
             optimize_memory_usage=optimize_memory_usage,
             supported_action_spaces=(spaces.Box,),
             support_multi_env=True,
+            mix_offline_online_buffers=mix_offline_online_buffers,
         )
 
         self.target_entropy = target_entropy
@@ -159,6 +164,7 @@ class CQL(OfflineRLAlgorithm):
         self.min_q_weight = min_q_weight
         self.temp = min_q_temp
         self.use_calibrated_q = use_calibrated_q
+        self.critic_update_ratio = critic_update_ratio
 
     def _setup_model(self) -> None:
         super()._setup_model()
@@ -281,97 +287,98 @@ class CQL(OfflineRLAlgorithm):
                     + (1 - replay_data.dones) * self.gamma * next_q_values
                 )
 
-            # Get current Q-values estimates for each critic network
-            # using action from the replay buffer
-            q1_current_actions, q2_current_actions = self.critic(
-                replay_data.observations, replay_data.actions
-            )
+            for _ in range(self.critic_update_ratio):
+                # Get current Q-values estimates for each critic network
+                # using action from the replay buffer
+                q1_current_actions, q2_current_actions = self.critic(
+                    replay_data.observations, replay_data.actions
+                )
 
-            # CQL Implementation
-            random_actions = (
-                th.FloatTensor(batch_size, self.action_space.shape[0])
-                .uniform_(-1, 1)
-                .to(self.device)
-            )
-            # Sample policy actions to calculate the CQL loss
-            current_actions, current_log_pis = self.actor.action_log_prob(
-                replay_data.observations
-            )
-            next_actions, next_log_pis = self.actor.action_log_prob(
-                replay_data.next_observations
-            )
+                # CQL Implementation
+                random_actions = (
+                    th.FloatTensor(batch_size, self.action_space.shape[0])
+                    .uniform_(-1, 1)
+                    .to(self.device)
+                )
+                # Sample policy actions to calculate the CQL loss
+                current_actions, current_log_pis = self.actor.action_log_prob(
+                    replay_data.observations
+                )
+                next_actions, next_log_pis = self.actor.action_log_prob(
+                    replay_data.next_observations
+                )
 
-            # Compute the Q values of random actions
-            q1_rand, q2_rand = self.critic(
-                replay_data.observations, random_actions.to(th.float32)
-            )
-            q1_current_actions, q2_current_actions = self.critic(
-                replay_data.observations, current_actions.to(th.float32)
-            )
-            q1_next_actions, q2_next_actions = self.critic(
-                replay_data.observations, next_actions.to(th.float32)
-            )
+                # Compute the Q values of random actions
+                q1_rand, q2_rand = self.critic(
+                    replay_data.observations, random_actions.to(th.float32)
+                )
+                q1_current_actions, q2_current_actions = self.critic(
+                    replay_data.observations, current_actions.to(th.float32)
+                )
+                q1_next_actions, q2_next_actions = self.critic(
+                    replay_data.observations, next_actions.to(th.float32)
+                )
 
-            # importance sampled version of CQL for cat_q1 and cat_q2
-            random_density = np.log(0.5 ** current_actions.shape[-1])
-            cat_q1 = th.cat(
-                [
-                    q1_rand - random_density,
-                    q1_next_actions - next_log_pis.detach(),
-                    q1_current_actions - current_log_pis.detach(),
-                ],
-                1,
-            )
-            cat_q2 = th.cat(
-                [
-                    q2_rand - random_density,
-                    q2_next_actions - next_log_pis.detach(),
-                    q2_current_actions - current_log_pis.detach(),
-                ],
-                1,
-            )
+                # importance sampled version of CQL for cat_q1 and cat_q2
+                random_density = np.log(0.5 ** current_actions.shape[-1])
+                cat_q1 = th.cat(
+                    [
+                        q1_rand - random_density,
+                        q1_next_actions - next_log_pis.detach(),
+                        q1_current_actions - current_log_pis.detach(),
+                    ],
+                    1,
+                )
+                cat_q2 = th.cat(
+                    [
+                        q2_rand - random_density,
+                        q2_next_actions - next_log_pis.detach(),
+                        q2_current_actions - current_log_pis.detach(),
+                    ],
+                    1,
+                )
 
-            cql_min_qf1_loss = (
-                th.logsumexp(cat_q1 / self.temp, dim=1).mean()
-                * self.min_q_weight
-                * self.temp
-            )
-            cql_min_qf2_loss = (
-                th.logsumexp(cat_q2 / self.temp, dim=1).mean()
-                * self.min_q_weight
-                * self.temp
-            )
+                cql_min_qf1_loss = (
+                    th.logsumexp(cat_q1 / self.temp, dim=1).mean()
+                    * self.min_q_weight
+                    * self.temp
+                )
+                cql_min_qf2_loss = (
+                    th.logsumexp(cat_q2 / self.temp, dim=1).mean()
+                    * self.min_q_weight
+                    * self.temp
+                )
 
-            cql_min_qf1_loss = (
-                cql_min_qf1_loss - q1_current_actions.mean() * self.min_q_weight
-            )
-            cql_min_qf2_loss = (
-                cql_min_qf2_loss - q2_current_actions.mean() * self.min_q_weight
-            )
+                cql_min_qf1_loss = (
+                    cql_min_qf1_loss - q1_current_actions.mean() * self.min_q_weight
+                )
+                cql_min_qf2_loss = (
+                    cql_min_qf2_loss - q2_current_actions.mean() * self.min_q_weight
+                )
 
-            critic_loss = 0.5 * sum(
-                F.mse_loss(current_q, target_q_values)
-                for current_q in [q1_current_actions, q2_current_actions]
-            )
-            critic_loss += cql_min_qf1_loss + cql_min_qf2_loss
+                critic_loss = 0.5 * sum(
+                    F.mse_loss(current_q, target_q_values)
+                    for current_q in [q1_current_actions, q2_current_actions]
+                )
+                critic_loss += cql_min_qf1_loss + cql_min_qf2_loss
 
-            critic_losses.append(critic_loss.item())
-            cql_losses.append((cql_min_qf1_loss + cql_min_qf2_loss).item())
+                critic_losses.append(critic_loss.item())
+                cql_losses.append((cql_min_qf1_loss + cql_min_qf2_loss).item())
 
-            # log q1 and q2 values
-            q1_values.append(q1_current_actions.mean().item())
-            q2_values.append(q2_current_actions.mean().item())
+                # log q1 and q2 values
+                q1_values.append(q1_current_actions.mean().item())
+                q2_values.append(q2_current_actions.mean().item())
 
-            # log next q1 and q2 values
-            q1_next_values.append(q1_next_actions.mean().item())
-            q2_next_values.append(q2_next_actions.mean().item())
+                # log next q1 and q2 values
+                q1_next_values.append(q1_next_actions.mean().item())
+                q2_next_values.append(q2_next_actions.mean().item())
 
-            # log average in batch reward
-            reward_values.append(replay_data.rewards.mean().item())
+                # log average in batch reward
+                reward_values.append(replay_data.rewards.mean().item())
 
-            self.critic.optimizer.zero_grad()
-            critic_loss.backward()
-            self.critic.optimizer.step()
+                self.critic.optimizer.zero_grad()
+                critic_loss.backward()
+                self.critic.optimizer.step()
 
             q_values_pi = th.cat(
                 self.critic(replay_data.observations, actions_pi), dim=1
