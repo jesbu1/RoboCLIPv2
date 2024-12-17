@@ -1,5 +1,7 @@
 defaults:
   - _self_
+  - metaworld: null
+  - algorithm: null
 
 wandb_notes: ""
 
@@ -61,10 +63,10 @@ model:
   qf_net_arch: [256, 256]
 
 environment:
+  text_string: null # Set to null so you must set environment yaml
   n_envs: 3
   train_freq_num: 1
   train_freq_type: 'step'
-  text_string: null # Set to null so you must set environment yaml
   dir_add: ""
   video_path: null
   pca_path: null

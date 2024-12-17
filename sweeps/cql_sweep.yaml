@@ -1,0 +1,25 @@
+program: test_scripts/test_iql.py
+name: cql_sweep
+method: bayes
+metric:
+  goal: maximize
+  name: eval/mean_reward
+parameters:
+  algorithm:
+    values: ["cql"] 
+  metaworld:
+    values: ["all_tasks"] 
+  general_training.cql_min_q_weight:
+    values: [0.1, 1.0, 5.0, 10.0]
+  general_training.cql_min_q_temp:
+    values: [0.5, 1.0, 2.0]
+  general_training.learning_rate:
+    values: [1e-4, 1e-3]
+  general_training.critic_update_ratio:
+    values: [1, 2, 4]
+
+command:
+  - ${env}
+  - ${interpreter}
+  - ${program}
+  - ${args_no_hyphens}
