@@ -264,7 +264,7 @@ class IQL(OfflineRLAlgorithm):
         self.critic_target = self.policy.critic_target
 
     def train(
-        self, gradient_steps: int, batch_size: int = 64, logging_prefix: str = ""
+        self, gradient_steps: int, batch_size: int = 64, logging_prefix: str = "train"
     ) -> None:
         # Switch to train mode (this affects batch norm / dropout)
         self.policy.set_training_mode(True)

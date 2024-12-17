@@ -1,0 +1,23 @@
+# @package _global_
+
+defaults:
+  - _self_
+
+general_training:
+  algo: sac
+  action_noise: 0 # sigma
+  sparse_only: false
+  learning_rate: 1e-3
+
+
+model:
+  policy_layer_norm: true
+  critic_layer_norm: true
+  pi_net_arch: [256, 256]
+  qf_net_arch: [512, 256, 256]
+
+offline_training:
+  offline_training_steps: 0 # SAC is online-only
+
+online_training:
+  total_time_steps: 1000000

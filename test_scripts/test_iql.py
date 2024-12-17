@@ -61,7 +61,8 @@ from stable_baselines3.common.callbacks import EvalCallback
 
 
 def create_exp_name(cfg):
-    exp_name = cfg.general_training.algo + "_"
+    exp_name = cfg.environment.cfg_name + "_"
+    exp_name += cfg.general_training.algo + "_"
 
     if cfg.general_training.algo == "iql":
         # add policy_extraction and awr/ddpg params
@@ -72,6 +73,11 @@ def create_exp_name(cfg):
         elif cfg.general_training.policy_extraction == "ddpg":
             exp_name += f"bc_weight_{cfg.general_training.ddpg_bc_weight}_"
 
+        exp_name += f"utd_{cfg.general_training.critic_update_ratio}_"
+
+    if cfg.general_training.algo == "cql":
+        exp_name += f"min_q_weight_{cfg.general_training.cql_min_q_weight}_"
+        exp_name += f"min_q_temp_{cfg.general_training.cql_min_q_temp}_"
         exp_name += f"utd_{cfg.general_training.critic_update_ratio}_"
 
     if cfg.environment.ignore_language:
@@ -192,12 +198,21 @@ def main(cfg: DictConfig):
     eval_callback.video_freq = online_video_freq
 
     if cfg.online_training.total_time_steps > 0:
-        model.learn(
-            total_timesteps=int(cfg.online_training.total_time_steps),
-            callback=callback_list,
-            logger=logger,
-            progress_bar=True
-        )
+
+        # logger only exists for offline algorithms
+        if isinstance(model, OfflineRLAlgorithm):
+            model.learn(
+                total_timesteps=int(cfg.online_training.total_time_steps),
+                callback=callback_list,
+                logger=logger,
+                progress_bar=True
+            )
+        else:
+            model.learn(
+                total_timesteps=int(cfg.online_training.total_time_steps),
+                callback=callback_list,
+                progress_bar=True
+            )
     model.save(logging_config.log_dir)
 
     if logging_config.wandb:
@@ -330,6 +345,10 @@ def get_policy_algorithm(cfg, envs, log_dir):
                 buffer_size=cfg.online_training.total_time_steps,
                 learning_starts=4000,
                 seed=args.seed,
+                action_noise=action_noise,
+                policy_kwargs=policy_kwargs,
+                learning_rate=args.learning_rate,
+                train_freq=(cfg.environment.train_freq_num, cfg.environment.train_freq_type),
             )
         else:
             model = model_class.load(args.pretrained, env=envs, tensorboard_log=log_dir)

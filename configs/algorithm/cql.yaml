@@ -7,23 +7,23 @@ general_training:
   algo: cql
   action_noise: 0 # sigma
   sparse_only: false
-  learning_rate: 1e-3
+  learning_rate: 1e-4
 
   # offline rl parameters
   critic_update_ratio: 4 # iql and cql
 
   # CQL-specific parameters
-  cql_min_q_weight: 5.0
+  cql_min_q_weight: 1.0
   cql_min_q_temp: 1.0
 
 model:
   policy_layer_norm: true
   critic_layer_norm: true
-  pi_net_arch: [256, 256]
-  qf_net_arch: [512, 256, 256]
+  pi_net_arch: [512, 512]
+  qf_net_arch: [512, 512, 256]
 
 offline_training:
-  offline_training_steps: 100000
+  offline_training_steps: 25000
 
 online_training:
-  total_time_steps: 1000000
+  total_time_steps: 0
