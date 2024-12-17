@@ -1,0 +1,28 @@
+# @package _global_
+
+defaults:
+  - _self_
+
+general_training:
+  algo: iql
+  action_noise: 0.1 # sigma
+  sparse_only: false
+
+  critic_update_ratio: 1 # iql and cql
+
+  # IQL-specific parameters
+  policy_extraction: 'awr' # awr or ddpg
+  awr_advantage_temp: 5.0 # iql only
+  ddpg_bc_weight: 0. # iql only
+
+model:
+  policy_layer_norm: true
+  critic_layer_norm: true
+  pi_net_arch: [512, 512]
+  qf_net_arch: [512, 512, 512]
+
+offline_training:
+  offline_training_steps: 5000 
+
+online_training:
+  total_time_steps: 1000000

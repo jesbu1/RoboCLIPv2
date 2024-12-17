@@ -50,6 +50,7 @@ from envs.metaworld_envs.metaworld import create_wrapped_env, instruction_to_env
 
 
 from stable_baselines3.common.policies import ActorCriticPolicy
+import stable_baselines3
 
 
 import hydra
@@ -58,8 +59,37 @@ from hydra.utils import to_absolute_path
 from omegaconf import DictConfig, OmegaConf
 from stable_baselines3.common.callbacks import EvalCallback
 
+
+def create_exp_name(cfg):
+    exp_name = cfg.general_training.algo + "_"
+
+    if cfg.general_training.algo == "iql":
+        # add policy_extraction and awr/ddpg params
+        exp_name += f"pe_{cfg.general_training.policy_extraction}_"
+        
+        if cfg.general_training.policy_extraction == "awr":
+            exp_name += f"adv_temp_{cfg.general_training.awr_advantage_temp}_"
+        elif cfg.general_training.policy_extraction == "ddpg":
+            exp_name += f"bc_weight_{cfg.general_training.ddpg_bc_weight}_"
+
+        exp_name += f"utd_{cfg.general_training.critic_update_ratio}_"
+
+    if cfg.environment.ignore_language:
+        exp_name += "no_lang_"
+
+    if cfg.general_training.sparse_only:
+        exp_name += "sparse_"
+    else:
+        exp_name += "dense_"
+
+    # if the last character is an underscore, remove it
+    if exp_name[-1] == "_":
+        exp_name = exp_name[:-1]
+
+    return exp_name
+
 # Define the function to initialize Hydra
-@hydra.main( config_path="../configs", config_name="single_task")
+@hydra.main( config_path="../configs", config_name="base_config")
 def main(cfg: DictConfig):
     print(OmegaConf.to_yaml(cfg))
 
@@ -70,14 +100,17 @@ def main(cfg: DictConfig):
     logging_config = cfg.logging
     offline_config = cfg.offline_training
 
+    experiment_name = create_exp_name(cfg)
+
     ### Setup wandb and logging ###
     if logging_config.wandb:
+        config_for_wandb = OmegaConf.to_container(cfg, resolve=True)
         wandb.init(
             entity=logging_config.wandb_entity_name,
             project=logging_config.wandb_project_name,
             group=logging_config.wandb_group_name,
-            name=logging_config.wandb_group_name,
-            config=cfg,
+            name=experiment_name,
+            config=config_for_wandb,
             monitor_gym=True,
             sync_tensorboard=True,
             notes=cfg.wandb_notes
@@ -132,12 +165,17 @@ def main(cfg: DictConfig):
         h5_path = to_absolute_path(h5_path)
         use_language = not env_config.ignore_language
 
+        if offline_config.offline_tasks == 'all':
+            offline_tasks = None
+        else:
+            offline_tasks = offline_config.offline_tasks
+
         buffer = H5ReplayBuffer(
             h5_path,
             use_language_embeddings=use_language,
             success_bonus=env_config.succ_bonus,
             sparsify_rewards=cfg.general_training.sparse_only,
-            filter_instructions=offline_config.offline_tasks,
+            filter_instructions=offline_tasks,
         )
         model.learn_offline(
             offline_replay_buffer=buffer,
@@ -242,6 +280,16 @@ def get_policy_algorithm(cfg, envs, log_dir):
 
     args = cfg.general_training
 
+
+
+    if cfg.general_training.action_noise is not None:
+        n_actions = envs.action_space.shape[-1]
+        action_noise = stable_baselines3.common.noise.NormalActionNoise(
+            mean=np.zeros(n_actions), sigma=cfg.general_training.action_noise * n_actions
+        )
+    else:
+        action_noise = None
+
     # We don't need as large of a network there is no language
     if env_config.ignore_language:
         policy_kwargs = {
@@ -298,10 +346,16 @@ def get_policy_algorithm(cfg, envs, log_dir):
                 buffer_size=cfg.online_training.total_time_steps,
                 learning_starts=0,
                 seed=args.seed,
-                min_q_weight=5.0,
-                min_q_temp=1.0,
+                action_noise=action_noise,
+                policy_kwargs=policy_kwargs,
+                mix_offline_online_buffers=cfg.online_training.mix_buffers,
+                learning_rate=args.learning_rate,
+                train_freq=(cfg.environment.train_freq_num, cfg.environment.train_freq_type),
+                critic_update_ratio=cfg.general_training.critic_update_ratio,
+                min_q_weight=cfg.general_training.cql_min_q_weight,
+                min_q_temp=cfg.general_training.cql_min_q_temp,
                 use_calibrated_q=use_calibrated_cql,
-                # learning_rate=0.0001,
+
             )
         else:
             model = model_class.load(args.pretrained, env=envs, tensorboard_log=log_dir)
@@ -309,16 +363,6 @@ def get_policy_algorithm(cfg, envs, log_dir):
     elif args.algo.lower() == "iql":
         model_class = IQL
 
-        if cfg.general_training.action_noise is not None:
-
-            import stable_baselines3
-
-            n_actions = envs.action_space.shape[-1]
-            action_noise = stable_baselines3.common.noise.NormalActionNoise(
-               mean=np.zeros(n_actions), sigma=cfg.general_training.action_noise * n_actions
-            )
-        else:
-            action_noise = None
         # policy = SACPolicy(observation_space=envs.observation_space, action_space=envs.action_space, net_arch=[32, 32], lr_schedule=None)
         if not args.pretrained:
             model = model_class(
@@ -333,11 +377,12 @@ def get_policy_algorithm(cfg, envs, log_dir):
                 policy_kwargs=policy_kwargs,
                 mix_offline_online_buffers=cfg.online_training.mix_buffers,
                 learning_rate=args.learning_rate,
+                train_freq=(cfg.environment.train_freq_num, cfg.environment.train_freq_type),
+                critic_update_ratio=cfg.general_training.critic_update_ratio,
                 policy_extraction=cfg.general_training.policy_extraction,
                 advantage_temp=cfg.general_training.awr_advantage_temp,
                 ddpg_bc_weight=cfg.general_training.ddpg_bc_weight,
-                train_freq=(cfg.environment.train_freq_num, cfg.environment.train_freq_type),
-                critic_update_ratio=cfg.general_training.critic_update_ratio,
+
             )
         else:
             model = model_class.load(args.pretrained, env=envs, tensorboard_log=log_dir)
@@ -352,6 +397,11 @@ def get_policy_algorithm(cfg, envs, log_dir):
                 buffer_size=cfg.online_training.total_time_steps,
                 learning_starts=0,
                 seed=args.seed,
+                action_noise=action_noise, # should be null
+                policy_kwargs=policy_kwargs, 
+                mix_offline_online_buffers=cfg.online_training.mix_buffers, # useless
+                learning_rate=args.learning_rate, 
+                train_freq=(cfg.environment.train_freq_num, cfg.environment.train_freq_type), # useless
             )
         else:
             model = model_class.load(args.pretrained, env=envs, tensorboard_log=log_dir)

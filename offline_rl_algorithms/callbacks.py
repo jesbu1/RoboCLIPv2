@@ -27,7 +27,6 @@ class OfflineEvalCallback(EvalCallback):
 
             all_gradients = np.concatenate(policy_gradients)
             self.logger.record("grad/policy_histogram", wandb.Histogram(all_gradients))
-        if hasattr(self.model, "v_net"):
             # Log critic gradients
             critic_gradients = [
                 param.grad.view(-1)
@@ -58,20 +57,6 @@ class OfflineEvalCallback(EvalCallback):
                     "grad/critic_target_histogram", wandb.Histogram(all_gradients)
                 )
 
-            # Log v_net gradients
-            v_net_gradients = [
-                param.grad.view(-1)
-                .detach()
-                .cpu()
-                .numpy()  # Flatten each gradient tensor
-                for param in self.model.v_net.parameters()
-                if param.grad is not None
-            ]
-            if len(v_net_gradients) != 0:
-                all_gradients = np.concatenate(v_net_gradients)
-                self.logger.record(
-                    "grad/v_net_histogram", wandb.Histogram(all_gradients)
-                )
             # Log critic weights
             critic_weights = [
                 param.data.view(-1).detach().cpu().numpy()  # Flatten each weight tensor
@@ -102,6 +87,23 @@ class OfflineEvalCallback(EvalCallback):
                 all_weights = np.concatenate(critic_target_weights)
                 self.logger.record(
                     "weights/critic_target_histogram", wandb.Histogram(all_weights)
+                )
+
+        # Log v_net weights and gradients
+        if hasattr(self.model, "v_net"):
+            # Log v_net gradients
+            v_net_gradients = [
+                param.grad.view(-1)
+                .detach()
+                .cpu()
+                .numpy()  # Flatten each gradient tensor
+                for param in self.model.v_net.parameters()
+                if param.grad is not None
+            ]
+            if len(v_net_gradients) != 0:
+                all_gradients = np.concatenate(v_net_gradients)
+                self.logger.record(
+                    "grad/v_net_histogram", wandb.Histogram(all_gradients)
                 )
 
             # Log v_net weights
