@@ -301,11 +301,6 @@ class CQL(OfflineRLAlgorithm):
                         + (1 - replay_data.dones) * self.gamma * next_q_values
                     )
 
-                # Get current Q-values estimates for each critic network
-                # using action from the replay buffer
-                q1_current_actions, q2_current_actions = self.critic(
-                    replay_data.observations, replay_data.actions
-                )
 
                 # CQL Implementation
                 random_actions = (
@@ -320,6 +315,9 @@ class CQL(OfflineRLAlgorithm):
                 next_actions, next_log_pis = self.actor.action_log_prob(
                     replay_data.next_observations
                 )
+
+                current_log_pis = current_log_pis.reshape(-1, 1)
+                next_log_pis = next_log_pis.reshape(-1, 1)
 
                 # Compute the Q values of random actions
                 q1_rand, q2_rand = self.critic(
@@ -375,6 +373,7 @@ class CQL(OfflineRLAlgorithm):
                 )
                 critic_loss += cql_min_qf1_loss + cql_min_qf2_loss
 
+                # breakpoint()
                 critic_losses.append(critic_loss.item())
                 cql_losses.append((cql_min_qf1_loss + cql_min_qf2_loss).item())
 
@@ -433,7 +432,7 @@ class CQL(OfflineRLAlgorithm):
             metrics_dict[f"{logging_prefix}/ent_coef_loss"] = np.mean(ent_coef_losses)
 
         for metric in metrics_dict:
-            self.logger.record(logging_prefix + metric, metrics_dict[metric])
+            self.logger.record(metric, metrics_dict[metric])
 
         return metrics_dict
 
@@ -445,6 +444,7 @@ class CQL(OfflineRLAlgorithm):
         tb_log_name: str = "SAC",
         reset_num_timesteps: bool = True,
         progress_bar: bool = False,
+        logger: Optional = None,
     ):
         return super().learn(
             total_timesteps=total_timesteps,
@@ -453,6 +453,7 @@ class CQL(OfflineRLAlgorithm):
             tb_log_name=tb_log_name,
             reset_num_timesteps=reset_num_timesteps,
             progress_bar=progress_bar,
+            logger=logger,
         )
 
     def _excluded_save_params(self) -> List[str]:

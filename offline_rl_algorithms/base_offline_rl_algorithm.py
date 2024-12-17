@@ -194,7 +194,7 @@ class OfflineRLAlgorithm(OffPolicyAlgorithm):
 
         print("learning offline")
         for _ in range(train_steps):
-            metrics = self.train(1, batch_size=batch_size, logging_prefix="offline_")
+            metrics = self.train(1, batch_size=batch_size, logging_prefix="offline")
             # metrics is a local() which will be updated in callback.update_locals
             callback.update_locals(locals())  # a little hacky
             callback.on_step()  # because of locals, we have access to self.locals['metrics']

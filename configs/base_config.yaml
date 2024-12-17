@@ -1,4 +1,3 @@
-# @package _group_
 defaults:
   - _self_
 
@@ -14,19 +13,25 @@ logging:
   video_freq: 50000
 
 general_training:
-  algo: "iql"
+  algo: null # Set to null so you must set algorithm yaml
   n_steps: 128
   seed: 42
   sparse_only: true
   pretrained: false
-  acion_noise: null
-  learning_rate: 1e-4
+  action_noise: null
+  learning_rate: 1e-3
+
+  # offline rl parameters
+  critic_update_ratio: 1 # iql and cql
 
   # IQL-specific parameters
   policy_extraction: 'awr' # awr or ddpg
   awr_advantage_temp: 5.0 # iql only
   ddpg_bc_weight: 0.1 # iql only
-  critic_update_ratio: 1 # iql and cql
+
+  # CQL-specific parameters
+  cql_min_q_weight: 5.0
+  cql_min_q_temp: 1.0
 
   # below not used for now
   succ_end: false
@@ -44,10 +49,10 @@ online_training:
   mix_buffers: true
 
 offline_training:
-  offline_h5_path: "data/h5_buffers/updated_trajs/metaworld_traj_100_demos_orig_reward.h5"
+  offline_h5_path: null # Set to null so you must set environment yaml
   offline_training_steps: 100000
   offline_tasks: ["opening window"]
-  succ_bonus: 10.0
+  succ_bonus: 0.0
 
 model:
   policy_layer_norm: true
@@ -59,12 +64,11 @@ environment:
   n_envs: 3
   train_freq_num: 1
   train_freq_type: 'step'
-  text_string: "opening window"
+  text_string: null # Set to null so you must set environment yaml
   dir_add: ""
   video_path: null
   pca_path: null
   transform_base_path: null
   transform_model_path: null
   ignore_language: false
-  use_simulator_reward: true
-  succ_bonus: 10.0
+  succ_bonus: 0.0
