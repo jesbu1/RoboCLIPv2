@@ -71,11 +71,10 @@ class RLPD(OfflineRLAlgorithm):
     :param device: Device (cpu, cuda, ...) on which the code should be run.
         Setting it to auto, the code will be run on the GPU if possible.
     :param _init_setup_model: Whether or not to build the network at the creation of the instance
-    :param min_q_weight: Weight for the min_q loss for CQL
-    :param min_q_temp: Temperature parameter for the min_q loss for CQL
-    :param use_calibrated_q: Whether to use calibrated Q for CQL (Cal-QL algorithm)
     :param mix_offline_online_buffers: Whether to mix offline and online buffers
     :param critic_update_ratio: Number of critic updates per actor update
+    :param n_critics_to_sample: Number of critics to sample from
+    :param train_critic_with_entropy: Whether to train the critic with the entropy term
     """
 
     policy_aliases: ClassVar[Dict[str, Type[BasePolicy]]] = {
@@ -117,6 +116,7 @@ class RLPD(OfflineRLAlgorithm):
         _init_setup_model: bool = True,
         critic_update_ratio: int = 5,  # number of critic updates per actor update
         n_critics_to_sample: int = 2,  # number of critics to sample from
+        mix_offline_online_buffers: bool = True,  # whether to mix offline and online buffers
         train_critic_with_entropy: bool = False,  # whether to train the critic with the entropy term
     ):
         assert (
@@ -125,6 +125,9 @@ class RLPD(OfflineRLAlgorithm):
         assert (
             policy_kwargs["critic_layer_norm"] == True
         ), "RLPD is made for layernorm critics. Double check this."
+        print(
+            f"Mix offline and online buffers: {mix_offline_online_buffers}. RLPD assumes offline data is mixed with online data. Just printing for sanity."
+        )
         super().__init__(
             policy,
             env,
@@ -151,7 +154,7 @@ class RLPD(OfflineRLAlgorithm):
             optimize_memory_usage=optimize_memory_usage,
             supported_action_spaces=(spaces.Box,),
             support_multi_env=True,
-            mix_offline_online_buffers=True,
+            mix_offline_online_buffers=mix_offline_online_buffers,
         )
 
         self.target_entropy = target_entropy
