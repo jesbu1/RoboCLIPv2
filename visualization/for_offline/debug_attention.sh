@@ -7,8 +7,8 @@
 #SBATCH --partition=partition-1
 #SBATCH --time=72:00:00
 
-source /scr/yusenluo/anaconda3/etc/profile.d/conda.sh  # 这里需要替换成你的实际 conda.sh 路径
-conda activate roboclip      # 替换 myenv 为你的 Conda 环境名
+source /scr/yusenluo/anaconda3/etc/profile.d/conda.sh
+conda activate roboclip
 
 
 
