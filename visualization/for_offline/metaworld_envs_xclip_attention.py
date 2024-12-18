@@ -553,24 +553,20 @@ class CustomEvalCallback(EvalCallback):
 
 
 class RunningMeanStd:
-    """跟踪值的均值、方差和计数。"""
 
     # 参考：https://en.wikipedia.org/wiki/Algorithms_for_calculating_variance#Parallel_algorithm
     def __init__(self, epsilon=1e-8, shape=()):
-        """初始化均值、方差和计数。"""
         self.mean = np.zeros(shape, dtype=np.float32)
         self.var = np.ones(shape, dtype=np.float32)
         self.count = epsilon
 
     def update(self, x):
-        """使用一批样本更新均值、方差和计数。"""
         batch_mean = np.mean(x, axis=0)
         batch_var = np.var(x, axis=0)
         batch_count = x.shape[0]
         self.update_from_moments(batch_mean, batch_var, batch_count)
 
     def update_from_moments(self, batch_mean, batch_var, batch_count):
-        """使用批量的均值、方差和计数更新统计信息。"""
         delta = batch_mean - self.mean
         tot_count = self.count + batch_count
 

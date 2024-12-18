@@ -38,7 +38,6 @@ class VideoRewardEvaluator:
         ])
 
     def extract_frames(self, video_path):
-        """读取MP4视频文件并提取帧"""
         cap = cv2.VideoCapture(video_path)
         frames = []
 
@@ -53,7 +52,6 @@ class VideoRewardEvaluator:
         return frames
 
     def preprocess_frames(self, frames):
-        """裁剪中心区域并转换为Tensor"""
         processed_frames = [
             self.transform(Image.fromarray(frame)) for frame in frames
         ]
@@ -68,19 +66,15 @@ class VideoRewardEvaluator:
         return th.stack(processed_frames)
 
     def compute_reward(self, video_path):
-        """从视频文件计算reward"""
-        # 1. 提取和预处理视频帧
         frames = self.extract_frames(video_path)
         frames_tensor = self.preprocess_frames(frames)
         
         length = frames_tensor.shape[0]
         # frames_tensor = frames_tensor[:length // 2]
         # print(frames_tensor.shape)
-        indices = np.linspace(0, length-1, num=9, dtype=int)
+        # indices = np.linspace(0, length-1, num=9, dtype=int)
+        # frames_tensor = frames_tensor[indices]
 
-        # 对 frames_tensor 进行索引
-        frames_tensor = frames_tensor[indices]
-        # 2. 计算视频嵌入
         with th.no_grad():
             video_embeddings = embedding_image(self.model, self.processor, frames_tensor).cuda()
             if self.pca_video_model:
@@ -89,7 +83,6 @@ class VideoRewardEvaluator:
 
         video_embeddings = video_embeddings.view(1, -1, video_embeddings.shape[-1]).float()
         print(video_embeddings.shape)
-        # 3. 计算相似度reward
         reward = self.transform_model(video_embeddings, None, self.target_embedding).item()
 
         return reward
@@ -132,9 +125,7 @@ if __name__ == "__main__":
 
     video_evaluator = VideoRewardEvaluator(model, processor, transform_model, target_embedding, pca_video_model)
 
-    # 输入视频路径
     video_path = "/scr/yusenluo/RoboCLIP/self_collected_vids/button_press/GT/step_58880_seed_505_sumreward[39.47]_succ_True.mp4"
 
-    # 计算reward
     reward = video_evaluator.compute_reward(video_path)
     print(f"Computed Reward: {reward}")
