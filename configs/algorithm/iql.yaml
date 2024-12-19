@@ -6,7 +6,7 @@ defaults:
 general_training:
   algo: iql
   action_noise: 0.1 # sigma
-  sparse_only: false
+  sparse_only: true
 
   critic_update_ratio: 1 # iql and cql
 
@@ -22,7 +22,7 @@ model:
   qf_net_arch: [512, 512, 512]
 
 offline_training:
-  offline_training_steps: 5000 
+  offline_training_steps: 50000
 
 online_training:
-  total_time_steps: 1000000
+  total_time_steps: 0
