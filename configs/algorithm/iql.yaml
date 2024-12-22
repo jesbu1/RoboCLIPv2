@@ -20,6 +20,7 @@ model:
   critic_layer_norm: true
   pi_net_arch: [512, 512]
   qf_net_arch: [512, 512, 512]
+  image_encoder: Resnet18
 
 offline_training:
   offline_training_steps: 50000

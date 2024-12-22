@@ -1,0 +1,8 @@
+# @package _global_
+
+reward_model: 
+  name: 'sparse'
+  encoder: null # default and only option is vlc
+
+environment:
+  is_state_based: true
