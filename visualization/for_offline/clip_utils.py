@@ -52,6 +52,7 @@ def embedding_text(model, tokenizer, text):
     else:
         text = clip.tokenize(text)
         text_embeddings = model(input=text, modality="text")
+        text_embeddings = normalize_embeddings(text_embeddings) #text_embeddings / text_embeddings.norm(dim=-1, keepdim=True)
     return text_embeddings
 
 def embedding_image(model, processor, image):
@@ -67,6 +68,7 @@ def embedding_image(model, processor, image):
         #image = T.ToTensor()(image).unsqueeze(0).to(device)
         with torch.no_grad():
             image_embeddings = model(input=image, modality="vision")
+            image_embeddings = normalize_embeddings(image_embeddings) #image_embeddings / image_embeddings.norm(dim=-1, keepdim=True)
     return image_embeddings
 
 def compute_similarity(text_embeddings, image_embeddings):
