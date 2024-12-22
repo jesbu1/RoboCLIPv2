@@ -1,0 +1,30 @@
+# @package _global_
+
+defaults:
+  - _self_
+
+general_training:
+  algo: rlpd
+  action_noise: 0 # sigma
+  sparse_only: true
+  learning_rate: 1e-4
+
+  # offline rl parameters
+  critic_update_ratio: 1 # iql and cql
+
+  # RLPD-specific parameters
+  rlpd_n_critics_to_sample: 2
+  rlpd_train_critic_with_entropy: false
+
+model:
+  policy_layer_norm: true
+  critic_layer_norm: true
+  pi_net_arch: [512, 512]
+  qf_net_arch: [512, 512, 256]
+  image_encoder: Resnet18
+
+offline_training:
+  offline_training_steps: 10000
+
+online_training:
+  total_time_steps: 1000000

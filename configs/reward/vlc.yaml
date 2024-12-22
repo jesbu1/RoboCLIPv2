@@ -1,0 +1,6 @@
+# @package _global_
+
+reward_model: 
+  name: 'vlc'
+  batch_size: 64
+  model_path: null

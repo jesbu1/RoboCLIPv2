@@ -1,8 +1,10 @@
+# WARNING: not used anymore, won't be updated with latest API for encoder
 import os, sys
 
 import torch
 import torch.nn.functional as F
 import numpy as np
+from typing import Union
 from transformers import AutoTokenizer, AutoModel, AutoProcessor
 
 
@@ -13,11 +15,12 @@ from encoders.encoder import BaseEncoder
 
 
 class XCLIPEncoder(BaseEncoder):
-    def __init__(self):
+    def __init__(self, device: str = "cuda"):
         """
         Initializes the X-CLIP encoder using a pretrained model.
+        :param device: Device to run the model on (default: "cuda").
         """
-        super().__init__()
+        super().__init__(device)
         self.tokenizer, self.model, self.processor = self.load_model()
 
     def load_model(self):
@@ -46,7 +49,7 @@ class XCLIPEncoder(BaseEncoder):
         else:
             return normalized_embeddings.detach().cpu().numpy()
 
-    def encode_text(self, text):
+    def encode_text(self, text: Union[str, list]) -> np.ndarray:
         """
         Encodes text input using X-CLIP.
         :param text: Input text (list of strings).
@@ -65,19 +68,19 @@ class XCLIPEncoder(BaseEncoder):
         with torch.no_grad():
             text_features = self.model.get_text_features(**text_tokens)
 
-        return self.normalize_embeddings(text_features)
+        return self.normalize_embeddings(text_features, return_tensor=False)
 
-    def encode_video(self, video_frames):
+    def encode_images(self, images: np.ndarray) -> np.ndarray:
         """
         Encodes video input using X-CLIP.
         :param video_frames: Input video frames (as a numpy array of shape [frames, height, width, channels]).
         :return: Normalized video embeddings.
         """
 
-        video_frames = self.adjust_frames_xclip(video_frames)
+        adjusted_video_frames = self.adjust_frames_xclip(images)
 
-        video_input = self.processor(videos=list(video_frames), return_tensors="pt")
-        video_input = video_input["pixel_values"].cuda()
+        video_input = self.processor(videos=list(adjusted_video_frames), return_tensors="pt")
+        video_input = video_input["pixel_values"].to(self.device)
 
         with torch.no_grad():
             video_features = self.model.get_video_features(video_input)
@@ -85,7 +88,7 @@ class XCLIPEncoder(BaseEncoder):
         return self.normalize_embeddings(video_features)
 
 
-    def adjust_frames_xclip(self, frames, target_frame_count=32):
+    def adjust_frames_xclip(self, frames, target_frame_count=32) -> np.ndarray:
         """
         Ensures same numbers of frames(32). returns a numpy array of shape (target_frame_count, 224, 224, 3)
         """
@@ -109,6 +112,9 @@ class XCLIPEncoder(BaseEncoder):
         # frames = processor(videos=list(frames), return_tensors="pt")
         # frames = frames["pixel_values"]
         return frames
+    
+    def calculate_similarity(self, encoded_text: np.ndarray, encoded_video: np.ndarray) -> float:
+        pass
 
 
 if __name__ == "__main__":

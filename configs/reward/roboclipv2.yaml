@@ -1,0 +1,12 @@
+# @package _global_
+
+reward_model: 
+  name: 'roboclipv2'
+  batch_size: 64
+  model_path: '/data/shared/roboclip/clip_liv_models/RegressionRandom_liv_subtract_before_heads_4/model_74.pt'
+  use_pca: false
+
+environment:
+  is_state_based: true
+
+# data/h5_buffers/updated_trajs/metaworld_traj_15_demos_roboclipv2.h5

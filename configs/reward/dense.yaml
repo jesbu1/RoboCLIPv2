@@ -1,0 +1,5 @@
+# @package _global_
+
+reward_model: 
+  name: 'dense'
+  encoder: 'liv' # default and only option is vlc
