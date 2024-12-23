@@ -11,66 +11,74 @@ from metaworld.envs import (
 )
 
 from envs.metaworld_envs.wrappers import *
-
+from reward_model.env_reward_model import EnvRewardModel
 
 environment_to_instruction = {
-    'assembly-v2': 'assembling',
-    'basketball-v2': 'playing basketball',
-    'bin-picking-v2': 'picking bin',
-    'box-close-v2': 'closing box',
-    'button-press-topdown-v2': 'pressing button',
-    'button-press-topdown-wall-v2': 'pressing button',
-    'button-press-v2': 'pressing button',
-    'button-press-wall-v2': 'pressing button',
-    'coffee-button-v2': 'pressing button',
-    'coffee-pull-v2': 'pulling cup',
-    'coffee-push-v2': 'pushing cup',
-    'dial-turn-v2': 'turning dial.',
-    'disassemble-v2': 'disassembling',
-    'door-close-v2': 'closing door',
-    'door-lock-v2': 'locking door',
-    'door-open-v2': 'opening door',
-    'door-unlock-v2': 'unlocking door',
-    'hand-insert-v2': 'inserting bin',
-    'drawer-close-v2': 'closing drawer',
-    'drawer-open-v2': 'opening drawer',
-    'faucet-open-v2': 'opening faucet',
-    'faucet-close-v2': 'closing faucet',
-    'hammer-v2': 'hammering nail',
-    'handle-press-side-v2': 'pressing handle',
-    'handle-press-v2': 'pressing handle',
-    'handle-pull-side-v2': 'pulling handle',
-    'handle-pull-v2': 'pulling handle',
-    'lever-pull-v2': 'pulling lever.',
-    'peg-insert-side-v2': 'inserting peg',
-    'pick-place-wall-v2': 'placing bin to shelf',
-    'pick-out-of-hole-v2': 'picking bin',
-    'reach-v2': 'reaching red',
-    'push-back-v2': 'pushing bin back.',
-    'push-v2': 'pushing bin',
-    'pick-place-v2': 'placing bin to shelf',
-    'plate-slide-v2': 'sliding plate',
-    'plate-slide-side-v2': 'sliding plate',
-    'plate-slide-back-v2': 'sliding plate',
-    'plate-slide-back-side-v2': 'sliding plate',
-    'peg-unplug-side-v2': 'unpluging peg',
-    'soccer-v2': 'kicking soccer ball',
-    'stick-push-v2': 'pushing stick',
-    'stick-pull-v2': 'pulling stick',
-    'push-wall-v2': 'pushing bin',
-    'reach-wall-v2': 'reaching red',
-    'shelf-place-v2': 'placing bin to shelf',
-    'sweep-into-v2': 'sweeping bin',
-    'sweep-v2': 'sweeping bin',
-    'window-open-v2': 'opening window',
-    'window-close-v2': 'closing window'
+    "assembly-v2": "assembling",
+    "basketball-v2": "playing basketball",
+    "bin-picking-v2": "picking bin",
+    "box-close-v2": "closing box",
+    "button-press-topdown-v2": "pressing button",
+    "button-press-topdown-wall-v2": "pressing button",
+    "button-press-v2": "pressing button",
+    "button-press-wall-v2": "pressing button",
+    "coffee-button-v2": "pressing button",
+    "coffee-pull-v2": "pulling cup",
+    "coffee-push-v2": "pushing cup",
+    "dial-turn-v2": "turning dial.",
+    "disassemble-v2": "disassembling",
+    "door-close-v2": "closing door",
+    "door-lock-v2": "locking door",
+    "door-open-v2": "opening door",
+    "door-unlock-v2": "unlocking door",
+    "hand-insert-v2": "inserting bin",
+    "drawer-close-v2": "closing drawer",
+    "drawer-open-v2": "opening drawer",
+    "faucet-open-v2": "opening faucet",
+    "faucet-close-v2": "closing faucet",
+    "hammer-v2": "hammering nail",
+    "handle-press-side-v2": "pressing handle",
+    "handle-press-v2": "pressing handle",
+    "handle-pull-side-v2": "pulling handle",
+    "handle-pull-v2": "pulling handle",
+    "lever-pull-v2": "pulling lever.",
+    "peg-insert-side-v2": "inserting peg",
+    "pick-place-wall-v2": "placing bin to shelf",
+    "pick-out-of-hole-v2": "picking bin",
+    "reach-v2": "reaching red",
+    "push-back-v2": "pushing bin back.",
+    "push-v2": "pushing bin",
+    "pick-place-v2": "placing bin to shelf",
+    "plate-slide-v2": "sliding plate",
+    "plate-slide-side-v2": "sliding plate",
+    "plate-slide-back-v2": "sliding plate",
+    "plate-slide-back-side-v2": "sliding plate",
+    "peg-unplug-side-v2": "unpluging peg",
+    "soccer-v2": "kicking soccer ball",
+    "stick-push-v2": "pushing stick",
+    "stick-pull-v2": "pulling stick",
+    "push-wall-v2": "pushing bin",
+    "reach-wall-v2": "reaching red",
+    "shelf-place-v2": "placing bin to shelf",
+    "sweep-into-v2": "sweeping bin",
+    "sweep-v2": "sweeping bin",
+    "window-open-v2": "opening window",
+    "window-close-v2": "closing window",
 }
 
 instruction_to_environment = {v: k for k, v in environment_to_instruction.items()}
 
+
 # Define a base environment for MetaWorld
 class MetaworldBase(Env):
-    def __init__(self, env_id, seed=0, goal_observable=False, random_reset=False, max_episode_steps=128):
+    def __init__(
+        self,
+        env_id,
+        seed=0,
+        goal_observable=False,
+        random_reset=False,
+        max_episode_steps=128,
+    ):
         """
         Parameters
         ----------
@@ -100,7 +108,9 @@ class MetaworldBase(Env):
 
         self.max_episode_steps = max_episode_steps
 
-        self.base_env = TimeLimit(self.base_env, max_episode_steps=self.max_episode_steps)
+        self.base_env = TimeLimit(
+            self.base_env, max_episode_steps=self.max_episode_steps
+        )
 
         self.action_space = self.base_env.action_space
         self.observation_space = self.base_env.observation_space
@@ -147,7 +157,9 @@ class MetaworldBase(Env):
         if self.random_reset:
             self.rank = random.randint(0, 400)
             self.base_env = self.all_env_types[self.env_id](seed=self.rank)
-            self.base_env = TimeLimit(self.base_env, max_episode_steps=self.max_episode_steps)
+            self.base_env = TimeLimit(
+                self.base_env, max_episode_steps=self.max_episode_steps
+            )
 
         return self.base_env.reset()
 
@@ -194,13 +206,15 @@ class MetaworldBase(Env):
 # Example usage of the base environment and wrappers
 def create_wrapped_env(
     env_id,
+    reward_model,
     pca_model=None,
     language_features=None,
-    success_bonus=0.0,
-    use_simulator_reward=False,
     use_time=False,
     monitor=False,
-    goal_observable=False
+    goal_observable=False,
+    success_bonus=0.0,
+    is_state_based=False,
+    dense_eval=False,
 ):
     """
     Creates a wrapped MetaWorld environment with the given options.
@@ -217,20 +231,37 @@ def create_wrapped_env(
     Returns:
         A function that returns the wrapped environment when called.
     """
+
     def _init():
         base_env = MetaworldBase(env_id, goal_observable=goal_observable)
 
         if pca_model is not None:
             base_env = PCAReducerWrapper(base_env, pca_model)
 
-        if language_features is not None:
-            base_env = LanguageWrapper(base_env, language_features)
-
         if use_time:
             base_env = TimeWrapper(base_env)
 
-        use_sparse_only = not use_simulator_reward
-        base_env = RewardWrapper(base_env, sparse=use_sparse_only, success_bonus=success_bonus)
+        # breakpoint()
+        # This replaces the metaworld state-based input with an image embedding too
+        base_env = LearnedRewardWrapper(
+            base_env,
+            reward_model,
+            is_state_based=is_state_based,
+            language_features=language_features,
+            dense_eval=dense_eval,
+        )
+
+        # This adds the language features to the observation
+        if language_features is not None:
+            base_env = LanguageWrapper(base_env, language_features)
+
+        # else:
+        #     # Then we are an EnvRewardModel
+        #     if reward_model.name == 'sparse':
+        #         use_sparse = True
+        #     elif reward_model.name == 'dense':
+        #         use_sparse = False
+        #     base_env = RewardWrapper(base_env, sparse=use_sparse, success_bonus=reward_model.success_bonus)
 
         if monitor:
             base_env = Monitor(base_env)

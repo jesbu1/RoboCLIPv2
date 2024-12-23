@@ -1,20 +1,22 @@
 program: test_scripts/test_iql.py
-name: cql_sweep_15_demos_sparse
+name: rlpd_sweep_15_demos_sparse
 method: bayes
 metric:
   goal: maximize
   name: eval/mean_reward
 parameters:
   algorithm:
-    values: ["cql"] 
+    values: ["rlpd"] 
   metaworld:
-    values: ["all_tasks_15"] 
+    values: ["some_tasks_15"] 
   reward:
     values: ["sparse"]
-  general_training.cql_min_q_weight:
-    values: [0.1, 1.0, 5.0, 10.0]
-  general_training.cql_min_q_temp:
-    values: [0.5, 1.0, 2.0]
+  general_training.rlpd_n_critics:
+    values: [5, 10]
+  general_training.rlpd_n_critics_to_sample:
+    values: [2, 4]
+  general_training.rlpd_train_critic_with_entropy:
+    values: [True, False]
   general_training.learning_rate:
     values: [1e-4, 1e-3]
   general_training.critic_update_ratio:

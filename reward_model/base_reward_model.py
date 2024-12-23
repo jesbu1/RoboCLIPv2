@@ -4,12 +4,13 @@ import numpy as np
 from typing import List, Union
 
 class BaseRewardModel(abc.ABC):
-    def __init__(self, device: str = 'cuda', batch_size=64):
+    def __init__(self, device: str = 'cuda', batch_size=64, success_bonus=10.0):
         """
         Initialize the encoder. Subclasses can implement specific initialization as needed.
         """
         self.device = torch.device(device)
         self.batch_size = batch_size
+        self.success_bonus = success_bonus
 
     def encode_text(self, text: Union[str, List]) -> np.ndarray:
         """
@@ -27,6 +28,11 @@ class BaseRewardModel(abc.ABC):
                     encoded_text_all = np.concatenate((encoded_text_all, encoded_text))
         else:
             encoded_text_all = self._encode_text_batch([text])
+
+        # ensure the output is a numpy array
+        if isinstance(encoded_text_all, torch.Tensor):
+            encoded_text_all = encoded_text_all.detach().cpu().numpy()
+
         return encoded_text_all
     
     @abc.abstractmethod
@@ -88,6 +94,9 @@ class BaseRewardModel(abc.ABC):
             else:
                 rewards_all = np.concatenate((rewards_all, rewards))
         return rewards_all
+    
+    def set_success_bonus(self, success_bonus: float):
+        self.success_bonus = success_bonus
     
     @abc.abstractmethod
     def _calculate_reward_batch(self, encoded_texts: np.ndarray, encoded_videos: np.ndarray) -> np.ndarray:

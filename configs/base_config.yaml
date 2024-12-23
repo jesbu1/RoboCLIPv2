@@ -80,3 +80,4 @@ environment:
   transform_model_path: null
   ignore_language: false
   succ_bonus: 0.0
+  is_state_based: false

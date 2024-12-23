@@ -3,16 +3,22 @@
 defaults:
   - _self_
 
+# Because RLPD is slower, we will log more frequently
+logging:
+  eval_freq: 500
+  video_freq: 500
+
 general_training:
   algo: rlpd
   action_noise: 0 # sigma
   sparse_only: true
-  learning_rate: 1e-4
+  learning_rate: 3e-4
 
   # offline rl parameters
   critic_update_ratio: 1 # iql and cql
 
   # RLPD-specific parameters
+  rlpd_n_critics: 10
   rlpd_n_critics_to_sample: 2
   rlpd_train_critic_with_entropy: false
 
@@ -24,7 +30,11 @@ model:
   image_encoder: Resnet18
 
 offline_training:
-  offline_training_steps: 10000
+  offline_training_steps: 10000 # runs BC, only doing 1 for now for checking
 
 online_training:
-  total_time_steps: 1000000
+  total_time_steps: 32000
+  mix_buffers: true
+
+environment:
+  is_state_based: true # TODO: this is temporary

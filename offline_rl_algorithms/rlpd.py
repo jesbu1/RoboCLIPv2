@@ -297,7 +297,7 @@ class RLPD(OfflineRLAlgorithm):
                         self.critic_target(
                             replay_data.next_observations,
                             next_actions,
-                            critic_indices=critic_indices,
+                            critic_indicies=critic_indices,
                         ),
                         dim=1,
                     )

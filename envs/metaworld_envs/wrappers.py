@@ -4,6 +4,8 @@ import torch as th
 import torch.nn.functional as F
 from gym import spaces
 
+from reward_model.base_reward_model import BaseRewardModel
+
 
 class SingleLayerMLP(th.nn.Module):
     def __init__(self, input_dim, output_dim, normalize=True):
@@ -91,7 +93,7 @@ class RewardWrapper(gym.Wrapper):
             reward = sparse_reward
         else:
             reward = reward + sparse_reward
-            
+
         return obs, reward, done, info
 
 
@@ -126,6 +128,10 @@ class TimeWrapper(gym.Wrapper):
 class LanguageWrapper(gym.Wrapper):
     def __init__(self, env, language_feature):
         super(LanguageWrapper, self).__init__(env)
+
+        if isinstance(language_feature, th.Tensor):
+            language_feature = language_feature.cpu().numpy()
+
         self.language_features = language_feature
         self.observation_space = spaces.Box(
             low=-np.inf,
@@ -144,10 +150,130 @@ class LanguageWrapper(gym.Wrapper):
         return np.concatenate([obs, self.language_features])
 
 
-# class LanguageSizeWrapper(gym.Wrapper):
-#     def __init__(self, env, language_feature_size):
-#         super(LanguageSizeWrapper, self).__init__(env)
-#         self.observation_space = spaces.Box(low=-np.inf, high=np.inf, shape=(self.env.observation_space.shape[0] + language_feature_size,), dtype=np.float32)
+class LearnedRewardWrapper(gym.Wrapper):
+    def __init__(
+        self,
+        env: gym.Env,
+        reward_model: BaseRewardModel,
+        language_features: th.Tensor,
+        is_state_based: bool = False,
+        dense_eval: bool = False,
+    ):
+        super(LearnedRewardWrapper, self).__init__(env)
+        self.reward_model = reward_model
+        self.is_state_based = is_state_based
+
+        if self.is_state_based is False:
+            self.observation_space = spaces.Box(
+                low=-np.inf,
+                high=np.inf,
+                shape=(self.reward_model.img_output_dim,),
+                dtype=np.float32,
+            )
+
+        self.past_observations = []
+        self.counter = 0
+
+        self.dense_eval = dense_eval
+
+        self.reward_at_every_step = self.reward_model.reward_at_every_step
+        self.reward_language_features = (
+            th.Tensor(language_features)
+            .float()
+            .to(self.reward_model.device)
+            .unsqueeze(0)
+            .unsqueeze(0)
+        )
+
+    def step(self, action):
+        self.counter += 1
+        obs, original_reward, done, info = self.env.step(action)
+
+        encoded_image = None
+        # IF the model is state-based and is dense/sparse reward, we can skip this
+        if not (
+            (self.is_state_based)
+            and (
+                self.reward_model.name == "sparse" or self.reward_model.name == "dense"
+            )
+        ):
+            # if state-based, we can render every 10 steps
+            if (self.is_state_based and self.counter % 10 == 0) or (
+                not self.is_state_based
+            ):
+                image = self.env.render()
+
+                # Input should be of shape (batch_size, num_frames, height, width, channels)
+                # However, the input is of shape (height, width, channels)
+                image_for_model = image[None, None, :, :, :]
+                encoded_image = self.reward_model.encode_images(
+                    image_for_model
+                ).squeeze()
+
+        if self.is_state_based is False:
+            # obs = np.concatenate([obs, self.reward_model(obs)])
+            obs = encoded_image
+
+        if self.reward_model.name == "dense" or self.dense_eval:
+            return obs, original_reward, done, info
+        # Check if this is sparse/dense reward
+        elif self.reward_model.name == "sparse":
+            sparse_reward = (
+                self.reward_model.success_bonus if info.get("success", False) else 0.0
+            )
+            reward = sparse_reward
+            return obs, reward, done, info
+
+        if encoded_image is not None:
+            self.past_observations.append(encoded_image)
+
+        if self.reward_at_every_step:
+            stacked_sequence = np.stack(self.past_observations, axis=1)
+            stacked_sequence = (
+                th.from_numpy(stacked_sequence).float().to(self.reward_model.device)
+            )
+
+            reward = self.reward_model.calculate_rewards(
+                self.reward_language_features, stacked_sequence
+            )
+
+        else:
+            if done:
+                stacked_sequence = np.stack(self.past_observations, axis=0)
+                stacked_sequence = (
+                    th.from_numpy(stacked_sequence).float().to(self.reward_model.device)
+                )
+
+                reward = self.reward_model.calculate_rewards(
+                    self.reward_language_features, stacked_sequence.unsqueeze(0)
+                )
+                self.past_observations = []
+            else:
+                reward = 0
+
+        # Success bonus
+        if info.get("success", False):
+            reward += self.reward_model.success_bonus
+
+        return obs, reward, done, info
+
+    def reset(self):
+        self.past_observations = []
+        self.counter = 0
+
+        obs = self.env.reset()
+
+        # This is for the reward function
+        image = self.env.render()
+        image_for_model = image[None, None, :, :, :]
+        encoded_image = self.reward_model.encode_images(image_for_model).squeeze()
+
+        if self.is_state_based is False:
+            obs = encoded_image
+
+        self.past_observations.append(encoded_image)
+
+        return obs
 
 
 # Wrapper for similarity-based observations
@@ -192,9 +318,13 @@ class SimilarityRewardWrapper(gym.Wrapper):
 
     def step(self, action):
         obs, _, done, info = self.env.step(action)
-        self.past_observations.append(
-            self.env.render()
-        )  # Collect frame from the environment
+
+        # render every 10 steps
+        if self.counter % 10 == 0:
+            self.past_observations.append(
+                self.env.render()
+            )  # Collect frame from the environment
+
         self.counter += 1
 
         if done:

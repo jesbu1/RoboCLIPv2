@@ -4,3 +4,4 @@ reward_model:
   name: 'vlc'
   batch_size: 64
   model_path: null
+  success_bonus: 10.0

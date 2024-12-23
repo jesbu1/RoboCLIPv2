@@ -71,7 +71,8 @@ class RoboclipV2RewardModel(BaseRewardModel):
         with torch.no_grad():
             text_embeddings = self.pretrained_liv_model(input=text, modality="text")
             if self.use_pca:
-                text_embeddings = self.pca_text_model.transform(text_embeddings)
+                pca_input_normed = normalize_embeddings(text_embeddings)
+                text_embeddings = self.pca_text_model.transform(pca_input_normed.cpu().numpy())
         text_embeddings = normalize_embeddings(text_embeddings)
         return text_embeddings.detach().cpu().numpy()
 
@@ -84,9 +85,10 @@ class RoboclipV2RewardModel(BaseRewardModel):
         assert images.shape[0] == 1, "LIV doesn't support batch > 1"
         images = images.squeeze(0)
         with torch.no_grad():
-            image_embeddings = self.pretrained_liv_model(input=images, modality="vision")
+            image_embeddings =self.pretrained_liv_model(input=images, modality="vision")
             if self.pca_video_model:
-                image_embeddings = self.pca_video_model.transform(image_embeddings.cpu().numpy())
+                pca_input_normed = normalize_embeddings(image_embeddings)
+                image_embeddings = self.pca_video_model.transform(pca_input_normed.cpu().numpy())
                 image_embeddings = torch.from_numpy(image_embeddings).float().to(self.device)
         image_embeddings = normalize_embeddings(image_embeddings, return_tensor=True)
         return image_embeddings.unsqueeze(0)
