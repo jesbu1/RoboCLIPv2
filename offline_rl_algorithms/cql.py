@@ -239,10 +239,7 @@ class CQL(OfflineRLAlgorithm):
             if self.use_sde:
                 self.actor.reset_noise()
 
-            if (
-                self.ent_coef_optimizer is not None
-                and self.log_ent_coef is not None
-            ):
+            if self.ent_coef_optimizer is not None and self.log_ent_coef is not None:
                 ent_coef = th.exp(self.log_ent_coef.detach())
             else:
                 ent_coef = self.ent_coef_tensor
@@ -250,8 +247,6 @@ class CQL(OfflineRLAlgorithm):
             for critic_update in range(self.critic_update_ratio):
                 # Sample replay buffer
                 replay_data = self.replay_buffer.sample(batch_size, env=self._vec_normalize_env)  # type: ignore[union-attr]
-
-
 
                 with th.no_grad():
                     # Select action according to policy
@@ -274,7 +269,6 @@ class CQL(OfflineRLAlgorithm):
                         + (1 - replay_data.dones) * self.gamma * next_q_values
                     )
 
-
                 # CQL Implementation
                 random_actions = (
                     th.FloatTensor(batch_size, self.action_space.shape[0])
@@ -293,9 +287,7 @@ class CQL(OfflineRLAlgorithm):
                 next_log_pis = next_log_pis.reshape(-1, 1)
 
                 # Compute the Q values of random actions
-                q1_rand, q2_rand = self.critic(
-                    replay_data.observations, random_actions
-                )
+                q1_rand, q2_rand = self.critic(replay_data.observations, random_actions)
                 q1_current_actions, q2_current_actions = self.critic(
                     replay_data.observations, replay_data.actions
                 )
@@ -376,21 +368,15 @@ class CQL(OfflineRLAlgorithm):
                         self.batch_norm_stats, self.batch_norm_stats_target, 1.0
                     )
             # Action by the current actor for the sampled state
-            actions_pi, log_prob = self.actor.action_log_prob(
-                replay_data.observations
-            )
+            actions_pi, log_prob = self.actor.action_log_prob(replay_data.observations)
             log_prob = log_prob.reshape(-1, 1)
             ent_coef_loss = None
-            if (
-                self.ent_coef_optimizer is not None
-                and self.log_ent_coef is not None
-            ):
+            if self.ent_coef_optimizer is not None and self.log_ent_coef is not None:
                 # Important: detach the variable from the graph
                 # so we don't change it with other losses
                 # see https://github.com/rail-berkeley/softlearning/issues/60
                 ent_coef_loss = -(
-                    self.log_ent_coef
-                    * (log_prob + self.target_entropy).detach()
+                    self.log_ent_coef * (log_prob + self.target_entropy).detach()
                 ).mean()
                 ent_coef_losses.append(ent_coef_loss.item())
             else:
@@ -400,10 +386,7 @@ class CQL(OfflineRLAlgorithm):
 
             # Optimize entropy coefficient, also called
             # entropy temperature or alpha in the paper
-            if (
-                ent_coef_loss is not None
-                and self.ent_coef_optimizer is not None
-            ):
+            if ent_coef_loss is not None and self.ent_coef_optimizer is not None:
                 self.ent_coef_optimizer.zero_grad()
                 ent_coef_loss.backward()
                 self.ent_coef_optimizer.step()

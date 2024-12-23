@@ -13,6 +13,7 @@ from stable_baselines3.common.logger import Logger
 from offline_rl_algorithms.custom_policies import (
     CustomActor,
     CustomSACPolicy,
+    CustomContinuousCritic,
     CustomCnnPolicy,
     CustomMlpPolicy,
     CustomMultiInputPolicy,
@@ -81,8 +82,8 @@ class OfflineRLAlgorithm(OffPolicyAlgorithm):
     }
     policy: CustomSACPolicy
     actor: CustomActor
-    critic: ContinuousCritic
-    critic_target: ContinuousCritic
+    critic: CustomContinuousCritic
+    critic_target: CustomContinuousCritic
 
     def __init__(
         self,

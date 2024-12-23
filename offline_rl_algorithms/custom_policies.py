@@ -8,7 +8,7 @@ from stable_baselines3.common.distributions import (
 )
 from stable_baselines3.common.preprocessing import get_action_dim
 from torch import nn
-from typing import Optional, Union, Type, Dict, Any, List
+from typing import Optional, Union, Type, Dict, Any, List, Tuple
 
 from stable_baselines3.common.policies import (
     BasePolicy,
@@ -239,6 +239,30 @@ class CustomContinuousCritic(ContinuousCritic):
             q_net = nn.Sequential(*q_net)
             self.add_module(f"qf{idx}", q_net)
             self.q_networks.append(q_net)
+
+    def forward(
+        self, obs: th.Tensor, actions: th.Tensor, critic_indicies: th.Tensor = None
+    ) -> Tuple[th.Tensor, ...]:
+        """Forward function
+
+        Args:
+            obs (th.Tensor): batched observation tensor
+            actions (th.Tensor): batched action tensor
+            critic_indicies (th.Tensor, optional): tensor of critic indicies to return. Defaults to None. If given, only the critic values at the given indicies are returned for less computation.
+
+        Returns:
+            Tuple[th.Tensor, ...]: tuple of critic values
+        """
+        # Learn the features extractor using the policy loss only
+        # when the features_extractor is shared with the actor
+        with th.set_grad_enabled(not self.share_features_extractor):
+            features = self.extract_features(obs, self.features_extractor)
+        qvalue_input = th.cat([features, actions], dim=1)
+        if critic_indicies is not None:
+            # save computation
+            return tuple(self.q_networks[idx](qvalue_input) for idx in critic_indicies)
+        else:
+            return tuple(q_net(qvalue_input) for q_net in self.q_networks)
 
 
 class CustomSACPolicy(SACPolicy):
