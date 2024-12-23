@@ -325,14 +325,19 @@ class RLPD(OfflineRLAlgorithm):
                         dim=1,
                     )
                     # sample a random subset of self.n_critics_to_sample critics
-                    critic_indices = th.randint(
-                        0, self.policy_kwargs["n_critics"], (self.n_critics_to_sample,)
-                    )
-                    next_q_values = next_q_values[critic_indices]
+                    # critic_indices = th.randint(
+                    #     0, self.policy_kwargs["n_critics"], (self.n_critics_to_sample,)
+                    # )
+                    # sample a random subset of self.n_critics_to_sample critics. no replacement
+                    critic_indices = th.randperm(
+                        self.policy_kwargs["n_critics"]
+                    )[: self.n_critics_to_sample]
+                    next_q_values = next_q_values[:, critic_indices]
                     next_q_values, _ = th.min(next_q_values, dim=1, keepdim=True)
 
                     # add entropy term
                     if self.train_critic_with_entropy:
+                        # TODO: there is an error here
                         next_q_values = (
                             next_q_values - ent_coef * next_log_prob.reshape(-1, 1)
                         )
@@ -390,7 +395,9 @@ class RLPD(OfflineRLAlgorithm):
             q_values_pi = th.cat(
                 self.critic(replay_data.observations, actions_pi), dim=1
             )
-            min_qf_pi, _ = th.mean(q_values_pi, dim=1, keepdim=True)
+            # min_qf_pi, _ = th.mean(q_values_pi, dim=1, keepdim=True)
+            min_qf_pi = th.mean(q_values_pi, dim=1, keepdim=True)
+
             actor_loss = (ent_coef * log_prob - min_qf_pi).mean()
             actor_losses.append(actor_loss.item())
             actor_losses.append(actor_loss.item())
@@ -414,7 +421,7 @@ class RLPD(OfflineRLAlgorithm):
             metrics_dict[f"{logging_prefix}/ent_coef_loss"] = np.mean(ent_coef_losses)
 
         for metric in metrics_dict:
-            self.logger.record(logging_prefix + metric, metrics_dict[metric])
+            self.logger.record(metric, metrics_dict[metric])
 
         return metrics_dict
 
@@ -426,6 +433,7 @@ class RLPD(OfflineRLAlgorithm):
         tb_log_name: str = "SAC",
         reset_num_timesteps: bool = True,
         progress_bar: bool = False,
+        logger: Optional = None,
     ):
         return super().learn(
             total_timesteps=total_timesteps,
@@ -434,6 +442,7 @@ class RLPD(OfflineRLAlgorithm):
             tb_log_name=tb_log_name,
             reset_num_timesteps=reset_num_timesteps,
             progress_bar=progress_bar,
+            logger=logger,
         )
 
     def _excluded_save_params(self) -> List[str]:
