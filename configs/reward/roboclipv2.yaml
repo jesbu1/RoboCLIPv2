@@ -5,8 +5,12 @@ reward_model:
   batch_size: 64
   model_path: '/data/shared/roboclip/clip_liv_models/RegressionRandom_liv_subtract_before_heads_4/model_74.pt'
   use_pca: false
+  success_bonus: 10.0
 
-environment:
-  is_state_based: true
+# environment:
+#   is_state_based: false
+
+# offline_training:
+#   offline_training_steps: 1
 
 # data/h5_buffers/updated_trajs/metaworld_traj_15_demos_roboclipv2.h5

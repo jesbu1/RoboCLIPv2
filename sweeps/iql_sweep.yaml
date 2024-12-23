@@ -9,6 +9,8 @@ parameters:
     values: ["iql"] 
   metaworld:
     values: ["all_tasks_15"] 
+  reward:
+    values: ["dense"]
   general_training.policy_extraction:
     values: ['awr']
   general_training.awr_advantage_temp:

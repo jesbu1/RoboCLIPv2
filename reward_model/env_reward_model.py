@@ -8,7 +8,7 @@ from reward_model.liv_reward_model import LIVRewardModel # TODO: implement liv_r
 
 
 class EnvRewardModel(BaseRewardModel):
-    def __init__(self, model_path: str, device: str = "cuda", reward_at_every_step: bool = False) -> None:
+    def __init__(self, model_path: str, device: str = "cuda", reward_at_every_step: bool = False, success_bonus: float = 10.) -> None:
         """
         Env reward model simply passes the reward from the simulator.
         Initializes a LIV encoder with a pretrained model 
@@ -16,7 +16,7 @@ class EnvRewardModel(BaseRewardModel):
         :param model_path: Path to the LIV model file.
         :param device: Device to run the model on.
         """
-        super().__init__(device)
+        super().__init__(device, success_bonus=success_bonus)
 
         # TODO: Turn this into a cfg option and a param in every constructor
         self.reward_at_every_step = reward_at_every_step
@@ -49,12 +49,22 @@ class EnvRewardModel(BaseRewardModel):
         return 0 # Always return 0 reward
     
     @property
-    def output_dim(self):
-        return self.liv_model.output_dim
-    
-    @property
     def name(self) -> str:
         """
         Returns the name of the encoder class.
         """
         return 'EnvRewardModel'
+    
+    @property
+    def img_output_dim(self) -> int:
+        """
+        Returns the output dimension of the image encoder. Used to determine the observation space of a policy.
+        """
+        return self.liv_model.img_output_dim
+    
+    @property
+    def text_output_dim(self) -> int:
+        """
+        Returns the output dimension of the text encoder. Used to determine the observation space of a policy.
+        """
+        return self.liv_model.text_output_dim

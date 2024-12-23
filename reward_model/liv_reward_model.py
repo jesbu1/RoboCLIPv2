@@ -21,7 +21,7 @@ def normalize_embeddings(embeddings, return_tensor=True):
         return normalized_embeddings.detach().cpu().numpy()
 
 class LIVRewardModel(BaseRewardModel):
-    def __init__(self, model_load_path: str, use_pca: bool, attention_heads: int, pca_model_dir: str = None, device: str = 'cuda', batch_size=64):
+    def __init__(self, model_load_path: str, use_pca: bool, attention_heads: int, pca_model_dir: str = None, device: str = 'cuda', batch_size=64, success_bonus: float = 10.0):
         """
         Initializes the LIV reward model.
         :param model_load_path: Path to the model checkpoint.
@@ -31,7 +31,7 @@ class LIVRewardModel(BaseRewardModel):
         :param device: Device to run the model on (default: 'cuda').
         :param batch_size: Batch size to use for encoding data (default: 64).
         """
-        super().__init__(device, batch_size)
+        super().__init__(device, batch_size, success_bonus=success_bonus)
         self.use_pca = use_pca
         self.attention_heads = attention_heads
         self.pretrained_liv_model = self._load_model(model_load_path)
@@ -54,8 +54,10 @@ class LIVRewardModel(BaseRewardModel):
         :return: Encoded representation of the text.
         """
         text = clip.tokenize(text)
-        text_embeddings = self.pretrained_liv_model(input=text, modality="text")
-        return text_embeddings
+        with torch.no_grad():
+            text_embeddings = self.pretrained_liv_model(input=text, modality="text")
+        text_embeddings = normalize_embeddings(text_embeddings, return_tensor=True)
+        return text_embeddings.detach().cpu().numpy()
 
     def _encode_image_batch(self, images: torch.Tensor) -> np.ndarray:
         """
@@ -80,14 +82,22 @@ class LIVRewardModel(BaseRewardModel):
         pass
 
     @property
-    def output_dim(self) -> int:
+    def img_output_dim(self) -> int:
         """
         Returns the output dimension of the image encoder. Used to determine the observation space of a policy.
         """
         if self.use_pca:
             return self.pca_video_model.components_.shape[0]
         return 1024 # for LIV
-
+    
+    @property
+    def text_output_dim(self) -> int:
+        """
+        Returns the output dimension of the text encoder. Used to determine the observation space of a policy.
+        """
+        if self.use_pca:
+            return self.pca_text_model.components_.shape[0]
+        return 1024 # for LIV
     @property
     def name(self) -> str:
         """

@@ -3,6 +3,7 @@
 reward_model: 
   name: 'sparse'
   encoder: null # default and only option is vlc
+  success_bonus: 10.0
 
 environment:
-  is_state_based: true
+  is_state_based: false

@@ -4,8 +4,8 @@
 ## wandb sweep sweep_config.yaml
 
 # Number of agents to run
-NUM_AGENTS=4
-SWEEP_ID=abraranwar/RoboCLIPv2-test_scripts/iiqesw8p # Replace with your actual sweep ID
+NUM_AGENTS=2
+SWEEP_ID=abraranwar/RoboCLIPv2-test_scripts/6f5lx3rd # Replace with your actual sweep ID
 
 # Run agents in parallel
 for i in $(seq 1 $NUM_AGENTS); do

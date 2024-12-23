@@ -7,6 +7,7 @@ from typing import Any, Dict, Generator, List, Optional, Tuple, Union, NamedTupl
 import numpy as np
 import torch as th
 from gym import spaces
+import os
 
 from stable_baselines3.common.preprocessing import get_action_dim, get_obs_shape
 from stable_baselines3.common.type_aliases import (
@@ -17,6 +18,8 @@ from stable_baselines3.common.type_aliases import (
 )
 from stable_baselines3.common.utils import get_device
 from stable_baselines3.common.vec_env import VecNormalize
+
+from reward_model.base_reward_model import BaseRewardModel
 
 try:
     # Check memory used by replay buffer when possible
@@ -44,6 +47,7 @@ class H5ReplayBuffer(ReplayBuffer):
         separately and treat the task as infinite horizon task.
         https://github.com/DLR-RM/stable-baselines3/issues/284
     """
+
     # TODO: success bonus needs to be handled in this replay buffer as an optional param
 
     observations: np.ndarray
@@ -66,6 +70,8 @@ class H5ReplayBuffer(ReplayBuffer):
         sparsify_rewards: bool = False,
         dense_rewards_at_end: bool = False,
         filter_instructions: List[str] = None,
+        image_encoder: BaseRewardModel = None,
+        is_state_based: bool = False,
     ):
         """
         Initialize the replay buffer.
@@ -82,12 +88,20 @@ class H5ReplayBuffer(ReplayBuffer):
         :param sparsify_rewards: Converts reward to done
         :param dense_rewards_at_end: Whether to use the reward sum at the end of the episode instead.
         """
-        assert not (dense_rewards_at_end and sparsify_rewards), "Cannot use both dense rewards at end and sparsify as a precaution"
+        assert not (
+            dense_rewards_at_end and sparsify_rewards
+        ), "Cannot use both dense rewards at end and sparsify as a precaution"
+
+        images = None
         with h5py.File(h5_path, "r") as f:
             observations = f["state"][()]
             lang_embeddings = f["lang_embedding"][()]
             next_observations = observations
             actions = f["action"][()]
+
+            # if 'img' in f.keys() and image_encoder is not None:
+            # images = f["img"][()]
+
             if clip_actions:
                 actions = np.clip(actions, -1, 1)
             if sparsify_rewards:
@@ -97,7 +111,47 @@ class H5ReplayBuffer(ReplayBuffer):
             dones = f["done"][()]
             # timesteps = f["timesteps"][()]
 
-            # Look at the instructions and only keep the ones that are in the filter_instructions
+            self.is_state_based = is_state_based
+            # Process and save images if they are going to be used
+            # if not self.is_state_based:
+                # image_encoder_preprocessed_path = h5_path.replace(
+                #     ".h5", f"_{image_encoder.name}_preprocessed.h5"
+                # )
+                # # replace "updated_trajs" with "image_encoder_preprocessed"
+                # image_encoder_preprocessed_path = (
+                #     image_encoder_preprocessed_path.replace(
+                #         "updated_trajs", "image_encoder_preprocessed"
+                #     )
+                # )
+
+                # # Check if the preprocessed file exists
+                # try:
+                #     with h5py.File(image_encoder_preprocessed_path, "r") as image_f:
+                #         encoded = image_f["encoded"][()]
+
+                #     print(
+                #         f"Found preprocessed images for {image_encoder.name} in {image_encoder_preprocessed_path}"
+                #     )
+                # except:
+                #     # If not, pre-process the images and save them
+                #     images = f["img"]  # Lazy loading with h5py
+                #     encoded = image_encoder.encode_images(images)
+                #     # create folder if it doesn't exist
+                #     os.makedirs(
+                #         os.path.dirname(image_encoder_preprocessed_path), exist_ok=True
+                #     )
+                #     with h5py.File(image_encoder_preprocessed_path, "w") as image_f:
+                #         image_f.create_dataset("encoded", data=encoded)
+
+                #     print(
+                #         f"Saved preprocessed images for {image_encoder.name} in {image_encoder_preprocessed_path}"
+                #     )
+
+            if not self.is_state_based:
+                image_encodings = f["img_embedding"][()]
+                # If we're using images, let's replace the observations with the encoded
+                observations = image_encodings
+                next_observations = image_encodings
 
             if filter_instructions is not None:
                 instructions = f["string"][()]
@@ -105,12 +159,16 @@ class H5ReplayBuffer(ReplayBuffer):
                 for i in range(len(instructions)):
                     if instructions[i].decode("utf-8") in filter_instructions:
                         indices_to_keep.append(i)
-                observations = observations[indices_to_keep]
-                lang_embeddings = lang_embeddings[indices_to_keep]
-                next_observations = next_observations[indices_to_keep]
-                actions = actions[indices_to_keep]
-                rewards = rewards[indices_to_keep]
-                dones = dones[indices_to_keep]
+                # observations = observations[indices_to_keep]
+                # lang_embeddings = lang_embeddings[indices_to_keep]
+                # next_observations = next_observations[indices_to_keep]
+                # actions = actions[indices_to_keep]
+                # rewards = rewards[indices_to_keep]
+                # dones = dones[indices_to_keep]
+            else:
+                indices_to_keep = np.arange(observations.shape[0])
+
+            self.indices_to_keep = np.array(indices_to_keep, dtype=int)
 
         if dense_rewards_at_end:
             rewards = np.zeros_like(rewards)
@@ -126,8 +184,10 @@ class H5ReplayBuffer(ReplayBuffer):
             mc_returns = np.zeros_like(rewards)
             prev_return = 0
             for i in range(len(rewards)):
-                mc_returns[-i-1] = rewards[-i-1] + mc_return_gamma * prev_return * (1 - dones[-i-1])
-                prev_return = mc_returns[-i-1]
+                mc_returns[-i - 1] = rewards[-i - 1] + mc_return_gamma * prev_return * (
+                    1 - dones[-i - 1]
+                )
+                prev_return = mc_returns[-i - 1]
 
         # TODO: Temporary, but set timesteps to be going from 0-n until it hits a done of 1
         timesteps = np.zeros_like(rewards)
@@ -150,7 +210,8 @@ class H5ReplayBuffer(ReplayBuffer):
         self.timesteps = timesteps
         self.lang_embeddings = np.squeeze(lang_embeddings)
 
-        self.buffer_size = self.rewards.shape[0]
+        # self.buffer_size = self.rewards.shape[0]
+        self.buffer_size = len(self.indices_to_keep)
         self.success_bonus = success_bonus
 
         self.pos = self.buffer_size
@@ -178,6 +239,10 @@ class H5ReplayBuffer(ReplayBuffer):
         batch_inds: np.ndarray,
         env: Optional[VecNormalize] = None,
     ) -> ReplayBufferSamples:
+
+        # Batch inds are in sampling indices_to_sample. Get the actual indices
+        batch_inds = np.array([self.indices_to_keep[i] for i in batch_inds])
+
         # Sample randomly the env idx
         if self.optimize_memory_usage:
             next_obs = self._normalize_obs(
@@ -186,32 +251,50 @@ class H5ReplayBuffer(ReplayBuffer):
             )
             # add timestep into the observation
             if self.add_timestep:
-                timesteps = self.timesteps[(batch_inds + 1) % self.buffer_size] / 500 # 500 is the max episode length
+                timesteps = (
+                    self.timesteps[(batch_inds + 1) % self.buffer_size] / 500
+                )  # 500 is the max episode length
                 next_obs = np.concatenate((next_obs, timesteps.reshape(-1, 1)), axis=1)
 
             if self.use_language_embeddings:
-                next_obs = np.concatenate((next_obs, self.lang_embeddings[(batch_inds + 1) % self.buffer_size, :]), axis=1)
+                next_obs = np.concatenate(
+                    (
+                        next_obs,
+                        self.lang_embeddings[(batch_inds + 1) % self.buffer_size, :],
+                    ),
+                    axis=1,
+                )
 
         else:
             next_obs = self._normalize_obs(
                 self.next_observations[batch_inds, :], env=None
             )
             if self.add_timestep:
-                timesteps = self.timesteps[batch_inds] / 500 # 500 is the max episode length
+                timesteps = (
+                    self.timesteps[batch_inds] / 500
+                )  # 500 is the max episode length
                 next_obs = np.concatenate((next_obs, timesteps.reshape(-1, 1)), axis=1)
 
             if self.use_language_embeddings:
-                next_obs = np.concatenate((next_obs, self.lang_embeddings[batch_inds, :]), axis=1)
+                next_obs = np.concatenate(
+                    (next_obs, self.lang_embeddings[batch_inds, :]), axis=1
+                )
 
         observation = self._normalize_obs(self.observations[batch_inds, :], env=None)
 
         # add the timestep into the observation
         if self.add_timestep:
-            timesteps = self.timesteps[batch_inds] / 500 # 500 is the max episode length
-            observation = np.concatenate((observation, timesteps.reshape(-1, 1)), axis=1)
+            timesteps = (
+                self.timesteps[batch_inds] / 500
+            )  # 500 is the max episode length
+            observation = np.concatenate(
+                (observation, timesteps.reshape(-1, 1)), axis=1
+            )
 
         if self.use_language_embeddings:
-            observation = np.concatenate((observation, self.lang_embeddings[batch_inds, :]), axis=1)
+            observation = np.concatenate(
+                (observation, self.lang_embeddings[batch_inds, :]), axis=1
+            )
 
         # set dtype of observations to float32
         observation = observation.astype(np.float32)
@@ -248,8 +331,11 @@ class CombinedBufferSamples(NamedTuple):
     rewards: th.Tensor
     offline_data_mask: th.Tensor
 
+
 class CombinedBuffer(ReplayBuffer):
-    def __init__(self, old_buffer: ReplayBuffer, new_buffer: ReplayBuffer, ratio: float = 0.5):
+    def __init__(
+        self, old_buffer: ReplayBuffer, new_buffer: ReplayBuffer, ratio: float = 0.5
+    ):
         self.old_buffer = old_buffer
         self.new_buffer = new_buffer
         self.ratio = ratio
@@ -259,7 +345,7 @@ class CombinedBuffer(ReplayBuffer):
         batch_inds: np.ndarray,
     ) -> ReplayBufferSamples:
         return
-    
+
     def add(
         self,
         obs: np.ndarray,
@@ -284,12 +370,17 @@ class CombinedBuffer(ReplayBuffer):
 
         old_samples = self.old_buffer.sample(old_batch_size, env=env)
         new_samples = self.new_buffer.sample(new_batch_size, env=env)
-
         # Concatenate the samples into old_samples
-        cat_names = ["observations", "actions", "next_observations", "dones", "rewards", "offline_data_mask"]
+        cat_names = [
+            "observations",
+            "actions",
+            "next_observations",
+            "dones",
+            "rewards",
+            "offline_data_mask",
+        ]
         attributes = {}
         for name in cat_names:
-
 
             if name == "offline_data_mask":
                 # 1 for the old data, 0 for the new data
@@ -299,7 +390,7 @@ class CombinedBuffer(ReplayBuffer):
                 old_data = getattr(old_samples, name)
                 new_data = getattr(new_samples, name)
             attributes[name] = th.cat((old_data, new_data), dim=0)
-        
+
         old_samples = CombinedBufferSamples(**attributes)
         return old_samples
 
@@ -309,9 +400,10 @@ class CombinedBuffer(ReplayBuffer):
         """
         return self.new_buffer.size() + self.old_buffer.size()
 
+
 if __name__ == "__main__":
     # Test the H5ReplayBuffer
-    h5_path = 'data/h5_buffers/updated_trajs/metaworld_dataset_sparse_only.h5'
+    h5_path = "data/h5_buffers/updated_trajs/metaworld_dataset_sparse_only.h5"
     buffer = H5ReplayBuffer(h5_path, success_bonus=10)
     print(buffer.size())
     samples = buffer.sample(10)
