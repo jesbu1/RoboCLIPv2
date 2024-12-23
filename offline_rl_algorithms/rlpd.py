@@ -274,45 +274,14 @@ class RLPD(OfflineRLAlgorithm):
             if self.use_sde:
                 self.actor.reset_noise()
 
+            if self.ent_coef_optimizer is not None and self.log_ent_coef is not None:
+                ent_coef = th.exp(self.log_ent_coef.detach())
+            else:
+                ent_coef = self.ent_coef_tensor
+
             for critic_update in range(self.critic_update_ratio):
                 # Sample replay buffer
                 replay_data = self.replay_buffer.sample(batch_size, env=self._vec_normalize_env)  # type: ignore[union-attr]
-
-                if critic_update == 0:
-                    # Action by the current actor for the sampled state
-                    actions_pi, log_prob = self.actor.action_log_prob(
-                        replay_data.observations
-                    )
-                    log_prob = log_prob.reshape(-1, 1)
-
-                    ent_coef_loss = None
-                    if (
-                        self.ent_coef_optimizer is not None
-                        and self.log_ent_coef is not None
-                    ):
-                        # Important: detach the variable from the graph
-                        # so we don't change it with other losses
-                        # see https://github.com/rail-berkeley/softlearning/issues/60
-                        ent_coef = th.exp(self.log_ent_coef.detach())
-                        ent_coef_loss = -(
-                            self.log_ent_coef
-                            * (log_prob + self.target_entropy).detach()
-                        ).mean()
-                        ent_coef_losses.append(ent_coef_loss.item())
-                    else:
-                        ent_coef = self.ent_coef_tensor
-
-                    ent_coefs.append(ent_coef.item())
-
-                    # Optimize entropy coefficient, also called
-                    # entropy temperature or alpha in the paper
-                    if (
-                        ent_coef_loss is not None
-                        and self.ent_coef_optimizer is not None
-                    ):
-                        self.ent_coef_optimizer.zero_grad()
-                        ent_coef_loss.backward()
-                        self.ent_coef_optimizer.step()
 
                 with th.no_grad():
                     # Select action according to policy
@@ -320,19 +289,18 @@ class RLPD(OfflineRLAlgorithm):
                         replay_data.next_observations
                     )
                     # Compute the next Q values: min over all critics targets
+                    # sample a random subset of self.n_critics_to_sample critics. no replacement
+                    critic_indices = th.randperm(self.policy_kwargs["n_critics"])[
+                        : self.n_critics_to_sample
+                    ]
                     next_q_values = th.cat(
-                        self.critic_target(replay_data.next_observations, next_actions),
+                        self.critic_target(
+                            replay_data.next_observations,
+                            next_actions,
+                            critic_indices=critic_indices,
+                        ),
                         dim=1,
                     )
-                    # sample a random subset of self.n_critics_to_sample critics
-                    # critic_indices = th.randint(
-                    #     0, self.policy_kwargs["n_critics"], (self.n_critics_to_sample,)
-                    # )
-                    # sample a random subset of self.n_critics_to_sample critics. no replacement
-                    critic_indices = th.randperm(
-                        self.policy_kwargs["n_critics"]
-                    )[: self.n_critics_to_sample]
-                    next_q_values = next_q_values[:, critic_indices]
                     next_q_values, _ = th.min(next_q_values, dim=1, keepdim=True)
 
                     # add entropy term
@@ -377,6 +345,36 @@ class RLPD(OfflineRLAlgorithm):
                     polyak_update(
                         self.batch_norm_stats, self.batch_norm_stats_target, 1.0
                     )
+                # Action by the current actor for the sampled state
+                actions_pi, log_prob = self.actor.action_log_prob(
+                    replay_data.observations
+                )
+                log_prob = log_prob.reshape(-1, 1)
+
+                ent_coef_loss = None
+                if (
+                    self.ent_coef_optimizer is not None
+                    and self.log_ent_coef is not None
+                ):
+                    # Important: detach the variable from the graph
+                    # so we don't change it with other losses
+                    # see https://github.com/rail-berkeley/softlearning/issues/60
+                    ent_coef = th.exp(self.log_ent_coef.detach())
+                    ent_coef_loss = -(
+                        self.log_ent_coef * (log_prob + self.target_entropy).detach()
+                    ).mean()
+                    ent_coef_losses.append(ent_coef_loss.item())
+                else:
+                    ent_coef = self.ent_coef_tensor
+
+                ent_coefs.append(ent_coef.item())
+
+                # Optimize entropy coefficient, also called
+                # entropy temperature or alpha in the paper
+                if ent_coef_loss is not None and self.ent_coef_optimizer is not None:
+                    self.ent_coef_optimizer.zero_grad()
+                    ent_coef_loss.backward()
+                    self.ent_coef_optimizer.step()
 
                 # log average in batch reward
                 reward_values.append(replay_data.rewards.mean().item())
