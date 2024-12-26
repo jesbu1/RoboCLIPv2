@@ -5,8 +5,8 @@ defaults:
 
 # Because RLPD is slower, we will log more frequently
 logging:
-  eval_freq: 500
-  video_freq: 500
+  eval_freq: 1500
+  video_freq: 1500
 
 general_training:
   algo: rlpd
@@ -30,10 +30,10 @@ model:
   image_encoder: Resnet18
 
 offline_training:
-  offline_training_steps: 10000 # runs BC, only doing 1 for now for checking
+  offline_training_steps: 5000 # runs BC, only doing 1 for now for checking
 
 online_training:
-  total_time_steps: 32000
+  total_time_steps: 50000
   mix_buffers: true
 
 environment:

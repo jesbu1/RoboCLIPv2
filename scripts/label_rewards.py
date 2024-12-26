@@ -102,6 +102,9 @@ def label_trajectories_iteratively(args, traj_h5, output_file):
         "lang_embedding", (total_timesteps, reward_model.text_output_dim), dtype="float32"
     )
     output_file.create_dataset(
+        "policy_lang_embedding", (total_timesteps, reward_model.policy_text_output_dim), dtype="float32"
+    )
+    output_file.create_dataset(
         "img_embedding", (total_timesteps, reward_model.img_output_dim), dtype="float32"
     )
 
@@ -115,6 +118,7 @@ def label_trajectories_iteratively(args, traj_h5, output_file):
 
     rewards = output_file["rewards"]
     lang_embeds = output_file["lang_embedding"]
+    policy_lang_embeds = output_file["policy_lang_embedding"]
     img_embeds = output_file["img_embedding"]
     timesteps = output_file["timesteps"]
     img_dataset = output_file["img"]
@@ -131,11 +135,15 @@ def label_trajectories_iteratively(args, traj_h5, output_file):
             if traj_data["string"][i] != previous_instruction:
                 traj_string = traj_data["string"][i].decode("utf-8")
                 text_embedding = reward_model.encode_text(traj_string)[0]
+
+                policy_lang_embedding = reward_model.encode_text_for_policy(traj_string)[0]
+
                 assert len(text_embedding.shape) == 1
                 previous_instruction = traj_string
 
             # Save language embedding and timestep
             lang_embeds[current_timestep] = text_embedding
+            policy_lang_embeds[current_timestep] = policy_lang_embedding
             timesteps[current_timestep] = current_timestep
 
             # Use the image to get the image embedding

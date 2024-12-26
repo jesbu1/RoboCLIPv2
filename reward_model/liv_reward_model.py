@@ -56,7 +56,7 @@ class LIVRewardModel(BaseRewardModel):
         text = clip.tokenize(text)
         with torch.no_grad():
             text_embeddings = self.pretrained_liv_model(input=text, modality="text")
-        text_embeddings = normalize_embeddings(text_embeddings, return_tensor=True)
+        # text_embeddings = normalize_embeddings(text_embeddings, return_tensor=True)
         return text_embeddings.detach().cpu().numpy()
 
     def _encode_image_batch(self, images: torch.Tensor) -> np.ndarray:
@@ -69,7 +69,7 @@ class LIVRewardModel(BaseRewardModel):
         images = images.squeeze(0)
         with torch.no_grad():
             image_embeddings = self.pretrained_liv_model(input=images, modality="vision")
-        image_embeddings = normalize_embeddings(image_embeddings, return_tensor=True)
+        # image_embeddings = normalize_embeddings(image_embeddings, return_tensor=True)
         return image_embeddings.unsqueeze(0)
 
     def _calculate_reward_batch(self, encoded_texts: np.ndarray, encoded_videos: np.ndarray) -> np.ndarray:

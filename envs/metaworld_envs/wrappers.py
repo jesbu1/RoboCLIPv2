@@ -177,13 +177,18 @@ class LearnedRewardWrapper(gym.Wrapper):
         self.dense_eval = dense_eval
 
         self.reward_at_every_step = self.reward_model.reward_at_every_step
-        self.reward_language_features = (
-            th.Tensor(language_features)
-            .float()
-            .to(self.reward_model.device)
-            .unsqueeze(0)
-            .unsqueeze(0)
-        )
+
+        if language_features is not None:
+            self.reward_language_features = (
+                th.Tensor(language_features)
+                .float()
+                .to(self.reward_model.device)
+                .unsqueeze(0)
+                .unsqueeze(0)
+            )
+        else:
+            print("Language features are not provided in the reward model")
+            print("This may be valid if the user is using sparse/dense reward in a single task")
 
     def step(self, action):
         self.counter += 1
@@ -227,6 +232,7 @@ class LearnedRewardWrapper(gym.Wrapper):
         if encoded_image is not None:
             self.past_observations.append(encoded_image)
 
+        assert self.reward_language_features is not None, "Language features are None in the reward model"
         if self.reward_at_every_step:
             stacked_sequence = np.stack(self.past_observations, axis=1)
             stacked_sequence = (

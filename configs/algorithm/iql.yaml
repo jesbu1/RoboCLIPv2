@@ -12,7 +12,7 @@ general_training:
 
   # IQL-specific parameters
   policy_extraction: 'awr' # awr or ddpg
-  awr_advantage_temp: 5.0 # iql only
+  awr_advantage_temp: 0.5 # iql only
   ddpg_bc_weight: 0. # iql only
 
 model:

@@ -92,10 +92,11 @@ class H5ReplayBuffer(ReplayBuffer):
             dense_rewards_at_end and sparsify_rewards
         ), "Cannot use both dense rewards at end and sparsify as a precaution"
 
+        print(f"Loading transitions from {h5_path}")
         images = None
         with h5py.File(h5_path, "r") as f:
             observations = f["state"][()]
-            lang_embeddings = f["lang_embedding"][()]
+            lang_embeddings = f["policy_lang_embedding"][()]
             next_observations = observations
             actions = f["action"][()]
 
@@ -114,38 +115,38 @@ class H5ReplayBuffer(ReplayBuffer):
             self.is_state_based = is_state_based
             # Process and save images if they are going to be used
             # if not self.is_state_based:
-                # image_encoder_preprocessed_path = h5_path.replace(
-                #     ".h5", f"_{image_encoder.name}_preprocessed.h5"
-                # )
-                # # replace "updated_trajs" with "image_encoder_preprocessed"
-                # image_encoder_preprocessed_path = (
-                #     image_encoder_preprocessed_path.replace(
-                #         "updated_trajs", "image_encoder_preprocessed"
-                #     )
-                # )
+            # image_encoder_preprocessed_path = h5_path.replace(
+            #     ".h5", f"_{image_encoder.name}_preprocessed.h5"
+            # )
+            # # replace "updated_trajs" with "image_encoder_preprocessed"
+            # image_encoder_preprocessed_path = (
+            #     image_encoder_preprocessed_path.replace(
+            #         "updated_trajs", "image_encoder_preprocessed"
+            #     )
+            # )
 
-                # # Check if the preprocessed file exists
-                # try:
-                #     with h5py.File(image_encoder_preprocessed_path, "r") as image_f:
-                #         encoded = image_f["encoded"][()]
+            # # Check if the preprocessed file exists
+            # try:
+            #     with h5py.File(image_encoder_preprocessed_path, "r") as image_f:
+            #         encoded = image_f["encoded"][()]
 
-                #     print(
-                #         f"Found preprocessed images for {image_encoder.name} in {image_encoder_preprocessed_path}"
-                #     )
-                # except:
-                #     # If not, pre-process the images and save them
-                #     images = f["img"]  # Lazy loading with h5py
-                #     encoded = image_encoder.encode_images(images)
-                #     # create folder if it doesn't exist
-                #     os.makedirs(
-                #         os.path.dirname(image_encoder_preprocessed_path), exist_ok=True
-                #     )
-                #     with h5py.File(image_encoder_preprocessed_path, "w") as image_f:
-                #         image_f.create_dataset("encoded", data=encoded)
+            #     print(
+            #         f"Found preprocessed images for {image_encoder.name} in {image_encoder_preprocessed_path}"
+            #     )
+            # except:
+            #     # If not, pre-process the images and save them
+            #     images = f["img"]  # Lazy loading with h5py
+            #     encoded = image_encoder.encode_images(images)
+            #     # create folder if it doesn't exist
+            #     os.makedirs(
+            #         os.path.dirname(image_encoder_preprocessed_path), exist_ok=True
+            #     )
+            #     with h5py.File(image_encoder_preprocessed_path, "w") as image_f:
+            #         image_f.create_dataset("encoded", data=encoded)
 
-                #     print(
-                #         f"Saved preprocessed images for {image_encoder.name} in {image_encoder_preprocessed_path}"
-                #     )
+            #     print(
+            #         f"Saved preprocessed images for {image_encoder.name} in {image_encoder_preprocessed_path}"
+            #     )
 
             if not self.is_state_based:
                 image_encodings = f["img_embedding"][()]
@@ -159,12 +160,12 @@ class H5ReplayBuffer(ReplayBuffer):
                 for i in range(len(instructions)):
                     if instructions[i].decode("utf-8") in filter_instructions:
                         indices_to_keep.append(i)
-                # observations = observations[indices_to_keep]
-                # lang_embeddings = lang_embeddings[indices_to_keep]
-                # next_observations = next_observations[indices_to_keep]
-                # actions = actions[indices_to_keep]
-                # rewards = rewards[indices_to_keep]
-                # dones = dones[indices_to_keep]
+                observations = observations[indices_to_keep]
+                lang_embeddings = lang_embeddings[indices_to_keep]
+                next_observations = next_observations[indices_to_keep]
+                actions = actions[indices_to_keep]
+                rewards = rewards[indices_to_keep]
+                dones = dones[indices_to_keep]
             else:
                 indices_to_keep = np.arange(observations.shape[0])
 
@@ -210,8 +211,8 @@ class H5ReplayBuffer(ReplayBuffer):
         self.timesteps = timesteps
         self.lang_embeddings = np.squeeze(lang_embeddings)
 
-        # self.buffer_size = self.rewards.shape[0]
-        self.buffer_size = len(self.indices_to_keep)
+        self.buffer_size = self.rewards.shape[0]
+        # self.buffer_size = len(self.indices_to_keep)
         self.success_bonus = success_bonus
 
         self.pos = self.buffer_size
@@ -239,9 +240,8 @@ class H5ReplayBuffer(ReplayBuffer):
         batch_inds: np.ndarray,
         env: Optional[VecNormalize] = None,
     ) -> ReplayBufferSamples:
-
         # Batch inds are in sampling indices_to_sample. Get the actual indices
-        batch_inds = np.array([self.indices_to_keep[i] for i in batch_inds])
+        # batch_inds = np.array([self.indices_to_keep[i] for i in batch_inds])
 
         # Sample randomly the env idx
         if self.optimize_memory_usage:
@@ -381,7 +381,6 @@ class CombinedBuffer(ReplayBuffer):
         ]
         attributes = {}
         for name in cat_names:
-
             if name == "offline_data_mask":
                 # 1 for the old data, 0 for the new data
                 old_data = th.ones(old_batch_size, 1)

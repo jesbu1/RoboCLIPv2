@@ -8,9 +8,9 @@ parameters:
   algorithm:
     values: ["rlpd"] 
   metaworld:
-    values: ["some_tasks_15"] 
+    values: ["single_task"] 
   reward:
-    values: ["sparse"]
+    values: ["dense"]
   general_training.rlpd_n_critics:
     values: [5, 10]
   general_training.rlpd_n_critics_to_sample:
