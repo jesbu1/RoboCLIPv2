@@ -179,7 +179,7 @@ def main(args):
 
             wandb.log(wandb_log)
 
-        if epoch % 10 == 9:
+        if epoch % 15 == 14:
             self_attention_model.eval()
 
             save_path = os.path.join("/scr/jzhang96/roboclip_v2_models_final", experiment_name)
@@ -225,7 +225,7 @@ def main(args):
 
             self_attention_model.train()
 
-        if epoch % 20 == 19:
+        if epoch % 30 == 29:
             self_attention_model.eval()
 
             if args.catagorical_progress:
@@ -248,7 +248,7 @@ if __name__ == "__main__":
     argparser.add_argument('--h5_embedding_path', type=str, default='/scr/jzhang96/metaworld_25_for_clip_liv.h5')
     argparser.add_argument('--model_name', type=str, default='liv', choices=['clip', 'liv'])
     argparser.add_argument('--batch_size', type=int, default=32)
-    argparser.add_argument('--epochs', type=int, default=100)
+    argparser.add_argument('--epochs', type=int, default=150)
     argparser.add_argument('--seed', type=int, default=42)
     argparser.add_argument('--lr', type=float, default=1e-3)
     argparser.add_argument('--loss_type', type=str, choices=['triplet', 'mse'], default='mse')
