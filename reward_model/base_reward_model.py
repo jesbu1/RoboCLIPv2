@@ -3,6 +3,17 @@ import abc
 import numpy as np
 from typing import List, Union
 
+from transformers import AutoTokenizer, AutoModel
+import torch
+import torch.nn.functional as F
+
+
+#Mean Pooling - Take attention mask into account for correct averaging
+def mean_pooling(model_output, attention_mask):
+    token_embeddings = model_output[0] #First element of model_output contains all token embeddings
+    input_mask_expanded = attention_mask.unsqueeze(-1).expand(token_embeddings.size()).float()
+    return torch.sum(token_embeddings * input_mask_expanded, 1) / torch.clamp(input_mask_expanded.sum(1), min=1e-9)
+
 class BaseRewardModel(abc.ABC):
     def __init__(self, device: str = 'cuda', batch_size=64, success_bonus=10.0):
         """
@@ -11,6 +22,11 @@ class BaseRewardModel(abc.ABC):
         self.device = torch.device(device)
         self.batch_size = batch_size
         self.success_bonus = success_bonus
+
+        # Load minilm-12v2
+        # Load model from HuggingFace Hub
+        self.tokenizer = AutoTokenizer.from_pretrained('sentence-transformers/all-MiniLM-L12-v2')
+        self.model = AutoModel.from_pretrained('sentence-transformers/all-MiniLM-L12-v2')
 
     def encode_text(self, text: Union[str, List]) -> np.ndarray:
         """
@@ -34,15 +50,24 @@ class BaseRewardModel(abc.ABC):
             encoded_text_all = encoded_text_all.detach().cpu().numpy()
 
         return encoded_text_all
-    
-    @abc.abstractmethod
-    def _encode_text_batch(self, text: List[str]) -> np.ndarray:
+
+    def encode_text_for_policy(self, text: Union[str, List]) -> np.ndarray:
         """
-        Encodes a batch of text data into a representation.
-        :param text: A list of text data to be encoded.
+        Encodes a text input into a representation for policy training.
+        :param text: Text data to be encoded. If a list of strings is provided, it will be batch encoded.
         :return: Encoded representation of the text.
         """
-        pass
+
+        encoded_input = self.tokenizer(text, padding=True, truncation=True, return_tensors='pt')
+
+        with torch.no_grad():
+            model_output = self.model(**encoded_input)
+            text_embeddings = mean_pooling(model_output, encoded_input['attention_mask'])
+
+        # normalize the embeddings
+        text_embeddings = F.normalize(text_embeddings, p=2, dim=1)
+
+        return text_embeddings.detach().cpu().numpy()
 
     def encode_images(self, images: np.ndarray) -> np.ndarray:
         """
@@ -121,6 +146,13 @@ class BaseRewardModel(abc.ABC):
         Returns the output dimension of the text encoder. Used to determine the observation space of a policy.
         """
         pass
+
+    @property
+    def policy_text_output_dim(self) -> int:
+        """
+        Returns the output dimension of the text encoder. Used to determine the observation space of a policy.
+        """
+        return 384 # for MiniLM
 
     @property
     def name(self) -> str:

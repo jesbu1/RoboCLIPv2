@@ -174,6 +174,11 @@ class RLPD(OfflineRLAlgorithm):
 
     def _setup_model(self) -> None:
         super()._setup_model()
+
+        self.policy.actor = th.compile(self.policy.actor, mode="reduce-overhead")
+        self.policy.critic = th.compile(self.policy.critic)
+        self.policy.critic_target = th.compile(self.policy.critic_target)
+
         self._create_aliases()
         # Running mean and running var
         self.batch_norm_stats = get_parameters_by_name(self.critic, ["running_"])
@@ -183,7 +188,9 @@ class RLPD(OfflineRLAlgorithm):
         # Target entropy is used when learning the entropy coefficient
         if self.target_entropy == "auto":
             # automatically set target entropy if needed
-            self.target_entropy = float(-np.prod(self.env.action_space.shape).astype(np.float32))  # type: ignore
+            self.target_entropy = float(
+                -np.prod(self.env.action_space.shape).astype(np.float32)
+            )  # type: ignore
         else:
             # Force conversion
             # this will also throw an error for unexpected string
@@ -269,7 +276,6 @@ class RLPD(OfflineRLAlgorithm):
         reward_values = []
 
         for gradient_step in range(gradient_steps):
-
             # We need to sample because `log_std` may have changed between two gradient steps
             if self.use_sde:
                 self.actor.reset_noise()
@@ -281,7 +287,9 @@ class RLPD(OfflineRLAlgorithm):
 
             for critic_update in range(self.critic_update_ratio):
                 # Sample replay buffer
-                replay_data = self.replay_buffer.sample(batch_size, env=self._vec_normalize_env)  # type: ignore[union-attr]
+                replay_data = self.replay_buffer.sample(
+                    batch_size, env=self._vec_normalize_env
+                )  # type: ignore[union-attr]
 
                 with th.no_grad():
                     # Select action according to policy

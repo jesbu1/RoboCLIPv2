@@ -5,7 +5,7 @@
 
 # Number of agents to run
 NUM_AGENTS=2
-SWEEP_ID=abraranwar/RoboCLIPv2-test_scripts/6f5lx3rd # Replace with your actual sweep ID
+SWEEP_ID=abraranwar/RoboCLIPv2-test_scripts/xp35978o # Replace with your actual sweep ID
 
 # Run agents in parallel
 for i in $(seq 1 $NUM_AGENTS); do

@@ -158,7 +158,9 @@ class BC(OfflineRLAlgorithm):
 
         for gradient_step in range(gradient_steps):
             # Sample replay buffer
-            replay_data = self.replay_buffer.sample(batch_size, env=self._vec_normalize_env)  # type: ignore[union-attr]
+            replay_data = self.replay_buffer.sample(
+                batch_size, env=self._vec_normalize_env
+            )  # type: ignore[union-attr]
 
             # We need to sample because `log_std` may have changed between two gradient steps
             if self.use_sde:
@@ -169,11 +171,14 @@ class BC(OfflineRLAlgorithm):
             # log_prob = log_prob.reshape(-1, 1)
             # policy_loss = -th.mean(log_prob)
 
-            mean_actions, log_std, kwargs = self.actor.get_action_dist_params(replay_data.observations)
-            distribution = self.actor.action_dist.proba_distribution(mean_actions, log_std)
+            mean_actions, log_std, kwargs = self.actor.get_action_dist_params(
+                replay_data.observations
+            )
+            distribution = self.actor.action_dist.proba_distribution(
+                mean_actions, log_std
+            )
             log_prob = distribution.log_prob(replay_data.actions)
             policy_loss = -log_prob.mean()
-
 
             # Optimize the policy
             self.actor.optimizer.zero_grad()

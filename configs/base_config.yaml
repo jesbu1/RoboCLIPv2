@@ -65,7 +65,7 @@ model:
 
 reward_model: 
   name: null # Set to null so you must set reward_model yaml
-  batch_size: 64
+  batch_size: 128
   model_path: null
 
 environment:

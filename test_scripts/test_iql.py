@@ -189,7 +189,7 @@ def main(cfg: DictConfig):
     model, model_class = get_policy_algorithm(cfg, envs, log_dir)
 
     # Set eval freq and video freq if not set
-    eval_freq = offline_config.offline_training_steps * env_config.n_envs // (10)
+    eval_freq = offline_config.offline_training_steps * env_config.n_envs // (10*2)
     video_freq = offline_config.offline_training_steps * env_config.n_envs // 10
     # Use deterministic actions for evaluation
     eval_callback = OfflineEvalCallback(
@@ -296,7 +296,7 @@ def create_envs(cfg: DictConfig, reward_model: BaseRewardModel):
     text_instruction = env_config.text_string
 
     with th.no_grad():
-        lang_feat = reward_model.encode_text(text_instruction).squeeze()
+        lang_feat = reward_model.encode_text_for_policy(text_instruction).squeeze()
         # lang_feat = th.from_numpy(lang_feat).squeeze()
 
     ignore_language = env_config.ignore_language
@@ -408,6 +408,12 @@ def get_policy_algorithm(cfg: DictConfig, envs: VecEnv, log_dir: str):
             model = model_class.load(args.pretrained, env=envs, tensorboard_log=log_dir)
     elif args.algo.lower() == "sac":
         model_class = SAC
+
+        # For SAC, we cannot take anything besides net_arch as a parameter
+        policy_kwargs = {
+            "net_arch": policy_kwargs["net_arch"],
+        }
+
         if not args.pretrained:
             model = model_class(
                 "MlpPolicy",
@@ -497,9 +503,8 @@ def get_policy_algorithm(cfg: DictConfig, envs: VecEnv, log_dir: str):
                 buffer_size=cfg.online_training.total_time_steps,
                 learning_starts=0,
                 seed=args.seed,
-                action_noise=action_noise,  # should be null
+                action_noise=action_noise,  # should be null?
                 policy_kwargs=policy_kwargs,
-                mix_offline_online_buffers=cfg.online_training.mix_buffers,  # useless
                 learning_rate=args.learning_rate,
                 train_freq=(
                     cfg.environment.train_freq_num,
