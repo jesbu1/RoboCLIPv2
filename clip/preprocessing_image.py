@@ -20,7 +20,7 @@ def main(model_name, video_base_path):
     env_names = os.listdir(video_base_path)
     print(env_names, len(env_names))
     # add data
-    data_file = h5py.File("/scr/jzhang96/metaworld_25_for_clip_liv.h5", "a")
+    data_file = h5py.File("/scr/jzhang96/metaworld_25_for_clip_liv_nonorm.h5", "w")
     if model_name not in data_file.keys():
         model_group = data_file.create_group(model_name)
 
@@ -42,10 +42,23 @@ def main(model_name, video_base_path):
 
                     embeddings = []
                     for frame in frames:
+                        # save frame as image use imageio
+                        # imageio.imwrite("test.png", frame)
+
+                        # import pdb; pdb.set_trace()
+
                         image_embeddings = embedding_image(model, processor, Image.fromarray(frame.astype(np.uint8))).squeeze(0)
+                        # embedding norm
+                        embedding_norm = torch.norm(image_embeddings.unsqueeze(0), dim=1, keepdim=True)
+                        print(embedding_norm)
+                        import pdb; pdb.set_trace()
+
+
                         embeddings.append(image_embeddings.detach().cpu().numpy())
                     embeddings = np.array(embeddings)
+                    # imageio.imwrite("test.png", frame)
 
+                    # import pdb; pdb.set_trace()
                     env_group.create_dataset(save_name, data=embeddings)
     data_file.close()
 
@@ -64,5 +77,5 @@ def main(model_name, video_base_path):
 
 if __name__ == "__main__":
     video_base_path = "/scr/jzhang96/metaworld_25_for_clip/"
-    main("clip", video_base_path)
+    # main("clip", video_base_path)
     main("liv", video_base_path)

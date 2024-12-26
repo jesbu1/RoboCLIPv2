@@ -5,7 +5,7 @@ from PIL import Image
 import io
 import wandb
 
-def animate_video_with_rewards(frames, rewards, fps=10):
+def animate_video_with_rewards(frames, rewards, fps=10, _class = False):
     """
     Create an animation where the left side shows video frames and the right side shows rewards,
     and return an in-memory GIF buffer to log directly to WandB without saving to disk.
@@ -31,7 +31,11 @@ def animate_video_with_rewards(frames, rewards, fps=10):
     ax2.set_title('Rewards')
     ax2.set_xlim(0, n - 1)
     # ax2.set_ylim(min(rewards) - 1, max(rewards) + 1)
-    ax2.set_ylim( - 1, 6)
+    if _class:
+        ax2.set_ylim( - 1, 6)
+    else:
+        ax2.set_ylim(-1, 1)
+    
     line_plot, = ax2.plot([], [], lw=2, color='blue')
     scat = ax2.scatter([], [], color='red', zorder=5)
 

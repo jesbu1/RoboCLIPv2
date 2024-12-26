@@ -57,7 +57,7 @@ def main(args):
     run = wandb.init(
         entity=WANDB_ENTITY_NAME,
         project=WANDB_PROJECT_NAME,
-        group="RegressionRandomStartMultiHeadSelfAttentioncompare",
+        group="RegressionRandomStartMultiHeadSelfAttentionSameLength1",
         config=args,
         name=experiment_name,
     )
@@ -159,6 +159,7 @@ if __name__ == "__main__":
     argparser.add_argument('--subtract_before', action='store_true')
     argparser.add_argument('--attention_heads', type=int, default=4)
     argparser.add_argument('--dropout', type=float, default=0.1)
+    argparser.add_argument('--video_length', type=int, default=32)
     args = argparser.parse_args()
     main(args)
 

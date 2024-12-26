@@ -9,6 +9,8 @@ import io
 import os
 from sklearn.decomposition import PCA
 from triplet_utils import cosine_similarity
+import matplotlib
+matplotlib.use('Agg')
 
 
 def normalize_embeddings(embeddings, return_tensor=True):
@@ -154,6 +156,41 @@ def plot_progress_embedding(embedding, transform_model, text_embedding):
     return figure_1
 
 
+def plot_eval_distribution(text_embedding, evaluate_video_embeddings, task_names):
+    text_embedding = normalize_embeddings(text_embedding, False)
+    total_embedding = np.concatenate([evaluate_video_embeddings, text_embedding], axis=0)
+    pca = PCA(n_components=2)
+    pca_model = pca.fit(total_embedding)
+    evaluate_video_embeddings = pca_model.transform(evaluate_video_embeddings)
+    text_embedding = pca_model.transform(text_embedding)
+
+    task_num = len(task_names)
+
+    figure_1 = plt.figure()
+    colors = plt.cm.tab10(np.linspace(0, 1, task_num))
+
+    for i in range(task_num):
+        group_video_data = evaluate_video_embeddings[i*15:(i+1)*15]
+        x = group_video_data[:, 0]
+        y = group_video_data[:, 1]
+
+        text_name = task_names[i]
+        plt.scatter(x, y, color=colors[i], label=text_name, marker='o', s=100, zorder=2)
+        plt.scatter(text_embedding[i][0], text_embedding[i][1], color=colors[i], marker='x', s=100, zorder=3)
+
+    plt.title('2D PCA for Metaworld Evaluate Videos')
+    plt.xlabel('x-dim')
+    plt.ylabel('y-dim')
+    plt.legend(loc='upper left', ncol=1, bbox_to_anchor=(1, 1))
+    plt.tight_layout() # adjust the plot to the right (to fit the legend)
+
+    return figure_1
+
+
+
+
+
+
 
 
 
@@ -193,7 +230,7 @@ def plot_distribution(transform_model, evaluate_run_embeddings, total_evaluate_e
     figure_2 = plt.figure()
     colors = plt.cm.tab10(np.linspace(0, 1, len(evaluate_tasks)))
     for i in range(len(evaluate_tasks)):
-        group_data = run_video_embedding[i*10:(i+1)*10]
+        group_data = run_video_embedding[i*15:(i+1)*15]
         x = group_data[:, 0]
         y = group_data[:, 1]
         text_name = evaluate_tasks[i].split("-v2")[0]

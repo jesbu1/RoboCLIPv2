@@ -54,6 +54,26 @@ class SingleLayerMLP(nn.Module):
             x = F.normalize(x, p=2, dim=1)
         return x
 
+class TwoLayerMLP(nn.Module):
+    def __init__(self, input_dim, lrelu = True, normalize=True):
+        super(TwoLayerMLP, self).__init__()
+        self.linear1 = nn.Linear(input_dim, input_dim)
+        self.linear2 = nn.Linear(input_dim, input_dim)
+        self.lrelu = lrelu
+        self.normalize = normalize
+
+    def forward(self, x):
+        if self.lrelu:
+            x = F.leaky_relu(self.linear1(x))
+        else:
+            x = self.linear1(x)
+        x = self.linear2(x)
+        if self.normalize:
+            x = F.normalize(x, p=2, dim=1)
+        return x
+
+
+
 def cosine_similarity(x1, x2):
     return F.cosine_similarity(x1, x2, dim=-1)
 
@@ -93,6 +113,18 @@ def triplet_loss(gt, positive, negative, type, margin = (1.0, 1.0, 1.0, 0.0, 1.0
     loss[mask_type_4] = F.relu(margin[3] - pos_sim[mask_type_4] + neg_sim[mask_type_4])
 
     return loss.mean()
+
+
+def triplet_loss_only(gt, positive, negative, margin = 1.0): 
+
+    pos_sim = cosine_similarity(gt, positive)
+    neg_sim = cosine_similarity(gt, negative)
+
+    loss = F.relu(margin - pos_sim + neg_sim)
+
+
+    return loss.mean()
+
 
 
 class MILNCELoss(th.nn.Module):

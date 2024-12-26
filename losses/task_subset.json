@@ -84,6 +84,20 @@
         "window-close-v2-goal-hidden",
         "sweep-v2-goal-hidden",
         "push-v2-goal-hidden"
+    ],
+    "evaluate_tasks_idx":[
+        "4",
+        "6",
+        "9",
+        "15",
+        "16",
+        "19",
+        "25",
+        "20",
+        "41",
+        "49",
+        "47",
+        "33"
     ]
 
 

@@ -353,9 +353,9 @@ class CustomEvalCallback(EvalCallback):
 
             # Log to wandb
             wandb.log(log_data, step=self.num_timesteps)
-            if mean_reward > self.best_mean_reward:
+            if mean_reward >= self.best_mean_reward:
                 self.best_mean_reward = mean_reward
-                self.model.save(f"{self.best_model_save_path}/best_model_{self.num_timesteps}_steps.zip")
+                self.model.save(f"{self.best_model_save_path}/best_model.zip")
 
         return result
 

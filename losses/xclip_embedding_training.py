@@ -63,36 +63,33 @@ def main(args):
 
     h5_text_file = h5py.File(args.h5_text_path, "r")
     h5_embedding_file = h5py.File(args.h5_embedding_path, "r")
-    h5_video_file = h5py.File(args.h5_video_path, "r")
+    import pdb; pdb.set_trace()
+    # h5_video_file = h5py.File(args.h5_video_path, "r")
 
-    # choose button-press-topdown-v2-goal-hidden as the evaluation task
-    video_group = h5_video_file["button-press-topdown-v2-goal-hidden"]
-    video_names = list(video_group.keys())[-1]
-    BPTD_video = np.asarray(video_group[video_names][()])
-    BPTD_video = th.tensor(BPTD_video).cuda()
-    BPTD_text_embedding = np.asarray(h5_text_file["button-press-topdown-v2-goal-hidden"])
-    BPTD_text_embedding = np.expand_dims(BPTD_text_embedding, axis=0)
-    video_group = h5_video_file["door-open-v2-goal-hidden"]
-    video_names = list(video_group.keys())[-1]
-    DO_video = np.asarray(video_group[video_names][()])
-    DO_video = th.tensor(DO_video).cuda()
-    DO_text_embedding = np.asarray(h5_text_file["door-open-v2-goal-hidden"])
-    DO_text_embedding = np.expand_dims(DO_text_embedding, axis=0)
-    h5_video_file.close()
+    # # choose button-press-topdown-v2-goal-hidden as the evaluation task
+    # video_group = h5_video_file["button-press-topdown-v2-goal-hidden"]
+    # video_names = list(video_group.keys())[-1]
+    # BPTD_video = np.asarray(video_group[video_names][()])
+    # BPTD_video = th.tensor(BPTD_video).cuda()
+    # BPTD_text_embedding = np.asarray(h5_text_file["button-press-topdown-v2-goal-hidden"])
+    # BPTD_text_embedding = np.expand_dims(BPTD_text_embedding, axis=0)
+    # video_group = h5_video_file["door-open-v2-goal-hidden"]
+    # video_names = list(video_group.keys())[-1]
+    # DO_video = np.asarray(video_group[video_names][()])
+    # DO_video = th.tensor(DO_video).cuda()
+    # DO_text_embedding = np.asarray(h5_text_file["door-open-v2-goal-hidden"])
+    # DO_text_embedding = np.expand_dims(DO_text_embedding, axis=0)
+    # h5_video_file.close()
 
-    xclip_tokenizer, xclip_net, xclip_processor = load_model("xclip")
-    xclip_net = xclip_net.cuda()
-    xclip_net.eval()
+    # xclip_tokenizer, xclip_net, xclip_processor = load_model("xclip")
+    # xclip_net = xclip_net.cuda()
+    # xclip_net.eval()
 
-    BPTD_embedding = xclip_get_progress_embedding(args, BPTD_video, xclip_processor, xclip_net).squeeze(1)
-    DO_embedding = xclip_get_progress_embedding(args, DO_video, xclip_processor, xclip_net).squeeze(1)
-    del xclip_net, xclip_processor, xclip_tokenizer
-
-
+    # BPTD_embedding = xclip_get_progress_embedding(args, BPTD_video, xclip_processor, xclip_net).squeeze(1)
+    # DO_embedding = xclip_get_progress_embedding(args, DO_video, xclip_processor, xclip_net).squeeze(1)
+    # del xclip_net, xclip_processor, xclip_tokenizer
 
 
-    
-    
 
     if args.loss_type == "MILNCE":
         loss_func = MILNCELoss()
@@ -103,11 +100,18 @@ def main(args):
         model.load_state_dict(th.load(args.load_model_path)["model_state_dict"])
         optimizer.load_state_dict(th.load(args.load_model_path)["optimizer_state_dict"])
 
-    evaluate_task = ["door-close-v2-goal-hidden", "door-open-v2-goal-hidden", "drawer-close-v2-goal-hidden", "button-press-v2-goal-hidden", "button-press-topdown-v2-goal-hidden"]
+    # evaluate_task = ["door-close-v2-goal-hidden", "door-open-v2-goal-hidden", "drawer-close-v2-goal-hidden", "button-press-v2-goal-hidden", "button-press-topdown-v2-goal-hidden"]
+    evaluate_task = [ "door-close-v2-goal-hidden", "drawer-open-v2-goal-hidden", "plate-slide-side-v2-goal-hidden", "button-press-topdown-v2-goal-hidden", "window-open-v2-goal-hidden"]
     evaluate_run_embeddings = []
     evaluate_run_text_embeddings = []
     total_evaluate_tasks = list(h5_embedding_file["GT_Videos"].keys())
     total_evaluate_embeddings = []
+
+
+
+
+
+
 
     for keys in total_evaluate_tasks:
         task_data = np.asarray(h5_embedding_file["GT_Videos"][keys])
@@ -121,8 +125,8 @@ def main(args):
         text_embedding = np.asarray(h5_text_file[keys])
         text_embedding = np.expand_dims(text_embedding, axis=0)
         task_data = np.asarray(h5_embedding_file["GT_Videos"][keys])
-        # random choose 10
-        choose_index = np.random.choice(task_data.shape[0], 10, replace=False)
+        # random choose 15
+        choose_index = np.random.choice(task_data.shape[0], 15, replace=False)
         task_data = task_data[choose_index]
         evaluate_run_embeddings.append(task_data)
         evaluate_run_text_embeddings.append(text_embedding)
@@ -142,10 +146,6 @@ def main(args):
     if args.norm_vlm:
         evaluate_run_embeddings = normalize_embeddings(evaluate_run_embeddings, False)
         total_evaluate_embeddings = normalize_embeddings(total_evaluate_embeddings, False)
-        BPTD_embedding = normalize_embeddings(BPTD_embedding, False)
-        DO_embedding = normalize_embeddings(DO_embedding, False)
-    BPTD_text_embedding = normalize_embeddings(BPTD_text_embedding, False)
-    DO_text_embedding = normalize_embeddings(DO_text_embedding, False)
     evaluate_run_text_embeddings = normalize_embeddings(evaluate_run_text_embeddings, False)
 
     pca_text_model = None
@@ -158,11 +158,7 @@ def main(args):
         if args.subset == 0:
             video_pca_embedding = copy.deepcopy(total_evaluate_embeddings)
             text_pca_embedding = copy.deepcopy(total_text_embedding)
-            for kk in range (11):
-                if kk == 0:
-                    text_pca_embedding = copy.deepcopy(total_text_embedding)
-                else:
-                    text_pca_embedding = np.concatenate([text_pca_embedding, total_text_embedding], axis=0)
+
 
         else:
             subset_list = json.load(open("task_subset.json"))

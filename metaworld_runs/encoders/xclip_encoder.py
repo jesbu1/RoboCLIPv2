@@ -90,7 +90,7 @@ class XCLIPEncoder(BaseEncoder):
         Ensures same numbers of frames(32). returns a numpy array of shape (target_frame_count, 224, 224, 3)
         """
         frames = np.array(frames)
-        frames = frames[:,240-112:240+112,320-112:320+112,:] # center crop to 224x224
+        frames = frames[:,frames.shape[1]//2-112:frames.shape[1]//2+112,frames.shape[2]//2-112:frames.shape[2]//2+112,:] # center crop 224x224
         frame_count = frames.shape[0]
         #print(f"frames number{frame_count}")
         # frames = th.from_numpy(frames)

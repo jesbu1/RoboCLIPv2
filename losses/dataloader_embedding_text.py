@@ -22,7 +22,7 @@ def normalize_embeddings(embeddings, return_tensor=True):
 class GifTextGenEmbeddingDataset(Dataset):
     def __init__(self, args):
         self.h5_file = h5py.File(args.h5_embedding_path, "r")
-        self.text_file = pickle.load(open("training_text_embedding.pkl", "rb"))
+        self.text_file = pickle.load(open("training_text_embedding_no_norm.pkl", "rb"))
 
 
         subset_list = json.load(open("task_subset.json"))

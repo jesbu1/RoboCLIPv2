@@ -64,8 +64,8 @@ class XCLIPEncoder(BaseEncoder):
 
         with torch.no_grad():
             text_features = self.model.get_text_features(**text_tokens)
-
-        return self.normalize_embeddings(text_features)
+        return text_features
+        # return self.normalize_embeddings(text_features)
 
     def encode_video(self, video_frames):
         """
@@ -82,7 +82,8 @@ class XCLIPEncoder(BaseEncoder):
         with torch.no_grad():
             video_features = self.model.get_video_features(video_input)
 
-        return self.normalize_embeddings(video_features)
+        # return self.normalize_embeddings(video_features)
+        return video_features
 
 
     def adjust_frames_xclip(self, frames, target_frame_count=32):

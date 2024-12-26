@@ -73,7 +73,7 @@ class LivVideoDataset(Dataset):
         # choose index
         idx = random.randint(0, len(text_dataset)-1)
         text_array = np.asarray(text_dataset[idx])
-        text_array = np.asarray(text_dataset[0])
+        # text_array = np.asarray(text_dataset[0])
         if self.args.normalize_embedding:
             text_array = np.expand_dims(text_array, axis=0)
             text_array = normalize_embeddings(text_array, return_tensor=False)

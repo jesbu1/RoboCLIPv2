@@ -56,20 +56,19 @@ def main(args):
         experiment_name += "_subtract_after"
 
     experiment_name += "_heads_" + str(args.attention_heads)
-
-
-
-
-
-
     
+    if args.random_shuffle:
+        experiment_name += "_random_shuffle"
+
+
+
 
 
 
     run = wandb.init(
         entity=WANDB_ENTITY_NAME,
         project=WANDB_PROJECT_NAME,
-        group="RegressionRandomPCAFinal2",
+        group="RegressionRandomStartMultiHeadSelfAttentionSameLength1_debug",
         config=args,
         name=experiment_name,
     )
@@ -237,6 +236,7 @@ if __name__ == "__main__":
     argparser.add_argument('--attention_heads', type=int, default=4)
     argparser.add_argument('--dropout', type=float, default=0.1)
     argparser.add_argument('--sample_neg', action='store_true')
+    argparser.add_argument('--random_shuffle', action='store_true')
     args = argparser.parse_args()
     main(args)
 

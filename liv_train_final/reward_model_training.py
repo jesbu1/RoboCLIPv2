@@ -50,6 +50,18 @@ def main(args):
 
     experiment_name += "_heads_" + str(args.attention_heads)
 
+    if args.sample_neg:
+        experiment_name += "_sample_neg"
+    if args.reverse_video:
+        experiment_name += "_reverse_video"
+    if args.normalize_embedding:
+        experiment_name += "_norm"
+    if args.catagorical_progress:
+        experiment_name += "_CatProgress"
+    if args.subsample_video:
+        experiment_name += "_subsample_video"
+    if args.cat_embedding:
+        experiment_name += "_cat_embedding"
 
 
 
@@ -167,10 +179,23 @@ def main(args):
 
             wandb.log(wandb_log)
 
-        if epoch % 10 == 0:
+        if epoch % 10 == 9:
             self_attention_model.eval()
+
+            save_path = os.path.join("/scr/jzhang96/roboclip_v2_models_final", experiment_name)
+            if not os.path.exists(save_path):
+                os.makedirs(save_path)
+            save_dict = {
+                "model": self_attention_model.state_dict(),
+                "optimizer": optimizer.state_dict(),
+                "epoch": epoch,
+                "args": args
+            }
+            torch.save(save_dict, os.path.join(save_path, f"model_{epoch}.pth"))
+
+
             if args.catagorical_progress:
-                plot_videos_class(args.model_name, self_attention_model, args)
+                
                 plot_progress_class(h5_file, args.model_name, "train", self_attention_model, args)
                 plot_progress_class(h5_file, args.model_name, "eval", self_attention_model, args)
                 plot_confusion_matrix_pca_class(h5_file = h5_file, 
@@ -185,7 +210,6 @@ def main(args):
                                                 args = args)
             
             else:
-                plot_videos(args.model_name, self_attention_model, args)
                 plot_progress(h5_file, args.model_name, "train", self_attention_model, args)
                 plot_progress(h5_file, args.model_name, "eval", self_attention_model, args)
                 plot_confusion_matrix_pca(h5_file = h5_file, 
@@ -200,6 +224,18 @@ def main(args):
                                           args = args)
 
             self_attention_model.train()
+
+        if epoch % 20 == 19:
+            self_attention_model.eval()
+
+            if args.catagorical_progress:
+                plot_videos_class(args.model_name, self_attention_model, args)
+            else:
+                plot_videos(args.model_name, self_attention_model, args)
+
+            self_attention_model.train()
+
+            
 
 
 

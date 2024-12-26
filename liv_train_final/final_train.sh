@@ -2,7 +2,7 @@
 #SBATCH --job-name=4       # Job name
 #SBATCH --output=4.out   # Output file
 #SBATCH --error=4.err    # Error file
-#SBATCH --ntasks=2                      # Number of tasks (processes)
+#SBATCH --ntasks=4                      # Number of tasks (processes)
 #SBATCH --gres=shard:30                    # Number of GPUs                
 #SBATCH --cpus-per-task=6               # Number of CPU cores per task
 

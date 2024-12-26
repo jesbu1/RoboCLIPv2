@@ -175,6 +175,9 @@ def main():
                 if not os.path.exists(folder_name):
                     os.makedirs(folder_name)
                 print(env_name, i, success_num)
+                # save imgs to gif at ./
+                imageio.mimsave("test_gif.gif", imgs, fps=30)
+                import pdb ; pdb.set_trace()
                 h5_traj[env_name].create_group(str(i))
                 h5_traj[env_name][str(i)]['state'] = np.array(state_list)
                 h5_traj[env_name][str(i)]['next_state'] = np.array(next_state_list)
@@ -186,57 +189,7 @@ def main():
 
             if success_num > collect_num:
                 break
-                # gif_file_name = os.path.join(folder_name, "output_gif_{}.gif".format(str(success_num)))
-                # imageio.mimsave(gif_file_name, imgs, fps=30)
 
-        
-
-
-
-    # action_space_ptp = env.action_space.high - env.action_space.low
-
-    # env.reset()
-    # env.reset_model()
-    # o = env.reset()
-
-    # for _ in range(env.max_path_length):
-    #     a = policy.get_action(o)
-    #     a = np.random.normal(a, act_noise_pct * action_space_ptp)
-
-    #     o, r, done, info = env.step(a)
-    #     # Camera is one of ['corner', 'topview', 'behindGripper', 'gripperPOV']
-    #     yield r, done, info, env.sim.render(*res, mode='offscreen', camera_name=camera)[:,:,::-1]
-
-
-    #     import pdb ; pdb.set_trace()
-
-
-
-    # for env, noise, cycles, quit_on_success in config:
-    #     # import pdb ; pdb.set_trace()
-    #     cycles = 1
-    #     tag = env + '-noise-' + np.array2string(noise, precision=2, separator=',', suppress_small=True)
-
-    #     policy = functools.reduce(lambda a,b : a if a[0] == env else b, test_cases_latest_nonoise)[1]
-    #     env = ALL_ENVS[env]()
-    #     env._partially_observable = False
-    #     env._freeze_rand_vec = False
-    #     env._set_task_called = True
-
-    #     # writer = writer_for(tag, env.metadata['video.frames_per_second'], resolution)
-    #     writer = writer_for_mp4(tag, env.metadata['video.frames_per_second'], resolution)
-
-    #     for _ in range(cycles):
-    #         for r, done, info, img in trajectory_generator(env, policy, noise, resolution, camera):
-    #             if flip: img = cv2.rotate(img, cv2.ROTATE_180)
-    #             writer.write(img)
-    #             if quit_on_success and info['success']:
-    #                 break
-
-    #     writer.release()
-    #     num += 1
-    #     print(f'Finished {num}/{len(config)}')
-    #     break
 
 
 if __name__ == '__main__':

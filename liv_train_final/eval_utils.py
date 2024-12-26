@@ -294,7 +294,7 @@ def plot_videos(model_name, self_attention_model, args):
 
 
 
-                gif_buffer = animate_video_with_rewards(frames, predicted_output, 15)
+                gif_buffer = animate_video_with_rewards(frames, predicted_output, 15, _class = False)
                 # mmrv = compute_mmrv(gt_index, predicted_output)
                 # wandb.log({f"mmrv/{task}/{diff}_{video_idx}": mmrv})
                 
@@ -399,7 +399,7 @@ def plot_videos_class(model_name, self_attention_model, args):
 
 
 
-                gif_buffer = animate_video_with_rewards(frames, predicted_output, 15)
+                gif_buffer = animate_video_with_rewards(frames, predicted_output, 15, _class = True)
                 # mmrv = compute_mmrv(gt_index, predicted_output)
                 # wandb.log({f"mmrv/{task}/{diff}_{video_idx}": mmrv})
                 

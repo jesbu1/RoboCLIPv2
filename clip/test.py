@@ -1,22 +1,18 @@
 import transformers
 import torch
+import h5py
+import numpy as np
 
-model_id = "meta-llama/Meta-Llama-3.1-8B-Instruct"
+h5_file = h5py.File("/scr/jzhang96/metaworld_25_for_clip_liv.h5", "r")
+data = h5_file['liv']['sweep-into-v2_text']
+data = np.array(data)
+print(data.shape)
+norm = np.linalg.norm(data, axis=1)
+print(norm)
+data = h5_file['liv']["coffee-push-v2"]['1']
 
-pipeline = transformers.pipeline(
-    "text-generation",
-    model=model_id,
-    model_kwargs={"torch_dtype": torch.bfloat16},
-    device_map="auto",
-)
+data = np.array(data)
 
-messages = [
-    {"role": "system", "content": "You are a pirate chatbot who always responds in pirate speak!"},
-    {"role": "user", "content": "I have a task for a robot to solve:'Pressing handle from side' Please give me a bunch of ways to rephrase the task description without changing the meaning. "},
-]
+norm = np.linalg.norm(data, axis=1)
+print(norm)
 
-outputs = pipeline(
-    messages,
-    max_new_tokens=256,
-)
-print(outputs[0]["generated_text"][-1])

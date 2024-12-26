@@ -1,10 +1,10 @@
 #!/bin/bash
-#SBATCH --job-name=RMSv1_1      # Job name
-#SBATCH --output=RMSv1_1.out   # Output file
-#SBATCH --error=RMRMSv1_1Sv1.err    # Error file
-#SBATCH --ntasks=3                      # Number of tasks (processes)
+#SBATCH --job-name=bsl32      # Job name
+#SBATCH --output=bsl32.out   # Output file
+#SBATCH --error=bsl32.err    # Error file
+#SBATCH --ntasks=2                      # Number of tasks (processes)
 #SBATCH --gres=shard:25                   # Number of GPUs
-#SBATCH --cpus-per-task=4               # Number of CPU cores per task
+#SBATCH --cpus-per-task=5               # Number of CPU cores per task
 
 
 # seeds=(42 32 5 0 1)
@@ -49,13 +49,15 @@
 # wait
 
 
-seeds=(42 32 5)
+seeds=(32)
 
 for seed in "${seeds[@]}"; do
 
 
 
-    # python metaworld_envs_xclip_text_clean.py --n_envs 4 --succ_bonus 200 --succ_end --time_reward 100 --random_reset --seed $seed --model_base_path models/triplet_loss_subset_0_42_var1.0new_TimeShuffle_TimeShort_NormVLMtriplet --transform_model_path model_19999.pth --env_id 'button-press-topdown-v2-goal-hidden' --text_string 'pressing button' --exp_name_end "new_log_noPCA" & 
+    python metaworld_envs_xclip_text_clean.py --n_envs 4 --succ_bonus 200 --succ_end --time_reward 10 --random_reset --seed $seed --baseline --ep_length 128 --exp_name_end "v1_baseline" --env_id "window-open-v2-goal-hidden" --text_string "opening window" & 
+    python metaworld_envs_xclip_text_clean.py --n_envs 4 --succ_bonus 200 --succ_end --time_reward 10 --random_reset --seed $seed --baseline --ep_length 128 --exp_name_end "v1_baseline" --env_id "coffee-push-v2-goal-hidden" --text_string "pushing coffee cup" & 
+
     # python metaworld_envs_xclip_text_clean.py --n_envs 4 --succ_bonus 200 --time_reward 100 --random_reset --seed $seed --model_base_path models/triplet_loss_subset_0_42_var1.0new_TimeShuffle_TimeShort_NormVLMtriplet --transform_model_path model_19999.pth --env_id 'handle-pull-side-v2-goal-hidden' --text_string 'pullinig handle' --exp_name_end "no_succ_end" & 
 
     # python metaworld_envs_xclip_text_clean.py --n_envs 4 --succ_bonus 200 --time_reward 100 --random_reset --seed $seed --model_base_path models/triplet_loss_subset_0_42_var1.0new_TimeShuffle_TimeShort_NormVLMtriplet --transform_model_path model_19999.pth --env_id 'window-close-v2-goal-hidden' --text_string 'closing window' --exp_name_end "no_succ_end" & 
@@ -63,8 +65,8 @@ for seed in "${seeds[@]}"; do
 
 
     
-    # python metaworld_envs_xclip_RMS.py --n_envs 4 --succ_bonus 50 --time_reward 1 --random_reset --seed $seed --baseline --env_id 'button-press-v2-goal-hidden' --text_string 'pressing button' --exp_name_end "RMS_BSL" &
-    python metaworld_envs_xclip_RMS.py --n_envs 4 --succ_bonus 50 --time_reward 1 --random_reset --seed $seed --baseline --env_id 'button-press-topdown-v2-goal-hidden' --text_string 'pressing button' --exp_name_end "RMS_BSL" &
+    # python metaworld_envs_xclip_RMS.py --n_envs 4 --succ_bonus 50 --time_reward 1 --random_reset --seed $seed --baseline --env_id 'button-press-v2-goal-hidden' --text_string 'pressing button' --exp_name_end "RMS_BSL" --succ_end &
+    # python metaworld_envs_xclip_RMS.py --n_envs 4 --succ_bonus 50 --time_reward 1 --random_reset --seed $seed --baseline --env_id 'button-press-topdown-v2-goal-hidden' --text_string 'pressing button' --exp_name_end "RMS_BSL" --succ_end &
 
 
 done
