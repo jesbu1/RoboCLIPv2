@@ -187,28 +187,55 @@ def plot_progress_class(h5_file, model_name, set, self_attention_model, args):
         wandb.log({f"class_{set}/{env}": wandb.Image(figure)})
         plt.close()
 
+def sample_video_frames(frames, num_frames = 32):
+    total_frames = len(frames)
+    if total_frames > num_frames:
+        frames = frames[::total_frames//num_frames]
+    else:
+        # padding 1st frame
+        padding_num = num_frames - total_frames
+        frames = [frames[0]] * padding_num + frames
 
-def plot_videos_class(model_name, self_attention_model, num_class = 11):
+    return frames
+
+def plot_videos(model_name, self_attention_model, args):
     device = next(self_attention_model.parameters()).device
     model, processor, tokenizer = load_model(model_name)
     video_base_path = "/home/jzhang96/RoboCLIPv2/clip/reward_eval_videos"
     video_idxs = ["1", "2"]
     diffs = ["all_fail", "close_succ", "success", "GT"]
-    tasks = ["button_press_wall", "topdown", "windowclose"]
+    tasks = [
+            "button_press",
+            "button_press_wall", 
+            # "coffee_pull",
+            "door_open",
+            "drawer_close",
+            "faucet_open",
+            "handle_press_side",
+            "handle_pull_side",
+            "topdown", 
+            "windowclose"
+            ]
 
-    texts = {"button_press_wall": "Robot pressing button from side",
-             "topdown": "Robot pressing button from top",
-             "windowclose": "Robot closing window"}
-
-    # texts = {"button_press_wall": "Pushing the button from the side",
-    #          "topdown": "Pressing button from top",
-    #          "windowclose": "Closing window"}
+    texts = {
+            "button_press": "pressing button from side",
+            "button_press_wall": "pressing button from side",
+            # "coffee_pull": "pulling coffee",
+            "door_open": "opening door",
+            "drawer_close": "closing drawer",
+            "faucet_open": "opening faucet",
+            "handle_press_side": "pressing handle from side",
+            "handle_pull_side": "pulling handle from side",
+            "topdown": "pressing button from top",
+            "windowclose": "closing window"
+            }
 
 
     for task in tasks:
         text = texts[task]
         text_embeddings = embedding_text(model, tokenizer, text).to(device).float()
-        text_embeddings = normalize_embeddings(text_embeddings)
+        if args.normalize_embedding:
+            text_embeddings = normalize_embeddings(text_embeddings)
 
 
         for diff in diffs:
@@ -217,11 +244,16 @@ def plot_videos_class(model_name, self_attention_model, num_class = 11):
                 # load gif
                 frames = imageio.mimread(gif_path)
                 frames = [frame[:,:,0:3] for frame in frames]
+                
+                if args.subsample_video:
+                    frames = sample_video_frames(frames, num_frames = args.max_length)
 
                 image_embeddings = []
+                # select 32 frames
                 for frame in frames:
                     image_embedding = embedding_image(model, processor, frame)
-                    image_embedding = normalize_embeddings(image_embedding)
+                    if args.normalize_embedding:
+                        image_embedding = normalize_embeddings(image_embedding)
                     image_embeddings.append(image_embedding)
                 image_embeddings = torch.stack(image_embeddings).to(device).float().squeeze(1)
 
@@ -231,8 +263,7 @@ def plot_videos_class(model_name, self_attention_model, num_class = 11):
 
                     image = image.unsqueeze(0)
                     progress_score = self_attention_model(image, mask=None, text_array=text_embeddings)
-                    progress_score = np.argmax(progress_score.squeeze().detach().cpu().numpy())
-                    predicted_output.append(progress_score)
+                    predicted_output.append(progress_score.squeeze().detach().cpu().numpy())
                 predicted_output = np.array(predicted_output)
 
                 frame_index = np.linspace(1, len(predicted_output), len(predicted_output))
@@ -243,7 +274,7 @@ def plot_videos_class(model_name, self_attention_model, num_class = 11):
                 plt.ylabel("Similarity")
                 plt.title(f"{task} {diff} {video_idx}")
                 # set y axis range [-1,1]
-                plt.ylim(-1, 11)
+                plt.ylim(-1, 1)
 
                 # plt.savefig(f"progress_img/{env}.png")
                 wandb.log({f"progress_video/{task}/{diff}_{video_idx}": wandb.Image(figure)})
@@ -263,10 +294,113 @@ def plot_videos_class(model_name, self_attention_model, num_class = 11):
 
 
 
-                gif_buffer = animate_video_with_rewards_class(frames, predicted_output, num_class, 15)
+                gif_buffer = animate_video_with_rewards(frames, predicted_output, 15)
                 # mmrv = compute_mmrv(gt_index, predicted_output)
                 # wandb.log({f"mmrv/{task}/{diff}_{video_idx}": mmrv})
                 
                 log_gif_to_wandb(gif_buffer, f"{task}/{diff}_{video_idx}")
 
 
+
+def plot_videos_class(model_name, self_attention_model, args):
+    device = next(self_attention_model.parameters()).device
+    model, processor, tokenizer = load_model(model_name)
+    video_base_path = "/home/jzhang96/RoboCLIPv2/clip/reward_eval_videos"
+    video_idxs = ["1", "2"]
+    diffs = ["all_fail", "close_succ", "success", "GT"]
+    tasks = [
+            "button_press",
+            "button_press_wall", 
+            # "coffee_pull",
+            "door_open",
+            "drawer_close",
+            "faucet_open",
+            "handle_press_side",
+            "handle_pull_side",
+            "topdown", 
+            "windowclose"
+            ]
+
+    texts = {
+            "button_press": "pressing button from side",
+            "button_press_wall": "pressing button from side",
+            # "coffee_pull": "pulling coffee",
+            "door_open": "opening door",
+            "drawer_close": "closing drawer",
+            "faucet_open": "opening faucet",
+            "handle_press_side": "pressing handle from side",
+            "handle_pull_side": "pulling handle from side",
+            "topdown": "pressing button from top",
+            "windowclose": "closing window"
+            }
+
+
+    for task in tasks:
+        text = texts[task]
+        text_embeddings = embedding_text(model, tokenizer, text).to(device).float()
+        if args.normalize_embedding:
+            text_embeddings = normalize_embeddings(text_embeddings)
+
+
+        for diff in diffs:
+            for video_idx in video_idxs:
+                gif_path = f"{video_base_path}/{task}/{diff}/{video_idx}.gif"
+                # load gif
+                frames = imageio.mimread(gif_path)
+                frames = [frame[:,:,0:3] for frame in frames]
+                
+                if args.subsample_video:
+                    frames = sample_video_frames(frames, num_frames = args.max_length)
+
+                image_embeddings = []
+                # select 32 frames
+                for frame in frames:
+                    image_embedding = embedding_image(model, processor, frame)
+                    if args.normalize_embedding:
+                        image_embedding = normalize_embeddings(image_embedding)
+                    image_embeddings.append(image_embedding)
+                image_embeddings = torch.stack(image_embeddings).to(device).float().squeeze(1)
+
+                predicted_output = list()
+                for i in range(len(image_embeddings)):
+                    image = image_embeddings[:i+1]
+
+                    image = image.unsqueeze(0)
+                    progress_score = self_attention_model(image, mask=None, text_array=text_embeddings)
+                    progress_score = torch.argmax(progress_score, dim=1)
+                    predicted_output.append(progress_score.squeeze().detach().cpu().numpy())
+                predicted_output = np.array(predicted_output)
+
+                frame_index = np.linspace(1, len(predicted_output), len(predicted_output))
+
+                figure = plt.figure()
+                plt.plot(frame_index, predicted_output )
+                plt.xlabel("Frame Index")
+                plt.ylabel("Similarity")
+                plt.title(f"{task} {diff} {video_idx}")
+                # set y axis range [-1,1]
+                plt.ylim(-1, 6)
+
+                # plt.savefig(f"progress_img/{env}.png")
+                wandb.log({f"progress_video/{task}/{diff}_{video_idx}": wandb.Image(figure)})
+                plt.close()
+                print(f"progress_video/{task}/{diff}/{video_idx}")
+
+                
+                frames = np.stack(frames)
+                predicted_output = np.stack(predicted_output)
+
+                gt_index = np.linspace(1, len(predicted_output), len(predicted_output))
+                act_index = np.argsort(predicted_output) + 1
+
+                # pearson correlation act_index
+                corr = np.corrcoef(act_index, gt_index)[0, 1]
+                wandb.log({f"corr/{task}/{diff}_{video_idx}": corr})
+
+
+
+                gif_buffer = animate_video_with_rewards(frames, predicted_output, 15)
+                # mmrv = compute_mmrv(gt_index, predicted_output)
+                # wandb.log({f"mmrv/{task}/{diff}_{video_idx}": mmrv})
+                
+                log_gif_to_wandb(gif_buffer, f"{task}/{diff}_{video_idx}")
