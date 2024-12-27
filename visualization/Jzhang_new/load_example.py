@@ -235,10 +235,13 @@ class VideoRewardEvaluator:
 
         # 2. 前半段帧
         frames_front_half = frames_tensor[: length // 2]
-        #frames_front_half = self.padding_video(frames_front_half)
+        if self.args.subsample_video:
+            frames_front_half = self.padding_video(frames_front_half)
 
         # 3. 后半段帧
         frames_back_half = frames_tensor[length // 2 :]
+        if self.args.subsample_video:
+            frames_back_half = self.padding_video(frames_back_half)
 
         # 4. 均匀抽取18帧（包括第一帧和最后一帧）
         # 如果视频长度小于18帧，则 linspace 会产生重复索引，这种情况下不会有问题
@@ -288,7 +291,8 @@ class VideoRewardEvaluator:
         """
         frames = self.extract_frames(video_path)
         frames_tensor = self.preprocess_frames(frames)
-        frames_tensor = self.padding_video(frames_tensor)
+        if self.args.subsample_video:
+            frames_tensor = self.padding_video(frames_tensor)
         length = frames_tensor.shape[0]
 
         incremental_rewards = []
@@ -335,7 +339,7 @@ class VideoRewardEvaluator:
         """
         frames = self.extract_frames(video_path)
         frames_tensor = self.preprocess_frames(frames)
-        frames_tensor = self.padding_video(frames_tensor)
+        #frames_tensor = self.padding_video(frames_tensor)
         length = frames_tensor.shape[0]
 
         # frames_tensor = frames_tensor[:length // 2]
@@ -344,7 +348,8 @@ class VideoRewardEvaluator:
         reversed_frames_tensor = frames_tensor.flip(dims=[0])  # frames_tensor[::-1] 也可行, 对torch张量使用flip更标准
         
         appended_frames_tensor = th.cat([frames_tensor, reversed_frames_tensor], dim=0)
-        #appended_frames_tensor = self.padding_video(appended_frames_tensor)
+        if self.args.subsample_video:
+            appended_frames_tensor = self.padding_video(appended_frames_tensor)
         save_reversed_video(appended_frames_tensor, output_path="reversed_video.mp4", fps=30)
         new_length = appended_frames_tensor.shape[0]
 
