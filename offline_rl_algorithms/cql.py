@@ -365,9 +365,7 @@ class CQL(OfflineRLAlgorithm):
                 #     for current_q in [q1_current_actions, q2_current_actions]
                 # )
 
-                critic_loss = 1/self.n_critics_to_sample * sum(
-                    F.mse_loss(q_current_actions[:, i].reshape(1, -1), target_q_values) for i in range(q_current_actions.shape[1])
-                )
+                critic_loss = F.mse_loss(q_current_actions, target_q_values.expand_as(q_current_actions))
 
                 critic_loss += th.sum(cql_min_qf_loss)
 
