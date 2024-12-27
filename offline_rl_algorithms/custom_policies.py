@@ -241,14 +241,14 @@ class CustomContinuousCritic(ContinuousCritic):
             self.q_networks.append(q_net)
 
     def forward(
-        self, obs: th.Tensor, actions: th.Tensor, critic_indicies: th.Tensor = None
+        self, obs: th.Tensor, actions: th.Tensor, critic_indices: th.Tensor = None
     ) -> Tuple[th.Tensor, ...]:
         """Forward function
 
         Args:
             obs (th.Tensor): batched observation tensor
             actions (th.Tensor): batched action tensor
-            critic_indicies (th.Tensor, optional): tensor of critic indicies to return. Defaults to None. If given, only the critic values at the given indicies are returned for less computation.
+            critic_indices (th.Tensor, optional): tensor of critic indicies to return. Defaults to None. If given, only the critic values at the given indicies are returned for less computation.
 
         Returns:
             Tuple[th.Tensor, ...]: tuple of critic values
@@ -258,9 +258,9 @@ class CustomContinuousCritic(ContinuousCritic):
         with th.set_grad_enabled(not self.share_features_extractor):
             features = self.extract_features(obs, self.features_extractor)
         qvalue_input = th.cat([features, actions], dim=1)
-        if critic_indicies is not None:
+        if critic_indices is not None:
             # save computation
-            return tuple(self.q_networks[idx](qvalue_input) for idx in critic_indicies)
+            return tuple(self.q_networks[idx](qvalue_input) for idx in critic_indices)
         else:
             return tuple(q_net(qvalue_input) for q_net in self.q_networks)
 
