@@ -18,6 +18,10 @@ pip install -e kitchen_alt
 pip install -e kitchen_alt/kitchen/envs
 wget https://www.rocq.inria.fr/cluster-willow/amiech/howto100m/s3d_howto100m.pth
 wget https://www.rocq.inria.fr/cluster-willow/amiech/howto100m/s3d_dict.npy
+git submodule init
+git submodule update --recursive
+pip install -e reward_models/LIV # TODO: fix how it gets rid of our pytorch version
+pip install -e reward_models/LIV/liv/models/clip
 pip install -e .
 ```
 
