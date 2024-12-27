@@ -178,3 +178,6 @@ metaworld
 kitchem_alt
 losses/wandb
 metaworld_runs/wandb
+
+# Keep config folder
+!configs/metaworld

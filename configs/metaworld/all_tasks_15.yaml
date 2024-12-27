@@ -1,0 +1,23 @@
+# @package _global_
+
+defaults:
+  - _self_
+
+general_training:
+  sparse_only: false
+
+offline_training:
+  offline_h5_path: "data/h5_buffers/updated_trajs/metaworld_traj_15_demos_{}.h5"
+  offline_tasks: "all"
+  offline_training_steps: 5000 
+
+online_training:
+  total_time_steps: 1000000
+
+environment:
+  cfg_name: "metaworld_all_tasks_15"
+  n_envs: 1
+  train_freq_num: 1
+  train_freq_type: 'step'
+  text_string: "opening window" # eval task
+  ignore_language: false
