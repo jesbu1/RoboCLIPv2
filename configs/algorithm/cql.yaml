@@ -7,7 +7,7 @@ general_training:
   algo: cql
   action_noise: 0 # sigma
   sparse_only: true
-  learning_rate: 1e-3
+  learning_rate: 3e-4
 
   # offline rl parameters
   critic_update_ratio: 1 # iql and cql
