@@ -231,8 +231,8 @@ class CQL(OfflineRLAlgorithm):
 
         ent_coef_losses, ent_coefs = [], []
         actor_losses, critic_losses = [], []
-        q1_values, q2_values = [], []
-        q1_next_values, q2_next_values = [], []
+        q_values = []
+        q_next_values = [] 
         actor_log_pis = []
         reward_values = []
         cql_losses = []
@@ -373,10 +373,10 @@ class CQL(OfflineRLAlgorithm):
                 cql_losses.append(cql_min_qf_loss.sum().item())
 
                 # log q1 and q2 values
-                q1_values.append([q_current_actions[:, i].mean().item() for i in range(q_current_actions.shape[1])])
+                q_values.append([q_current_actions[:, i].mean().item() for i in range(q_current_actions.shape[1])])
 
                 # log next q1 and q2 values
-                q1_next_values.append([q_next_actions[:, i].mean().item() for i in range(q_next_actions.shape[1])])
+                q_next_values.append([q_next_actions[:, i].mean().item() for i in range(q_next_actions.shape[1])])
 
                 # log average in batch reward
                 reward_values.append(replay_data.rewards.mean().item())
@@ -438,8 +438,8 @@ class CQL(OfflineRLAlgorithm):
             f"{logging_prefix}/actor_loss": np.mean(actor_losses),
             f"{logging_prefix}/critic_loss": np.mean(critic_losses),
             f"{logging_prefix}/cql_loss": np.mean(cql_losses),
-            f"{logging_prefix}/average_q_values": np.mean(q1_values),
-            f"{logging_prefix}/average_q_next_values": np.mean(q1_next_values),
+            f"{logging_prefix}/average_q_values": np.mean(q_values),
+            f"{logging_prefix}/average_q_next_values": np.mean(q_next_values),
             f"{logging_prefix}/average_reward": np.mean(reward_values),
             f"{logging_prefix}/average_actor_log_pis": np.mean(actor_log_pis),
         }
