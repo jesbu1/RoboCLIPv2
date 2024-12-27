@@ -361,15 +361,12 @@ class RLPD(OfflineRLAlgorithm):
 
                 # Get current Q-values estimates for each critic network
                 # using action from the replay buffer
-                current_q_values = self.critic(
+                current_q_values = th.cat(self.critic(
                     replay_data.observations, replay_data.actions
-                )
+                ), dim=1)
 
                 # Compute critic loss
-                critic_loss = 1/len(current_q_values) * sum(
-                    F.mse_loss(current_q, target_q_values)
-                    for current_q in current_q_values
-                )
+                critic_loss = F.mse_loss(current_q_values, target_q_values.expand_as(current_q_values))
                 assert isinstance(critic_loss, th.Tensor)  # for type checker
                 critic_losses.append(critic_loss.item())  # type: ignore[union-attr]
 

@@ -324,10 +324,7 @@ class IQL(OfflineRLAlgorithm):
                     replay_data.rewards
                     + (1 - replay_data.dones) * self.gamma * next_vf_pred
                 )
-                q_loss = 1/len(q_preds) * sum(
-                    F.mse_loss(q_preds[:, i], target_q_values)
-                    for i in range(q_preds.shape[1])
-                )
+                q_loss = F.mse_loss(q_preds, target_q_values.expand_as(q_preds))
 
                 # Value function expectile loss
                 vf_err = vf_pred - target_q_pred
