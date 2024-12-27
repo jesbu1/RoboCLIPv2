@@ -353,47 +353,47 @@ class RLPD(OfflineRLAlgorithm):
                     polyak_update(
                         self.batch_norm_stats, self.batch_norm_stats_target, 1.0
                     )
-                # Action by the current actor for the sampled state
-                actions_pi, log_prob = self.actor.action_log_prob(
-                    replay_data.observations
-                )
-                log_prob = log_prob.reshape(-1, 1)
+            # Action by the current actor for the sampled state
+            actions_pi, log_prob = self.actor.action_log_prob(
+                replay_data.observations
+            )
+            log_prob = log_prob.reshape(-1, 1)
 
-                ent_coef_loss = None
-                if (
-                    self.ent_coef_optimizer is not None
-                    and self.log_ent_coef is not None
-                ):
-                    # Important: detach the variable from the graph
-                    # so we don't change it with other losses
-                    # see https://github.com/rail-berkeley/softlearning/issues/60
-                    ent_coef = th.exp(self.log_ent_coef.detach())
-                    ent_coef_loss = -(
-                        self.log_ent_coef * (log_prob + self.target_entropy).detach()
-                    ).mean()
-                    ent_coef_losses.append(ent_coef_loss.item())
-                else:
-                    ent_coef = self.ent_coef_tensor
+            ent_coef_loss = None
+            if (
+                self.ent_coef_optimizer is not None
+                and self.log_ent_coef is not None
+            ):
+                # Important: detach the variable from the graph
+                # so we don't change it with other losses
+                # see https://github.com/rail-berkeley/softlearning/issues/60
+                ent_coef = th.exp(self.log_ent_coef.detach())
+                ent_coef_loss = -(
+                    self.log_ent_coef * (log_prob + self.target_entropy).detach()
+                ).mean()
+                ent_coef_losses.append(ent_coef_loss.item())
+            else:
+                ent_coef = self.ent_coef_tensor
 
-                ent_coefs.append(ent_coef.item())
+            ent_coefs.append(ent_coef.item())
 
-                # Optimize entropy coefficient, also called
-                # entropy temperature or alpha in the paper
-                if ent_coef_loss is not None and self.ent_coef_optimizer is not None:
-                    self.ent_coef_optimizer.zero_grad()
-                    ent_coef_loss.backward()
-                    self.ent_coef_optimizer.step()
+            # Optimize entropy coefficient, also called
+            # entropy temperature or alpha in the paper
+            if ent_coef_loss is not None and self.ent_coef_optimizer is not None:
+                self.ent_coef_optimizer.zero_grad()
+                ent_coef_loss.backward()
+                self.ent_coef_optimizer.step()
 
-                # log average in batch reward
-                reward_values.append(replay_data.rewards.mean().item())
+            # log average in batch reward
+            reward_values.append(replay_data.rewards.mean().item())
 
-                # log average q values
-                q_values_list.append(
-                    np.mean([q.mean().item() for q in current_q_values])
-                )
+            # log average q values
+            q_values_list.append(
+                np.mean([q.mean().item() for q in current_q_values])
+            )
 
-                # log average next q values
-                q_next_values_list.append(next_q_values.mean().item())
+            # log average next q values
+            q_next_values_list.append(next_q_values.mean().item())
 
             # Compute actor loss
             # Alternative: actor_loss = th.mean(log_prob - qf1_pi)
