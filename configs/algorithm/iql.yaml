@@ -7,6 +7,7 @@ general_training:
   algo: iql
   action_noise: 0.1 # sigma
   sparse_only: true
+  learning_rate: 1e-3
 
   critic_update_ratio: 1 # iql and cql
   n_critics: 10

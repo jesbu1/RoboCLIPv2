@@ -327,6 +327,14 @@ class CQL(OfflineRLAlgorithm):
                 #     1,
                 # )
                 # shape should be (batch_size, 10, 3) 
+                if self.use_calibrated_q:
+                    cal_ql_lower_bounds = replay_data.mc_returns.expand_as(q_current_actions)
+                    bound_rate_cal_ql = (q_current_actions < cal_ql_lower_bounds).float().mean()
+                    bound_rate_next_cal_ql = (q_next_actions < cal_ql_lower_bounds).float().mean()
+                    q_current_actions = th.max(q_current_actions, cal_ql_lower_bounds)
+                    q_next_actions = th.max(q_next_actions, cal_ql_lower_bounds)
+
+                    
 
                 cat_qs = th.cat(
                     [
@@ -373,10 +381,10 @@ class CQL(OfflineRLAlgorithm):
                 cql_losses.append(cql_min_qf_loss.sum().item())
 
                 # log q1 and q2 values
-                q_values.append([q_current_actions[:, i].mean().item() for i in range(q_current_actions.shape[1])])
+                q_values.append(q_current_actions.mean().item())
 
                 # log next q1 and q2 values
-                q_next_values.append([q_next_actions[:, i].mean().item() for i in range(q_next_actions.shape[1])])
+                q_next_values.append(q_next_actions.mean().item())
 
                 # log average in batch reward
                 reward_values.append(replay_data.rewards.mean().item())
@@ -446,6 +454,10 @@ class CQL(OfflineRLAlgorithm):
 
         if len(ent_coef_losses) > 0:
             metrics_dict[f"{logging_prefix}/ent_coef_loss"] = np.mean(ent_coef_losses)
+
+        if self.use_calibrated_q:
+            metrics_dict[f"{logging_prefix}/bound_rate_cal_ql"] = bound_rate_cal_ql
+            metrics_dict[f"{logging_prefix}/bound_rate_next_cal_ql"] = bound_rate_next_cal_ql
 
         for metric in metrics_dict:
             self.logger.record(metric, metrics_dict[metric])
