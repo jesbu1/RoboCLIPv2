@@ -13,7 +13,7 @@ general_training:
   critic_update_ratio: 4 # iql and cql
   n_critics: 10
   n_critics_to_sample: 2
-  use_calibrated_q: true # calibrated QL https://arxiv.org/pdf/2303.05479
+  use_calibrated_q: false # calibrated QL https://arxiv.org/pdf/2303.05479
   
   # CQL-specific parameters
   cql_min_q_weight: 1.0
