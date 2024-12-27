@@ -313,7 +313,7 @@ class IQL(OfflineRLAlgorithm):
                         ),
                         dim=1,
                     )
-                    target_q_pred = th.min(target_q_preds)
+                    target_q_pred = th.min(*target_q_preds)
                     next_vf_pred = self.v_net(replay_data.next_observations)
                 vf_pred = self.v_net(replay_data.observations)
 
