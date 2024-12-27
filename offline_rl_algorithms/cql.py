@@ -120,6 +120,7 @@ class CQL(OfflineRLAlgorithm):
         use_calibrated_q: bool = False,
         mix_offline_online_buffers: bool = True,
         critic_update_ratio: int = 1,  # number of critic updates per actor update
+        n_critics_to_sample: int = 2, # number of critics to sample from
     ):
         super().__init__(
             policy,
@@ -165,6 +166,7 @@ class CQL(OfflineRLAlgorithm):
         self.temp = min_q_temp
         self.use_calibrated_q = use_calibrated_q
         self.critic_update_ratio = critic_update_ratio
+        self.n_critics_to_sample = n_critics_to_sample
 
     def _setup_model(self) -> None:
         super()._setup_model()
@@ -254,9 +256,12 @@ class CQL(OfflineRLAlgorithm):
                     next_actions, next_log_prob = self.actor.action_log_prob(
                         replay_data.next_observations
                     )
-                    # Compute the next Q values: min over all critics targets
+                    # Compute the next Q values: min over a subset of critics targets (for generality with REDQ implementation)
+                    critic_indices = th.randperm(self.policy_kwargs["n_critics"])[
+                        : self.n_critics_to_sample
+                    ]
                     next_q_values = th.cat(
-                        self.critic_target(replay_data.next_observations, next_actions),
+                        self.critic_target(replay_data.next_observations, next_actions, critic_indices=critic_indices),
                         dim=1,
                     )
                     next_q_values, _ = th.min(next_q_values, dim=1, keepdim=True)
@@ -333,13 +338,12 @@ class CQL(OfflineRLAlgorithm):
                     cql_min_qf2_loss - q2_current_actions.mean() * self.min_q_weight
                 )
 
-                critic_loss = 0.5 * sum(
+                critic_loss = 1/self.n_critics_to_sample * sum(
                     F.mse_loss(current_q, target_q_values)
                     for current_q in [q1_current_actions, q2_current_actions]
                 )
                 critic_loss += cql_min_qf1_loss + cql_min_qf2_loss
 
-                # breakpoint()
                 critic_losses.append(critic_loss.item())
                 cql_losses.append((cql_min_qf1_loss + cql_min_qf2_loss).item())
 

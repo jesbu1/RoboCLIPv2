@@ -186,6 +186,7 @@ class IQL(OfflineRLAlgorithm):
         ddpg_bc_weight: float = 0.1,
         mix_offline_online_buffers: bool = True,
         critic_update_ratio: int = 1,  # number of critic updates per actor update
+        n_critics_to_sample: int = 2, # number of critics to sample from
     ):
         super().__init__(
             policy,
@@ -233,6 +234,7 @@ class IQL(OfflineRLAlgorithm):
         self.policy_extraction = policy_extraction
         self.ddpg_bc_weight = ddpg_bc_weight
         self.critic_update_ratio = critic_update_ratio
+        self.n_critics_to_sample = n_critics_to_sample
 
     def _setup_model(self) -> None:
         super()._setup_model()
@@ -275,10 +277,10 @@ class IQL(OfflineRLAlgorithm):
 
         actor_losses, q_losses, v_losses = [], [], []
         actor_log_pis = []
-        q1_values, q2_values = [], []
+        q_values = []
         v_next_values = []
         v_values = []
-        q1_target_values, q2_target_values = [], []
+        q_target_values = []
         reward_values = []
 
         for gradient_step in range(gradient_steps):
@@ -291,14 +293,27 @@ class IQL(OfflineRLAlgorithm):
                 replay_data = self.replay_buffer.sample(batch_size, env=self._vec_normalize_env)  # type: ignore[union-attr]
 
                 # Compute necessary values for the training update
-                q1_pred, q2_pred = self.critic(
-                    replay_data.observations, replay_data.actions
+                q_preds = th.cat(
+                    self.critic(
+                        replay_data.observations,
+                        replay_data.actions,
+                    ),
+                    dim=1,
                 )
                 with th.no_grad():
-                    target_q1_pred, target_q2_pred = self.critic_target(
-                        replay_data.observations, replay_data.actions
+                    # for generality with REDQ implmentation
+                    critic_indices = th.randperm(self.policy_kwargs["n_critics"])[
+                        : self.n_critics_to_sample
+                    ]
+                    target_q_preds = th.cat(
+                        self.critic_target(
+                            replay_data.observations,
+                            replay_data.actions,
+                            critic_indices=critic_indices,
+                        ),
+                        dim=1,
                     )
-                    target_q_pred = th.min(target_q1_pred, target_q2_pred)
+                    target_q_pred = th.min(target_q_preds)
                     next_vf_pred = self.v_net(replay_data.next_observations)
                 vf_pred = self.v_net(replay_data.observations)
 
@@ -307,9 +322,10 @@ class IQL(OfflineRLAlgorithm):
                     replay_data.rewards
                     + (1 - replay_data.dones) * self.gamma * next_vf_pred
                 )
-                q1_loss = F.mse_loss(q1_pred, target_q_values)
-                q2_loss = F.mse_loss(q2_pred, target_q_values)
-                q_loss = q1_loss + q2_loss
+                q_loss = 1/len(q_preds) * sum(
+                    F.mse_loss(q_pred, target_q_values)
+                    for q_pred in q_preds
+                )
 
                 # Value function expectile loss
                 vf_err = vf_pred - target_q_pred
@@ -320,15 +336,13 @@ class IQL(OfflineRLAlgorithm):
                 vf_loss = (vf_weight * (vf_err**2)).mean()
 
                 # log q1 and q2 values
-                q1_values.append(q1_pred.mean().item())
-                q2_values.append(q2_pred.mean().item())
+                q_values.append(q_preds[0].mean().item())
 
                 # log v
                 v_values.append(vf_pred.mean().item())
 
                 # log target
-                q1_target_values.append(target_q1_pred.mean().item())
-                q2_target_values.append(target_q2_pred.mean().item())
+                q_target_values.append(target_q_values.mean().item())
 
                 # log next v
                 v_next_values.append(next_vf_pred.mean().item())
@@ -374,7 +388,7 @@ class IQL(OfflineRLAlgorithm):
             elif self.policy_extraction == "ddpg":
                 # autoscale the bc weight based on the average q value
                 with th.no_grad():
-                    average_q_value = th.abs(th.min(q1_pred, q2_pred)).mean() 
+                    average_q_value = th.abs(th.min(*q_preds)).mean()
                     scaled_ddpg_bc_weight = self.ddpg_bc_weight / average_q_value
                 mean_actions, log_std, _ = self.actor.get_action_dist_params(replay_data.observations)
                 distribution = self.actor.action_dist.proba_distribution(mean_actions, log_std)
@@ -382,7 +396,10 @@ class IQL(OfflineRLAlgorithm):
 
                 actions_pi = distribution.actions_from_params(mean_actions, log_std)
 
-                q_values_pi = self.critic(replay_data.observations, actions_pi)
+                critic_indices = th.randperm(self.policy_kwargs["n_critics"])[
+                    : self.n_critics_to_sample
+                ]
+                q_values_pi = self.critic(replay_data.observations, actions_pi, critic_indices=critic_indices)
                 # breakpoint()
                 min_qf_pi = th.min(*q_values_pi).squeeze(-1)
                 assert min_qf_pi.shape == log_prob.shape, f"{min_qf_pi.shape} != {log_prob.shape}"
