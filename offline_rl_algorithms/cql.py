@@ -231,6 +231,7 @@ class CQL(OfflineRLAlgorithm):
         actor_losses, critic_losses = [], []
         q1_values, q2_values = [], []
         q1_next_values, q2_next_values = [], []
+        actor_log_pis = []
         reward_values = []
         cql_losses = []
 
@@ -397,6 +398,8 @@ class CQL(OfflineRLAlgorithm):
             actor_loss = (ent_coef * log_prob - min_qf_pi).mean()
             actor_losses.append(actor_loss.item())
 
+            actor_log_pis.append(log_prob.mean().item())
+
             self.actor.optimizer.zero_grad()
             actor_loss.backward()
             self.actor.optimizer.step()
@@ -413,6 +416,7 @@ class CQL(OfflineRLAlgorithm):
             f"{logging_prefix}/average_q1_next_values": np.mean(q1_next_values),
             f"{logging_prefix}/average_q2_next_values": np.mean(q2_next_values),
             f"{logging_prefix}/average_reward": np.mean(reward_values),
+            f"{logging_prefix}/average_actor_log_pis": np.mean(actor_log_pis),
         }
 
         if len(ent_coef_losses) > 0:

@@ -271,6 +271,7 @@ class RLPD(OfflineRLAlgorithm):
 
         ent_coef_losses, ent_coefs = [], []
         actor_losses, critic_losses = [], []
+        actor_log_pis = []
         q_values_list = []
         q_next_values_list = []
         reward_values = []
@@ -409,6 +410,8 @@ class RLPD(OfflineRLAlgorithm):
             self.actor.optimizer.zero_grad()
             actor_loss.backward()
             self.actor.optimizer.step()
+            
+            actor_log_pis.append(log_prob.mean().item())
 
         self._n_updates += gradient_steps
 
@@ -419,6 +422,7 @@ class RLPD(OfflineRLAlgorithm):
             f"{logging_prefix}/average_q_values": np.mean(q_values_list),
             f"{logging_prefix}/average_q_next_values": np.mean(q_next_values_list),
             f"{logging_prefix}/average_reward": np.mean(reward_values),
+            f"{logging_prefix}/average_actor_log_pis": np.mean(actor_log_pis),
         }
 
         if len(ent_coef_losses) > 0:
