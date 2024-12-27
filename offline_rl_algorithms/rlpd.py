@@ -179,10 +179,20 @@ class RLPD(OfflineRLAlgorithm):
 
     def set_policies_with_offline(self):
         # now replace the RLPD actor and critic with the offline_algo's actor and critic
+        # replace their parameters so that the optimizer is still the same
         self.policy.actor = self.offline_algo.policy.actor
         self.policy.critic = self.offline_algo.policy.critic
         self.policy.critic_target = self.offline_algo.policy.critic_target
 
+        self.policy.optimizer = self.offline_algo.policy.optimizer
+        self.policy.critic.optimizer = self.offline_algo.policy.critic.optimizer
+        if hasattr(self.offline_algo, "ent_coef_optimizer") and self.offline_algo.ent_coef_optimizer is not None:
+            print("Setting ent_coef_optimizer and ent coef to the old value of the offline algo")
+            self.ent_coef_optimizer = self.offline_algo.ent_coef_optimizer
+            self.log_ent_coef = self.offline_algo.log_ent_coef
+        elif hasattr(self.offline_algo, "ent_coef_tensor"):
+            print(f"Setting ent_coef_tensor to the old value of the offline algo: {self.offline_algo.ent_coef_tensor.item()}")
+            self.ent_coef_tensor = self.offline_algo.ent_coef_tensor
 
     def _setup_model(self) -> None:
         super()._setup_model()
@@ -191,20 +201,12 @@ class RLPD(OfflineRLAlgorithm):
         # self.policy.critic = th.compile(self.policy.critic)
         # self.policy.critic_target = th.compile(self.policy.critic_target)
 
-        # Set once in case the model is pretrained already
-        self.set_policies_with_offline()
 
         # If there is a v_net, we can add one here
-        if hasattr(self.offline_algo, "v_net"):
-            self.v_net = self.offline_algo.v_net
+        #if hasattr(self.offline_algo, "v_net"): # not needed for online
+        #    self.v_net = self.offline_algo.v_net # not needed for online
 
-        self._create_aliases()
 
-        # Running mean and running var
-        self.batch_norm_stats = get_parameters_by_name(self.critic, ["running_"])
-        self.batch_norm_stats_target = get_parameters_by_name(
-            self.critic_target, ["running_"]
-        )
         # Target entropy is used when learning the entropy coefficient
         if self.target_entropy == "auto":
             # automatically set target entropy if needed
@@ -241,6 +243,16 @@ class RLPD(OfflineRLAlgorithm):
             # this will throw an error if a malformed string (different from 'auto')
             # is passed
             self.ent_coef_tensor = th.tensor(float(self.ent_coef), device=self.device)
+        
+        # Set once in case the model is pretrained already
+        self.set_policies_with_offline()
+        self._create_aliases()
+        
+        # Running mean and running var
+        self.batch_norm_stats = get_parameters_by_name(self.critic, ["running_"])
+        self.batch_norm_stats_target = get_parameters_by_name(
+            self.critic_target, ["running_"]
+        )
 
 
 
