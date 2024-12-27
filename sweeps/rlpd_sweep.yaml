@@ -1,5 +1,5 @@
 program: test_scripts/test_iql.py
-name: rlpd_sweep_15_demos_sparse
+name: rlpd_iql_sweep_15_demos
 method: bayes
 metric:
   goal: maximize
@@ -11,9 +11,9 @@ parameters:
     values: ["single_task"] 
   reward:
     values: ["dense"]
-  general_training.rlpd_n_critics:
+  general_training.n_critics:
     values: [5, 10]
-  general_training.rlpd_n_critics_to_sample:
+  general_training.n_critics_to_sample:
     values: [2, 4]
   general_training.rlpd_train_critic_with_entropy:
     values: [True, False]

@@ -9,7 +9,9 @@ general_training:
   sparse_only: true
 
   critic_update_ratio: 1 # iql and cql
-
+  n_critics: 10
+  n_critics_to_sample: 2
+  
   # IQL-specific parameters
   policy_extraction: 'awr' # awr or ddpg
   awr_advantage_temp: 0.5 # iql only

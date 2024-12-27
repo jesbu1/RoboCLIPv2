@@ -89,6 +89,7 @@ class RLPD(OfflineRLAlgorithm):
         self,
         policy: Union[str, Type[CustomSACPolicy]],
         env: Union[GymEnv, str],
+        offline_algo: OfflineRLAlgorithm,
         learning_rate: Union[float, Schedule] = 3e-4,
         buffer_size: int = 1_000_000,  # 1e6
         learning_starts: int = 100,
@@ -128,6 +129,9 @@ class RLPD(OfflineRLAlgorithm):
         print(
             f"Mix offline and online buffers: {mix_offline_online_buffers}. RLPD assumes offline data is mixed with online data. Just printing for sanity."
         )
+
+        self.offline_algo = offline_algo
+
         super().__init__(
             policy,
             env,
@@ -165,6 +169,7 @@ class RLPD(OfflineRLAlgorithm):
         self.target_update_interval = target_update_interval
         self.ent_coef_optimizer: Optional[th.optim.Adam] = None
 
+
         if _init_setup_model:
             self._setup_model()
 
@@ -172,14 +177,29 @@ class RLPD(OfflineRLAlgorithm):
         self.n_critics_to_sample = n_critics_to_sample
         self.train_critic_with_entropy = train_critic_with_entropy
 
+    def set_policies_with_offline(self):
+        # now replace the RLPD actor and critic with the offline_algo's actor and critic
+        self.policy.actor = self.offline_algo.policy.actor
+        self.policy.critic = self.offline_algo.policy.critic
+        self.policy.critic_target = self.offline_algo.policy.critic_target
+
+
     def _setup_model(self) -> None:
         super()._setup_model()
 
-        self.policy.actor = th.compile(self.policy.actor, mode="reduce-overhead")
-        self.policy.critic = th.compile(self.policy.critic)
-        self.policy.critic_target = th.compile(self.policy.critic_target)
+        # self.policy.actor = th.compile(self.policy.actor, mode="reduce-overhead")
+        # self.policy.critic = th.compile(self.policy.critic)
+        # self.policy.critic_target = th.compile(self.policy.critic_target)
+
+        # Set once in case the model is pretrained already
+        self.set_policies_with_offline()
+
+        # If there is a v_net, we can add one here
+        if hasattr(self.offline_algo, "v_net"):
+            self.v_net = self.offline_algo.v_net
 
         self._create_aliases()
+
         # Running mean and running var
         self.batch_norm_stats = get_parameters_by_name(self.critic, ["running_"])
         self.batch_norm_stats_target = get_parameters_by_name(
@@ -222,6 +242,8 @@ class RLPD(OfflineRLAlgorithm):
             # is passed
             self.ent_coef_tensor = th.tensor(float(self.ent_coef), device=self.device)
 
+
+
     def _create_aliases(self) -> None:
         self.actor = self.policy.actor
         self.critic = self.policy.critic.to(th.float32)
@@ -235,22 +257,34 @@ class RLPD(OfflineRLAlgorithm):
         callback: MaybeCallback = None,
     ) -> None:
         # override train function to use BC offline training
-        old_train_function = self.train
-        RLPD.train = self._train_offline
-        super().learn_offline(
-            train_steps=train_steps,
+        self.offline_algo.set_logger(self.logger)
+
+        self.offline_algo.learn_offline(
             offline_replay_buffer=offline_replay_buffer,
+            train_steps=train_steps,
             batch_size=batch_size,
             callback=callback,
         )
-        # for online training we use RLPD's train function
-        RLPD.train = old_train_function
+
+        # Set the policies with the offline_algo's policies
+        self.set_policies_with_offline()
+
+        # old_train_function = self.train
+        # RLPD.train = self._train_offline
+        # super().learn_offline(
+        #     train_steps=train_steps,
+        #     offline_replay_buffer=offline_replay_buffer,
+        #     batch_size=batch_size,
+        #     callback=callback,
+        # )
+        # # for online training we use RLPD's train function
+        # RLPD.train = old_train_function
 
     def _train_offline(
         self, gradient_steps: int, batch_size: int = 64, logging_prefix: str = ""
     ) -> None:
-        return BC.train(
-            self,
+        return type(self.offline_algo).train(
+            self.offline_algo,
             gradient_steps=gradient_steps,
             batch_size=batch_size,
             logging_prefix=logging_prefix,

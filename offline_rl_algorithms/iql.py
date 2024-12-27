@@ -313,7 +313,9 @@ class IQL(OfflineRLAlgorithm):
                         ),
                         dim=1,
                     )
-                    target_q_pred = th.min(*target_q_preds)
+
+                    target_q_pred, _ = th.min(target_q_preds, dim=1)
+                    target_q_pred = target_q_pred.reshape(-1, 1)
                     next_vf_pred = self.v_net(replay_data.next_observations)
                 vf_pred = self.v_net(replay_data.observations)
 
@@ -323,8 +325,8 @@ class IQL(OfflineRLAlgorithm):
                     + (1 - replay_data.dones) * self.gamma * next_vf_pred
                 )
                 q_loss = 1/len(q_preds) * sum(
-                    F.mse_loss(q_pred, target_q_values)
-                    for q_pred in q_preds
+                    F.mse_loss(q_preds[:, i], target_q_values)
+                    for i in range(q_preds.shape[1])
                 )
 
                 # Value function expectile loss
@@ -424,13 +426,13 @@ class IQL(OfflineRLAlgorithm):
             f"{logging_prefix}/actor_loss": np.mean(actor_losses),
             f"{logging_prefix}/q_loss": np.mean(q_losses),
             f"{logging_prefix}/v_loss": np.mean(v_losses),
-            f"{logging_prefix}/average_q1_values": np.mean(q1_values),
-            f"{logging_prefix}/average_q2_values": np.mean(q2_values),
+            f"{logging_prefix}/average_q_values": np.mean(q_values),
+            # f"{logging_prefix}/average_q2_values": np.mean(q2_values),
             f"{logging_prefix}/average_v_next_values": np.mean(v_next_values),
             f"{logging_prefix}/average_reward": np.mean(reward_values),
             f"{logging_prefix}/average_v_values": np.mean(v_values),
-            f"{logging_prefix}/average_q1_target_values": np.mean(q1_target_values),
-            f"{logging_prefix}/average_q2_target_values": np.mean(q2_target_values),
+            f"{logging_prefix}/average_q1_target_values": np.mean(q_target_values),
+            # f"{logging_prefix}/average_q2_target_values": np.mean(q2_target_values),
             f"{logging_prefix}/average_actor_log_pis": np.mean(actor_log_pis),
         }
 
