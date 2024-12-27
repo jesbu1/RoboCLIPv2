@@ -397,15 +397,13 @@ class RLPD(OfflineRLAlgorithm):
 
             # Compute actor loss
             # Alternative: actor_loss = th.mean(log_prob - qf1_pi)
-            # Min over all critic networks
+            # Mean over all critic networks
             q_values_pi = th.cat(
                 self.critic(replay_data.observations, actions_pi), dim=1
             )
-            # min_qf_pi, _ = th.mean(q_values_pi, dim=1, keepdim=True)
-            min_qf_pi = th.mean(q_values_pi, dim=1, keepdim=True)
+            mean_qf_pi = th.mean(q_values_pi, dim=1, keepdim=True)
 
-            actor_loss = (ent_coef * log_prob - min_qf_pi).mean()
-            actor_losses.append(actor_loss.item())
+            actor_loss = (ent_coef * log_prob - mean_qf_pi).mean()
             actor_losses.append(actor_loss.item())
 
             self.actor.optimizer.zero_grad()
