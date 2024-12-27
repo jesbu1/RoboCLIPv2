@@ -194,9 +194,9 @@ class BC(OfflineRLAlgorithm):
         self._n_updates += gradient_steps
         # print(np.mean(actor_losses))
         metrics_dict = {
-            f"{logging_prefix}/actor_loss": np.mean(actor_losses),
-            f"{logging_prefix}/average_reward": replay_data.rewards.mean().item,
-            f"{logging_prefix}/average_actor_log_pis": np.mean(actor_log_pis),
+            f"actor_loss": np.mean(actor_losses),
+            f"average_reward": replay_data.rewards.mean().item,
+            f"average_actor_log_pis": np.mean(actor_log_pis),
         }
 
         for metric in metrics_dict:
