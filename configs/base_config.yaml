@@ -35,6 +35,7 @@ general_training:
   # CQL-specific parameters
   cql_min_q_weight: 1.0
   cql_min_q_temp: 1.0
+  use_calibrated_q: false # calibrated QL https://arxiv.org/pdf/2303.05479
 
   # below not used for now
   succ_end: false

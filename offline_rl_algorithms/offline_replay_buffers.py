@@ -27,6 +27,16 @@ try:
 except ImportError:
     psutil = None
 
+class CombinedBufferSamples(NamedTuple):
+    observations: th.Tensor
+    actions: th.Tensor
+    next_observations: th.Tensor
+    dones: th.Tensor
+    rewards: th.Tensor
+    mc_returns: th.Tensor
+    offline_data_mask: th.Tensor
+
+
 
 class H5ReplayBuffer(ReplayBuffer):
     """
@@ -48,13 +58,13 @@ class H5ReplayBuffer(ReplayBuffer):
         https://github.com/DLR-RM/stable-baselines3/issues/284
     """
 
-    # TODO: success bonus needs to be handled in this replay buffer as an optional param
-
     observations: np.ndarray
     next_observations: np.ndarray
     actions: np.ndarray
     rewards: np.ndarray
     dones: np.ndarray
+    mc_returns: np.ndarray
+    offline_data_mask: np.ndarray
 
     def __init__(
         self,
@@ -171,6 +181,7 @@ class H5ReplayBuffer(ReplayBuffer):
 
             self.indices_to_keep = np.array(indices_to_keep, dtype=int)
 
+
         if dense_rewards_at_end:
             rewards = np.zeros_like(rewards)
             prev_start = 0
@@ -179,7 +190,13 @@ class H5ReplayBuffer(ReplayBuffer):
                     rewards[i] = np.sum(rewards[prev_start:i])
                     prev_start = i
 
+        # add the success bonus
+        if success_bonus != 0:
+            print("-----Adding success bonus to offline buffer. Warning: this assumes all dones in the offline buffer == success.-----")
+            rewards[dones == 1] += success_bonus
+
         # calculate monte-carlo returns
+        self.mc_returns = None
         if calculate_mc_returns:
             # calculate discounted return-to-go for each timestep by using rewards and done
             mc_returns = np.zeros_like(rewards)
@@ -189,6 +206,7 @@ class H5ReplayBuffer(ReplayBuffer):
                     1 - dones[-i - 1]
                 )
                 prev_return = mc_returns[-i - 1]
+            self.mc_returns = mc_returns
 
         # TODO: Temporary, but set timesteps to be going from 0-n until it hits a done of 1
         timesteps = np.zeros_like(rewards)
@@ -205,8 +223,8 @@ class H5ReplayBuffer(ReplayBuffer):
 
         self.observations = observations
         self.next_observations = next_observations
-        self.actions = actions
-        self.rewards = rewards
+        self.actions = actions.astype(np.float32)
+        self.rewards = rewards.astype(np.float32)
         self.dones = dones
         self.timesteps = timesteps
         self.lang_embeddings = np.squeeze(lang_embeddings)
@@ -221,6 +239,7 @@ class H5ReplayBuffer(ReplayBuffer):
 
         self.add_timestep = add_timestep
         self.use_language_embeddings = use_language_embeddings
+        self.calculate_mc_returns = calculate_mc_returns
 
     def add(
         self,
@@ -239,7 +258,7 @@ class H5ReplayBuffer(ReplayBuffer):
         self,
         batch_inds: np.ndarray,
         env: Optional[VecNormalize] = None,
-    ) -> ReplayBufferSamples:
+    ) -> CombinedBufferSamples:
         # Batch inds are in sampling indices_to_sample. Get the actual indices
         # batch_inds = np.array([self.indices_to_keep[i] for i in batch_inds])
 
@@ -302,34 +321,20 @@ class H5ReplayBuffer(ReplayBuffer):
 
         rewards = self.rewards[batch_inds].reshape(-1, 1)
 
-        if self.success_bonus is not None:
-            # Give a positive reward if the environment is solved
-            success = np.expand_dims(
-                np.array([float(done) for done in self.dones[batch_inds]]), -1
-            )
-            rewards = rewards + self.success_bonus * success
-
         # # set rewards to have all zeros
         # rewards = np.zeros_like(rewards)
         data = (
             observation,
-            self.actions[batch_inds, :].astype(np.float32),
+            self.actions[batch_inds, :],
             next_obs,
             # Only use dones that are not due to timeouts
             # deactivated by default (timeouts is initialized as an array of False)
             self.dones[batch_inds].reshape(-1, 1),
-            self._normalize_reward(rewards, env=None).astype(np.float32),
+            rewards,
+            self.mc_returns[batch_inds].reshape(-1, 1) if self.calculate_mc_returns else rewards,
+            np.ones_like(rewards), # offline_data_mask is 1 for all offline data,
         )
-        return ReplayBufferSamples(*tuple(map(self.to_torch, data)))
-
-
-class CombinedBufferSamples(NamedTuple):
-    observations: th.Tensor
-    actions: th.Tensor
-    next_observations: th.Tensor
-    dones: th.Tensor
-    rewards: th.Tensor
-    offline_data_mask: th.Tensor
+        return CombinedBufferSamples(*tuple(map(self.to_torch, data)))
 
 
 class CombinedBuffer(ReplayBuffer):
@@ -377,6 +382,7 @@ class CombinedBuffer(ReplayBuffer):
             "next_observations",
             "dones",
             "rewards",
+            "mc_returns",
             "offline_data_mask",
         ]
         attributes = {}
@@ -385,6 +391,9 @@ class CombinedBuffer(ReplayBuffer):
                 # 1 for the old data, 0 for the new data
                 old_data = th.ones(old_batch_size, 1)
                 new_data = th.zeros(new_batch_size, 1)
+            elif name == "mc_returns":
+                old_data = getattr(old_samples, name)
+                new_data = np.zeros_like(old_data) # set all mc_returns to 0 for new data as it's currently not supported
             else:
                 old_data = getattr(old_samples, name)
                 new_data = getattr(new_samples, name)

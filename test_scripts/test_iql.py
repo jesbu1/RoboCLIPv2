@@ -261,6 +261,7 @@ def main(cfg: DictConfig):
             filter_instructions=offline_tasks,
             image_encoder=reward_model,
             is_state_based=env_config.is_state_based,
+            calculate_mc_returns=training_config.use_calibrated_q,
         )
         model.learn_offline(
             offline_replay_buffer=buffer,
@@ -450,8 +451,7 @@ def get_policy_algorithm(cfg: DictConfig, envs: VecEnv, log_dir: str):
             )
         else:
             model = model_class.load(args.pretrained, env=envs, tensorboard_log=log_dir)
-    elif algo in ["cql", "calibrated_ql"]:
-        use_calibrated_cql = args.algo.lower() == "calibrated_ql"
+    elif algo in ["cql"]:
         model_class = CQL
         if not args.pretrained:
             model = model_class(
@@ -474,7 +474,7 @@ def get_policy_algorithm(cfg: DictConfig, envs: VecEnv, log_dir: str):
                 critic_update_ratio=cfg.general_training.critic_update_ratio,
                 min_q_weight=cfg.general_training.cql_min_q_weight,
                 min_q_temp=cfg.general_training.cql_min_q_temp,
-                use_calibrated_q=use_calibrated_cql,
+                use_calibrated_q=cfg.general_training.use_calibrated_q,
                 n_critics_to_sample=cfg.general_training.n_critics_to_sample,
             )
         else:
