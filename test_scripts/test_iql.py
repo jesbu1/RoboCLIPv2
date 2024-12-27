@@ -89,17 +89,26 @@ def create_exp_name(cfg: DictConfig):
         elif cfg.general_training.policy_extraction == "ddpg":
             exp_name += f"bc_weight_{cfg.general_training.ddpg_bc_weight}_"
 
+        exp_name += f"n_critics_{cfg.general_training.n_critics}_"
+        exp_name += (
+            f"n_critics_to_sample_{cfg.general_training.n_critics_to_sample}_"
+        )
         exp_name += f"utd_{cfg.general_training.critic_update_ratio}_"
 
     if cfg.general_training.algo == "cql":
         exp_name += f"min_q_weight_{cfg.general_training.cql_min_q_weight}_"
         exp_name += f"min_q_temp_{cfg.general_training.cql_min_q_temp}_"
+        exp_name += f"n_critics_{cfg.general_training.n_critics}_"
+        exp_name += (
+            f"n_critics_to_sample_{cfg.general_training.n_critics_to_sample}_"
+        )
         exp_name += f"utd_{cfg.general_training.critic_update_ratio}_"
 
     if cfg.general_training.algo == "rlpd":
-        exp_name += f"n_critics_{cfg.general_training.rlpd_n_critics}_"
+        exp_name += cfg.general_training.rlpd_offline_algo + "_"
+        exp_name += f"n_critics_{cfg.general_training.n_critics}_"
         exp_name += (
-            f"n_critics_to_sample_{cfg.general_training.rlpd_n_critics_to_sample}_"
+            f"n_critics_to_sample_{cfg.general_training.n_critics_to_sample}_"
         )
         exp_name += f"train_critic_with_entropy_{cfg.general_training.rlpd_train_critic_with_entropy}_"
         exp_name += f"utd_{cfg.general_training.critic_update_ratio}_"
@@ -139,9 +148,9 @@ def parse_reward_model(reward_cfg: DictConfig) -> BaseRewardModel:
     # TODO: get these models up
     elif reward_string == "sparse":
         # raise NotImplementedError("Sparse reward model not implemented yet.")
-        return EnvRewardModel(reward_cfg.model_path)
+        return EnvRewardModel(reward_type="sparse", model_path=reward_cfg.model_path)
     elif reward_string == "dense":
-        return EnvRewardModel(reward_cfg.model_path)
+        return EnvRewardModel(reward_type="dense", model_path=reward_cfg.model_path)
     else:
         raise ValueError(f"Unknown reward model: {reward_string}")
 
@@ -379,19 +388,25 @@ def get_policy_algorithm(cfg: DictConfig, envs: VecEnv, log_dir: str):
     else:
         action_noise = None
 
-    # We don't need as large of a network there is no language
-    if env_config.ignore_language:
-        policy_kwargs = {
-            "net_arch": [256, 256],
-        }
-    else:
-        policy_kwargs = {
-            "net_arch": dict(pi=model_config.pi_net_arch, qf=model_config.qf_net_arch),
-            "policy_layer_norm": model_config.policy_layer_norm,
-            "critic_layer_norm": model_config.critic_layer_norm,
-        }
 
-    if args.algo.lower() == "ppo":
+    policy_kwargs = {
+        "net_arch": dict(pi=model_config.pi_net_arch, qf=model_config.qf_net_arch),
+        "policy_layer_norm": model_config.policy_layer_norm,
+        "critic_layer_norm": model_config.critic_layer_norm,
+    }
+
+    # everything except BC, SAC, and PPO require n_critics
+    if cfg.general_training.algo == "iql" or cfg.general_training.algo == "cql" or cfg.general_training.algo == "rlpd":
+        policy_kwargs["n_critics"] = cfg.general_training.n_critics
+
+    algo = args.algo.lower()
+
+    # If using RLPD, we instantiate a different offline model
+    orig_algo = algo
+    if args.algo.lower() == "rlpd":
+        algo = cfg.general_training.rlpd_offline_algo.lower()
+
+    if algo == "ppo":
         model_class = PPO
         if not args.pretrained:
             model = model_class(
@@ -406,7 +421,7 @@ def get_policy_algorithm(cfg: DictConfig, envs: VecEnv, log_dir: str):
             )
         else:
             model = model_class.load(args.pretrained, env=envs, tensorboard_log=log_dir)
-    elif args.algo.lower() == "sac":
+    elif algo == "sac":
         model_class = SAC
 
         # For SAC, we cannot take anything besides net_arch as a parameter
@@ -435,7 +450,7 @@ def get_policy_algorithm(cfg: DictConfig, envs: VecEnv, log_dir: str):
             )
         else:
             model = model_class.load(args.pretrained, env=envs, tensorboard_log=log_dir)
-    elif args.algo.lower() in ["cql", "calibrated_ql"]:
+    elif algo in ["cql", "calibrated_ql"]:
         use_calibrated_cql = args.algo.lower() == "calibrated_ql"
         model_class = CQL
         if not args.pretrained:
@@ -460,11 +475,12 @@ def get_policy_algorithm(cfg: DictConfig, envs: VecEnv, log_dir: str):
                 min_q_weight=cfg.general_training.cql_min_q_weight,
                 min_q_temp=cfg.general_training.cql_min_q_temp,
                 use_calibrated_q=use_calibrated_cql,
+                n_critics_to_sample=cfg.general_training.n_critics_to_sample,
             )
         else:
             model = model_class.load(args.pretrained, env=envs, tensorboard_log=log_dir)
 
-    elif args.algo.lower() == "iql":
+    elif algo == "iql":
         model_class = IQL
 
         # policy = SACPolicy(observation_space=envs.observation_space, action_space=envs.action_space, net_arch=[32, 32], lr_schedule=None)
@@ -489,10 +505,11 @@ def get_policy_algorithm(cfg: DictConfig, envs: VecEnv, log_dir: str):
                 policy_extraction=cfg.general_training.policy_extraction,
                 advantage_temp=cfg.general_training.awr_advantage_temp,
                 ddpg_bc_weight=cfg.general_training.ddpg_bc_weight,
+                n_critics_to_sample=cfg.general_training.n_critics_to_sample,
             )
         else:
             model = model_class.load(args.pretrained, env=envs, tensorboard_log=log_dir)
-    elif args.algo.lower() == "bc":
+    elif algo == "bc":
         model_class = BC
         if not args.pretrained:
             model = model_class(
@@ -513,13 +530,19 @@ def get_policy_algorithm(cfg: DictConfig, envs: VecEnv, log_dir: str):
             )
         else:
             model = model_class.load(args.pretrained, env=envs, tensorboard_log=log_dir)
-    elif args.algo.lower() == "rlpd":
+
+    if orig_algo.lower() == "rlpd":
+
+        offline_model = model
         model_class = RLPD
-        policy_kwargs["n_critics"] = cfg.general_training.rlpd_n_critics
+
+
+
         if not args.pretrained:
             model = model_class(
                 "MlpPolicy",
                 envs,
+                offline_algo=model,
                 verbose=1,
                 tensorboard_log=log_dir,
                 buffer_size=cfg.online_training.total_time_steps,
@@ -534,13 +557,13 @@ def get_policy_algorithm(cfg: DictConfig, envs: VecEnv, log_dir: str):
                     cfg.environment.train_freq_type,
                 ),  # useless
                 critic_update_ratio=cfg.general_training.critic_update_ratio,
-                n_critics_to_sample=cfg.general_training.rlpd_n_critics_to_sample,
+                n_critics_to_sample=cfg.general_training.n_critics_to_sample,
                 train_critic_with_entropy=cfg.general_training.rlpd_train_critic_with_entropy,
             )
         else:
             model = model_class.load(args.pretrained, env=envs, tensorboard_log=log_dir)
-    else:
-        raise ValueError("Unsupported algorithm. Choose either 'ppo' or 'sac'.")
+
+    assert model is not None, "Model is None. Something went wrong."
 
     return model, model_class
 

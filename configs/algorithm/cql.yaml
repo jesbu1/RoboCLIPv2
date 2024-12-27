@@ -11,7 +11,9 @@ general_training:
 
   # offline rl parameters
   critic_update_ratio: 4 # iql and cql
-
+  n_critics: 10
+  n_critics_to_sample: 2
+  
   # CQL-specific parameters
   cql_min_q_weight: 1.0
   cql_min_q_temp: 1.0

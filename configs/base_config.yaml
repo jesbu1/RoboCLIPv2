@@ -29,11 +29,11 @@ general_training:
 
   # IQL-specific parameters
   policy_extraction: 'awr' # awr or ddpg
-  awr_advantage_temp: 5.0 # iql only
-  ddpg_bc_weight: 0.1 # iql only
-
+  awr_advantage_temp: 0.5 # iql only
+  ddpg_bc_weight: 0. # iql only
+  
   # CQL-specific parameters
-  cql_min_q_weight: 5.0
+  cql_min_q_weight: 1.0
   cql_min_q_temp: 1.0
 
   # below not used for now

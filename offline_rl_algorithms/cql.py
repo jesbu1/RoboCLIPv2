@@ -291,69 +291,94 @@ class CQL(OfflineRLAlgorithm):
 
                 current_log_pis = current_log_pis.reshape(-1, 1)
                 next_log_pis = next_log_pis.reshape(-1, 1)
-
                 # Compute the Q values of random actions
-                q1_rand, q2_rand = self.critic(replay_data.observations, random_actions)
-                q1_current_actions, q2_current_actions = self.critic(
-                    replay_data.observations, replay_data.actions
-                )
-                q1_next_actions, q2_next_actions = self.critic(
+                # q1_rand, q2_rand = self.critic(replay_data.observations, random_actions)
+                q_rand = th.cat(self.critic(replay_data.observations, random_actions), 1)
+                # q1_current_actions, q2_current_actions = self.critic(
+                #     replay_data.observations, replay_data.actions
+                # )
+                q_current_actions = th.cat(self.critic(
+                    replay_data.observations, current_actions
+                ), 1)
+                # q1_next_actions, q2_next_actions = self.critic(
+                    # replay_data.observations, next_actions
+                # )
+                q_next_actions = th.cat(self.critic(
                     replay_data.observations, next_actions
-                )
+                ), 1)
 
                 # importance sampled version of CQL for cat_q1 and cat_q2
                 random_density = np.log(0.5 ** current_actions.shape[-1])
-                cat_q1 = th.cat(
+                # cat_q1 = th.cat(
+                #     [
+                #         q1_rand - random_density,
+                #         q1_next_actions - next_log_pis.detach(),
+                #         q1_current_actions - current_log_pis.detach(),
+                #     ],
+                #     1,
+                # )
+                # shape is (batch_size, 3)
+                # cat_q2 = th.cat(
+                #     [
+                #         q2_rand - random_density,
+                #         q2_next_actions - next_log_pis.detach(),
+                #         q2_current_actions - current_log_pis.detach(),
+                #     ],
+                #     1,
+                # )
+                # shape should be (batch_size, 10, 3) 
+
+                cat_qs = th.cat(
                     [
-                        q1_rand - random_density,
-                        q1_next_actions - next_log_pis.detach(),
-                        q1_current_actions - current_log_pis.detach(),
+                        q_rand[:, :, None] - random_density,
+                        q_next_actions[:, :, None] - next_log_pis.detach()[:, None],
+                        q_current_actions[:, :, None] - current_log_pis.detach()[:, None],
                     ],
-                    1,
-                )
-                cat_q2 = th.cat(
-                    [
-                        q2_rand - random_density,
-                        q2_next_actions - next_log_pis.detach(),
-                        q2_current_actions - current_log_pis.detach(),
-                    ],
-                    1,
+                    dim=-1,
                 )
 
-                cql_min_qf1_loss = (
-                    th.logsumexp(cat_q1 / self.temp, dim=1).mean()
-                    * self.min_q_weight
-                    * self.temp
-                )
-                cql_min_qf2_loss = (
-                    th.logsumexp(cat_q2 / self.temp, dim=1).mean()
-                    * self.min_q_weight
-                    * self.temp
-                )
 
-                cql_min_qf1_loss = (
-                    cql_min_qf1_loss - q1_current_actions.mean() * self.min_q_weight
-                )
-                cql_min_qf2_loss = (
-                    cql_min_qf2_loss - q2_current_actions.mean() * self.min_q_weight
-                )
+                # cql_min_qf1_loss = (
+                #     th.logsumexp(cat_q1 / self.temp, dim=1).mean()
+                #     * self.min_q_weight
+                #     * self.temp
+                # )
+                # cql_min_qf2_loss = (
+                #     th.logsumexp(cat_q2 / self.temp, dim=1).mean()
+                #     * self.min_q_weight
+                #     * self.temp
+                # )
+
+                cql_min_qf_loss = th.logsumexp(cat_qs / self.temp, dim=-1).mean(dim=0) * self.min_q_weight * self.temp
+
+                # cql_min_qf1_loss = (
+                #     cql_min_qf1_loss - q1_current_actions.mean() * self.min_q_weight
+                # )
+                # cql_min_qf2_loss = (
+                #     cql_min_qf2_loss - q2_current_actions.mean() * self.min_q_weight
+                # )
+
+                cql_min_qf_loss = cql_min_qf_loss - q_current_actions.mean(dim=0) * self.min_q_weight
+
+                # critic_loss = 1/self.n_critics_to_sample * sum(
+                #     F.mse_loss(current_q, target_q_values)
+                #     for current_q in [q1_current_actions, q2_current_actions]
+                # )
 
                 critic_loss = 1/self.n_critics_to_sample * sum(
-                    F.mse_loss(current_q, target_q_values)
-                    for current_q in [q1_current_actions, q2_current_actions]
+                    F.mse_loss(q_current_actions[:, i].reshape(1, -1), target_q_values) for i in range(q_current_actions.shape[1])
                 )
-                critic_loss += cql_min_qf1_loss + cql_min_qf2_loss
+
+                critic_loss += th.sum(cql_min_qf_loss)
 
                 critic_losses.append(critic_loss.item())
-                cql_losses.append((cql_min_qf1_loss + cql_min_qf2_loss).item())
+                cql_losses.append(cql_min_qf_loss.sum().item())
 
                 # log q1 and q2 values
-                q1_values.append(q1_current_actions.mean().item())
-                q2_values.append(q2_current_actions.mean().item())
+                q1_values.append([q_current_actions[:, i].mean().item() for i in range(q_current_actions.shape[1])])
 
                 # log next q1 and q2 values
-                q1_next_values.append(q1_next_actions.mean().item())
-                q2_next_values.append(q2_next_actions.mean().item())
+                q1_next_values.append([q_next_actions[:, i].mean().item() for i in range(q_next_actions.shape[1])])
 
                 # log average in batch reward
                 reward_values.append(replay_data.rewards.mean().item())
@@ -415,10 +440,8 @@ class CQL(OfflineRLAlgorithm):
             f"{logging_prefix}/actor_loss": np.mean(actor_losses),
             f"{logging_prefix}/critic_loss": np.mean(critic_losses),
             f"{logging_prefix}/cql_loss": np.mean(cql_losses),
-            f"{logging_prefix}/average_q1_values": np.mean(q1_values),
-            f"{logging_prefix}/average_q2_values": np.mean(q2_values),
-            f"{logging_prefix}/average_q1_next_values": np.mean(q1_next_values),
-            f"{logging_prefix}/average_q2_next_values": np.mean(q2_next_values),
+            f"{logging_prefix}/average_q_values": np.mean(q1_values),
+            f"{logging_prefix}/average_q_next_values": np.mean(q1_next_values),
             f"{logging_prefix}/average_reward": np.mean(reward_values),
             f"{logging_prefix}/average_actor_log_pis": np.mean(actor_log_pis),
         }

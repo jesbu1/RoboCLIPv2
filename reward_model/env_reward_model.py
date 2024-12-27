@@ -8,7 +8,7 @@ from reward_model.liv_reward_model import LIVRewardModel # TODO: implement liv_r
 
 
 class EnvRewardModel(BaseRewardModel):
-    def __init__(self, model_path: str, device: str = "cuda", reward_at_every_step: bool = False, success_bonus: float = 10.) -> None:
+    def __init__(self, reward_type: str="dense", model_path: str = "", device: str = "cuda", reward_at_every_step: bool = False, success_bonus: float = 10.) -> None:
         """
         Env reward model simply passes the reward from the simulator.
         Initializes a LIV encoder with a pretrained model 
@@ -17,6 +17,8 @@ class EnvRewardModel(BaseRewardModel):
         :param device: Device to run the model on.
         """
         super().__init__(device, success_bonus=success_bonus)
+
+        self.reward_type = reward_type
 
         # TODO: Turn this into a cfg option and a param in every constructor
         self.reward_at_every_step = reward_at_every_step
@@ -53,7 +55,7 @@ class EnvRewardModel(BaseRewardModel):
         """
         Returns the name of the encoder class.
         """
-        return 'EnvRewardModel'
+        return self.reward_type
     
     @property
     def img_output_dim(self) -> int:
