@@ -331,7 +331,7 @@ class RLPD(OfflineRLAlgorithm):
                 )
 
                 # Compute critic loss
-                critic_loss = 0.5 * sum(
+                critic_loss = 1/len(current_q_values) * sum(
                     F.mse_loss(current_q, target_q_values)
                     for current_q in current_q_values
                 )
