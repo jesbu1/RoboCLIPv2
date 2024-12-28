@@ -62,13 +62,15 @@ def main(args):
         experiment_name += "_subsample_video"
     if args.cat_embedding:
         experiment_name += "_cat_embedding"
+    if args.enlarge_embedding_space:
+        experiment_name += "_enlarge_embedding_space"
 
 
 
     run = wandb.init(
         entity=WANDB_ENTITY_NAME,
         project=WANDB_PROJECT_NAME,
-        group="Regression_final_debug",
+        group="Regression_final_fresh",
         config=args,
         name=experiment_name,
     )
@@ -125,9 +127,9 @@ def main(args):
                     num_bins = args.catagorical_progress_bins + 1
                 else:
                     num_bins = args.catagorical_progress_bins
-                self_attention_model = MultiHeadAttentionModel(embedding_dim, num_heads = args.attention_heads, dropout = args.dropout, class_num=num_bins).to(device)
+                self_attention_model = MultiHeadAttentionModel(embedding_dim, num_heads = args.attention_heads, dropout = args.dropout, class_num=num_bins, enlarge = args.enlarge_embedding_space).to(device)
             else:
-                self_attention_model = MultiHeadAttentionModel(embedding_dim, num_heads = args.attention_heads, dropout = args.dropout, class_num=1).to(device)
+                self_attention_model = MultiHeadAttentionModel(embedding_dim, num_heads = args.attention_heads, dropout = args.dropout, class_num=1, enlarge = args.enlarge_embedding_space).to(device)
 
     # if args.pca:
     #     optimizer = torch.optim.Adam(list(self_attention_model.parameters()) + list(transform_model.parameters()), lr=args.lr)
@@ -250,7 +252,7 @@ if __name__ == "__main__":
     argparser.add_argument('--batch_size', type=int, default=32)
     argparser.add_argument('--epochs', type=int, default=150)
     argparser.add_argument('--seed', type=int, default=42)
-    argparser.add_argument('--lr', type=float, default=1e-3)
+    argparser.add_argument('--lr', type=float, default=1e-4)
     argparser.add_argument('--loss_type', type=str, choices=['triplet', 'mse'], default='mse')
     argparser.add_argument('--margin_range', type=float, default=1.0)
     argparser.add_argument('--pca', action='store_true')

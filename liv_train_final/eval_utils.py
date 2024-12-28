@@ -318,7 +318,7 @@ def plot_videos_class(model_name, self_attention_model, args):
             "handle_press_side",
             "handle_pull_side",
             "topdown", 
-            "windowclose"
+            "window_close"
             ]
 
     texts = {

@@ -26,12 +26,35 @@ class TwoLayerMLPClass(torch.nn.Module):
         x = F.relu(self.linear1(x))
         x = self.linear2(x)
         return x
+    
+class OneLayerMLP(torch.nn.Module):
+    def __init__(self, input_dim):
+        super(OneLayerMLP, self).__init__()
+        self.linear1 = torch.nn.Linear(input_dim, input_dim * 2)
+        # self.linear2 = torch.nn.Linear(input_dim * 2, input_dim * 2)
+
+    def forward(self, x):
+        x = self.linear1(x)
+        # x = F.relu(x)
+        # x = self.linear2(x)
+        return x
 
 
 class MultiHeadAttentionModel(nn.Module):
-    def __init__(self, embed_dim, num_heads, class_num=1, dropout=0.1):
+    def __init__(self, embed_dim, num_heads, class_num=1, dropout=0.1, enlarge = False):
         super(MultiHeadAttentionModel, self).__init__()
+        self.enlarge = False
+        if enlarge:
+            
+            self.enlarge = True
+            self.text_enlarge_model = OneLayerMLP(embed_dim)
+            self.image_enlarge_model = OneLayerMLP(embed_dim)
+            embed_dim = embed_dim * 2
+        
+
+
         assert embed_dim % num_heads == 0, "Embedding dimension must be divisible by the number of heads."
+
 
         self.embed_dim = embed_dim
         self.num_heads = num_heads
@@ -65,6 +88,15 @@ class MultiHeadAttentionModel(nn.Module):
 
         # # Apply masked positional encoding
         # x = self.pos_encoding(x, mask)
+        if self.enlarge:
+            
+            text_array = self.text_enlarge_model(text_array)
+            # x dim is batch_size, seq_length, embed_dim, convert x to batch_size * seq_length, embed_dim
+            x = x.view(-1, embed_dim)
+            x = self.image_enlarge_model(x)
+            embed_dim = embed_dim * 2
+            x = x.view(batch_size, seq_length, embed_dim)
+            
 
 
         

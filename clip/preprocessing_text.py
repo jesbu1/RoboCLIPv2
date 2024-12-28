@@ -20,11 +20,11 @@ def main(model_name, generated_text, gt_text):
 
 
     # add data
-    data_file = h5py.File("/scr/jzhang96/metaworld_25_for_clip_liv.h5", "a")
+    # data_file = h5py.File("/scr/jzhang96/metaworld_25_for_clip_liv.h5", "a")
 
     # if model_name not in data_file.keys():
     #     model_group = data_file.create_group(model_name)
-    model_group = data_file[model_name]
+    # model_group = data_file[model_name]
     for env_name in tqdm(generated_text.keys()):
         text_env_name = env_name + "_text"
 
@@ -35,7 +35,10 @@ def main(model_name, generated_text, gt_text):
         # env_text_group = model_group.create_dataset(text_env_name, data=anns)
         text_embeddings = embedding_text(model, tokenizer, anns)
         text_embeddings = text_embeddings.detach().cpu().numpy()
-        model_group.create_dataset(text_env_name, data=text_embeddings)
+        norm = np.linalg.norm(text_embeddings, axis=1)
+        print(norm)
+        import pdb; pdb.set_trace()
+        # model_group.create_dataset(text_env_name, data=text_embeddings)
 
 
     data_file.close()
@@ -74,5 +77,5 @@ def main(model_name, generated_text, gt_text):
 
 
 if __name__ == "__main__":
-    main("clip", generate_set_6_ann_v2, gt_annotations_v2)
+    # main("clip", generate_set_6_ann_v2, gt_annotations_v2)
     main("liv", generate_set_6_ann_v2, gt_annotations_v2)
