@@ -74,6 +74,8 @@ class CQL(OfflineRLAlgorithm):
     :param use_calibrated_q: Whether to use calibrated Q for CQL (Cal-QL algorithm)
     :param mix_offline_online_buffers: Whether to mix offline and online buffers
     :param critic_update_ratio: Number of critic updates per actor update
+    :param n_critics_to_sample: Number of critics to sample from
+    :param warm_start_online_rl: Whether to warm start the online RL agent with the offline RL agent
     """
 
     policy_aliases: ClassVar[Dict[str, Type[BasePolicy]]] = {
@@ -121,6 +123,7 @@ class CQL(OfflineRLAlgorithm):
         mix_offline_online_buffers: bool = True,
         critic_update_ratio: int = 1,  # number of critic updates per actor update
         n_critics_to_sample: int = 2, # number of critics to sample from
+        warm_start_online_rl: bool = True,
     ):
         super().__init__(
             policy,
@@ -149,6 +152,7 @@ class CQL(OfflineRLAlgorithm):
             supported_action_spaces=(spaces.Box,),
             support_multi_env=True,
             mix_offline_online_buffers=mix_offline_online_buffers,
+            warm_start_online_rl=warm_start_online_rl,
         )
 
         self.target_entropy = target_entropy
