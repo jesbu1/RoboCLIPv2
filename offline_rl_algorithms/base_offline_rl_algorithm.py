@@ -1,4 +1,5 @@
-from typing import Any, ClassVar, Dict, List, Optional, Tuple, Type, TypeVar, Union
+from typing import Any, ClassVar, Dict, Optional, Tuple, Type, Union
+import numpy as np
 
 import torch as th
 from gym import spaces
@@ -6,7 +7,7 @@ from gym import spaces
 from stable_baselines3.common.buffers import ReplayBuffer
 from stable_baselines3.common.noise import ActionNoise
 from stable_baselines3.common.off_policy_algorithm import OffPolicyAlgorithm
-from stable_baselines3.common.policies import BasePolicy, ContinuousCritic
+from stable_baselines3.common.policies import BasePolicy
 from stable_baselines3.common.type_aliases import GymEnv, MaybeCallback, Schedule
 from stable_baselines3.common.logger import Logger
 
@@ -73,6 +74,7 @@ class OfflineRLAlgorithm(OffPolicyAlgorithm):
     :param _init_setup_model: Whether or not to build the network at the creation of the instance
     :param support_multi_env: Whether to support training with multiple environments
     :param mix_offline_online_buffers: If true, the online replay buffer used during `learn` will be a combination of the offline (from `learn_offline`) and online buffers.
+    :param warm_start_online_rl: If true, the online RL training will be warm started with the offline trained policy.
     """
 
     policy_aliases: ClassVar[Dict[str, Type[BasePolicy]]] = {
@@ -117,6 +119,7 @@ class OfflineRLAlgorithm(OffPolicyAlgorithm):
         supported_action_spaces: Optional[Tuple[spaces.Space]] = (spaces.Box,),
         support_multi_env: bool = True,
         mix_offline_online_buffers: bool = True,
+        warm_start_online_rl: bool = True,
     ):
         super().__init__(
             policy,
@@ -154,6 +157,9 @@ class OfflineRLAlgorithm(OffPolicyAlgorithm):
         self.target_update_interval = target_update_interval
         self.ent_coef_optimizer: Optional[th.optim.Adam] = None
         self.mix_offline_online_buffers = mix_offline_online_buffers
+
+        self.warm_start_online_rl = warm_start_online_rl
+        self.learned_offline = False
 
         if _init_setup_model:
             self._setup_model()
@@ -194,6 +200,7 @@ class OfflineRLAlgorithm(OffPolicyAlgorithm):
         self.replay_buffer = offline_replay_buffer
 
         print("learning offline")
+        self.learned_offline = True
         for _ in range(train_steps):
             metrics = self.train(1, batch_size=batch_size, logging_prefix="offline")
             # metrics is a local() which will be updated in callback.update_locals
@@ -244,3 +251,54 @@ class OfflineRLAlgorithm(OffPolicyAlgorithm):
 
     # def _get_torch_save_params(self) -> Tuple[List[str], List[str]]:
     #     raise NotImplementedError
+
+    def _sample_action(
+        self,
+        learning_starts: int,
+        action_noise: Optional[ActionNoise] = None,
+        n_envs: int = 1,
+    ) -> Tuple[np.ndarray, np.ndarray]:
+        """
+        This differs from the parent class in that if there are any offline training steps performed, we will warm start the online RL training with the pre-trained policy.
+
+        Sample an action according to the exploration policy.
+        This is either done by sampling the probability distribution of the policy,
+        or sampling a random action (from a uniform distribution over the action space)
+        or by adding noise to the deterministic output.
+
+        :param action_noise: Action noise that will be used for exploration
+            Required for deterministic policy (e.g. TD3). This can also be used
+            in addition to the stochastic policy for SAC.
+        :param learning_starts: Number of steps before learning for the warm-up phase.
+        :param n_envs:
+        :return: action to take in the environment
+            and scaled action that will be stored in the replay buffer.
+            The two differs when the action space is not normalized (bounds are not [-1, 1]).
+        """
+        # Select action randomly or according to policy
+        if self.num_timesteps < learning_starts and not (self.use_sde and self.use_sde_at_warmup) and not (self.warm_start_online_rl and self.learned_offline):
+            # Warmup phase
+            unscaled_action = np.array([self.action_space.sample() for _ in range(n_envs)])
+        else:
+            # Note: when using continuous actions,
+            # we assume that the policy uses tanh to scale the action
+            # We use non-deterministic action in the case of SAC, for TD3, it does not matter
+            assert self._last_obs is not None, "self._last_obs was not set"
+            unscaled_action, _ = self.predict(self._last_obs, deterministic=False)
+
+        # Rescale the action from [low, high] to [-1, 1]
+        if isinstance(self.action_space, spaces.Box):
+            scaled_action = self.policy.scale_action(unscaled_action)
+
+            # Add noise to the action (improve exploration)
+            if action_noise is not None:
+                scaled_action = np.clip(scaled_action + action_noise(), -1, 1)
+
+            # We store the scaled action in the buffer
+            buffer_action = scaled_action
+            action = self.policy.unscale_action(scaled_action)
+        else:
+            # Discrete case, no need to normalize or clip
+            buffer_action = unscaled_action
+            action = buffer_action
+        return action, buffer_action

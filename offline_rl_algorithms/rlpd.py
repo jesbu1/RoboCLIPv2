@@ -75,6 +75,7 @@ class RLPD(OfflineRLAlgorithm):
     :param critic_update_ratio: Number of critic updates per actor update
     :param n_critics_to_sample: Number of critics to sample from
     :param train_critic_with_entropy: Whether to train the critic with the entropy term
+    :param warm_start_online_rl: Whether to warm start online RL with offline RL
     """
 
     policy_aliases: ClassVar[Dict[str, Type[BasePolicy]]] = {
@@ -119,6 +120,7 @@ class RLPD(OfflineRLAlgorithm):
         n_critics_to_sample: int = 2,  # number of critics to sample from
         mix_offline_online_buffers: bool = True,  # whether to mix offline and online buffers
         train_critic_with_entropy: bool = False,  # whether to train the critic with the entropy term
+        warm_start_online_rl: bool = True,
     ):
         assert (
             policy_kwargs["n_critics"] > 2
@@ -159,6 +161,7 @@ class RLPD(OfflineRLAlgorithm):
             supported_action_spaces=(spaces.Box,),
             support_multi_env=True,
             mix_offline_online_buffers=mix_offline_online_buffers,
+            warm_start_online_rl=warm_start_online_rl,
         )
 
         self.target_entropy = target_entropy
