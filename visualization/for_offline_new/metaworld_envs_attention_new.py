@@ -1,0 +1,631 @@
+import os
+import io
+import json
+from tqdm import tqdm
+import wandb
+import random
+import joblib
+import imageio
+import argparse
+import cv2
+import torch as th
+import numpy as np
+from gym import Env
+from gym.spaces import Box
+import torch.nn.functional as F
+from stable_baselines3 import SAC
+from wandb.integration.sb3 import WandbCallback
+from gym.wrappers.time_limit import TimeLimit
+from metaworld.envs import ALL_V2_ENVIRONMENTS_GOAL_OBSERVABLE, ALL_V2_ENVIRONMENTS_GOAL_HIDDEN
+
+from stable_baselines3.common.monitor import Monitor
+from stable_baselines3.common.vec_env import DummyVecEnv
+from stable_baselines3.common.callbacks import EvalCallback, CallbackList
+from stable_baselines3.common.vec_env.subproc_vec_env import SubprocVecEnv
+import matplotlib.pyplot as plt
+import torchvision.transforms as T
+from PIL import Image
+from clip_utils import load_model, embedding_text, embedding_image
+from model_utils import load_reward_model
+import pickle
+
+
+transform = T.Compose([T.ToTensor()])
+
+class RunningMeanStd:
+
+    # https://en.wikipedia.org/wiki/Algorithms_for_calculating_variance#Parallel_algorithm
+    def __init__(self, epsilon=1e-8, shape=()):
+        self.mean = np.zeros(shape, dtype=np.float32)
+        self.var = np.ones(shape, dtype=np.float32)
+        self.count = epsilon
+
+    def update(self, x):
+        batch_mean = np.mean(x, axis=0)
+        batch_var = np.var(x, axis=0)
+        batch_count = x.shape[0]
+        self.update_from_moments(batch_mean, batch_var, batch_count)
+
+    def update_from_moments(self, batch_mean, batch_var, batch_count):
+        delta = batch_mean - self.mean
+        tot_count = self.count + batch_count
+
+        new_mean = self.mean + delta * batch_count / tot_count
+        m_a = self.var * self.count
+        m_b = batch_var * batch_count
+        M2 = m_a + m_b + delta ** 2 * self.count * batch_count / tot_count
+        new_var = M2 / tot_count
+        new_count = tot_count
+
+        self.mean = new_mean
+        self.var = new_var
+        self.count = new_count
+
+def save_video(frames, output_path, fps=30):
+    if len(frames) == 0:
+        print("Frames list is empty, no video will be saved.")
+        return
+
+    height, width, _ = frames[0].shape
+
+    fourcc = cv2.VideoWriter_fourcc(*'mp4v')
+    video_writer = cv2.VideoWriter(output_path, fourcc, fps, (width, height))
+
+    for frame in frames:
+        frame_bgr = cv2.cvtColor(frame, cv2.COLOR_RGB2BGR)
+        frame_bgr = frame_bgr.astype(np.uint8)
+        video_writer.write(frame_bgr)
+
+    video_writer.release()
+    print(f"Video Saved: {output_path}")
+
+def parse_entropy_term(value):
+    try:
+        return float(value)
+    except ValueError:
+        return value
+
+def eval_policys(args, env, policy):
+    succ_count = 0
+    total_count = 0
+    for seed in range(400, 500):
+        eval_env = env(args)
+        obs = eval_env.reset_seed(seed)
+        img_buffer = []
+        for i in range(128):
+            action, _states = policy.predict(obs)
+            obs, rewards, dones, info = eval_env.step(action)
+            if info['success']:
+                succ_count += 1
+                break
+        total_count += 1
+    return succ_count/total_count
+
+
+def get_args():
+    parser = argparse.ArgumentParser(description='RL')
+    parser.add_argument('--encoder', type=str, default='xclip')
+    parser.add_argument('--text_string', type=str, default='opening door')
+    parser.add_argument('--env_id', type=str, default='window-open-v2-goal-hidden')
+    parser.add_argument('--total_time_steps', type=int, default=1000000)
+    parser.add_argument('--n_envs', type=int, default=4)
+    parser.add_argument('--seed', type=int, default=42)
+    parser.add_argument('--eval_freq', type=int, default=5000)
+    parser.add_argument('--video_freq', type=int, default=10000)
+    parser.add_argument('--succ_end', action="store_true")
+    parser.add_argument('--pca', action="store_true")
+    parser.add_argument('--model_base_path', type=str, default=None)
+    parser.add_argument('--transform_model_path', type=str, default="/scr/jzhang96/clip_liv_models/RegressionRandom_liv_subtract_before_heads_4/model_74.pt")
+    parser.add_argument('--random_reset', action="store_true")
+    parser.add_argument('--attention_heads', type=int, default=4)
+    parser.add_argument('--time_reward', type=float, default=1.0)
+    parser.add_argument('--succ_bonus', type=float, default=0.0)
+    parser.add_argument('--xclip_model', type=str, default='microsoft/xclip-base-patch16-zero-shot')
+    parser.add_argument('--frame_length', type=int, default=32)
+    parser.add_argument("--exp_name_end", type=str, default=None)
+    parser.add_argument("--sparse_only", action="store_true")
+    parser.add_argument("--baseline", action="store_true")
+    parser.add_argument("--obs_env", action="store_true")
+    parser.add_argument("--ep_length", type=int, default=128)
+    parser.add_argument("--catagorical_progress", action="store_true")
+    parser.add_argument("--subsample_video", action="store_true")
+    parser.add_argument("--reward_normalization_offset", action="store_true")
+    parser.add_argument("--reward_normalization_gymnasium", action="store_true")
+
+    args = parser.parse_args()
+    return args
+
+
+def padding_video(frames, max_length=32):
+        total_frames = frames.shape[0]
+
+        if total_frames > max_length:
+            indices = th.linspace(0, total_frames - 1, max_length).long()
+            frames = frames[indices]
+        else:
+            padding_num = max_length - total_frames
+            first_frame = frames[0].unsqueeze(0)
+            padding_frames = first_frame.repeat(padding_num, 1, 1, 1)
+            frames = th.cat([padding_frames, frames], dim=0)
+
+        return frames
+
+class MetaworldSparseAtt(Env):
+    '''
+    Training metaworld environments
+
+    '''
+    def __init__(self, args, model, processor, tokenizer):
+        super(MetaworldSparseAtt,self)
+        self.args = args
+        # if args.encoder == 'xclip':
+        #     self.encoder = xclip_encoder.XCLIPEncoder()
+        # else:
+        #     raise ValueError("Please provide a valid encoder")
+        self.model = model
+        self.tokenizer = tokenizer
+        self.processor = processor
+        if args.obs_env:
+            self.env_class = ALL_V2_ENVIRONMENTS_GOAL_OBSERVABLE[args.env_id]
+        else:
+            self.env_class = ALL_V2_ENVIRONMENTS_GOAL_HIDDEN[args.env_id]
+        os.makedirs(f"debug_video/{args.env_id}/{args.seed}", exist_ok=True)
+        self.rank = args.seed
+        self.baseEnv = self.env_class(seed=self.rank)
+        self.env = TimeLimit(self.baseEnv, max_episode_steps=args.ep_length)
+        self.env.action_space.seed(self.rank)
+        self.observation_space = self.env.observation_space
+        self.action_space = self.env.action_space
+        if args.pca:
+            pca_text_path = os.path.join(args.model_base_path, 'pca_text.pkl') 
+            pca_video_path = os.path.join(args.model_base_path, 'pca_video.pkl') 
+            pca_text_model = joblib.load(pca_text_path)
+            pca_video_model = joblib.load(pca_video_path)
+            self.pca_text_model = pca_text_model
+            self.pca_video_model = pca_video_model
+        self.past_observations = []
+        self.past_dense_reward = []
+        self.frame_length = args.frame_length
+
+        self.gamma = args.gamma if hasattr(args, 'gamma') else 0.99
+        self.epsilon = 1e-8
+        self.return_rms = RunningMeanStd(shape=())
+        self.offset = None
+
+        self.ep_count = 0
+        # if only use sparse reward, we don't need to load the VLM and compute the similarity reward
+        if not args.sparse_only:
+            with th.no_grad():
+                if not args.baseline: # baseline is RoboCLIPv1, only use the similarity from VLM output, not using VLM
+                    # load transform layer model
+                    # if args.pca:
+                    #     pca_dim = pca_video_model.components_.shape[0]
+                    #     self.transform_model = MultiHeadAttentionSubtraction(pca_dim, num_heads=args.attention_heads)
+                    # else:
+                    #     self.transform_model = MultiHeadAttentionSubtraction(1024, num_heads=args.attention_heads)
+                    transform_model_path = os.path.join(args.model_base_path, args.transform_model_path)
+                    self.transform_model = load_reward_model(transform_model_path)
+                self.target_embedding = None
+
+                if args.text_string: 
+                    #self.target_embedding = self.encoder.encode_text(args.text_string)
+                    self.target_embedding = embedding_text(self.model, self.tokenizer, args.text_string)
+                    if args.pca:
+                        self.target_embedding = th.from_numpy(self.pca_text_model.transform(self.target_embedding.cpu())).cuda().float()
+
+    def get_obs(self):
+        return self.baseEnv._get_obs(self.baseEnv.prev_time_step)
+    
+    def render(self):
+        frame = self.env.render()
+        return frame
+
+    def step(self, action):
+        obs, dense_reward, done, info = self.env.step(action)
+        self.past_observations.append(self.env.render())
+        self.past_dense_reward.append(dense_reward)
+        
+        if self.args.succ_end:
+            if info['success']:
+                done = True
+
+        if done:
+            self.ep_count += 1
+            if self.args.sparse_only:
+                if info['success']:
+                    reward = self.args.succ_bonus
+                else:
+                    reward = 0.0
+                info['roboclip_reward'] = 0.0
+                info['dense_return'] = sum(self.past_dense_reward)
+                info['dense_reward'] = dense_reward
+                info['ep_length'] = len(self.past_dense_reward)
+                info["total_reward"] = reward
+
+            else:
+                with th.no_grad():
+                    #video_embedding = self.encoder.encode_video(self.past_observations)
+                    frames = [
+                        frame[ 
+                            (frame.shape[0] - 224) // 2 : (frame.shape[0] + 224) // 2,
+                            (frame.shape[1] - 224) // 2 : (frame.shape[1] + 224) // 2,
+                            :3 
+                        ]
+                        for frame in self.past_observations
+                    ]
+                    #print("frames shape", frames[0].shape)
+                    frames_tensor = th.stack([transform(Image.fromarray(frame.astype(np.uint8))) for frame in frames])
+                    if self.args.subsample_video:
+                        frames_tensor = padding_video(frames_tensor, self.frame_length)
+                    video_embeddings = embedding_image(self.model, self.processor, frames_tensor)
+
+                    if self.args.pca:
+                        video_embeddings = video_embeddings.detach().cpu().numpy()
+                        video_embeddings = th.from_numpy(self.pca_video_model.transform(video_embeddings)).float().cuda()
+
+                    video_embeddings = (video_embeddings.view(1, -1, video_embeddings.shape[-1])).float()
+
+                    # if not self.args.baseline:
+                    #     video_embedding = self.transform_model(video_embedding)
+                    if self.args.catagorical_progress:
+                        reward = th.argmax(self.transform_model(video_embeddings, None, self.target_embedding), dim=1).item()
+
+                    reward = (self.transform_model(video_embeddings, None, self.target_embedding)).item()
+                    og_reward = reward
+
+                    if self.args.time_reward != 1.0:
+                        reward = reward * self.args.time_reward      
+                    #reward = 0
+
+                    # if og_reward > 85:
+                    #     output_video_path = f"debug_video/{args.env_id}/output_video_{reward}.mp4"
+                    #     save_video(frames, output_video_path)
+
+                    if self.args.reward_normalization_offset:
+                        if self.offset is None:
+                            self.offset = reward
+                        reward -= self.offset
+
+                    if self.args.reward_normalization_gymnasium:
+                        returns = reward
+                        self.return_rms.update(np.array([returns]))
+                        reward = reward / np.sqrt(self.return_rms.var + self.epsilon)
+
+                    
+                    info['roboclip_reward'] = reward
+                    info['og_reward'] = og_reward
+                    info['dense_return'] = sum(self.past_dense_reward)
+                    info['dense_reward'] = dense_reward
+                    info['ep_length'] = len(self.past_dense_reward)
+                    if self.args.succ_bonus > 0:
+                        if info['success']:
+                            reward += self.args.succ_bonus
+                            if args.pca:
+                                output_video_path = f"debug_video/{args.env_id}/{args.seed}/output_video_ep_{self.ep_count}_{og_reward}_{reward}_pca.mp4"
+                            else:
+                                output_video_path = f"debug_video/{args.env_id}/{args.seed}/output_video_ep_{self.ep_count}_{og_reward}_{reward}.mp4"
+                            save_video(frames, output_video_path)
+                        else:
+                            if self.ep_count % 100 == 0:
+                                if args.pca:
+                                    output_video_path = f"debug_video/{args.env_id}/{args.seed}/output_video_unsuccessful_ep_{self.ep_count}_{og_reward}_{reward}_pca.mp4"
+                                else:
+                                    output_video_path = f"debug_video/{args.env_id}/{args.seed}/output_video_unsuccessful_ep_{self.ep_count}_{og_reward}_{reward}.mp4"
+                                save_video(frames, output_video_path)
+                        
+                    info["total_reward"] = reward
+
+            return obs, reward, done, info
+
+        info['roboclip_reward'] = 0.0
+        info['og_reward'] = 0.0
+        info['dense_return'] = 0.0
+        info['ep_length'] = 0.0
+        info['dense_reward'] = dense_reward
+        return obs, 0, done, info
+
+    def reset(self):
+        self.past_observations = []
+        self.past_dense_reward = []
+
+        if self.args.random_reset:
+            self.rank = random.randint(0, 400)
+            self.baseEnv = self.env_class(seed=self.rank)
+            self.env = TimeLimit(self.baseEnv, max_episode_steps=self.args.ep_length)
+            self.env.action_space.seed(self.rank)
+
+        return self.env.reset()
+
+
+class MetaworldDense(Env):
+    def __init__(self, args):
+        super(MetaworldDense, self)
+        if args.obs_env:
+            self.env_class = ALL_V2_ENVIRONMENTS_GOAL_OBSERVABLE[args.env_id]
+        else:
+            self.env_class = ALL_V2_ENVIRONMENTS_GOAL_HIDDEN[args.env_id]
+        self.args = args
+        self.rank = args.seed
+        self.baseEnv = self.env_class(seed=self.rank)
+        self.env = TimeLimit(self.baseEnv, max_episode_steps=args.ep_length)
+        self.observation_space = self.env.observation_space
+        self.action_space = self.env.action_space
+        self.past_observations = []
+
+    def get_obs(self):
+        return self.baseEnv._get_obs(self.baseEnv.prev_time_step)      
+    
+    def render(self, camera_name="topview"):
+        frame = self.env.render()
+        return frame
+
+    def step(self, action):
+        obs, _, done, info = self.env.step(action)
+        reward = 0.0 # original reward is always 0
+        if self.args.succ_end:
+            if info['success']:
+                done = True
+        if info["success"]:
+            reward += 1
+
+        return obs, reward, done, info
+        
+    def reset(self):
+        self.counter = 0
+
+        if self.args.random_reset:
+            self.rank = random.randint(400, 500)
+            self.baseEnv = self.env_class(seed=self.rank)
+            self.env = TimeLimit(self.baseEnv, max_episode_steps=self.args.ep_length)
+        return self.env.reset()
+    
+    def reset_seed(self, seed):
+        self.counter = 0
+
+        self.rank = seed
+        self.baseEnv = self.env_class(seed=self.rank) 
+        self.env = TimeLimit(self.baseEnv, max_episode_steps=args.ep_length)
+        #self.env.action_space.seed(self.rank)
+
+
+        return self.env.reset()
+
+
+def make_env(args, model, processor, tokenizer, eval = False):
+    """
+    Utility function for multiprocessed env.
+
+    :param env_id: (str) the environment ID
+    :param num_env: (int) the number of environments you wish to have in subprocesses
+    :param seed: (int) the inital seed for RNG
+    :param rank: (int) index of the subprocess
+    """
+    def _init():
+        # env = KitchenMicrowaveHingeSlideV0()
+        if not eval:
+                env = MetaworldSparseAtt(args, model, processor, tokenizer)
+        else:
+            env = MetaworldDense(args)
+        env = Monitor(env, os.path.join(log_dir, str(args.seed)))
+        return env
+    return _init
+
+
+
+class CustomWandbCallback(WandbCallback):
+    # def _on_rollout_end(self):
+    #     # Log episode metrics with environment steps as x-axis
+    #     wandb.log({
+    #         'episode_reward': sum(self.locals['rewards']),  # Cumulative reward for the episode
+    #         'episode_length': len(self.locals['rewards'])   # Length of the episode
+    #     }, step=self.model.num_timesteps)
+            
+    def _on_step(self):
+        # Log training metrics
+        # print done
+        #if done and done is True, log the info
+
+        done_array = self.locals["dones"]
+        infos = self.locals["infos"]
+        
+        for i, done in enumerate(done_array):
+            if done:
+
+                succ = infos[i].get('success', 0)
+                roboclip_reward = infos[i].get('roboclip_reward', 0)
+                wdb_og_reward = infos[i].get('og_reward', 0)
+                total_reward = infos[i].get('total_reward', 0)
+                dense_return = infos[i].get('dense_return', 0)
+                dense_reward = infos[i].get('dense_reward', 0)
+                ep_length = infos[i].get('ep_length', 0)
+                print("episode logged", self.num_timesteps)
+                wandb.log({"episode_info/episode_success": succ,
+                            "episode_info/roboclip_reward": roboclip_reward,
+                            "episode_info/og_reward": wdb_og_reward,
+                            "episode_info/RoboCLIP_bonus_reward": total_reward,
+                            "episode_info/dense_return": dense_return,
+                            "episode_info/dense_reward": dense_reward,
+                            "episode_info/ep_length": ep_length}, step = self.num_timesteps)
+                
+
+
+
+
+        return True
+
+
+
+
+class CustomEvalCallback(EvalCallback):
+    def __init__(self, *args, video_freq, **kwargs):
+        super(CustomEvalCallback, self).__init__(*args, **kwargs)
+        self.video_freq = video_freq
+
+    def _on_step(self) -> bool:
+        result = super(CustomEvalCallback, self)._on_step()
+
+        if self.n_calls % self.video_freq == 0:
+            video_buffer = self.record_video()
+            # wandb.log({f"evaluation_video": wandb.Video(video_buffer, fps=20, format="mp4")}, commit=False)
+            wandb.log({f"eval/evaluation_video": wandb.Video(video_buffer, fps=20, format="mp4")}, step = self.num_timesteps)
+        
+        if self.n_calls % self.eval_freq == 0:
+            mean_reward = np.mean(self.evaluations_results[-1])
+            eval_episode_lengths = self.evaluations_length[-1]  # Get the episode lengths
+            mean_episode_length = np.mean(eval_episode_lengths) 
+            log_data = {
+                "eval/succ_rate": mean_reward,
+                "eval/mean_episode_length": mean_episode_length
+            }
+            # Log to wandb
+            wandb.log(log_data, step=self.num_timesteps)
+            if mean_reward > self.best_mean_reward:
+                self.best_mean_reward = mean_reward
+                self.model.save(f"{self.best_model_save_path}/best_model_{self.num_timesteps}_steps.zip")
+        return result
+
+
+
+    def record_video(self):
+        frames = []
+        obs = self.eval_env.reset()
+
+        for _ in range(128):  # You can adjust the number of steps for recording
+            frame = self.eval_env.render(mode='rgb_array')
+            # downsample frame
+            frame = frame[::3, ::3, :3]
+            frames.append(frame)
+            action, _ = self.model.predict(obs, deterministic=self.deterministic)
+            obs, _, _, info = self.eval_env.step(action)
+
+        video_buffer = io.BytesIO()
+
+        with imageio.get_writer(video_buffer, format='mp4', fps=20) as writer:
+            for frame in frames:
+                writer.append_data(frame)
+
+        video_buffer.seek(0)
+        return video_buffer
+
+
+class RunningMeanStd:
+
+    def __init__(self, epsilon=1e-8, shape=()):
+        self.mean = np.zeros(shape, dtype=np.float32)
+        self.var = np.ones(shape, dtype=np.float32)
+        self.count = epsilon
+
+    def update(self, x):
+        batch_mean = np.mean(x, axis=0)
+        batch_var = np.var(x, axis=0)
+        batch_count = x.shape[0]
+        self.update_from_moments(batch_mean, batch_var, batch_count)
+
+    def update_from_moments(self, batch_mean, batch_var, batch_count):
+        delta = batch_mean - self.mean
+        tot_count = self.count + batch_count
+
+        new_mean = self.mean + delta * batch_count / tot_count
+        m_a = self.var * self.count
+        m_b = batch_var * batch_count
+        M2 = m_a + m_b + delta ** 2 * self.count * batch_count / tot_count
+        new_var = M2 / tot_count
+        new_count = tot_count
+
+        self.mean = new_mean
+        self.var = new_var
+        self.count = new_count
+
+
+def main():
+    global args
+    global log_dir
+    args = get_args()
+
+    # set seed
+    th.manual_seed(args.seed)
+    np.random.seed(args.seed)
+    random.seed(args.seed)
+    
+    device = "cuda" if th.cuda.is_available() else "cpu"
+    model_name = "liv"
+    model, processor, tokenizer = load_model(model_name)
+    model = model.to(device)
+    model.eval()
+
+
+    WANDB_ENTITY_NAME = "clvr"
+    WANDB_PROJECT_NAME = "roboclip-v2"
+    if args.pca:
+        experiment_name = "ep" + str(args.ep_length) + "_PCA_" + "xclip_textTRANS_" + args.env_id
+    else:
+        experiment_name = "ep" + str(args.ep_length) + "_NOPCA_" +"xclip_textTRANS_" + args.env_id
+
+    if args.reward_normalization_offset:
+        experiment_name = experiment_name + "_norm_offset"
+
+    if args.succ_end:
+        experiment_name = experiment_name + "_SuccEnd"
+
+    experiment_name = experiment_name + args.exp_name_end
+    run_group = experiment_name + "NEWDEBUG"
+    experiment_name = experiment_name + "_" + str(args.seed) + "NEW"
+
+    run = wandb.init(
+        entity=WANDB_ENTITY_NAME,
+        project=WANDB_PROJECT_NAME,
+        group=run_group,
+        config=args,
+        name=experiment_name,
+        monitor_gym=True,
+        sync_tensorboard=False,
+    )
+
+
+    column1 = ["text_string"]
+    table1 = wandb.Table(columns=column1)
+    table1.add_data([args.text_string])  
+
+    column2 = ["env_id"]
+    table2 = wandb.Table(columns=column2)
+    table2.add_data([args.env_id])  
+    wandb.log({"text_string": table1, "env_id": table2})
+
+
+    log_dir = f"/scr/yusenluo/RoboCLIP/visualization/xclip_text_transform_logs/{experiment_name}"
+    # log_dir = f"/home/jzhang96/logs/baseline_logs/{experiment_name}"
+
+    if not os.path.exists(log_dir):
+        os.makedirs(log_dir)
+    if args.n_envs > 1:
+        envs = SubprocVecEnv([make_env(args, model, processor, tokenizer, eval = False) for i in range(args.n_envs)])
+    else:
+        envs = DummyVecEnv([make_env(args, model, processor, tokenizer, eval = False)])
+
+    if args.n_envs > 1:
+        eval_env = SubprocVecEnv([make_env(args, model, processor, tokenizer, eval = True) for i in range(args.n_envs)])
+    else:
+        eval_env = DummyVecEnv([make_env(args, model, processor, tokenizer, eval = True)]) 
+
+    model = SAC("MlpPolicy", envs, verbose=1, tensorboard_log=log_dir, gradient_steps = args.n_envs,
+                ent_coef="auto", buffer_size=args.total_time_steps, learning_starts=1000, seed=args.seed)
+
+    eval_callback = CustomEvalCallback(eval_env, best_model_save_path=log_dir, 
+                                    log_path=log_dir, eval_freq=args.eval_freq//args.n_envs, video_freq=args.video_freq//args.n_envs,
+                                    deterministic=True, render=False, n_eval_episodes = 25)
+     
+    customwandbcallback = CustomWandbCallback()
+    callback = CallbackList([eval_callback, customwandbcallback])
+    model.learn(total_timesteps=int(args.total_time_steps), callback=callback)
+    model.save(f"{log_dir}/{experiment_name}")
+
+    # Evaluate the agent
+    # load the best model
+
+    model = SAC.load(f"{log_dir}/best_model")
+    success_rate = eval_policys(args, MetaworldDense, model)
+    wandb.log({"eval_SR/evaluate_succ": success_rate}, step = 0)
+
+
+if __name__ == '__main__':
+    main()
