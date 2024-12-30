@@ -153,7 +153,7 @@ class OfflineEvalCallback(EvalCallback):
         # print the first layer's weight of self.model.policy
         print(self.model.policy.actor.latent_pi[0].weight[0][:10])
 
-        for _ in range(128):  # You can adjust the number of steps for recording
+        for _ in range(self.eval_env.max_timesteps):  # You can adjust the number of steps for recording
             frame = self.eval_env.render(mode="rgb_array")
             # downsample frame
             frame = frame[::3, ::3, :3]
