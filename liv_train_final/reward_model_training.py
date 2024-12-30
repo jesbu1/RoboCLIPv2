@@ -13,7 +13,7 @@ import h5py
 from torch.nn.functional import mse_loss
 from torch.nn import CrossEntropyLoss 
 import os
-from models import MultiHeadAttentionModel, MultiHeadAttentionSubtraction, MultiHeadAttentionConcatenation
+from models import MultiHeadAttentionModel, MultiHeadAttentionSubtraction, MultiHeadAttentionConcatenation, MultiHeadAttentionTwostepModel
 from eval_utils import plot_progress, plot_progress_class, plot_videos, plot_videos_class
 from confusion_matrix import plot_confusion_matrix_pca, plot_confusion_matrix_pca_class
 
@@ -44,33 +44,37 @@ def main(args):
     #     experiment_name += "_pca" 
 
     if args.subtract_before:
-        experiment_name += "_subtract_before"
+        experiment_name += "_SubtractBefore"
     else:
-        experiment_name += "_subtract_after"
+        experiment_name += "_SubtractAfter"
 
     experiment_name += "_heads_" + str(args.attention_heads)
 
     if args.sample_neg:
-        experiment_name += "_sample_neg"
+        experiment_name += "_SampleNeg"
     if args.reverse_video:
-        experiment_name += "_reverse_video"
+        experiment_name += "_ReverseVideo"
     if args.normalize_embedding:
         experiment_name += "_norm"
     if args.catagorical_progress:
         experiment_name += "_CatProgress"
     if args.subsample_video:
-        experiment_name += "_subsample_video"
+        experiment_name += "_SubsampleVideo"
+        experiment_name += "_MaxLen" + str(args.max_length)
     if args.cat_embedding:
-        experiment_name += "_cat_embedding"
+        experiment_name += "_CatEmbedding"
     if args.enlarge_embedding_space:
-        experiment_name += "_enlarge_embedding_space"
-
-
-
+        experiment_name += "_EnlargeEmbedding"
+    if args.fully_reverse_data:
+        experiment_name += "_FullyReverse"
+    if args.two_step_training:
+        experiment_name += "_TwoStep"
+    
+    
     run = wandb.init(
         entity=WANDB_ENTITY_NAME,
         project=WANDB_PROJECT_NAME,
-        group="Regression_final_fresh",
+        group="Regression_final_2nd",
         config=args,
         name=experiment_name,
     )
@@ -95,10 +99,17 @@ def main(args):
         dataloader = DataLoader(dataset, batch_size=args.batch_size, shuffle=True, num_workers=args.worker, drop_last=True)
     else:
         dataloader = DataLoader(dataset, batch_size=args.batch_size, shuffle=True, num_workers=args.worker, drop_last=True, collate_fn=video_collate_fn)
-    if args.catagorical_progress:
-        loss_function = CrossEntropyLoss()
+
+    if args.two_step_training:
+        classification_loss_function = CrossEntropyLoss()
+        if args.catagorical_progress:
+            progress_loss_function = CrossEntropyLoss()
+        else:
+            progress_loss_function = mse_loss        
+    elif args.catagorical_progress:
+        progress_loss_function = CrossEntropyLoss()
     else:
-        loss_function = mse_loss
+        progress_loss_function = mse_loss
 
 
     if args.cat_embedding:
@@ -107,36 +118,47 @@ def main(args):
                 num_bins = args.catagorical_progress_bins + 1
             else:
                 num_bins = args.catagorical_progress_bins
-            self_attention_model = MultiHeadAttentionConcatenation(embedding_dim, num_heads = args.attention_heads, dropout = args.dropout, class_num=num_bins).to(device)
         else:
-            self_attention_model = MultiHeadAttentionConcatenation(embedding_dim, num_heads = args.attention_heads, dropout = args.dropout, class_num=1).to(device)
+            num_bins = 1
+        self_attention_model = MultiHeadAttentionConcatenation(embedding_dim, num_heads = args.attention_heads, dropout = args.dropout, class_num=1).to(device)
     else:
-        if args.subtract_before:
+        if args.two_step_training:
             if args.catagorical_progress:
                 if args.sample_neg:
                     num_bins = args.catagorical_progress_bins + 1
                 else:
                     num_bins = args.catagorical_progress_bins
-                self_attention_model = MultiHeadAttentionSubtraction(embedding_dim, num_heads = args.attention_heads, dropout = args.dropout, class_num=num_bins).to(device)
             else:
-                self_attention_model = MultiHeadAttentionSubtraction(embedding_dim, num_heads = args.attention_heads, dropout = args.dropout, class_num=1).to(device)
+                num_bins = 1
+            self_attention_model = MultiHeadAttentionTwostepModel(embedding_dim, num_heads = args.attention_heads, dropout = args.dropout, class_num=num_bins).to(device)
+
+        elif args.subtract_before:
+            if args.catagorical_progress:
+                if args.sample_neg:
+                    num_bins = args.catagorical_progress_bins + 1
+                else:
+                    num_bins = args.catagorical_progress_bins
+            else:
+                num_bins = 1
+            self_attention_model = MultiHeadAttentionSubtraction(embedding_dim, num_heads = args.attention_heads, dropout = args.dropout, class_num=num_bins).to(device)
             
         else:
+
             if args.catagorical_progress:
                 if args.sample_neg:
                     num_bins = args.catagorical_progress_bins + 1
                 else:
                     num_bins = args.catagorical_progress_bins
-                self_attention_model = MultiHeadAttentionModel(embedding_dim, num_heads = args.attention_heads, dropout = args.dropout, class_num=num_bins, enlarge = args.enlarge_embedding_space).to(device)
             else:
-                self_attention_model = MultiHeadAttentionModel(embedding_dim, num_heads = args.attention_heads, dropout = args.dropout, class_num=1, enlarge = args.enlarge_embedding_space).to(device)
+                num_bins = 1
+
+            self_attention_model = MultiHeadAttentionModel(embedding_dim, num_heads = args.attention_heads, dropout = args.dropout, class_num=num_bins, enlarge = args.enlarge_embedding_space).to(device)
+
 
     # if args.pca:
     #     optimizer = torch.optim.Adam(list(self_attention_model.parameters()) + list(transform_model.parameters()), lr=args.lr)
     # else:
     optimizer = torch.optim.Adam(self_attention_model.parameters(), lr=args.lr)
-
-
 
     for epoch in range(args.epochs):
         self_attention_model.train()
@@ -144,7 +166,6 @@ def main(args):
         #     transform_model.train()
         for i, data in enumerate(tqdm(dataloader)):
             video_array = data["video_array"].to(device).float()
-
             text_array = data["text_array"].to(device).float()
             # if args.pca:
             #     text_array = pca_text_model.transform(text_array.cpu().detach().numpy())
@@ -156,32 +177,57 @@ def main(args):
             #     video_array = transform_model(video_array)
             #     # convert back to (batch_size, num_frames, 1024)
             #     video_array = video_array.view(args.batch_size, -1, video_array.shape[1])
+
             if not args.subsample_video:
                 mask = data["mask"].to(device).float()
-                progress_output = self_attention_model(video_array, mask, text_array)
+                progress_output, class_output = self_attention_model(video_array, mask, text_array)
             else:
-                progress_output = self_attention_model(video_array, None, text_array)
+                progress_output, class_output = self_attention_model(video_array, None, text_array)
             if args.catagorical_progress:
                 progress = data["progress"].to(device).long()
             else:
                 progress = data["progress"].to(device).float().unsqueeze(1)
-            loss = loss_function(progress_output, progress)
+
+            if args.two_step_training:
+                class_label = data["class_label"].to(device).long()
+                class_loss = classification_loss_function(class_output, class_label)
+                non_zero_mask = class_label != 0
+                progress_output = progress_output[non_zero_mask]
+                progress = progress[non_zero_mask]
+                progress_loss = progress_loss_function(progress_output, progress)
+                loss = class_loss + progress_loss
+                class_predict_label = torch.argmax(class_output, dim=1)
+                accuracy = torch.sum(class_predict_label == class_label).item() / args.batch_size
+
+                wandb_log = {
+                    "total_loss": loss.item(),
+                    "class_loss": class_loss.item(),
+                    "progress_loss": progress_loss.item(),
+                    "class_accuracy": accuracy
+                }
+                if args.catagorical_progress:
+                    predict_label = torch.argmax(progress_output, dim=1)
+                    accuracy = torch.sum(predict_label == progress).item() / args.batch_size
+                    wandb_log["progress_accuracy"] = accuracy
+
+            else:
+                loss = progress_loss_function(progress_output, progress)
+                
+                wandb_log = {
+                    "progress_loss": loss.item(),
+                }
+                if args.catagorical_progress:
+                    predict_label = torch.argmax(progress_output, dim=1)
+                    accuracy = torch.sum(predict_label == progress).item() / args.batch_size
+                    wandb_log["progress_accuracy"] = accuracy
 
             optimizer.zero_grad()
             loss.backward()
             optimizer.step()
 
-            wandb_log = {
-                "loss": loss.item(),
-            }
-            if args.catagorical_progress:
-                predict_label = torch.argmax(progress_output, dim=1)
-                accuracy = torch.sum(predict_label == progress).item() / args.batch_size
-                wandb_log["accuracy"] = accuracy
-
             wandb.log(wandb_log)
 
-        if epoch % 15 == 14:
+        if epoch % 20 == 19:
             self_attention_model.eval()
 
             save_path = os.path.join("/scr/jzhang96/roboclip_v2_models_final", experiment_name)
@@ -196,46 +242,46 @@ def main(args):
             torch.save(save_dict, os.path.join(save_path, f"model_{epoch}.pth"))
 
 
-            if args.catagorical_progress:
+            # if args.catagorical_progress:
                 
-                plot_progress_class(h5_file, args.model_name, "train", self_attention_model, args)
-                plot_progress_class(h5_file, args.model_name, "eval", self_attention_model, args)
-                plot_confusion_matrix_pca_class(h5_file = h5_file, 
-                                          model_name = args.model_name, 
-                                          set = "train", 
-                                          self_attention_model = self_attention_model, 
-                                          args = args)
-                plot_confusion_matrix_pca_class(h5_file = h5_file,
-                                                model_name = args.model_name,
-                                                set = "eval",
-                                                self_attention_model = self_attention_model,
-                                                args = args)
+            #     plot_progress_class(h5_file, args.model_name, "train", self_attention_model, args)
+            #     plot_progress_class(h5_file, args.model_name, "eval", self_attention_model, args)
+            #     plot_confusion_matrix_pca_class(h5_file = h5_file, 
+            #                               model_name = args.model_name, 
+            #                               set = "train", 
+            #                               self_attention_model = self_attention_model, 
+            #                               args = args)
+            #     plot_confusion_matrix_pca_class(h5_file = h5_file,
+            #                                     model_name = args.model_name,
+            #                                     set = "eval",
+            #                                     self_attention_model = self_attention_model,
+            #                                     args = args)
             
-            else:
-                plot_progress(h5_file, args.model_name, "train", self_attention_model, args)
-                plot_progress(h5_file, args.model_name, "eval", self_attention_model, args)
-                plot_confusion_matrix_pca(h5_file = h5_file, 
-                                          model_name = args.model_name, 
-                                          set = "train", 
-                                          self_attention_model = self_attention_model, 
-                                          args = args)
-                plot_confusion_matrix_pca(h5_file = h5_file,
-                                          model_name = args.model_name,
-                                          set = "eval",
-                                          self_attention_model = self_attention_model,
-                                          args = args)
+            # else:
+            #     plot_progress(h5_file, args.model_name, "train", self_attention_model, args)
+            #     plot_progress(h5_file, args.model_name, "eval", self_attention_model, args)
+            #     plot_confusion_matrix_pca(h5_file = h5_file, 
+            #                               model_name = args.model_name, 
+            #                               set = "train", 
+            #                               self_attention_model = self_attention_model, 
+            #                               args = args)
+            #     plot_confusion_matrix_pca(h5_file = h5_file,
+            #                               model_name = args.model_name,
+            #                               set = "eval",
+            #                               self_attention_model = self_attention_model,
+            #                               args = args)
 
-            self_attention_model.train()
+            # self_attention_model.train()
 
-        if epoch % 30 == 29:
-            self_attention_model.eval()
+        # if epoch % 30 == 29:
+        #     self_attention_model.eval()
 
-            if args.catagorical_progress:
-                plot_videos_class(args.model_name, self_attention_model, args)
-            else:
-                plot_videos(args.model_name, self_attention_model, args)
+        #     if args.catagorical_progress:
+        #         plot_videos_class(args.model_name, self_attention_model, args)
+        #     else:
+        #         plot_videos(args.model_name, self_attention_model, args)
 
-            self_attention_model.train()
+        #     self_attention_model.train()
 
             
 
@@ -250,7 +296,7 @@ if __name__ == "__main__":
     argparser.add_argument('--h5_embedding_path', type=str, default='/scr/jzhang96/metaworld_25_for_clip_liv.h5')
     argparser.add_argument('--model_name', type=str, default='liv', choices=['clip', 'liv'])
     argparser.add_argument('--batch_size', type=int, default=32)
-    argparser.add_argument('--epochs', type=int, default=150)
+    argparser.add_argument('--epochs', type=int, default=200)
     argparser.add_argument('--seed', type=int, default=42)
     argparser.add_argument('--lr', type=float, default=1e-4)
     argparser.add_argument('--loss_type', type=str, choices=['triplet', 'mse'], default='mse')
@@ -269,6 +315,8 @@ if __name__ == "__main__":
     argparser.add_argument('--catagorical_progress_bins', type=int, default=5)
     argparser.add_argument('--max_length', type=int, default=32)
     argparser.add_argument('--cat_embedding', action='store_true')
+    argparser.add_argument('--fully_reverse_data', action='store_true')
+    argparser.add_argument('--two_step_training', action='store_true')
     args = argparser.parse_args()
     main(args)
 

@@ -43,27 +43,38 @@ class LivVideoDataset(Dataset):
         if self.args.sample_neg:
             if not self.args.reverse_video:
                 if random.random() > 0.75:
-                    video_array, progress = self.sample_negative_video_feature(key)
+                    video_array, progress, class_label = self.sample_negative_video_feature(key)
                 else:
-                    video_array, progress = self.sample_video_feature(key)
-            else:
+                    video_array, progress, class_label = self.sample_video_feature(key)
+            elif not self.args.fully_reverse_data:
                 random_num = random.random()
                 if random_num < 0.25:
-                    video_array, progress = self.sample_reverse_video_feature(key)
+                    video_array, progress, class_label = self.sample_reverse_video_feature(key)
                 elif random_num > 0.75:
-                    video_array, progress = self.sample_negative_video_feature(key)
+                    video_array, progress, class_label = self.sample_negative_video_feature(key)
                 else:
-                    video_array, progress = self.sample_video_feature(key)
+                    video_array, progress, class_label = self.sample_video_feature(key)
+            else:
+                random_num = random.random()
+                if random_num < 0.20:
+                    video_array, progress, class_label = self.sample_reverse_video_feature(key)
+                elif random_num < 0.30:
+                    video_array, progress, class_label = self.sample_fully_reverse_video_feature(key)
+                elif random_num < 0.50:
+                    video_array, progress, class_label = self.sample_negative_video_feature(key)
+                else:
+                    video_array, progress, class_label = self.sample_video_feature(key)
 
 
 
         else:
-            video_array, progress = self.sample_video_feature(key)
+            video_array, progress, class_label = self.sample_video_feature(key)
 
         output_dict = {
             "text_array": text_array,
             "video_array": video_array,
-            "progress": progress
+            "progress": progress,
+            "class_label": class_label
         }
         return  output_dict
 
@@ -109,7 +120,7 @@ class LivVideoDataset(Dataset):
             if self.args.sample_neg:
                 progress += 1
 
-        return video_frames, progress
+        return video_frames, progress, 1
 
     def sample_negative_video_feature(self, env_name):
 
@@ -134,7 +145,7 @@ class LivVideoDataset(Dataset):
             negative_video_frames = self.padding_video(negative_video_frames, self.args.max_length)
 
 
-        return negative_video_frames, progress
+        return negative_video_frames, progress, 0
 
     def padding_video(self, video_frames, max_length):
         video_length = len(video_frames)
@@ -152,6 +163,38 @@ class LivVideoDataset(Dataset):
             video_frames = video_frames[frame_idx]
 
         return video_frames
+
+
+
+    def sample_fully_reverse_video_feature(self, env_name):
+        progress_group = self.h5_file[self.model_name][env_name]
+        datasets = list(progress_group.keys())
+        random_name = random.choice(datasets)
+        progress_dataset = np.asarray(progress_group[random_name]) # all video data
+
+        
+        start_idx = random.randint(0, len(progress_dataset)-2)
+        while start_idx + 10 > len(progress_dataset):
+            start_idx = random.randint(0, len(progress_dataset)-2)
+        end_idx = random.randint(start_idx + 10, len(progress_dataset))
+
+        video_frames = np.array(progress_dataset)[start_idx:end_idx]
+        # full_frames = np.array(progress_dataset)[start_idx:]
+        if self.args.normalize_embedding:
+            video_frames = normalize_embeddings(video_frames, return_tensor=True)
+        else:
+            video_frames = th.tensor(video_frames)
+
+        video_frames = video_frames.flip(dims=[0])
+
+        if self.args.subsample_video:
+            video_frames = self.padding_video(video_frames, self.args.max_length)
+
+        progress = 0
+
+        return video_frames, progress, 0
+
+
 
     def sample_reverse_video_feature(self, env_name):
         progress_group = self.h5_file[self.model_name][env_name]
@@ -193,7 +236,7 @@ class LivVideoDataset(Dataset):
                 if self.args.sample_neg:
                     progress += 1
 
-            return final_part, progress
+            return final_part, progress, 1
         else:
             progress = video_length / full_length
             if self.args.subsample_video:
@@ -206,7 +249,7 @@ class LivVideoDataset(Dataset):
                 if self.args.sample_neg:
                     progress += 1
 
-            return video_frames, progress
+            return video_frames, progress, 1
         
 
 def video_collate_fn(batch):
@@ -218,11 +261,14 @@ def video_collate_fn(batch):
     embedding_size = batch[0]["video_array"].shape[1]
     batch_size = len(batch)
 
+
+
     
     video_output = list()
     mask_output = list()
     text_output = list()
     progress_output = list()
+    class_label_output = list()
     
 
     for i in range(batch_size):
@@ -235,11 +281,13 @@ def video_collate_fn(batch):
         mask[:video.shape[0]] = 1
         text = th.tensor(batch[i]["text_array"])
         progress = th.tensor(batch[i]["progress"])
+        class_label = th.tensor(batch[i]["class_label"])
 
         video_output.append(padded_video)
         mask_output.append(mask)
         text_output.append(text)
         progress_output.append(progress)
+        class_label_output.append(class_label)
 
 
     output_dict = {
@@ -247,6 +295,7 @@ def video_collate_fn(batch):
         "mask": th.stack(mask_output),
         "text_array": th.stack(text_output),
         "progress": th.stack(progress_output),
+        "class_label": th.stack(class_label_output)
     }
 
     return output_dict
