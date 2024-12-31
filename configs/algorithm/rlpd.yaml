@@ -14,7 +14,7 @@ general_training:
   learning_rate: 1e-3
 
   # offline rl parameters
-  n_critics: 4
+  n_critics: 3
   n_critics_to_sample: 2
 
   # RLPD-specific parameters
@@ -24,11 +24,11 @@ general_training:
 model:
   policy_layer_norm: true
   critic_layer_norm: true
-  pi_net_arch: [768, 512, 256]
-  qf_net_arch: [1024, 768, 512]
+  pi_net_arch: [768, 512]
+  qf_net_arch: [768, 768, 512]
 
 offline_training:
-  offline_training_steps: 30000
+  offline_training_steps: 20000
   ckpt_path: null  # Path to load checkpoint from, if provided will skip offline training
   critic_update_ratio: 1
 
@@ -36,5 +36,5 @@ online_training:
   total_time_steps: 50000
   mix_buffers: true
   warm_start_online_rl: true
-  learning_starts: 1000
+  learning_starts: 200
   critic_update_ratio: 4 

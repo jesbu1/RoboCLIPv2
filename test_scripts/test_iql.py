@@ -191,16 +191,18 @@ def main(cfg: DictConfig):
 
     ### Create environment and callbacks ###
     envs, eval_env = create_envs(cfg, reward_model)
-    model, model_class = get_policy_algorithm(cfg, envs, log_dir)
+    model, model_class, policy_kwargs = get_policy_algorithm(cfg, envs, log_dir)
 
     # Set eval freq and video freq if not set
-    eval_freq = offline_config.offline_training_steps * env_config.n_envs // (10)
 
     # if it's rlpd, video_freq should be never
     if training_config.algo == "rlpd":
         video_freq = 0
+        eval_freq = 0
+        # eval_freq = offline_config.offline_training_steps * env_config.n_envs // (2)
     else:
         video_freq = offline_config.offline_training_steps * env_config.n_envs // 10
+        eval_freq = offline_config.offline_training_steps * env_config.n_envs // (10)
 
     # Use deterministic actions for evaluation
     eval_callback = OfflineEvalCallback(
@@ -281,8 +283,20 @@ def main(cfg: DictConfig):
                 # model.load(
                 #     offline_config.ckpt_path, offline_algo=model.offline_algo, env=envs
                 # )
-                model.offline_algo.load(offline_config.ckpt_path, env=envs)
-                model.set_policies_with_offline()
+                new_offline_algo = model.offline_algo.load(
+                    offline_config.ckpt_path + "_rlpd_offline", env=envs
+                )
+                model.offline_algo = new_offline_algo
+                model.set_policies_with_offline(offline_algo=new_offline_algo)
+
+                kwargs = {
+                    "policy_kwargs": policy_kwargs,
+                }
+
+                model = model.load(offline_config.ckpt_path, env=envs, **kwargs)
+                model.offline_algo = new_offline_algo
+                model.set_logger(wandb_logger)
+
             else:
                 model.load(offline_config.ckpt_path, env=envs)
         else:
@@ -297,12 +311,18 @@ def main(cfg: DictConfig):
             save_dir = os.path.join(log_dir, "last_offline")
 
             if training_config.algo == "rlpd":
-                model.offline_algo.save(save_dir)
+                model.offline_algo.save(save_dir + "_rlpd_offline")
+                model.save(save_dir, exclude=["offline_algo"])
             else:
                 model.save(save_dir)
 
-            # Model is saved at:
-            print(f"Model saved at {save_dir}")
+            # Model is saved at
+            absolute_save_dir = os.path.abspath(save_dir)
+            print(f"Model saved at {absolute_save_dir}")
+
+        # Set the replay buffer back to the original one
+        if cfg.online_training.mix_buffers:
+            model.set_combined_buffer(buffer, ratio=0.3)
 
     ### Learn online ###
     logger = model.logger  # set logger in case
@@ -615,7 +635,7 @@ def get_policy_algorithm(cfg: DictConfig, envs: VecEnv, log_dir: str):
 
     assert model is not None, "Model is None. Something went wrong."
 
-    return model, model_class
+    return model, model_class, policy_kwargs
 
 
 def generate_callback_list(args: DictConfig, eval_callback: EvalCallback):

@@ -212,15 +212,14 @@ class OfflineRLAlgorithm(OffPolicyAlgorithm):
 
         callback.on_training_end()
 
-        # Set the replay buffer back to the original one
-        if self.mix_offline_online_buffers:
-            # make a new combined replay buffer with partial sampling of both old and new data
-            # for online RL learning
-            self.replay_buffer = CombinedBuffer(
-                old_buffer=offline_replay_buffer, new_buffer=old_replay_buffer
-            )
-        else:
-            self.replay_buffer = old_replay_buffer
+        self.replay_buffer = old_replay_buffer
+
+    def set_combined_buffer(
+        self, offline_replay_buffer: ReplayBuffer, ratio=0.5
+    ) -> None:
+        self.replay_buffer = CombinedBuffer(
+            old_buffer=offline_replay_buffer, new_buffer=self.replay_buffer, ratio=ratio
+        )
 
     def train(
         self, gradient_steps: int, batch_size: int = 64, callback: MaybeCallback = None
