@@ -147,11 +147,6 @@ class OfflineEvalCallback(EvalCallback):
     def record_video(self):
         frames = []
         obs = self.eval_env.reset()
-        # success = 0
-        # breakpoint()
-
-        # print the first layer's weight of self.model.policy
-        print(self.model.policy.actor.latent_pi[0].weight[0][:10])
 
         for _ in range(128):  # You can adjust the number of steps for recording
             frame = self.eval_env.render(mode="rgb_array")
@@ -159,15 +154,9 @@ class OfflineEvalCallback(EvalCallback):
             frame = frame[::3, ::3, :3]
             frames.append(frame)
             action, _ = self.model.predict(obs, deterministic=False)
-            # action += np.random.normal(5, 0.1, size=action.shape)
-            # action[0] += 5
-            # print(action)
+
             obs, _, _, info = self.eval_env.step(action)
-            # print(type(info))
-            # print(info)
-            # if info['success']:
-            #     success = 1
-            #     break
+
 
         video_buffer = io.BytesIO()
 

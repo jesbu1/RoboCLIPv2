@@ -1,4 +1,3 @@
-import joblib
 from gym import Env, spaces
 from offline_rl_algorithms.offline_replay_buffers import H5ReplayBuffer
 import torch.nn as nn
@@ -90,34 +89,31 @@ def create_exp_name(cfg: DictConfig):
             exp_name += f"bc_weight_{cfg.general_training.ddpg_bc_weight}_"
 
         exp_name += f"n_critics_{cfg.general_training.n_critics}_"
-        exp_name += (
-            f"n_critics_to_sample_{cfg.general_training.n_critics_to_sample}_"
-        )
-        exp_name += f"utd_{cfg.general_training.critic_update_ratio}_"
+        exp_name += f"n_critics_to_sample_{cfg.general_training.n_critics_to_sample}_"
+        exp_name += f"utd_{cfg.online_training.critic_update_ratio}_"
 
     if cfg.general_training.algo == "cql":
         exp_name += f"min_q_weight_{cfg.general_training.cql_min_q_weight}_"
         exp_name += f"min_q_temp_{cfg.general_training.cql_min_q_temp}_"
         exp_name += f"n_critics_{cfg.general_training.n_critics}_"
-        exp_name += (
-            f"n_critics_to_sample_{cfg.general_training.n_critics_to_sample}_"
-        )
-        exp_name += f"utd_{cfg.general_training.critic_update_ratio}_"
+        exp_name += f"n_critics_to_sample_{cfg.general_training.n_critics_to_sample}_"
+        exp_name += f"utd_{cfg.online_training.critic_update_ratio}_"
 
     if cfg.general_training.algo == "rlpd":
         exp_name += cfg.general_training.rlpd_offline_algo + "_"
         exp_name += f"n_critics_{cfg.general_training.n_critics}_"
-        exp_name += (
-            f"n_critics_to_sample_{cfg.general_training.n_critics_to_sample}_"
-        )
+        exp_name += f"n_critics_to_sample_{cfg.general_training.n_critics_to_sample}_"
         exp_name += f"train_critic_with_entropy_{cfg.general_training.rlpd_train_critic_with_entropy}_"
-        exp_name += f"utd_{cfg.general_training.critic_update_ratio}_"
+        exp_name += f"utd_{cfg.online_training.critic_update_ratio}_"
 
     if cfg.environment.ignore_language:
         exp_name += "no_lang_"
 
     if cfg.environment.is_state_based:
         exp_name += "state_based_"
+
+    if cfg.environment.use_proprio:
+        exp_name += "use_proprio_"
 
     # if the last character is an underscore, remove it
     if exp_name[-1] == "_":
@@ -198,8 +194,14 @@ def main(cfg: DictConfig):
     model, model_class = get_policy_algorithm(cfg, envs, log_dir)
 
     # Set eval freq and video freq if not set
-    eval_freq = offline_config.offline_training_steps * env_config.n_envs // (10*2)
-    video_freq = offline_config.offline_training_steps * env_config.n_envs // 10
+    eval_freq = offline_config.offline_training_steps * env_config.n_envs // (10)
+
+    # if it's rlpd, video_freq should be never
+    if training_config.algo == "rlpd":
+        video_freq = 0
+    else:
+        video_freq = offline_config.offline_training_steps * env_config.n_envs // 10
+
     # Use deterministic actions for evaluation
     eval_callback = OfflineEvalCallback(
         eval_env,
@@ -252,6 +254,9 @@ def main(cfg: DictConfig):
         else:
             offline_tasks = offline_config.offline_tasks
 
+        # Map the tasks to their strings
+        # offline_task_strings =
+
         sparse_only = True if reward_model.name == "sparse" else False
         buffer = H5ReplayBuffer(
             h5_path,
@@ -261,14 +266,43 @@ def main(cfg: DictConfig):
             filter_instructions=offline_tasks,
             image_encoder=reward_model,
             is_state_based=env_config.is_state_based,
+            use_proprio=env_config.use_proprio,
             calculate_mc_returns=training_config.use_calibrated_q,
+            dense_rewards_at_end=training_config.dense_rewards_at_end,
         )
-        model.learn_offline(
-            offline_replay_buffer=buffer,
-            train_steps=offline_config.offline_training_steps,
-            callback=callback_list,
-            batch_size=256,
-        )
+
+        if hasattr(offline_config, "ckpt_path") and offline_config.ckpt_path:
+            # convert to absolute path from hydra
+            offline_config.ckpt_path = to_absolute_path(offline_config.ckpt_path)
+            print(f"Loading checkpoint from {offline_config.ckpt_path}")
+
+            # if rlpd, we do a special load
+            if training_config.algo == "rlpd":
+                # model.load(
+                #     offline_config.ckpt_path, offline_algo=model.offline_algo, env=envs
+                # )
+                model.offline_algo.load(offline_config.ckpt_path, env=envs)
+                model.set_policies_with_offline()
+            else:
+                model.load(offline_config.ckpt_path, env=envs)
+        else:
+            model.learn_offline(
+                offline_replay_buffer=buffer,
+                train_steps=offline_config.offline_training_steps,
+                callback=callback_list,
+                batch_size=256,
+            )
+
+            # save the model in log_dir/last
+            save_dir = os.path.join(log_dir, "last_offline")
+
+            if training_config.algo == "rlpd":
+                model.offline_algo.save(save_dir)
+            else:
+                model.save(save_dir)
+
+            # Model is saved at:
+            print(f"Model saved at {save_dir}")
 
     ### Learn online ###
     logger = model.logger  # set logger in case
@@ -302,8 +336,10 @@ def create_envs(cfg: DictConfig, reward_model: BaseRewardModel):
     env_config = cfg.environment
     # Extract configuration
     # env_id = env_config.env_id
-    env_id = instruction_to_environment[env_config.text_string]
-    text_instruction = env_config.text_string
+    # env_id = instruction_to_environment[env_config.text_string]
+    # text_instruction = env_config.text_string
+    env_id = env_config.env_id
+    text_instruction = environment_to_instruction[env_id]
 
     with th.no_grad():
         lang_feat = reward_model.encode_text_for_policy(text_instruction).squeeze()
@@ -322,6 +358,9 @@ def create_envs(cfg: DictConfig, reward_model: BaseRewardModel):
                     goal_observable=True,
                     success_bonus=env_config.succ_bonus,
                     is_state_based=env_config.is_state_based,
+                    use_proprio=env_config.use_proprio,
+                    mode="train",
+                    dense_rewards_at_end=cfg.general_training.dense_rewards_at_end,
                 )
                 for _ in range(env_config.n_envs)
             ]
@@ -336,6 +375,9 @@ def create_envs(cfg: DictConfig, reward_model: BaseRewardModel):
                     reward_model=reward_model,
                     goal_observable=True,
                     is_state_based=env_config.is_state_based,
+                    use_proprio=env_config.use_proprio,
+                    mode="train",
+                    dense_rewards_at_end=cfg.general_training.dense_rewards_at_end,
                 )
             ]
         )
@@ -351,7 +393,8 @@ def create_envs(cfg: DictConfig, reward_model: BaseRewardModel):
                     monitor=True,
                     goal_observable=True,
                     is_state_based=env_config.is_state_based,
-                    dense_eval=True,
+                    mode="eval",
+                    use_proprio=env_config.use_proprio,
                 )
                 for i in range(env_config.n_envs)
             ]
@@ -367,7 +410,8 @@ def create_envs(cfg: DictConfig, reward_model: BaseRewardModel):
                     monitor=True,
                     goal_observable=True,
                     is_state_based=env_config.is_state_based,
-                    dense_eval=True,
+                    mode="eval",
+                    use_proprio=env_config.use_proprio,
                 )
             ]
         )  # KitchenEnvDenseOriginalReward(time=True)
@@ -389,7 +433,6 @@ def get_policy_algorithm(cfg: DictConfig, envs: VecEnv, log_dir: str):
     else:
         action_noise = None
 
-
     policy_kwargs = {
         "net_arch": dict(pi=model_config.pi_net_arch, qf=model_config.qf_net_arch),
         "policy_layer_norm": model_config.policy_layer_norm,
@@ -397,7 +440,11 @@ def get_policy_algorithm(cfg: DictConfig, envs: VecEnv, log_dir: str):
     }
 
     # everything except BC, SAC, and PPO require n_critics
-    if cfg.general_training.algo == "iql" or cfg.general_training.algo == "cql" or cfg.general_training.algo == "rlpd":
+    if (
+        cfg.general_training.algo == "iql"
+        or cfg.general_training.algo == "cql"
+        or cfg.general_training.algo == "rlpd"
+    ):
         policy_kwargs["n_critics"] = cfg.general_training.n_critics
 
     algo = args.algo.lower()
@@ -439,7 +486,7 @@ def get_policy_algorithm(cfg: DictConfig, envs: VecEnv, log_dir: str):
                 # batch_size=args.n_steps * args.n_envs,
                 ent_coef="auto",
                 buffer_size=cfg.online_training.total_time_steps,
-                learning_starts=4000,
+                learning_starts=cfg.online_training.learning_starts,
                 seed=args.seed,
                 action_noise=action_noise,
                 policy_kwargs=policy_kwargs,
@@ -461,7 +508,7 @@ def get_policy_algorithm(cfg: DictConfig, envs: VecEnv, log_dir: str):
                 tensorboard_log=log_dir,
                 ent_coef="auto",
                 buffer_size=cfg.online_training.total_time_steps,
-                learning_starts=0,
+                learning_starts=cfg.online_training.learning_starts,
                 seed=args.seed,
                 action_noise=action_noise,
                 policy_kwargs=policy_kwargs,
@@ -471,11 +518,13 @@ def get_policy_algorithm(cfg: DictConfig, envs: VecEnv, log_dir: str):
                     cfg.environment.train_freq_num,
                     cfg.environment.train_freq_type,
                 ),
-                critic_update_ratio=cfg.general_training.critic_update_ratio,
+                online_critic_update_ratio=cfg.online_training.critic_update_ratio,
+                offline_critic_update_ratio=cfg.offline_training.critic_update_ratio,
                 min_q_weight=cfg.general_training.cql_min_q_weight,
                 min_q_temp=cfg.general_training.cql_min_q_temp,
                 use_calibrated_q=cfg.general_training.use_calibrated_q,
                 n_critics_to_sample=cfg.general_training.n_critics_to_sample,
+                warm_start_online_rl=cfg.online_training.warm_start_online_rl,
             )
         else:
             model = model_class.load(args.pretrained, env=envs, tensorboard_log=log_dir)
@@ -491,7 +540,7 @@ def get_policy_algorithm(cfg: DictConfig, envs: VecEnv, log_dir: str):
                 verbose=1,
                 tensorboard_log=log_dir,
                 buffer_size=cfg.online_training.total_time_steps,
-                learning_starts=0,
+                learning_starts=cfg.online_training.learning_starts,
                 seed=args.seed,
                 action_noise=action_noise,
                 policy_kwargs=policy_kwargs,
@@ -501,11 +550,13 @@ def get_policy_algorithm(cfg: DictConfig, envs: VecEnv, log_dir: str):
                     cfg.environment.train_freq_num,
                     cfg.environment.train_freq_type,
                 ),
-                critic_update_ratio=cfg.general_training.critic_update_ratio,
+                online_critic_update_ratio=cfg.online_training.critic_update_ratio,
+                offline_critic_update_ratio=cfg.offline_training.critic_update_ratio,
                 policy_extraction=cfg.general_training.policy_extraction,
                 advantage_temp=cfg.general_training.awr_advantage_temp,
                 ddpg_bc_weight=cfg.general_training.ddpg_bc_weight,
                 n_critics_to_sample=cfg.general_training.n_critics_to_sample,
+                warm_start_online_rl=cfg.online_training.warm_start_online_rl,
             )
         else:
             model = model_class.load(args.pretrained, env=envs, tensorboard_log=log_dir)
@@ -518,7 +569,7 @@ def get_policy_algorithm(cfg: DictConfig, envs: VecEnv, log_dir: str):
                 verbose=1,
                 tensorboard_log=log_dir,
                 buffer_size=cfg.online_training.total_time_steps,
-                learning_starts=0,
+                learning_starts=cfg.online_training.learning_starts,
                 seed=args.seed,
                 action_noise=action_noise,  # should be null?
                 policy_kwargs=policy_kwargs,
@@ -532,11 +583,8 @@ def get_policy_algorithm(cfg: DictConfig, envs: VecEnv, log_dir: str):
             model = model_class.load(args.pretrained, env=envs, tensorboard_log=log_dir)
 
     if orig_algo.lower() == "rlpd":
-
         offline_model = model
         model_class = RLPD
-
-
 
         if not args.pretrained:
             model = model_class(
@@ -546,7 +594,7 @@ def get_policy_algorithm(cfg: DictConfig, envs: VecEnv, log_dir: str):
                 verbose=1,
                 tensorboard_log=log_dir,
                 buffer_size=cfg.online_training.total_time_steps,
-                learning_starts=0,
+                learning_starts=cfg.online_training.learning_starts,
                 seed=args.seed,
                 action_noise=action_noise,  # should be null
                 policy_kwargs=policy_kwargs,
@@ -556,9 +604,11 @@ def get_policy_algorithm(cfg: DictConfig, envs: VecEnv, log_dir: str):
                     cfg.environment.train_freq_num,
                     cfg.environment.train_freq_type,
                 ),  # useless
-                critic_update_ratio=cfg.general_training.critic_update_ratio,
+                online_critic_update_ratio=cfg.online_training.critic_update_ratio,
+                offline_critic_update_ratio=cfg.offline_training.critic_update_ratio,
                 n_critics_to_sample=cfg.general_training.n_critics_to_sample,
                 train_critic_with_entropy=cfg.general_training.rlpd_train_critic_with_entropy,
+                warm_start_online_rl=cfg.online_training.warm_start_online_rl,
             )
         else:
             model = model_class.load(args.pretrained, env=envs, tensorboard_log=log_dir)

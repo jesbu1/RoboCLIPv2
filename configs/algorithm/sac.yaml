@@ -6,7 +6,6 @@ defaults:
 general_training:
   algo: sac
   action_noise: 0 # sigma
-  sparse_only: false
   learning_rate: 1e-3
 
 

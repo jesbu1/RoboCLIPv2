@@ -178,10 +178,13 @@ class OfflineRLAlgorithm(OffPolicyAlgorithm):
         batch_size: int = 64,
         callback: MaybeCallback = None,
     ) -> None:
-
         # Getting callbacks to work
         # Create eval callback if needed
         # total_timesteps = 0
+
+        if "current_critic_update_ratio" in self.__dict__:
+            # switch to offline
+            self.critic_update_ratio = self.offline_critic_update_ratio
 
         total_timesteps, callback = self._setup_learn(
             total_timesteps=train_steps,
@@ -236,6 +239,11 @@ class OfflineRLAlgorithm(OffPolicyAlgorithm):
     ):
         if logger is not None:
             super().set_logger(logger)
+
+        if "current_critic_update_ratio" in self.__dict__:
+            # switch from offline to online
+            self.critic_update_ratio = self.online_critic_update_ratio
+
         # TODO: implement custom buffer and switch it here
         return super().learn(
             total_timesteps=total_timesteps,
@@ -276,9 +284,15 @@ class OfflineRLAlgorithm(OffPolicyAlgorithm):
             The two differs when the action space is not normalized (bounds are not [-1, 1]).
         """
         # Select action randomly or according to policy
-        if self.num_timesteps < learning_starts and not (self.use_sde and self.use_sde_at_warmup) and not (self.warm_start_online_rl and self.learned_offline):
+        if (
+            self.num_timesteps < learning_starts
+            and not (self.use_sde and self.use_sde_at_warmup)
+            and not (self.warm_start_online_rl and self.learned_offline)
+        ):
             # Warmup phase
-            unscaled_action = np.array([self.action_space.sample() for _ in range(n_envs)])
+            unscaled_action = np.array(
+                [self.action_space.sample() for _ in range(n_envs)]
+            )
         else:
             # Note: when using continuous actions,
             # we assume that the policy uses tanh to scale the action

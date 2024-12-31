@@ -27,6 +27,7 @@ try:
 except ImportError:
     psutil = None
 
+
 class CombinedBufferSamples(NamedTuple):
     observations: th.Tensor
     actions: th.Tensor
@@ -35,7 +36,6 @@ class CombinedBufferSamples(NamedTuple):
     rewards: th.Tensor
     mc_returns: th.Tensor
     offline_data_mask: th.Tensor
-
 
 
 class H5ReplayBuffer(ReplayBuffer):
@@ -82,6 +82,7 @@ class H5ReplayBuffer(ReplayBuffer):
         filter_instructions: List[str] = None,
         image_encoder: BaseRewardModel = None,
         is_state_based: bool = False,
+        use_proprio: bool = False,
     ):
         """
         Initialize the replay buffer.
@@ -161,11 +162,18 @@ class H5ReplayBuffer(ReplayBuffer):
             if not self.is_state_based:
                 image_encodings = f["img_embedding"][()]
                 # If we're using images, let's replace the observations with the encoded
-                observations = image_encodings
-                next_observations = image_encodings
+                # proprio is the first 4 observations
+                proprio = observations[:, :4]
+
+                img_obs = image_encodings
+                if use_proprio:
+                    img_obs = np.concatenate((image_encodings, proprio), axis=1)
+
+                observations = img_obs
+                next_observations = img_obs
 
             if filter_instructions is not None:
-                instructions = f["string"][()]
+                instructions = f["env_id"][()]
                 indices_to_keep = []
                 for i in range(len(instructions)):
                     if instructions[i].decode("utf-8") in filter_instructions:
@@ -181,18 +189,20 @@ class H5ReplayBuffer(ReplayBuffer):
 
             self.indices_to_keep = np.array(indices_to_keep, dtype=int)
 
-
         if dense_rewards_at_end:
-            rewards = np.zeros_like(rewards)
+            new_rewards = np.zeros_like(rewards)
             prev_start = 0
             for i in range(len(rewards)):
                 if dones[i] == 1:
-                    rewards[i] = np.sum(rewards[prev_start:i])
+                    new_rewards[i] = np.sum(rewards[prev_start:i])
                     prev_start = i
 
+            rewards = new_rewards
         # add the success bonus
         if success_bonus != 0:
-            print("-----Adding success bonus to offline buffer. Warning: this assumes all dones in the offline buffer == success.-----")
+            print(
+                "-----Adding success bonus to offline buffer. Warning: this assumes all dones in the offline buffer == success.-----"
+            )
             rewards[dones == 1] += success_bonus
 
         # calculate monte-carlo returns
@@ -331,8 +341,10 @@ class H5ReplayBuffer(ReplayBuffer):
             # deactivated by default (timeouts is initialized as an array of False)
             self.dones[batch_inds].reshape(-1, 1),
             rewards,
-            self.mc_returns[batch_inds].reshape(-1, 1) if self.calculate_mc_returns else rewards,
-            np.ones_like(rewards), # offline_data_mask is 1 for all offline data,
+            self.mc_returns[batch_inds].reshape(-1, 1)
+            if self.calculate_mc_returns
+            else rewards,
+            np.ones_like(rewards),  # offline_data_mask is 1 for all offline data,
         )
         return CombinedBufferSamples(*tuple(map(self.to_torch, data)))
 
@@ -393,7 +405,9 @@ class CombinedBuffer(ReplayBuffer):
                 new_data = th.zeros(new_batch_size, 1)
             elif name == "mc_returns":
                 old_data = getattr(old_samples, name)
-                new_data = np.zeros_like(old_data) # set all mc_returns to 0 for new data as it's currently not supported
+                new_data = np.zeros_like(
+                    old_data
+                )  # set all mc_returns to 0 for new data as it's currently not supported
             else:
                 old_data = getattr(old_samples, name)
                 new_data = getattr(new_samples, name)

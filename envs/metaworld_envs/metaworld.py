@@ -18,14 +18,14 @@ environment_to_instruction = {
     "basketball-v2": "playing basketball",
     "bin-picking-v2": "picking bin",
     "box-close-v2": "closing box",
-    "button-press-topdown-v2": "pressing button",
+    "button-press-topdown-v2": "pressing button from top",
     "button-press-topdown-wall-v2": "pressing button",
-    "button-press-v2": "pressing button",
-    "button-press-wall-v2": "pressing button",
-    "coffee-button-v2": "pressing button",
+    "button-press-v2": "pressing button from side",
+    "button-press-wall-v2": "pressing button from side",
+    "coffee-button-v2": "pressing coffee button",
     "coffee-pull-v2": "pulling cup",
-    "coffee-push-v2": "pushing cup",
-    "dial-turn-v2": "turning dial.",
+    "coffee-push-v2": "pushing coffee cup",
+    "dial-turn-v2": "turning dial",
     "disassemble-v2": "disassembling",
     "door-close-v2": "closing door",
     "door-lock-v2": "locking door",
@@ -37,17 +37,17 @@ environment_to_instruction = {
     "faucet-open-v2": "opening faucet",
     "faucet-close-v2": "closing faucet",
     "hammer-v2": "hammering nail",
-    "handle-press-side-v2": "pressing handle",
+    "handle-press-side-v2": "pressing handle from side",
     "handle-press-v2": "pressing handle",
     "handle-pull-side-v2": "pulling handle",
     "handle-pull-v2": "pulling handle",
-    "lever-pull-v2": "pulling lever.",
+    "lever-pull-v2": "pulling lever",
     "peg-insert-side-v2": "inserting peg",
     "pick-place-wall-v2": "placing bin to shelf",
     "pick-out-of-hole-v2": "picking bin",
     "reach-v2": "reaching red",
-    "push-back-v2": "pushing bin back.",
-    "push-v2": "pushing bin",
+    "push-back-v2": "pulling bin back",
+    "push-v2": "pushing block",
     "pick-place-v2": "placing bin to shelf",
     "plate-slide-v2": "sliding plate",
     "plate-slide-side-v2": "sliding plate",
@@ -60,8 +60,8 @@ environment_to_instruction = {
     "push-wall-v2": "pushing bin",
     "reach-wall-v2": "reaching red",
     "shelf-place-v2": "placing bin to shelf",
-    "sweep-into-v2": "sweeping bin",
-    "sweep-v2": "sweeping bin",
+    "sweep-into-v2": "sweep blocks into hole",
+    "sweep-v2": "sweeping block",
     "window-open-v2": "opening window",
     "window-close-v2": "closing window",
 }
@@ -76,7 +76,7 @@ class MetaworldBase(Env):
         env_id,
         seed=0,
         goal_observable=False,
-        random_reset=False,
+        random_reset="train",
         max_episode_steps=128,
     ):
         """
@@ -136,6 +136,11 @@ class MetaworldBase(Env):
             info (dict): contains auxiliary diagnostic information (helpful for debugging, and sometimes for learning)
         """
         obs, reward, done, info = self.base_env.step(action)
+
+        # if success, we add "is_success" to the info
+        if "success" in info and info["success"]:
+            info["is_success"] = True
+
         return obs, reward, done, info
 
     def get_obs(self):
@@ -154,8 +159,20 @@ class MetaworldBase(Env):
         Returns:
             observation (object): the initial observation
         """
-        if self.random_reset:
-            self.rank = random.randint(0, 400)
+        if self.random_reset == "train":
+            self.rank = random.randint(100, 400)
+            self.base_env = self.all_env_types[self.env_id](seed=self.rank)
+            self.base_env = TimeLimit(
+                self.base_env, max_episode_steps=self.max_episode_steps
+            )
+        elif self.random_reset == "eval":
+            self.rank = random.randint(400, 500)
+            self.base_env = self.all_env_types[self.env_id](seed=self.rank)
+            self.base_env = TimeLimit(
+                self.base_env, max_episode_steps=self.max_episode_steps
+            )
+        elif self.random_reset == "demo":
+            self.rank = random.randint(0, 100)
             self.base_env = self.all_env_types[self.env_id](seed=self.rank)
             self.base_env = TimeLimit(
                 self.base_env, max_episode_steps=self.max_episode_steps
@@ -214,7 +231,9 @@ def create_wrapped_env(
     goal_observable=False,
     success_bonus=0.0,
     is_state_based=False,
-    dense_eval=False,
+    mode="train",
+    use_proprio=False,
+    dense_rewards_at_end=False,
 ):
     """
     Creates a wrapped MetaWorld environment with the given options.
@@ -233,7 +252,20 @@ def create_wrapped_env(
     """
 
     def _init():
-        base_env = MetaworldBase(env_id, goal_observable=goal_observable)
+        if mode == "eval":
+            base_env = MetaworldBase(
+                env_id, goal_observable=goal_observable, random_reset="eval"
+            )
+        elif mode == "train":
+            base_env = MetaworldBase(
+                env_id, goal_observable=goal_observable, random_reset="train"
+            )
+        elif mode == "demo":
+            base_env = MetaworldBase(
+                env_id, goal_observable=goal_observable, random_reset="demo"
+            )
+        else:
+            raise ValueError("Invalid mode")
 
         if pca_model is not None:
             base_env = PCAReducerWrapper(base_env, pca_model)
@@ -243,17 +275,26 @@ def create_wrapped_env(
 
         # breakpoint()
         # This replaces the metaworld state-based input with an image embedding too
-        base_env = LearnedRewardWrapper(
-            base_env,
-            reward_model,
-            is_state_based=is_state_based,
-            language_features=language_features,
-            dense_eval=dense_eval,
-        )
+
+        dense_eval = True if (mode == "eval" or mode == "demo") else False
+
+        if reward_model is not None:
+            base_env = LearnedRewardWrapper(
+                base_env,
+                reward_model,
+                is_state_based=is_state_based,
+                language_features=language_features,
+                dense_eval=dense_eval,
+                use_proprio=use_proprio,
+            )
 
         # This adds the language features to the observation
         if language_features is not None:
             base_env = LanguageWrapper(base_env, language_features)
+
+        # Environment keeps an aggregate reward at each step and outputs it only when the episode ends
+        if dense_rewards_at_end:
+            base_env = RewardAtEndWrapper(base_env)
 
         # else:
         #     # Then we are an EnvRewardModel
@@ -269,3 +310,9 @@ def create_wrapped_env(
         return base_env
 
     return _init
+
+
+if __name__ == "__main__":
+    env = MetaworldBase("door-open-v2", goal_observable=True)
+    env.reset()
+    env.render()

@@ -6,7 +6,6 @@ defaults:
 general_training:
   algo: cql
   action_noise: 0 # sigma
-  sparse_only: true
   learning_rate: 3e-4
 
   # offline rl parameters
@@ -30,3 +29,5 @@ offline_training:
 
 online_training:
   total_time_steps: 0
+  warm_start_online_rl: true
+  learning_starts: 1000

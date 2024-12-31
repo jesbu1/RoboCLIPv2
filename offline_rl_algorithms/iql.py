@@ -186,8 +186,9 @@ class IQL(OfflineRLAlgorithm):
         policy_extraction: str = "ddpg",
         ddpg_bc_weight: float = 0.1,
         mix_offline_online_buffers: bool = True,
-        critic_update_ratio: int = 1,  # number of critic updates per actor update
-        n_critics_to_sample: int = 2, # number of critics to sample from
+        offline_critic_update_ratio: int = 1,  # number of critic updates per actor update
+        online_critic_update_ratio: int = 1,  # number of critic updates per actor update
+        n_critics_to_sample: int = 2,  # number of critics to sample from
         warm_start_online_rl: bool = True,
     ):
         super().__init__(
@@ -236,8 +237,11 @@ class IQL(OfflineRLAlgorithm):
         ], "Policy extraction algorithm must be either 'awr' or 'ddpg'"
         self.policy_extraction = policy_extraction
         self.ddpg_bc_weight = ddpg_bc_weight
-        self.critic_update_ratio = critic_update_ratio
+        self.online_critic_update_ratio = online_critic_update_ratio
+        self.offline_critic_update_ratio = offline_critic_update_ratio
+        self.current_critic_update_ratio = self.offline_critic_update_ratio
         self.n_critics_to_sample = n_critics_to_sample
+        self.name = "iql"
 
     def _setup_model(self) -> None:
         super()._setup_model()
@@ -291,9 +295,11 @@ class IQL(OfflineRLAlgorithm):
             if self.use_sde:
                 self.actor.reset_noise()
 
-            for _ in range(int(self.critic_update_ratio)):
+            for _ in range(int(self.current_critic_update_ratio)):
                 # Sample replay buffer
-                replay_data = self.replay_buffer.sample(batch_size, env=self._vec_normalize_env)  # type: ignore[union-attr]
+                replay_data = self.replay_buffer.sample(
+                    batch_size, env=self._vec_normalize_env
+                )  # type: ignore[union-attr]
 
                 # Compute necessary values for the training update
                 q_preds = th.cat(
@@ -338,7 +344,7 @@ class IQL(OfflineRLAlgorithm):
                 vf_loss = (vf_weight * (vf_err**2)).mean()
 
                 # log q1 and q2 values
-                q_values.append(q_preds[0].mean().item())
+                q_values.append(q_preds.mean().item())
 
                 # log v
                 v_values.append(vf_pred.mean().item())
@@ -381,8 +387,12 @@ class IQL(OfflineRLAlgorithm):
                     th.exp(advantage * self.advantage_temp), 0, self.clip_score
                 )
 
-                mean_actions, log_std, kwargs = self.actor.get_action_dist_params(replay_data.observations)
-                distribution = self.actor.action_dist.proba_distribution(mean_actions, log_std)
+                mean_actions, log_std, kwargs = self.actor.get_action_dist_params(
+                    replay_data.observations
+                )
+                distribution = self.actor.action_dist.proba_distribution(
+                    mean_actions, log_std
+                )
                 log_prob = distribution.log_prob(replay_data.actions)
 
                 log_prob = log_prob.reshape(-1, 1)
@@ -392,8 +402,12 @@ class IQL(OfflineRLAlgorithm):
                 with th.no_grad():
                     average_q_value = th.abs(th.min(*q_preds)).mean()
                     scaled_ddpg_bc_weight = self.ddpg_bc_weight / average_q_value
-                mean_actions, log_std, _ = self.actor.get_action_dist_params(replay_data.observations)
-                distribution = self.actor.action_dist.proba_distribution(mean_actions, log_std)
+                mean_actions, log_std, _ = self.actor.get_action_dist_params(
+                    replay_data.observations
+                )
+                distribution = self.actor.action_dist.proba_distribution(
+                    mean_actions, log_std
+                )
                 log_prob = distribution.log_prob(replay_data.actions)
 
                 actions_pi = distribution.actions_from_params(mean_actions, log_std)
@@ -401,10 +415,14 @@ class IQL(OfflineRLAlgorithm):
                 critic_indices = th.randperm(self.policy_kwargs["n_critics"])[
                     : self.n_critics_to_sample
                 ]
-                q_values_pi = self.critic(replay_data.observations, actions_pi, critic_indices=critic_indices)
+                q_values_pi = self.critic(
+                    replay_data.observations, actions_pi, critic_indices=critic_indices
+                )
                 # breakpoint()
                 min_qf_pi = th.min(*q_values_pi).squeeze(-1)
-                assert min_qf_pi.shape == log_prob.shape, f"{min_qf_pi.shape} != {log_prob.shape}"
+                assert (
+                    min_qf_pi.shape == log_prob.shape
+                ), f"{min_qf_pi.shape} != {log_prob.shape}"
                 policy_loss = -th.mean(min_qf_pi + scaled_ddpg_bc_weight * log_prob)
                 # print proportion of policy loss contributed to by each term
                 # policy_loss = -th.mean(min_qf_pi + self.ddpg_bc_weight * log_prob)

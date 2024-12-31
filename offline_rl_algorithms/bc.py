@@ -132,6 +132,7 @@ class BC(OfflineRLAlgorithm):
         # Entropy coefficient / Entropy temperature
         # Inverse of the reward scale
         self.target_update_interval = target_update_interval
+        self.name = "bc"
 
         if _init_setup_model:
             self._setup_model()

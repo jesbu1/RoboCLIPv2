@@ -3,12 +3,10 @@
 defaults:
   - _self_
 
-general_training:
-  sparse_only: false
 
 offline_training:
   offline_h5_path: "data/h5_buffers/updated_trajs/metaworld_traj_15_demos_{}.h5"
-  offline_tasks: ["opening window"]
+  offline_tasks: ["window-open-v2"]
   offline_training_steps: 10000 
 
 online_training:
@@ -19,5 +17,5 @@ environment:
   n_envs: 1
   train_freq_num: 1
   train_freq_type: 'step'
-  text_string: "opening window"
+  env_id: "window-open-v2"
   ignore_language: false
