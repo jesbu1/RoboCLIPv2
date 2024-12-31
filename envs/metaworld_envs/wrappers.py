@@ -158,16 +158,20 @@ class LearnedRewardWrapper(gym.Wrapper):
         language_features: th.Tensor,
         is_state_based: bool = False,
         dense_eval: bool = False,
+        use_proprio: bool = False,
     ):
         super(LearnedRewardWrapper, self).__init__(env)
         self.reward_model = reward_model
         self.is_state_based = is_state_based
+        self.use_proprio = use_proprio
 
         if self.is_state_based is False:
             self.observation_space = spaces.Box(
                 low=-np.inf,
                 high=np.inf,
-                shape=(self.reward_model.img_output_dim,),
+                shape=(
+                    self.reward_model.img_output_dim + (4 if self.use_proprio else 0),
+                ),
                 dtype=np.float32,
             )
 
@@ -188,11 +192,15 @@ class LearnedRewardWrapper(gym.Wrapper):
             )
         else:
             print("Language features are not provided in the reward model")
-            print("This may be valid if the user is using sparse/dense reward in a single task")
+            print(
+                "This may be valid if the user is using sparse/dense reward in a single task"
+            )
 
     def step(self, action):
         self.counter += 1
         obs, original_reward, done, info = self.env.step(action)
+
+        proprio = obs[0:4]
 
         encoded_image = None
         # IF the model is state-based and is dense/sparse reward, we can skip this
@@ -219,6 +227,9 @@ class LearnedRewardWrapper(gym.Wrapper):
             # obs = np.concatenate([obs, self.reward_model(obs)])
             obs = encoded_image
 
+            if self.use_proprio:
+                obs = np.concatenate([obs, proprio])
+
         if self.reward_model.name == "dense" or self.dense_eval:
             return obs, original_reward, done, info
         # Check if this is sparse/dense reward
@@ -232,7 +243,9 @@ class LearnedRewardWrapper(gym.Wrapper):
         if encoded_image is not None:
             self.past_observations.append(encoded_image)
 
-        assert self.reward_language_features is not None, "Language features are None in the reward model"
+        assert (
+            self.reward_language_features is not None
+        ), "Language features are None in the reward model"
         if self.reward_at_every_step:
             stacked_sequence = np.stack(self.past_observations, axis=1)
             stacked_sequence = (
@@ -275,130 +288,30 @@ class LearnedRewardWrapper(gym.Wrapper):
         encoded_image = self.reward_model.encode_images(image_for_model).squeeze()
 
         if self.is_state_based is False:
-            obs = encoded_image
+            if self.use_proprio:
+                proprio = obs[0:4]
+                obs = np.concatenate([encoded_image, proprio])
+
+            else:
+                obs = encoded_image
 
         self.past_observations.append(encoded_image)
 
         return obs
 
 
-# Wrapper for similarity-based observations
-class SimilarityRewardWrapper(gym.Wrapper):
-    def __init__(
-        self,
-        env,
-        target_embedding,
-        transform_model,
-        video_processor,
-        pca_video_model=None,
-        max_sim=None,
-        succ_bonus=0,
-        time_penalty=0.1,
-        time_reward=1.0,
-        threshold_reward=False,
-        norm_output=True,
-        baseline=False,
-        project_reward=False,
-    ):
-        super(SimilarityRewardWrapper, self).__init__(env)
-        self.target_embedding = target_embedding  # Target video embedding
-        self.transform_model = transform_model  # Transformation model (if any)
-        self.video_processor = (
-            video_processor  # Video frame processor (for neural network input)
-        )
-        self.pca_video_model = (
-            pca_video_model  # Optional PCA model for dimensionality reduction
-        )
-        self.max_sim = max_sim  # Maximum similarity threshold for rewards
-        self.succ_bonus = succ_bonus  # Bonus if the task is successfully completed
-        self.time_penalty = time_penalty  # Penalty based on time spent
-        self.time_reward = time_reward  # Scaling factor for reward
-        self.threshold_reward = threshold_reward  # Use thresholded reward logic
-        self.norm_output = norm_output  # Normalize output embeddings
-        self.baseline = baseline  # Use baseline behavior
-        self.project_reward = (
-            project_reward  # Option to project rewards based on similarity
-        )
-        self.past_observations = []  # Storage for past observations (frames)
-        self.counter = 0  # Step counter to track time
+# Environment keeps an aggregate reward at each step and outputs it only when the episode ends
+class RewardAtEndWrapper(gym.Wrapper):
+    def __init__(self, env: gym.Env):
+        super(RewardAtEndWrapper, self).__init__(env)
+        # Keep track of the total reward
+        self.total_reward = 0
 
     def step(self, action):
-        obs, _, done, info = self.env.step(action)
-
-        # render every 10 steps
-        if self.counter % 10 == 0:
-            self.past_observations.append(
-                self.env.render()
-            )  # Collect frame from the environment
-
-        self.counter += 1
-
+        obs, reward, done, info = self.env.step(action)
+        self.total_reward += reward
         if done:
-            with th.no_grad():
-                # Process the video frames into embeddings
-                frames = self.video_processor.adjust_frames(self.past_observations)
-                video_embedding = self.transform_model.get_video_features(frames)
-
-                # Normalize the embeddings if required
-                if self.norm_output:
-                    video_embedding = normalize_embeddings(video_embedding).float()
-                    self.target_embedding = normalize_embeddings(
-                        self.target_embedding
-                    ).float()
-
-                # Apply PCA transformation if required
-                if self.pca_video_model is not None:
-                    video_embedding = (
-                        th.from_numpy(
-                            self.pca_video_model.transform(video_embedding.cpu())
-                        )
-                        .float()
-                        .cuda()
-                    )
-
-                # Further transform the embeddings if using non-baseline behavior
-                if not self.baseline:
-                    video_embedding = self.transform_model(video_embedding)
-
-                # Normalize embeddings again
-                video_embedding = normalize_embeddings(video_embedding).float()
-
-                # Calculate similarity between target and current video embedding
-                similarity_matrix = th.matmul(
-                    self.target_embedding, video_embedding.t()
-                )
-                reward = similarity_matrix.cpu().numpy()[0][0]
-
-                # Scale reward by time
-                reward *= self.time_reward
-
-                # Thresholded reward logic
-                if self.threshold_reward:
-                    if self.max_sim is not None:
-                        if reward < self.max_sim:
-                            reward = 0.0
-                        elif self.project_reward:
-                            reward = (
-                                (reward - self.max_sim) / (100 - self.max_sim) * 100
-                            )
-                    else:
-                        raise ValueError(
-                            "Max similarity score must be provided for thresholded reward."
-                        )
-
-                # Add bonus if task was successful
-                if info.get("success", False):
-                    reward += self.succ_bonus
-
-                # Apply time penalty
-                reward -= self.time_penalty
-
+            self.total_reward = 0
+            return obs, self.total_reward, done, info
+        else:
             return obs, reward, done, info
-
-        # Default time penalty if not finished
-        return obs, -self.time_penalty, done, info
-
-    def reset(self):
-        self.past_observations = []  # Clear observation history on reset
-        self.counter = 0  # Reset time counter
-        return self.env.reset()

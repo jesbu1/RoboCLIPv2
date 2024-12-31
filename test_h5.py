@@ -1,7 +1,7 @@
 import h5py
 
 # h5_path = 'data/h5_buffers/orig/metaworld_traj_15_demos.h5'
-h5_path = 'data/h5_buffers/updated_trajs/metaworld_traj_50_demos_orig_reward.h5'
+h5_path = "data/h5_buffers/updated_trajs/metaworld_traj_15_demos_dense.h5"
 # h5_path = 'data/h5_buffers/orig/metaworld_traj_15_demos.h5'
 h5_file = h5py.File(h5_path, "r")
 
@@ -9,40 +9,44 @@ print(h5_file.keys())
 breakpoint()
 
 # print action statistics for each dimension (N, 4)
-print(h5_file['action'].shape)
+print(h5_file["action"].shape)
 for i in range(4):
-    print(f"Action {i} {h5_file['action'][:, i].mean()} +/- {h5_file['action'][:, i].std()}")
-    print("Min/max", h5_file['action'][:, i].min(), h5_file['action'][:, i].max())
+    print(
+        f"Action {i} {h5_file['action'][:, i].mean()} +/- {h5_file['action'][:, i].std()}"
+    )
+    print("Min/max", h5_file["action"][:, i].min(), h5_file["action"][:, i].max())
     print()
 
 # draw a histogram and for each action in one plot
 import matplotlib.pyplot as plt
 
 plt.subplot(2, 2, 1)
-plt.hist(h5_file['action'][:, 0])
+plt.hist(h5_file["action"][:, 0])
 plt.title("Action 0")
 
 plt.subplot(2, 2, 2)
-plt.hist(h5_file['action'][:, 1])
+plt.hist(h5_file["action"][:, 1])
 plt.title("Action 1")
 
 plt.subplot(2, 2, 3)
-plt.hist(h5_file['action'][:, 2])
+plt.hist(h5_file["action"][:, 2])
 plt.title("Action 2")
 
 plt.subplot(2, 2, 4)
-plt.hist(h5_file['action'][:, 3])
+plt.hist(h5_file["action"][:, 3])
 plt.title("Action 3")
 
 plt.savefig("action_histogram.png")
 
 
 # Let's also print the observation space and the min/max of its values
-print(h5_file['state'].shape)
+print(h5_file["state"].shape)
 
 for i in range(39):
-    print(f"Observation {i} {h5_file['state'][:, i].mean()} +/- {h5_file['state'][:, i].std()}")
-    print("Min/max", h5_file['state'][:, i].min(), h5_file['state'][:, i].max())
+    print(
+        f"Observation {i} {h5_file['state'][:, i].mean()} +/- {h5_file['state'][:, i].std()}"
+    )
+    print("Min/max", h5_file["state"][:, i].min(), h5_file["state"][:, i].max())
     print()
 
 
@@ -89,7 +93,7 @@ for i in range(39):
 #     print()
 
 # print h5py strings
-h5_strings = h5_file['string']
+h5_strings = h5_file["string"]
 
 strings_list = []
 for string in h5_strings:
@@ -105,4 +109,6 @@ for string in strings_list:
 
 print(string_counts)
 
-import pdb; pdb.set_trace()
+import pdb
+
+pdb.set_trace()

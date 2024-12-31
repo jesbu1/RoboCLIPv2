@@ -1,25 +1,32 @@
 program: test_scripts/test_iql.py
 name: iql_sweep_15_demos_sparse
-method: bayes
-metric:
-  goal: maximize
-  name: eval/mean_reward
+method: grid
+# metric:
+#   goal: maximize
+#   name: eval/mean_reward
 parameters:
   algorithm:
     values: ["iql"] 
   metaworld:
-    values: ["all_tasks_15"] 
+    values: ["some_tasks_15"] 
   reward:
     values: ["dense"]
   general_training.policy_extraction:
     values: ['awr']
-  general_training.awr_advantage_temp:
-    values: [0.5, 1.0, 5.0, 10.0]
-  general_training.learning_rate:
-    values: [1e-4, 1e-3]
-  general_training.critic_update_ratio:
-    values: [1, 2, 4]
-
+  model.pi_net_arch:
+    values: [[512, 256], [512, 512], [1024, 512, 256]]
+  model.qf_net_arch:
+    values: [[512, 256], [1024, 512, 256], [1024, 1024, 512]]
+  # general_training.awr_advantage_temp:
+    # values: [0.5, 1.0, 5.0, 10.0]
+  # general_training.learning_rate:
+  #   values: [1e-4, 1e-3]
+  # general_training.critic_update_ratio:
+  #   values: [1]
+  # general_training.n_critics:
+  #   values: [2, 5, 10]
+  # general_training.n_critics_to_sample:
+  #   values: [2, 4]
 command:
   - ${env}
   - ${interpreter}

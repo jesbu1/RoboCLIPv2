@@ -1,5 +1,19 @@
 # TODO: if offline, just do BC. if online, do SAC
-from typing import Any, ClassVar, Dict, List, Optional, Tuple, Type, TypeVar, Union
+from typing import (
+    Any,
+    ClassVar,
+    Dict,
+    List,
+    Optional,
+    Tuple,
+    Type,
+    TypeVar,
+    Union,
+    Iterable,
+)
+import io
+import os
+import pathlib
 
 import numpy as np
 import torch as th
@@ -116,7 +130,8 @@ class RLPD(OfflineRLAlgorithm):
         seed: Optional[int] = None,
         device: Union[th.device, str] = "auto",
         _init_setup_model: bool = True,
-        critic_update_ratio: int = 5,  # number of critic updates per actor update
+        offline_critic_update_ratio: int = 1,  # number of critic updates per actor update
+        online_critic_update_ratio: int = 5,  # number of critic updates per actor update
         n_critics_to_sample: int = 2,  # number of critics to sample from
         mix_offline_online_buffers: bool = True,  # whether to mix offline and online buffers
         train_critic_with_entropy: bool = False,  # whether to train the critic with the entropy term
@@ -172,13 +187,16 @@ class RLPD(OfflineRLAlgorithm):
         self.target_update_interval = target_update_interval
         self.ent_coef_optimizer: Optional[th.optim.Adam] = None
 
-
         if _init_setup_model:
             self._setup_model()
 
-        self.critic_update_ratio = critic_update_ratio
+        self.online_critic_update_ratio = online_critic_update_ratio
+        self.offline_critic_update_ratio = offline_critic_update_ratio
+        self.current_critic_update_ratio = self.offline_critic_update_ratio
         self.n_critics_to_sample = n_critics_to_sample
         self.train_critic_with_entropy = train_critic_with_entropy
+
+        self.name = "rlpd"
 
     def set_policies_with_offline(self):
         # now replace the RLPD actor and critic with the offline_algo's actor and critic
@@ -187,14 +205,21 @@ class RLPD(OfflineRLAlgorithm):
         self.policy.critic = self.offline_algo.policy.critic
         self.policy.critic_target = self.offline_algo.policy.critic_target
 
-        self.policy.optimizer = self.offline_algo.policy.optimizer
+        self.policy.actor.optimizer = self.offline_algo.policy.actor.optimizer
         self.policy.critic.optimizer = self.offline_algo.policy.critic.optimizer
-        if hasattr(self.offline_algo, "ent_coef_optimizer") and self.offline_algo.ent_coef_optimizer is not None:
-            print("Setting ent_coef_optimizer and ent coef to the old value of the offline algo")
+        if (
+            hasattr(self.offline_algo, "ent_coef_optimizer")
+            and self.offline_algo.ent_coef_optimizer is not None
+        ):
+            print(
+                "Setting ent_coef_optimizer and ent coef to the old value of the offline algo"
+            )
             self.ent_coef_optimizer = self.offline_algo.ent_coef_optimizer
             self.log_ent_coef = self.offline_algo.log_ent_coef
         elif hasattr(self.offline_algo, "ent_coef_tensor"):
-            print(f"Setting ent_coef_tensor to the old value of the offline algo: {self.offline_algo.ent_coef_tensor.item()}")
+            print(
+                f"Setting ent_coef_tensor to the old value of the offline algo: {self.offline_algo.ent_coef_tensor.item()}"
+            )
             self.ent_coef_tensor = self.offline_algo.ent_coef_tensor
 
     def _setup_model(self) -> None:
@@ -204,11 +229,9 @@ class RLPD(OfflineRLAlgorithm):
         # self.policy.critic = th.compile(self.policy.critic)
         # self.policy.critic_target = th.compile(self.policy.critic_target)
 
-
         # If there is a v_net, we can add one here
-        #if hasattr(self.offline_algo, "v_net"): # not needed for online
+        # if hasattr(self.offline_algo, "v_net"): # not needed for online
         #    self.v_net = self.offline_algo.v_net # not needed for online
-
 
         # Target entropy is used when learning the entropy coefficient
         if self.target_entropy == "auto":
@@ -246,18 +269,16 @@ class RLPD(OfflineRLAlgorithm):
             # this will throw an error if a malformed string (different from 'auto')
             # is passed
             self.ent_coef_tensor = th.tensor(float(self.ent_coef), device=self.device)
-        
+
         # Set once in case the model is pretrained already
         self.set_policies_with_offline()
         self._create_aliases()
-        
+
         # Running mean and running var
         self.batch_norm_stats = get_parameters_by_name(self.critic, ["running_"])
         self.batch_norm_stats_target = get_parameters_by_name(
             self.critic_target, ["running_"]
         )
-
-
 
     def _create_aliases(self) -> None:
         self.actor = self.policy.actor
@@ -335,7 +356,7 @@ class RLPD(OfflineRLAlgorithm):
             else:
                 ent_coef = self.ent_coef_tensor
 
-            for critic_update in range(self.critic_update_ratio):
+            for critic_update in range(self.current_critic_update_ratio):
                 # Sample replay buffer
                 replay_data = self.replay_buffer.sample(
                     batch_size, env=self._vec_normalize_env
@@ -376,12 +397,14 @@ class RLPD(OfflineRLAlgorithm):
 
                 # Get current Q-values estimates for each critic network
                 # using action from the replay buffer
-                current_q_values = th.cat(self.critic(
-                    replay_data.observations, replay_data.actions
-                ), dim=1)
+                current_q_values = th.cat(
+                    self.critic(replay_data.observations, replay_data.actions), dim=1
+                )
 
                 # Compute critic loss
-                critic_loss = F.mse_loss(current_q_values, target_q_values.expand_as(current_q_values))
+                critic_loss = F.mse_loss(
+                    current_q_values, target_q_values.expand_as(current_q_values)
+                )
                 assert isinstance(critic_loss, th.Tensor)  # for type checker
                 critic_losses.append(critic_loss.item())  # type: ignore[union-attr]
 
@@ -401,16 +424,11 @@ class RLPD(OfflineRLAlgorithm):
                         self.batch_norm_stats, self.batch_norm_stats_target, 1.0
                     )
             # Action by the current actor for the sampled state
-            actions_pi, log_prob = self.actor.action_log_prob(
-                replay_data.observations
-            )
+            actions_pi, log_prob = self.actor.action_log_prob(replay_data.observations)
             log_prob = log_prob.reshape(-1, 1)
 
             ent_coef_loss = None
-            if (
-                self.ent_coef_optimizer is not None
-                and self.log_ent_coef is not None
-            ):
+            if self.ent_coef_optimizer is not None and self.log_ent_coef is not None:
                 # Important: detach the variable from the graph
                 # so we don't change it with other losses
                 # see https://github.com/rail-berkeley/softlearning/issues/60
@@ -435,9 +453,7 @@ class RLPD(OfflineRLAlgorithm):
             reward_values.append(replay_data.rewards.mean().item())
 
             # log average q values
-            q_values_list.append(
-                np.mean([q.mean().item() for q in current_q_values])
-            )
+            q_values_list.append(np.mean([q.mean().item() for q in current_q_values]))
 
             # log average next q values
             q_next_values_list.append(next_q_values.mean().item())
@@ -456,7 +472,7 @@ class RLPD(OfflineRLAlgorithm):
             self.actor.optimizer.zero_grad()
             actor_loss.backward()
             self.actor.optimizer.step()
-            
+
             actor_log_pis.append(log_prob.mean().item())
 
         self._n_updates += gradient_steps

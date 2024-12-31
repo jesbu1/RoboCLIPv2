@@ -121,8 +121,9 @@ class CQL(OfflineRLAlgorithm):
         min_q_temp: float = 1.0,
         use_calibrated_q: bool = False,
         mix_offline_online_buffers: bool = True,
-        critic_update_ratio: int = 1,  # number of critic updates per actor update
-        n_critics_to_sample: int = 2, # number of critics to sample from
+        offline_critic_update_ratio: int = 1,  # number of critic updates per actor update
+        online_critic_update_ratio: int = 1,  # number of critic updates per actor update
+        n_critics_to_sample: int = 2,  # number of critics to sample from
         warm_start_online_rl: bool = True,
     ):
         super().__init__(
@@ -169,7 +170,9 @@ class CQL(OfflineRLAlgorithm):
         self.min_q_weight = min_q_weight
         self.temp = min_q_temp
         self.use_calibrated_q = use_calibrated_q
-        self.critic_update_ratio = critic_update_ratio
+        self.online_critic_update_ratio = online_critic_update_ratio
+        self.offline_critic_update_ratio = offline_critic_update_ratio
+        self.current_critic_update_ratio = self.offline_critic_update_ratio
         self.n_critics_to_sample = n_critics_to_sample
 
     def _setup_model(self) -> None:
@@ -183,7 +186,9 @@ class CQL(OfflineRLAlgorithm):
         # Target entropy is used when learning the entropy coefficient
         if self.target_entropy == "auto":
             # automatically set target entropy if needed
-            self.target_entropy = float(-np.prod(self.env.action_space.shape).astype(np.float32))  # type: ignore
+            self.target_entropy = float(
+                -np.prod(self.env.action_space.shape).astype(np.float32)
+            )  # type: ignore
         else:
             # Force conversion
             # this will also throw an error for unexpected string
@@ -215,6 +220,11 @@ class CQL(OfflineRLAlgorithm):
             # is passed
             self.ent_coef_tensor = th.tensor(float(self.ent_coef), device=self.device)
 
+        if self.use_calibrated_q:
+            self.name = "cal-ql"
+        else:
+            self.name = "cql"
+
     def _create_aliases(self) -> None:
         self.actor = self.policy.actor
         self.critic = self.policy.critic.to(th.float32)
@@ -236,7 +246,7 @@ class CQL(OfflineRLAlgorithm):
         ent_coef_losses, ent_coefs = [], []
         actor_losses, critic_losses = [], []
         q_values = []
-        q_next_values = [] 
+        q_next_values = []
         actor_log_pis = []
         reward_values = []
         cql_losses = []
@@ -251,9 +261,11 @@ class CQL(OfflineRLAlgorithm):
             else:
                 ent_coef = self.ent_coef_tensor
 
-            for critic_update in range(self.critic_update_ratio):
+            for critic_update in range(self.current_critic_update_ratio):
                 # Sample replay buffer
-                replay_data = self.replay_buffer.sample(batch_size, env=self._vec_normalize_env)  # type: ignore[union-attr]
+                replay_data = self.replay_buffer.sample(
+                    batch_size, env=self._vec_normalize_env
+                )  # type: ignore[union-attr]
 
                 with th.no_grad():
                     # Select action according to policy
@@ -265,7 +277,11 @@ class CQL(OfflineRLAlgorithm):
                         : self.n_critics_to_sample
                     ]
                     next_q_values = th.cat(
-                        self.critic_target(replay_data.next_observations, next_actions, critic_indices=critic_indices),
+                        self.critic_target(
+                            replay_data.next_observations,
+                            next_actions,
+                            critic_indices=critic_indices,
+                        ),
                         dim=1,
                     )
                     next_q_values, _ = th.min(next_q_values, dim=1, keepdim=True)
@@ -297,19 +313,21 @@ class CQL(OfflineRLAlgorithm):
                 next_log_pis = next_log_pis.reshape(-1, 1)
                 # Compute the Q values of random actions
                 # q1_rand, q2_rand = self.critic(replay_data.observations, random_actions)
-                q_rand = th.cat(self.critic(replay_data.observations, random_actions), 1)
+                q_rand = th.cat(
+                    self.critic(replay_data.observations, random_actions), 1
+                )
                 # q1_current_actions, q2_current_actions = self.critic(
                 #     replay_data.observations, replay_data.actions
                 # )
-                q_current_actions = th.cat(self.critic(
-                    replay_data.observations, current_actions
-                ), 1)
+                q_current_actions = th.cat(
+                    self.critic(replay_data.observations, current_actions), 1
+                )
                 # q1_next_actions, q2_next_actions = self.critic(
-                    # replay_data.observations, next_actions
+                # replay_data.observations, next_actions
                 # )
-                q_next_actions = th.cat(self.critic(
-                    replay_data.observations, next_actions
-                ), 1)
+                q_next_actions = th.cat(
+                    self.critic(replay_data.observations, next_actions), 1
+                )
 
                 # importance sampled version of CQL for cat_q1 and cat_q2
                 random_density = np.log(0.5 ** current_actions.shape[-1])
@@ -330,25 +348,29 @@ class CQL(OfflineRLAlgorithm):
                 #     ],
                 #     1,
                 # )
-                # shape should be (batch_size, 10, 3) 
+                # shape should be (batch_size, 10, 3)
                 if self.use_calibrated_q:
-                    cal_ql_lower_bounds = replay_data.mc_returns.expand_as(q_current_actions)
-                    bound_rate_cal_ql = (q_current_actions < cal_ql_lower_bounds).float().mean()
-                    bound_rate_next_cal_ql = (q_next_actions < cal_ql_lower_bounds).float().mean()
+                    cal_ql_lower_bounds = replay_data.mc_returns.expand_as(
+                        q_current_actions
+                    )
+                    bound_rate_cal_ql = (
+                        (q_current_actions < cal_ql_lower_bounds).float().mean()
+                    )
+                    bound_rate_next_cal_ql = (
+                        (q_next_actions < cal_ql_lower_bounds).float().mean()
+                    )
                     q_current_actions = th.max(q_current_actions, cal_ql_lower_bounds)
                     q_next_actions = th.max(q_next_actions, cal_ql_lower_bounds)
-
-                    
 
                 cat_qs = th.cat(
                     [
                         q_rand[:, :, None] - random_density,
                         q_next_actions[:, :, None] - next_log_pis.detach()[:, None],
-                        q_current_actions[:, :, None] - current_log_pis.detach()[:, None],
+                        q_current_actions[:, :, None]
+                        - current_log_pis.detach()[:, None],
                     ],
                     dim=-1,
                 )
-
 
                 # cql_min_qf1_loss = (
                 #     th.logsumexp(cat_q1 / self.temp, dim=1).mean()
@@ -361,7 +383,11 @@ class CQL(OfflineRLAlgorithm):
                 #     * self.temp
                 # )
 
-                cql_min_qf_loss = th.logsumexp(cat_qs / self.temp, dim=-1).mean(dim=0) * self.min_q_weight * self.temp
+                cql_min_qf_loss = (
+                    th.logsumexp(cat_qs / self.temp, dim=-1).mean(dim=0)
+                    * self.min_q_weight
+                    * self.temp
+                )
 
                 # cql_min_qf1_loss = (
                 #     cql_min_qf1_loss - q1_current_actions.mean() * self.min_q_weight
@@ -370,14 +396,18 @@ class CQL(OfflineRLAlgorithm):
                 #     cql_min_qf2_loss - q2_current_actions.mean() * self.min_q_weight
                 # )
 
-                cql_min_qf_loss = cql_min_qf_loss - q_current_actions.mean(dim=0) * self.min_q_weight
+                cql_min_qf_loss = (
+                    cql_min_qf_loss - q_current_actions.mean(dim=0) * self.min_q_weight
+                )
 
                 # critic_loss = 1/self.n_critics_to_sample * sum(
                 #     F.mse_loss(current_q, target_q_values)
                 #     for current_q in [q1_current_actions, q2_current_actions]
                 # )
 
-                critic_loss = F.mse_loss(q_current_actions, target_q_values.expand_as(q_current_actions))
+                critic_loss = F.mse_loss(
+                    q_current_actions, target_q_values.expand_as(q_current_actions)
+                )
 
                 critic_loss += th.sum(cql_min_qf_loss)
 
@@ -461,7 +491,9 @@ class CQL(OfflineRLAlgorithm):
 
         if self.use_calibrated_q:
             metrics_dict[f"{logging_prefix}/bound_rate_cal_ql"] = bound_rate_cal_ql
-            metrics_dict[f"{logging_prefix}/bound_rate_next_cal_ql"] = bound_rate_next_cal_ql
+            metrics_dict[f"{logging_prefix}/bound_rate_next_cal_ql"] = (
+                bound_rate_next_cal_ql
+            )
 
         for metric in metrics_dict:
             self.logger.record(metric, metrics_dict[metric])
