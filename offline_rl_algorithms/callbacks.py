@@ -7,6 +7,7 @@ import wandb
 from wandb.integration.sb3 import WandbCallback
 import io
 
+
 class OfflineEvalCallback(EvalCallback):
     def __init__(self, *args, video_freq, **kwargs):
         super(OfflineEvalCallback, self).__init__(*args, **kwargs)
@@ -24,7 +25,6 @@ class OfflineEvalCallback(EvalCallback):
             if param.grad is not None
         ]
         if len(policy_gradients) != 0:
-
             all_gradients = np.concatenate(policy_gradients)
             self.logger.record("grad/policy_histogram", wandb.Histogram(all_gradients))
             # Log critic gradients
@@ -148,7 +148,7 @@ class OfflineEvalCallback(EvalCallback):
         frames = []
         obs = self.eval_env.reset()
 
-        for _ in range(self.eval_env.max_timesteps):  # You can adjust the number of steps for recording
+        for _ in range(128):  # You can adjust the number of steps for recording
             frame = self.eval_env.render(mode="rgb_array")
             # downsample frame
             frame = frame[::3, ::3, :3]
@@ -156,7 +156,6 @@ class OfflineEvalCallback(EvalCallback):
             action, _ = self.model.predict(obs, deterministic=False)
 
             obs, _, _, info = self.eval_env.step(action)
-
 
         video_buffer = io.BytesIO()
 

@@ -8,13 +8,9 @@ offline_training:
   offline_tasks: ['door-close-v2', 'drawer-close-v2', 'button-press-wall-v2', 'window-open-v2', 
                   'handle-press-side-v2', 'coffee-push-v2', 'faucet-close-v2', 'stick-pull-v2', 
                   'sweep-into-v2', 'push-back-v2']
-  offline_training_steps: 5000 
-
-online_training:
-  total_time_steps: 1000000
 
 environment:
-  cfg_name: "metaworld_some_tasks_15"
+  cfg_name: "metaworld_off_on_15"
   n_envs: 1
   train_freq_num: 1
   train_freq_type: 'step'

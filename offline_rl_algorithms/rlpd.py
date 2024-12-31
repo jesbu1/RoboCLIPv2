@@ -104,7 +104,7 @@ class RLPD(OfflineRLAlgorithm):
         self,
         policy: Union[str, Type[CustomSACPolicy]],
         env: Union[GymEnv, str],
-        offline_algo: OfflineRLAlgorithm,
+        offline_algo: OfflineRLAlgorithm = None,
         learning_rate: Union[float, Schedule] = 3e-4,
         buffer_size: int = 1_000_000,  # 1e6
         learning_starts: int = 100,
@@ -137,15 +137,15 @@ class RLPD(OfflineRLAlgorithm):
         train_critic_with_entropy: bool = False,  # whether to train the critic with the entropy term
         warm_start_online_rl: bool = True,
     ):
-        assert (
-            policy_kwargs["n_critics"] > 2
-        ), "RLPD is made for more than 2 critics. Double check this."
-        assert (
-            policy_kwargs["critic_layer_norm"] == True
-        ), "RLPD is made for layernorm critics. Double check this."
-        print(
-            f"Mix offline and online buffers: {mix_offline_online_buffers}. RLPD assumes offline data is mixed with online data. Just printing for sanity."
-        )
+        # assert (
+        #     policy_kwargs["n_critics"] > 2
+        # ), "RLPD is made for more than 2 critics. Double check this."
+        # assert (
+        #     policy_kwargs["critic_layer_norm"] == True
+        # ), "RLPD is made for layernorm critics. Double check this."
+        # print(
+        #     f"Mix offline and online buffers: {mix_offline_online_buffers}. RLPD assumes offline data is mixed with online data. Just printing for sanity."
+        # )
 
         self.offline_algo = offline_algo
 
@@ -198,29 +198,39 @@ class RLPD(OfflineRLAlgorithm):
 
         self.name = "rlpd"
 
-    def set_policies_with_offline(self):
+    def set_offline_algo(self, offline_algo):
+        self.offline_algo = offline_algo
+
+    def set_policies_with_offline(self, offline_algo=None):
         # now replace the RLPD actor and critic with the offline_algo's actor and critic
         # replace their parameters so that the optimizer is still the same
-        self.policy.actor = self.offline_algo.policy.actor
-        self.policy.critic = self.offline_algo.policy.critic
-        self.policy.critic_target = self.offline_algo.policy.critic_target
 
-        self.policy.actor.optimizer = self.offline_algo.policy.actor.optimizer
-        self.policy.critic.optimizer = self.offline_algo.policy.critic.optimizer
+        if offline_algo is None:
+            offline_algo = self.offline_algo
+
+        if offline_algo is None and self.offline_algo is not None:
+            return
+
+        self.policy.actor = offline_algo.policy.actor
+        self.policy.critic = offline_algo.policy.critic
+        self.policy.critic_target = offline_algo.policy.critic_target
+
+        self.policy.actor.optimizer = offline_algo.policy.actor.optimizer
+        self.policy.critic.optimizer = offline_algo.policy.critic.optimizer
         if (
-            hasattr(self.offline_algo, "ent_coef_optimizer")
-            and self.offline_algo.ent_coef_optimizer is not None
+            hasattr(offline_algo, "ent_coef_optimizer")
+            and offline_algo.ent_coef_optimizer is not None
         ):
             print(
                 "Setting ent_coef_optimizer and ent coef to the old value of the offline algo"
             )
-            self.ent_coef_optimizer = self.offline_algo.ent_coef_optimizer
-            self.log_ent_coef = self.offline_algo.log_ent_coef
-        elif hasattr(self.offline_algo, "ent_coef_tensor"):
+            self.ent_coef_optimizer = offline_algo.ent_coef_optimizer
+            self.log_ent_coef = offline_algo.log_ent_coef
+        elif hasattr(offline_algo, "ent_coef_tensor"):
             print(
-                f"Setting ent_coef_tensor to the old value of the offline algo: {self.offline_algo.ent_coef_tensor.item()}"
+                f"Setting ent_coef_tensor to the old value of the offline algo: {offline_algo.ent_coef_tensor.item()}"
             )
-            self.ent_coef_tensor = self.offline_algo.ent_coef_tensor
+            self.ent_coef_tensor = offline_algo.ent_coef_tensor
 
     def _setup_model(self) -> None:
         super()._setup_model()
@@ -270,8 +280,6 @@ class RLPD(OfflineRLAlgorithm):
             # is passed
             self.ent_coef_tensor = th.tensor(float(self.ent_coef), device=self.device)
 
-        # Set once in case the model is pretrained already
-        self.set_policies_with_offline()
         self._create_aliases()
 
         # Running mean and running var
@@ -500,7 +508,7 @@ class RLPD(OfflineRLAlgorithm):
         total_timesteps: int,
         callback: MaybeCallback = None,
         log_interval: int = 4,
-        tb_log_name: str = "SAC",
+        tb_log_name: str = "RLPD",
         reset_num_timesteps: bool = True,
         progress_bar: bool = False,
         logger: Optional = None,

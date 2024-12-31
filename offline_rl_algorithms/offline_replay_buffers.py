@@ -405,7 +405,7 @@ class CombinedBuffer(ReplayBuffer):
                 new_data = th.zeros(new_batch_size, 1)
             elif name == "mc_returns":
                 old_data = getattr(old_samples, name)
-                new_data = np.zeros_like(
+                new_data = th.zeros_like(
                     old_data
                 )  # set all mc_returns to 0 for new data as it's currently not supported
             else:
