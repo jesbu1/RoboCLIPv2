@@ -148,7 +148,7 @@ class OfflineEvalCallback(EvalCallback):
         frames = []
         obs = self.eval_env.reset()
 
-        for _ in range(128):  # You can adjust the number of steps for recording
+        for _ in range(self.eval_env.max_timesteps):  # You can adjust the number of steps for recording
             frame = self.eval_env.render(mode="rgb_array")
             # downsample frame
             frame = frame[::3, ::3, :3]
