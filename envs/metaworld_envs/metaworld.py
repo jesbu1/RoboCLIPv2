@@ -140,6 +140,8 @@ class MetaworldBase(Env):
         # if success, we add "is_success" to the info
         if "success" in info and info["success"]:
             info["is_success"] = True
+        else:
+            info["is_success"] = False
 
         return obs, reward, done, info
 

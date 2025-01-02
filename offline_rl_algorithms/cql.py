@@ -72,7 +72,6 @@ class CQL(OfflineRLAlgorithm):
     :param min_q_weight: Weight for the min_q loss for CQL
     :param min_q_temp: Temperature parameter for the min_q loss for CQL
     :param use_calibrated_q: Whether to use calibrated Q for CQL (Cal-QL algorithm)
-    :param mix_offline_online_buffers: Whether to mix offline and online buffers
     :param critic_update_ratio: Number of critic updates per actor update
     :param n_critics_to_sample: Number of critics to sample from
     :param warm_start_online_rl: Whether to warm start the online RL agent with the offline RL agent
@@ -120,7 +119,6 @@ class CQL(OfflineRLAlgorithm):
         min_q_weight: float = 5.0,
         min_q_temp: float = 1.0,
         use_calibrated_q: bool = False,
-        mix_offline_online_buffers: bool = True,
         offline_critic_update_ratio: int = 1,  # number of critic updates per actor update
         online_critic_update_ratio: int = 1,  # number of critic updates per actor update
         n_critics_to_sample: int = 2,  # number of critics to sample from
@@ -152,7 +150,6 @@ class CQL(OfflineRLAlgorithm):
             optimize_memory_usage=optimize_memory_usage,
             supported_action_spaces=(spaces.Box,),
             support_multi_env=True,
-            mix_offline_online_buffers=mix_offline_online_buffers,
             warm_start_online_rl=warm_start_online_rl,
         )
 
@@ -169,11 +166,17 @@ class CQL(OfflineRLAlgorithm):
 
         self.min_q_weight = min_q_weight
         self.temp = min_q_temp
-        self.use_calibrated_q = use_calibrated_q
         self.online_critic_update_ratio = online_critic_update_ratio
         self.offline_critic_update_ratio = offline_critic_update_ratio
         self.current_critic_update_ratio = self.offline_critic_update_ratio
         self.n_critics_to_sample = n_critics_to_sample
+
+        self.use_calibrated_q = use_calibrated_q
+
+        if self.use_calibrated_q:
+            self.name = "cal-ql"
+        else:
+            self.name = "cql"
 
     def _setup_model(self) -> None:
         super()._setup_model()
@@ -219,11 +222,6 @@ class CQL(OfflineRLAlgorithm):
             # this will throw an error if a malformed string (different from 'auto')
             # is passed
             self.ent_coef_tensor = th.tensor(float(self.ent_coef), device=self.device)
-
-        if self.use_calibrated_q:
-            self.name = "cal-ql"
-        else:
-            self.name = "cql"
 
     def _create_aliases(self) -> None:
         self.actor = self.policy.actor

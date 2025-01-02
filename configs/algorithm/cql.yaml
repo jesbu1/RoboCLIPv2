@@ -9,25 +9,28 @@ general_training:
   learning_rate: 3e-4
 
   # offline rl parameters
-  critic_update_ratio: 1 # iql and cql
-  n_critics: 10
+  n_critics: 2
   n_critics_to_sample: 2
-  use_calibrated_q: false # calibrated QL https://arxiv.org/pdf/2303.05479
-  
+  gamma: 0.99
+
   # CQL-specific parameters
   cql_min_q_weight: 1.0
   cql_min_q_temp: 1.0
+  use_calibrated_q: false # calibrated QL https://arxiv.org/pdf/2303.05479
 
 model:
   policy_layer_norm: true
   critic_layer_norm: true
-  pi_net_arch: [512, 512]
-  qf_net_arch: [512, 512, 256]
+  pi_net_arch: [768, 512, 256]
+  qf_net_arch: [1024, 768, 512]
 
 offline_training:
   offline_training_steps: 100000
+  critic_update_ratio: 1
 
 online_training:
   total_time_steps: 0
   warm_start_online_rl: true
   learning_starts: 1000
+  critic_update_ratio: 1
+  mix_buffers_ratio: 0.50

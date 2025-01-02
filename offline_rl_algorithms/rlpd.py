@@ -85,7 +85,6 @@ class RLPD(OfflineRLAlgorithm):
     :param device: Device (cpu, cuda, ...) on which the code should be run.
         Setting it to auto, the code will be run on the GPU if possible.
     :param _init_setup_model: Whether or not to build the network at the creation of the instance
-    :param mix_offline_online_buffers: Whether to mix offline and online buffers
     :param critic_update_ratio: Number of critic updates per actor update
     :param n_critics_to_sample: Number of critics to sample from
     :param train_critic_with_entropy: Whether to train the critic with the entropy term
@@ -133,10 +132,10 @@ class RLPD(OfflineRLAlgorithm):
         offline_critic_update_ratio: int = 1,  # number of critic updates per actor update
         online_critic_update_ratio: int = 5,  # number of critic updates per actor update
         n_critics_to_sample: int = 2,  # number of critics to sample from
-        mix_offline_online_buffers: bool = True,  # whether to mix offline and online buffers
         train_critic_with_entropy: bool = False,  # whether to train the critic with the entropy term
         warm_start_online_rl: bool = True,
     ):
+        # NOTE: Asserntions currently commonted out due to saving/loading logic. Must fix this later TODO
         # assert (
         #     policy_kwargs["n_critics"] > 2
         # ), "RLPD is made for more than 2 critics. Double check this."
@@ -175,7 +174,6 @@ class RLPD(OfflineRLAlgorithm):
             optimize_memory_usage=optimize_memory_usage,
             supported_action_spaces=(spaces.Box,),
             support_multi_env=True,
-            mix_offline_online_buffers=mix_offline_online_buffers,
             warm_start_online_rl=warm_start_online_rl,
         )
 
@@ -235,9 +233,11 @@ class RLPD(OfflineRLAlgorithm):
     def _setup_model(self) -> None:
         super()._setup_model()
 
-        # self.policy.actor = th.compile(self.policy.actor, mode="reduce-overhead")
-        # self.policy.critic = th.compile(self.policy.critic)
-        # self.policy.critic_target = th.compile(self.policy.critic_target)
+        self.policy.actor = th.compile(self.policy.actor, mode="reduce-overhead")
+        self.policy.critic = th.compile(self.policy.critic, mode="reduce-overhead")
+        self.policy.critic_target = th.compile(
+            self.policy.critic_target, mode="reduce-overhead"
+        )
 
         # If there is a v_net, we can add one here
         # if hasattr(self.offline_algo, "v_net"): # not needed for online

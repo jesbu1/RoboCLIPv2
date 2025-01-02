@@ -71,6 +71,10 @@ from hydra.utils import to_absolute_path
 from omegaconf import DictConfig, OmegaConf
 from stable_baselines3.common.callbacks import EvalCallback
 
+import torch as th
+
+th.set_float32_matmul_precision("high")
+
 
 def create_exp_name(cfg: DictConfig):
     exp_name = cfg.environment.cfg_name + "_"
@@ -168,6 +172,9 @@ def main(cfg: DictConfig):
     ### Setup wandb and logging ###
     if logging_config.wandb:
         config_for_wandb = OmegaConf.to_container(cfg, resolve=True)
+        absolute_log_dir = os.path.abspath(logging_config.log_dir)
+        print("absolute log dir is", absolute_log_dir)
+        config_for_wandb["log_dir"] = absolute_log_dir
         wandb.init(
             entity=logging_config.wandb_entity_name,
             project=logging_config.wandb_project_name,
@@ -238,6 +245,7 @@ def main(cfg: DictConfig):
         try:
             h5_path = offline_config.offline_h5_path.format(cfg.reward_model.name)
             h5_path = to_absolute_path(h5_path)
+            print(h5_path)
             # check if file exists
             with open(h5_path, "r") as f:
                 pass
@@ -263,13 +271,14 @@ def main(cfg: DictConfig):
         buffer = H5ReplayBuffer(
             h5_path,
             use_language_embeddings=use_language,
-            success_bonus=env_config.succ_bonus,
+            success_bonus=cfg.reward_model.success_bonus,
             sparsify_rewards=sparse_only,
             filter_instructions=offline_tasks,
             image_encoder=reward_model,
             is_state_based=env_config.is_state_based,
             use_proprio=env_config.use_proprio,
-            calculate_mc_returns=training_config.use_calibrated_q,
+            calculate_mc_returns=training_config.use_calibrated_q,  # only used for cal-ql
+            mc_return_gamma=training_config.gamma,
             dense_rewards_at_end=training_config.dense_rewards_at_end,
         )
 
@@ -320,9 +329,15 @@ def main(cfg: DictConfig):
             absolute_save_dir = os.path.abspath(save_dir)
             print(f"Model saved at {absolute_save_dir}")
 
+            # Log this absolute_save_dir in wandb
+            if logging_config.wandb:
+                wandb.run.log({"model_dir": absolute_save_dir})
+
         # Set the replay buffer back to the original one
-        if cfg.online_training.mix_buffers:
-            model.set_combined_buffer(buffer, ratio=0.3)
+        if cfg.online_training.mix_buffers_ratio > 0.0:
+            model.set_combined_buffer(
+                buffer, ratio=cfg.online_training.mix_buffers_ratio
+            )
 
     ### Learn online ###
     logger = model.logger  # set logger in case
@@ -376,7 +391,7 @@ def create_envs(cfg: DictConfig, reward_model: BaseRewardModel):
                     language_features=lang_feat if not ignore_language else None,
                     reward_model=reward_model,
                     goal_observable=True,
-                    success_bonus=env_config.succ_bonus,
+                    success_bonus=cfg.reward_model.success_bonus,
                     is_state_based=env_config.is_state_based,
                     use_proprio=env_config.use_proprio,
                     mode="train",
@@ -390,7 +405,7 @@ def create_envs(cfg: DictConfig, reward_model: BaseRewardModel):
             [
                 create_wrapped_env(
                     env_id,
-                    success_bonus=env_config.succ_bonus,
+                    success_bonus=cfg.reward_model.success_bonus,
                     language_features=lang_feat if not ignore_language else None,
                     reward_model=reward_model,
                     goal_observable=True,
@@ -409,7 +424,7 @@ def create_envs(cfg: DictConfig, reward_model: BaseRewardModel):
                     env_id,
                     reward_model=reward_model,
                     language_features=lang_feat if not ignore_language else None,
-                    success_bonus=env_config.succ_bonus,
+                    success_bonus=cfg.reward_model.success_bonus,
                     monitor=True,
                     goal_observable=True,
                     is_state_based=env_config.is_state_based,
@@ -426,7 +441,7 @@ def create_envs(cfg: DictConfig, reward_model: BaseRewardModel):
                     env_id,
                     reward_model=reward_model,
                     language_features=lang_feat if not ignore_language else None,
-                    success_bonus=env_config.succ_bonus,
+                    success_bonus=cfg.reward_model.success_bonus,
                     monitor=True,
                     goal_observable=True,
                     is_state_based=env_config.is_state_based,
@@ -532,7 +547,6 @@ def get_policy_algorithm(cfg: DictConfig, envs: VecEnv, log_dir: str):
                 seed=args.seed,
                 action_noise=action_noise,
                 policy_kwargs=policy_kwargs,
-                mix_offline_online_buffers=cfg.online_training.mix_buffers,
                 learning_rate=args.learning_rate,
                 train_freq=(
                     cfg.environment.train_freq_num,
@@ -545,6 +559,7 @@ def get_policy_algorithm(cfg: DictConfig, envs: VecEnv, log_dir: str):
                 use_calibrated_q=cfg.general_training.use_calibrated_q,
                 n_critics_to_sample=cfg.general_training.n_critics_to_sample,
                 warm_start_online_rl=cfg.online_training.warm_start_online_rl,
+                gamma=cfg.general_training.gamma,
             )
         else:
             model = model_class.load(args.pretrained, env=envs, tensorboard_log=log_dir)
@@ -564,7 +579,6 @@ def get_policy_algorithm(cfg: DictConfig, envs: VecEnv, log_dir: str):
                 seed=args.seed,
                 action_noise=action_noise,
                 policy_kwargs=policy_kwargs,
-                mix_offline_online_buffers=cfg.online_training.mix_buffers,
                 learning_rate=args.learning_rate,
                 train_freq=(
                     cfg.environment.train_freq_num,
@@ -577,6 +591,7 @@ def get_policy_algorithm(cfg: DictConfig, envs: VecEnv, log_dir: str):
                 ddpg_bc_weight=cfg.general_training.ddpg_bc_weight,
                 n_critics_to_sample=cfg.general_training.n_critics_to_sample,
                 warm_start_online_rl=cfg.online_training.warm_start_online_rl,
+                gamma=cfg.general_training.gamma,
             )
         else:
             model = model_class.load(args.pretrained, env=envs, tensorboard_log=log_dir)
@@ -618,7 +633,6 @@ def get_policy_algorithm(cfg: DictConfig, envs: VecEnv, log_dir: str):
                 seed=args.seed,
                 action_noise=action_noise,  # should be null
                 policy_kwargs=policy_kwargs,
-                mix_offline_online_buffers=cfg.online_training.mix_buffers,  # useless
                 learning_rate=args.learning_rate,
                 train_freq=(
                     cfg.environment.train_freq_num,
@@ -629,6 +643,7 @@ def get_policy_algorithm(cfg: DictConfig, envs: VecEnv, log_dir: str):
                 n_critics_to_sample=cfg.general_training.n_critics_to_sample,
                 train_critic_with_entropy=cfg.general_training.rlpd_train_critic_with_entropy,
                 warm_start_online_rl=cfg.online_training.warm_start_online_rl,
+                gamma=cfg.general_training.gamma,
             )
         else:
             model = model_class.load(args.pretrained, env=envs, tensorboard_log=log_dir)
