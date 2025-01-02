@@ -24,6 +24,8 @@ from stable_baselines3.common.torch_layers import (
 )
 from stable_baselines3.common.type_aliases import Schedule
 
+import copy
+
 
 def create_mlp(
     input_dim: int,
@@ -214,6 +216,7 @@ class CustomContinuousCritic(ContinuousCritic):
         n_critics: int = 2,
         share_features_extractor: bool = True,
         use_layer_norm: bool = True,
+        parallelize: bool = False,
     ):
         BaseModel.__init__(
             self,
@@ -237,32 +240,63 @@ class CustomContinuousCritic(ContinuousCritic):
                 use_layer_norm=use_layer_norm,
             )
             q_net = nn.Sequential(*q_net)
-            self.add_module(f"qf{idx}", q_net)
+            if not parallelize:
+                self.add_module(f"qf{idx}", q_net)
+
             self.q_networks.append(q_net)
 
+        self.parallelize = parallelize
+
+        if parallelize:
+            self.base_model = copy.deepcopy(self.q_networks[0])
+            params, buffers = th.func.stack_module_state(self.q_networks)
+
+            self.params = nn.ParameterList([nn.Parameter(p) for p in params.values()])
+
+            for k, v in buffers.items():
+                self.register_buffer(k, v)
+
     def forward(
-        self, obs: th.Tensor, actions: th.Tensor, critic_indices: th.Tensor = None
+        self,
+        obs: th.Tensor,
+        actions: th.Tensor,
+        critic_indices: th.Tensor = None,
     ) -> Tuple[th.Tensor, ...]:
-        """Forward function
-
-        Args:
-            obs (th.Tensor): batched observation tensor
-            actions (th.Tensor): batched action tensor
-            critic_indices (th.Tensor, optional): tensor of critic indicies to return. Defaults to None. If given, only the critic values at the given indicies are returned for less computation.
-
-        Returns:
-            Tuple[th.Tensor, ...]: tuple of critic values
-        """
-        # Learn the features extractor using the policy loss only
-        # when the features_extractor is shared with the actor
         with th.set_grad_enabled(not self.share_features_extractor):
             features = self.extract_features(obs, self.features_extractor)
         qvalue_input = th.cat([features, actions], dim=1)
-        if critic_indices is not None:
-            # save computation
-            return tuple(self.q_networks[idx](qvalue_input) for idx in critic_indices)
+
+        if not self.parallelize:
+            if critic_indices is not None:
+                return tuple(
+                    self.q_networks[idx](qvalue_input) for idx in critic_indices
+                )
+            else:
+                return tuple(q_net(qvalue_input) for q_net in self.q_networks)
         else:
-            return tuple(q_net(qvalue_input) for q_net in self.q_networks)
+            if critic_indices is not None:
+                params = {
+                    f"param_{i}": p[critic_indices] for i, p in enumerate(self.params)
+                }
+                output = th.vmap(self._fmodel, in_dims=(0, None, None))(
+                    params,
+                    dict(self.named_buffers()),
+                    qvalue_input,
+                )
+                return tuple(output)
+            else:
+                params_dict = {f"param_{i}": p for i, p in enumerate(self.params)}
+                output = th.vmap(self._fmodel, in_dims=(0, None, None))(
+                    params_dict,
+                    dict(self.named_buffers()),
+                    qvalue_input,
+                )
+                return tuple(output)
+
+    def _fmodel(
+        self, params: Dict[str, th.Tensor], buffers: Dict[str, th.Tensor], x: th.Tensor
+    ) -> th.Tensor:
+        return th.func.functional_call(self.base_model, (params, buffers), x)
 
 
 class CustomSACPolicy(SACPolicy):

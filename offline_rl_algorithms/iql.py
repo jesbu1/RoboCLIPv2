@@ -137,7 +137,6 @@ class IQL(OfflineRLAlgorithm):
     :param clip_score: Clipping term on the advantage temp
     :param policy_extraction: ["awr", "ddpg"] policy extraction algorithm
     :param ddpg_bc_weight: DDPG's behavior cloning weight, only used when policy_extraction is "ddpg"
-    :param mix_offline_online_buffers: Whether to mix offline and online buffers
     :param critic_update_ratio: Number of critic updates per actor update
     :param warm_start_online_rl: If true, the online RL training will be warm started with the offline trained policy.
     """
@@ -185,7 +184,6 @@ class IQL(OfflineRLAlgorithm):
         clip_score: float = 100,
         policy_extraction: str = "ddpg",
         ddpg_bc_weight: float = 0.1,
-        mix_offline_online_buffers: bool = True,
         offline_critic_update_ratio: int = 1,  # number of critic updates per actor update
         online_critic_update_ratio: int = 1,  # number of critic updates per actor update
         n_critics_to_sample: int = 2,  # number of critics to sample from
@@ -217,7 +215,6 @@ class IQL(OfflineRLAlgorithm):
             optimize_memory_usage=optimize_memory_usage,
             supported_action_spaces=(spaces.Box,),
             support_multi_env=True,
-            mix_offline_online_buffers=mix_offline_online_buffers,
             warm_start_online_rl=warm_start_online_rl,
         )
 
@@ -245,6 +242,13 @@ class IQL(OfflineRLAlgorithm):
 
     def _setup_model(self) -> None:
         super()._setup_model()
+
+        self.policy.actor = th.compile(self.policy.actor, mode="reduce-overhead")
+        self.policy.critic = th.compile(self.policy.critic, mode="reduce-overhead")
+        self.policy.critic_target = th.compile(
+            self.policy.critic_target, mode="reduce-overhead"
+        )
+
         self._create_aliases()
         # Running mean and running var
         self.batch_norm_stats = get_parameters_by_name(self.critic, ["running_"])
@@ -272,6 +276,7 @@ class IQL(OfflineRLAlgorithm):
         self.critic = self.policy.critic.to(th.float32)
         self.critic_target = self.policy.critic_target
 
+    @th.compile
     def train(
         self, gradient_steps: int, batch_size: int = 64, logging_prefix: str = "train"
     ) -> None:
@@ -313,7 +318,7 @@ class IQL(OfflineRLAlgorithm):
                     # for generality with REDQ implmentation
                     critic_indices = th.randperm(self.policy_kwargs["n_critics"])[
                         : self.n_critics_to_sample
-                    ]
+                    ].to(replay_data.observations.device)
                     target_q_preds = th.cat(
                         self.critic_target(
                             replay_data.observations,
@@ -414,11 +419,10 @@ class IQL(OfflineRLAlgorithm):
 
                 critic_indices = th.randperm(self.policy_kwargs["n_critics"])[
                     : self.n_critics_to_sample
-                ]
+                ].to(replay_data.observations.device)
                 q_values_pi = self.critic(
                     replay_data.observations, actions_pi, critic_indices=critic_indices
                 )
-                # breakpoint()
                 min_qf_pi = th.min(*q_values_pi).squeeze(-1)
                 assert (
                     min_qf_pi.shape == log_prob.shape
@@ -445,12 +449,10 @@ class IQL(OfflineRLAlgorithm):
             f"{logging_prefix}/q_loss": np.mean(q_losses),
             f"{logging_prefix}/v_loss": np.mean(v_losses),
             f"{logging_prefix}/average_q_values": np.mean(q_values),
-            # f"{logging_prefix}/average_q2_values": np.mean(q2_values),
             f"{logging_prefix}/average_v_next_values": np.mean(v_next_values),
             f"{logging_prefix}/average_reward": np.mean(reward_values),
             f"{logging_prefix}/average_v_values": np.mean(v_values),
             f"{logging_prefix}/average_q1_target_values": np.mean(q_target_values),
-            # f"{logging_prefix}/average_q2_target_values": np.mean(q2_target_values),
             f"{logging_prefix}/average_actor_log_pis": np.mean(actor_log_pis),
         }
 

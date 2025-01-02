@@ -73,7 +73,6 @@ class OfflineRLAlgorithm(OffPolicyAlgorithm):
         Setting it to auto, the code will be run on the GPU if possible.
     :param _init_setup_model: Whether or not to build the network at the creation of the instance
     :param support_multi_env: Whether to support training with multiple environments
-    :param mix_offline_online_buffers: If true, the online replay buffer used during `learn` will be a combination of the offline (from `learn_offline`) and online buffers.
     :param warm_start_online_rl: If true, the online RL training will be warm started with the offline trained policy.
     """
 
@@ -118,7 +117,6 @@ class OfflineRLAlgorithm(OffPolicyAlgorithm):
         _init_setup_model: bool = True,
         supported_action_spaces: Optional[Tuple[spaces.Space]] = (spaces.Box,),
         support_multi_env: bool = True,
-        mix_offline_online_buffers: bool = True,
         warm_start_online_rl: bool = True,
     ):
         super().__init__(
@@ -156,7 +154,6 @@ class OfflineRLAlgorithm(OffPolicyAlgorithm):
         self.ent_coef = ent_coef
         self.target_update_interval = target_update_interval
         self.ent_coef_optimizer: Optional[th.optim.Adam] = None
-        self.mix_offline_online_buffers = mix_offline_online_buffers
 
         self.warm_start_online_rl = warm_start_online_rl
         self.learned_offline = False

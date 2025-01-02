@@ -46,11 +46,14 @@ from offline_rl_algorithms.callbacks import CustomWandbCallback, OfflineEvalCall
 from encoders.xclip_encoder import XCLIPEncoder
 
 
-from envs.metaworld_envs.metaworld import create_wrapped_env, instruction_to_environment, environment_to_instruction
+from envs.metaworld_envs.metaworld import (
+    create_wrapped_env,
+    instruction_to_environment,
+    environment_to_instruction,
+)
 
 
 from stable_baselines3.common.policies import ActorCriticPolicy
-
 
 
 def parse_entropy_term(value):
@@ -69,7 +72,6 @@ def generate_callback_list(args, eval_callback: EvalCallback):
     return callback
 
 
-
 def str2bool(v):
     # because argparse is trash
     # used for parsing boolean arguments
@@ -81,6 +83,7 @@ def str2bool(v):
         return False
     else:
         raise argparse.ArgumentTypeError("Boolean value expected.")
+
 
 def get_args():
     parser = argparse.ArgumentParser(description="RL")
@@ -115,11 +118,13 @@ def get_args():
     parser.add_argument("--random_reset", action="store_true")
     parser.add_argument("--time", action="store_false")
     parser.add_argument("--ignore_language", action="store_true")
-    parser.add_argument("--mix_buffers", 
-                                type=str2bool,
+    parser.add_argument(
+        "--mix_buffers",
+        type=str2bool,
         default=True,
         const=True,
-        nargs="?",)
+        nargs="?",
+    )
     parser.add_argument("--offline_h5_path", type=str, default=None)
 
     parser.add_argument(
@@ -138,11 +143,13 @@ def get_args():
     )
     parser.add_argument("--frame_length", type=int, default=32)
     parser.add_argument("--exp_name_end", type=str, default="triplet_hard_neg")
-    parser.add_argument("--sparse_only", 
-                                type=str2bool,
+    parser.add_argument(
+        "--sparse_only",
+        type=str2bool,
         default=True,
         const=True,
-        nargs="?",)
+        nargs="?",
+    )
     parser.add_argument("--baseline", action="store_true")
     parser.add_argument("--obs_env", action="store_true")
 
@@ -150,10 +157,8 @@ def get_args():
     return args
 
 
-
 # Return training and evaluation envs
 def create_envs(args, env_id, text_instruction, use_simulator_reward):
-
     # compute a language feature
     encoder = XCLIPEncoder()
     lang_feat = encoder.encode_text(text_instruction)
@@ -190,8 +195,6 @@ def create_envs(args, env_id, text_instruction, use_simulator_reward):
             ]
         )
 
-
-
     if args.n_envs > 1:
         eval_env = SubprocVecEnv(
             [
@@ -224,8 +227,6 @@ def create_envs(args, env_id, text_instruction, use_simulator_reward):
 
 
 def get_policy_algorithm(args, envs, log_dir):
-
-
     # We don't need as large of a network there is no language
     if args.ignore_language:
         policy_kwargs = {
@@ -234,7 +235,7 @@ def get_policy_algorithm(args, envs, log_dir):
     else:
         policy_kwargs = {
             "net_arch": dict(pi=[256, 256], qf=[256, 256]),
-            #"net_arch": dict(pi=[128, 128], qf=[256, 128]),
+            # "net_arch": dict(pi=[128, 128], qf=[256, 128]),
             "policy_layer_norm": True,
             "critic_layer_norm": True,
             # 'activation_fn': nn.Sequential(nn.ReLU(), nn.LayerNorm(256))
@@ -316,7 +317,6 @@ def get_policy_algorithm(args, envs, log_dir):
                 seed=args.seed,
                 action_noise=action_noise,
                 policy_kwargs=policy_kwargs,
-                mix_offline_online_buffers=args.mix_buffers,
             )
         else:
             model = model_class.load(args.pretrained, env=envs, tensorboard_log=log_dir)
@@ -337,12 +337,10 @@ def get_policy_algorithm(args, envs, log_dir):
     else:
         raise ValueError("Unsupported algorithm. Choose either 'ppo' or 'sac'.")
 
-
     return model, model_class
 
 
 def main():
-
     global args
     global log_dir
     args = get_args()
@@ -395,12 +393,10 @@ def main():
 
     log_dir = f"logs/baseline_logs/{experiment_name}"
 
-
     # args.log_dir = log_dir # temporary hopefully
 
     if not os.path.exists(log_dir):
         os.makedirs(log_dir)
-
 
     # Set training and test tasks, by language instruction (for now)
     # offline_tasks = ["assembling", "picking bin", "closing box", "pressing button", "opening window"]
@@ -409,11 +405,14 @@ def main():
     online_task_env_id = instruction_to_environment[args.text_string]
     online_task_string = args.text_string
 
-    envs, eval_env = create_envs(args, online_task_env_id, online_task_string, use_simulator_reward=(not args.sparse_only))
-
+    envs, eval_env = create_envs(
+        args,
+        online_task_env_id,
+        online_task_string,
+        use_simulator_reward=(not args.sparse_only),
+    )
 
     model, model_class = get_policy_algorithm(args, envs, log_dir)
-
 
     # Set eval freq and video freq if not set
     eval_freq = args.offline_training_steps * args.n_envs // (10)
@@ -435,7 +434,6 @@ def main():
     # Create the logger
     wandb_logger = WandBLogger()
     model.set_logger(wandb_logger)
-
 
     ### Learn offline ###
     # if isinstance(model, OfflineRLAlgorithm):
@@ -480,7 +478,7 @@ def main():
         total_timesteps=int(args.total_time_steps),
         callback=callback_list,
         logger=logger,
-        progress_bar=True
+        progress_bar=True,
     )
     model.save(f"{log_dir}/{experiment_name}")
 
@@ -493,6 +491,7 @@ def main():
     #     self.logger.record({"eval_SR/evaluate_succ": success_rate}, step = 0)
     if args.wandb:
         run.finish()
+
 
 if __name__ == "__main__":
     main()

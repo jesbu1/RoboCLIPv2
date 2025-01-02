@@ -8,7 +8,7 @@ general_training:
   action_noise: 0.1 # sigma
   learning_rate: 1e-3
 
-  n_critics: 2
+  n_critics: 10
   n_critics_to_sample: 2
   
   # IQL-specific parameters
@@ -32,3 +32,4 @@ online_training:
   warm_start_online_rl: true
   learning_starts: 1000
   critic_update_ratio: 4
+  mix_buffers_ratio: 0.50

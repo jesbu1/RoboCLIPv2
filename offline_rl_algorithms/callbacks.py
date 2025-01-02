@@ -62,32 +62,43 @@ class OfflineEvalCallback(EvalCallback):
                 param.data.view(-1).detach().cpu().numpy()  # Flatten each weight tensor
                 for param in self.model.policy.critic.parameters()
             ]
-            if len(critic_weights) != 0:
-                all_weights = np.concatenate(critic_weights)
-                self.logger.record(
-                    "weights/critic_histogram", wandb.Histogram(all_weights)
-                )
+
+            try:
+                if len(critic_weights) != 0:
+                    all_weights = np.concatenate(critic_weights)
+                    self.logger.record(
+                        "weights/critic_histogram", wandb.Histogram(all_weights)
+                    )
+            except:
+                print("NaN detected in critic weights. Skipping logging")
 
         # Log critic_target weights
         critic_target_weights = [
             param.data.view(-1).detach().cpu().numpy()  # Flatten each weight tensor
             for param in self.model.policy.critic_target.parameters()
         ]
-        if len(critic_target_weights) != 0:
-            all_weights = np.concatenate(critic_target_weights)
-            self.logger.record(
-                "weights/critic_target_histogram", wandb.Histogram(all_weights)
-            )
-            # Log critic_target weights
-            critic_target_weights = [
-                param.data.view(-1).detach().cpu().numpy()  # Flatten each weight tensor
-                for param in self.model.policy.critic_target.parameters()
-            ]
+
+        try:
             if len(critic_target_weights) != 0:
                 all_weights = np.concatenate(critic_target_weights)
                 self.logger.record(
                     "weights/critic_target_histogram", wandb.Histogram(all_weights)
                 )
+                # Log critic_target weights
+                critic_target_weights = [
+                    param.data.view(-1)
+                    .detach()
+                    .cpu()
+                    .numpy()  # Flatten each weight tensor
+                    for param in self.model.policy.critic_target.parameters()
+                ]
+                if len(critic_target_weights) != 0:
+                    all_weights = np.concatenate(critic_target_weights)
+                    self.logger.record(
+                        "weights/critic_target_histogram", wandb.Histogram(all_weights)
+                    )
+        except:
+            print("NaN detected in critic_target weights. Skipping logging")
 
         # Log v_net weights and gradients
         if hasattr(self.model, "v_net"):
