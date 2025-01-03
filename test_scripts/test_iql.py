@@ -519,7 +519,7 @@ def get_policy_algorithm(cfg: DictConfig, envs: VecEnv, log_dir: str):
                 verbose=1,
                 tensorboard_log=log_dir,
                 # batch_size=args.n_steps * args.n_envs,
-                ent_coef="auto",
+                ent_coef=args.entropy_term,
                 buffer_size=cfg.online_training.total_time_steps,
                 learning_starts=cfg.online_training.learning_starts,
                 seed=args.seed,
@@ -541,7 +541,7 @@ def get_policy_algorithm(cfg: DictConfig, envs: VecEnv, log_dir: str):
                 envs,
                 verbose=1,
                 tensorboard_log=log_dir,
-                ent_coef="auto",
+                ent_coef=args.entropy_term,
                 buffer_size=cfg.online_training.total_time_steps,
                 learning_starts=cfg.online_training.learning_starts,
                 seed=args.seed,
@@ -632,6 +632,7 @@ def get_policy_algorithm(cfg: DictConfig, envs: VecEnv, log_dir: str):
                 learning_starts=cfg.online_training.learning_starts,
                 seed=args.seed,
                 action_noise=action_noise,  # should be null
+                ent_coef=args.entropy_term,
                 policy_kwargs=policy_kwargs,
                 learning_rate=args.learning_rate,
                 train_freq=(
