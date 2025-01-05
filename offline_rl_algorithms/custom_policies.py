@@ -56,6 +56,8 @@ def create_mlp(
 
     if len(net_arch) > 0:
         modules = [nn.Linear(input_dim, net_arch[0], bias=with_bias), activation_fn()]
+        if use_layer_norm:
+            modules.append(nn.LayerNorm(net_arch[0]))
     else:
         modules = []
 

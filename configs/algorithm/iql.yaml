@@ -5,6 +5,7 @@ defaults:
 
 general_training:
   algo: iql
+  name: iql
   action_noise: 0.1 # sigma
   learning_rate: 1e-3
 
