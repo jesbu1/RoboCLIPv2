@@ -5,6 +5,7 @@ defaults:
 
 general_training:
   algo: cql
+  name: cql
   action_noise: 0 # sigma
   learning_rate: 3e-4
 

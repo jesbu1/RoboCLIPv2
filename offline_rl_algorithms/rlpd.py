@@ -230,14 +230,16 @@ class RLPD(OfflineRLAlgorithm):
             )
             self.ent_coef_tensor = offline_algo.ent_coef_tensor
 
+        self._create_aliases()
+
     def _setup_model(self) -> None:
         super()._setup_model()
 
-        self.policy.actor = th.compile(self.policy.actor, mode="reduce-overhead")
-        self.policy.critic = th.compile(self.policy.critic, mode="reduce-overhead")
-        self.policy.critic_target = th.compile(
-            self.policy.critic_target, mode="reduce-overhead"
-        )
+        # self.policy.actor = th.compile(self.policy.actor, mode="reduce-overhead")
+        # self.policy.critic = th.compile(self.policy.critic, mode="reduce-overhead")
+        # self.policy.critic_target = th.compile(
+        #     self.policy.critic_target, mode="reduce-overhead"
+        # )
 
         # If there is a v_net, we can add one here
         # if hasattr(self.offline_algo, "v_net"): # not needed for online

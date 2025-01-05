@@ -81,7 +81,7 @@ def create_exp_name(cfg: DictConfig):
 
     exp_name += cfg.reward_model.name + "_"
 
-    exp_name += cfg.general_training.algo + "_"
+    exp_name += cfg.general_training.name + "_"
 
     if cfg.general_training.algo == "iql":
         # add policy_extraction and awr/ddpg params
@@ -104,7 +104,6 @@ def create_exp_name(cfg: DictConfig):
         exp_name += f"utd_{cfg.online_training.critic_update_ratio}_"
 
     if cfg.general_training.algo == "rlpd":
-        exp_name += cfg.general_training.rlpd_offline_algo + "_"
         exp_name += f"n_critics_{cfg.general_training.n_critics}_"
         exp_name += f"n_critics_to_sample_{cfg.general_training.n_critics_to_sample}_"
         exp_name += f"train_critic_with_entropy_{cfg.general_training.rlpd_train_critic_with_entropy}_"
@@ -229,6 +228,46 @@ def main(cfg: DictConfig):
     wandb_logger = WandBLogger()
     model.set_logger(wandb_logger)
 
+    use_language = not env_config.ignore_language
+
+    if offline_config.offline_tasks == "all":
+        offline_tasks = None
+    else:
+        offline_tasks = offline_config.offline_tasks
+
+    # Map the tasks to their strings
+    # offline_task_strings =
+
+    try:
+        h5_path = offline_config.offline_h5_path.format(cfg.reward_model.name)
+        h5_path = to_absolute_path(h5_path)
+        print(h5_path)
+        # check if file exists
+        with open(h5_path, "r") as f:
+            pass
+    except FileNotFoundError:
+        print(
+            "File {} not found. This file likely does not have the correct reward preprocessed.".format(
+                h5_path
+            )
+        )
+        raise FileNotFoundError
+
+    sparse_only = True if reward_model.name == "sparse" else False
+    buffer = H5ReplayBuffer(
+        h5_path,
+        use_language_embeddings=use_language,
+        success_bonus=cfg.reward_model.success_bonus,
+        sparsify_rewards=sparse_only,
+        filter_instructions=offline_tasks,
+        image_encoder=reward_model,
+        is_state_based=env_config.is_state_based,
+        use_proprio=env_config.use_proprio,
+        calculate_mc_returns=training_config.use_calibrated_q,  # only used for cal-ql
+        mc_return_gamma=training_config.gamma,
+        dense_rewards_at_end=training_config.dense_rewards_at_end,
+    )
+
     ### Learn offline
     if offline_config.offline_training_steps > 0 and isinstance(
         model, OfflineRLAlgorithm
@@ -241,46 +280,6 @@ def main(cfg: DictConfig):
         #     h5_path = default_h5_path
         # else:
         #     h5_path = offline_config.offline_h5_path
-
-        try:
-            h5_path = offline_config.offline_h5_path.format(cfg.reward_model.name)
-            h5_path = to_absolute_path(h5_path)
-            print(h5_path)
-            # check if file exists
-            with open(h5_path, "r") as f:
-                pass
-        except FileNotFoundError:
-            print(
-                "File {} not found. This file likely does not have the correct reward preprocessed.".format(
-                    h5_path
-                )
-            )
-            raise FileNotFoundError
-
-        use_language = not env_config.ignore_language
-
-        if offline_config.offline_tasks == "all":
-            offline_tasks = None
-        else:
-            offline_tasks = offline_config.offline_tasks
-
-        # Map the tasks to their strings
-        # offline_task_strings =
-
-        sparse_only = True if reward_model.name == "sparse" else False
-        buffer = H5ReplayBuffer(
-            h5_path,
-            use_language_embeddings=use_language,
-            success_bonus=cfg.reward_model.success_bonus,
-            sparsify_rewards=sparse_only,
-            filter_instructions=offline_tasks,
-            image_encoder=reward_model,
-            is_state_based=env_config.is_state_based,
-            use_proprio=env_config.use_proprio,
-            calculate_mc_returns=training_config.use_calibrated_q,  # only used for cal-ql
-            mc_return_gamma=training_config.gamma,
-            dense_rewards_at_end=training_config.dense_rewards_at_end,
-        )
 
         if hasattr(offline_config, "ckpt_path") and offline_config.ckpt_path:
             # convert to absolute path from hydra
@@ -333,11 +332,9 @@ def main(cfg: DictConfig):
             if logging_config.wandb:
                 wandb.run.log({"model_dir": absolute_save_dir})
 
-        # Set the replay buffer back to the original one
-        if cfg.online_training.mix_buffers_ratio > 0.0:
-            model.set_combined_buffer(
-                buffer, ratio=cfg.online_training.mix_buffers_ratio
-            )
+    # Set the replay buffer back to the original one
+    if cfg.online_training.mix_buffers_ratio > 0.0:
+        model.set_combined_buffer(buffer, ratio=cfg.online_training.mix_buffers_ratio)
 
     ### Learn online ###
     logger = model.logger  # set logger in case
