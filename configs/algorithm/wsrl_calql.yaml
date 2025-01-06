@@ -5,8 +5,8 @@ defaults:
 
 # Because RLPD is slower, we will log more frequently
 logging:
-  eval_freq: 1500
-  video_freq: 3000
+  eval_freq: 5000
+  video_freq: 10000
 
 general_training:
   algo: rlpd
