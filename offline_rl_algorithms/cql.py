@@ -4,6 +4,7 @@ import numpy as np
 import torch as th
 from gym import spaces
 from torch.nn import functional as F
+import time
 
 from stable_baselines3.common.buffers import ReplayBuffer
 from stable_baselines3.common.noise import ActionNoise
@@ -231,6 +232,8 @@ class CQL(OfflineRLAlgorithm):
     def train(
         self, gradient_steps: int, batch_size: int = 64, logging_prefix: str = "train"
     ) -> None:
+        
+        t = time.time()
         # Switch to train mode (this affects batch norm / dropout)
         self.policy.set_training_mode(True)
         # Update optimizers learning rate
@@ -492,7 +495,7 @@ class CQL(OfflineRLAlgorithm):
             metrics_dict[f"{logging_prefix}/bound_rate_next_cal_ql"] = (
                 bound_rate_next_cal_ql
             )
-
+        
         for metric in metrics_dict:
             self.logger.record(metric, metrics_dict[metric])
 
