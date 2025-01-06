@@ -14,12 +14,18 @@ Note that the order of `metaworld`, `algorithm`, and `reward` must be in the sam
     -  `some_tasks_15`: Only 8(?) tasks including opening a window for training
     -  `task_gen`: Train on X tasks while leaving out the eval setting. TODO incompleted (but only requires simple yaml changes)
 
-- `algorithm`: Defines different RL algorithms, mostly on offline algorithms only. These settings should be general enough for all environments (hopefully!)
+- `algorithm`: Defines different RL algorithms, mostly on offline algorithms only. These settings should be general enough for all environments (hopefully!). All WSRL and RLPD examples uses the `rlpd.py` code
     - `bc`: behavior cloning offline only
     - `sac`: SAC training online only
     - `iql`: IQL training offline and online, though you should not expect good performance online
     - `cql`: CQL training offline and online, and you should expect a somewhat large dropoff when going online
     - `rlpd`: RLPD does not train offline and instead instantiates an offline buffer to use during online training
+    - `rlpd_scratch`: Train the RLPD class online without an offline buffer. This is meant to test the training code without any pretraining or offline
+    - `rlpd_iql`: Train the policy and critics offline with IQL offline, then use the offline data and keep training the policy online
+    - `rlpd_calql`: Train the policy and critics offline with Cal-QL offline, then use the offline data and keep training the policy online
+    - `wsrl_iql`: Train the policy and critics offline using IQL, then throw away the offline data, rollout the current policy N times on the new task to warmstart finetuning online
+    - `wsrl_calql`: Train the policy and critics offline using IQL, then throw away the offline data, rollout the current policy N times on the new task to warmstart finetuning online
+
 
 - `reward`: Defines different reward strategies and uses its associated visual encoder when using image information as opposed to state
     - `dense`: The default environment return returns nothing and uses the dense envirnoment reward. Only useful in simulation.

@@ -233,7 +233,6 @@ class CQL(OfflineRLAlgorithm):
         self, gradient_steps: int, batch_size: int = 64, logging_prefix: str = "train"
     ) -> None:
         
-        t = time.time()
         # Switch to train mode (this affects batch norm / dropout)
         self.policy.set_training_mode(True)
         # Update optimizers learning rate
