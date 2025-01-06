@@ -19,125 +19,125 @@ class OfflineEvalCallback(EvalCallback):
     def _on_step(self) -> bool:
         # print(self.n_calls, self.n_calls % self.video_freq)
         # Log policy gradients
-        policy_gradients = [
-            param.grad.view(-1).detach().cpu().numpy()  # Flatten each gradient tensor
-            for param in self.model.policy.actor.parameters()
-            if param.grad is not None
-        ]
-        if len(policy_gradients) != 0:
-            all_gradients = np.concatenate(policy_gradients)
-            self.logger.record("grad/policy_histogram", wandb.Histogram(all_gradients))
-            # Log critic gradients
-            critic_gradients = [
-                param.grad.view(-1)
-                .detach()
-                .cpu()
-                .numpy()  # Flatten each gradient tensor
-                for param in self.model.policy.critic.parameters()
+        if self.n_calls % 500 == 0:
+            policy_gradients = [
+                param.grad.view(-1).detach().cpu().numpy()  # Flatten each gradient tensor
+                for param in self.model.policy.actor.parameters()
                 if param.grad is not None
             ]
-            if len(critic_gradients) != 0:
-                all_gradients = np.concatenate(critic_gradients)
-                self.logger.record(
-                    "grad/critic_histogram", wandb.Histogram(all_gradients)
-                )
+            if len(policy_gradients) != 0:
+                all_gradients = np.concatenate(policy_gradients)
+                self.logger.record("grad/policy_histogram", wandb.Histogram(all_gradients))
+                # Log critic gradients
+                critic_gradients = [
+                    param.grad.view(-1)
+                    .detach()
+                    .cpu()
+                    .numpy()  # Flatten each gradient tensor
+                    for param in self.model.policy.critic.parameters()
+                    if param.grad is not None
+                ]
+                if len(critic_gradients) != 0:
+                    all_gradients = np.concatenate(critic_gradients)
+                    self.logger.record(
+                        "grad/critic_histogram", wandb.Histogram(all_gradients)
+                    )
 
-            # Log critic_target gradients
-            critic_target_gradients = [
-                param.grad.view(-1)
-                .detach()
-                .cpu()
-                .numpy()  # Flatten each gradient tensor
-                for param in self.model.policy.critic_target.parameters()
-                if param.grad is not None
-            ]
-            if len(critic_target_gradients) != 0:
-                all_gradients = np.concatenate(critic_target_gradients)
-                self.logger.record(
-                    "grad/critic_target_histogram", wandb.Histogram(all_gradients)
-                )
+                # Log critic_target gradients
+                critic_target_gradients = [
+                    param.grad.view(-1)
+                    .detach()
+                    .cpu()
+                    .numpy()  # Flatten each gradient tensor
+                    for param in self.model.policy.critic_target.parameters()
+                    if param.grad is not None
+                ]
+                if len(critic_target_gradients) != 0:
+                    all_gradients = np.concatenate(critic_target_gradients)
+                    self.logger.record(
+                        "grad/critic_target_histogram", wandb.Histogram(all_gradients)
+                    )
 
-            # Log critic weights
-            critic_weights = [
+                # Log critic weights
+                critic_weights = [
+                    param.data.view(-1).detach().cpu().numpy()  # Flatten each weight tensor
+                    for param in self.model.policy.critic.parameters()
+                ]
+
+                try:
+                    if len(critic_weights) != 0:
+                        all_weights = np.concatenate(critic_weights)
+                        self.logger.record(
+                            "weights/critic_histogram", wandb.Histogram(all_weights)
+                        )
+                except:
+                    print("NaN detected in critic weights. Skipping logging")
+
+            # Log critic_target weights
+            critic_target_weights = [
                 param.data.view(-1).detach().cpu().numpy()  # Flatten each weight tensor
-                for param in self.model.policy.critic.parameters()
+                for param in self.model.policy.critic_target.parameters()
             ]
 
             try:
-                if len(critic_weights) != 0:
-                    all_weights = np.concatenate(critic_weights)
-                    self.logger.record(
-                        "weights/critic_histogram", wandb.Histogram(all_weights)
-                    )
-            except:
-                print("NaN detected in critic weights. Skipping logging")
-
-        # Log critic_target weights
-        critic_target_weights = [
-            param.data.view(-1).detach().cpu().numpy()  # Flatten each weight tensor
-            for param in self.model.policy.critic_target.parameters()
-        ]
-
-        try:
-            if len(critic_target_weights) != 0:
-                all_weights = np.concatenate(critic_target_weights)
-                self.logger.record(
-                    "weights/critic_target_histogram", wandb.Histogram(all_weights)
-                )
-                # Log critic_target weights
-                critic_target_weights = [
-                    param.data.view(-1)
-                    .detach()
-                    .cpu()
-                    .numpy()  # Flatten each weight tensor
-                    for param in self.model.policy.critic_target.parameters()
-                ]
                 if len(critic_target_weights) != 0:
                     all_weights = np.concatenate(critic_target_weights)
                     self.logger.record(
                         "weights/critic_target_histogram", wandb.Histogram(all_weights)
                     )
-        except:
-            print("NaN detected in critic_target weights. Skipping logging")
+                    # Log critic_target weights
+                    critic_target_weights = [
+                        param.data.view(-1)
+                        .detach()
+                        .cpu()
+                        .numpy()  # Flatten each weight tensor
+                        for param in self.model.policy.critic_target.parameters()
+                    ]
+                    if len(critic_target_weights) != 0:
+                        all_weights = np.concatenate(critic_target_weights)
+                        self.logger.record(
+                            "weights/critic_target_histogram", wandb.Histogram(all_weights)
+                        )
+            except:
+                print("NaN detected in critic_target weights. Skipping logging")
 
-        # Log v_net weights and gradients
-        if hasattr(self.model, "v_net"):
-            # Log v_net gradients
-            v_net_gradients = [
-                param.grad.view(-1)
-                .detach()
-                .cpu()
-                .numpy()  # Flatten each gradient tensor
-                for param in self.model.v_net.parameters()
-                if param.grad is not None
-            ]
-            if len(v_net_gradients) != 0:
-                all_gradients = np.concatenate(v_net_gradients)
-                self.logger.record(
-                    "grad/v_net_histogram", wandb.Histogram(all_gradients)
-                )
+            # Log v_net weights and gradients
+            if hasattr(self.model, "v_net"):
+                # Log v_net gradients
+                v_net_gradients = [
+                    param.grad.view(-1)
+                    .detach()
+                    .cpu()
+                    .numpy()  # Flatten each gradient tensor
+                    for param in self.model.v_net.parameters()
+                    if param.grad is not None
+                ]
+                if len(v_net_gradients) != 0:
+                    all_gradients = np.concatenate(v_net_gradients)
+                    self.logger.record(
+                        "grad/v_net_histogram", wandb.Histogram(all_gradients)
+                    )
 
-            # Log v_net weights
-            v_net_weights = [
+                # Log v_net weights
+                v_net_weights = [
+                    param.data.view(-1).detach().cpu().numpy()  # Flatten each weight tensor
+                    for param in self.model.v_net.parameters()
+                ]
+                if len(v_net_weights) != 0:
+                    all_weights = np.concatenate(v_net_weights)
+                    self.logger.record(
+                        "weights/v_net_histogram", wandb.Histogram(all_weights)
+                    )
+
+            # Log policy weights
+            actor_weights = [
                 param.data.view(-1).detach().cpu().numpy()  # Flatten each weight tensor
-                for param in self.model.v_net.parameters()
+                for param in self.model.policy.actor.parameters()
             ]
-            if len(v_net_weights) != 0:
-                all_weights = np.concatenate(v_net_weights)
-                self.logger.record(
-                    "weights/v_net_histogram", wandb.Histogram(all_weights)
-                )
+            if len(actor_weights) != 0:
+                all_weights = np.concatenate(actor_weights)
+                self.logger.record("weights/policy_histogram", wandb.Histogram(all_weights))
 
-        # Log policy weights
-        actor_weights = [
-            param.data.view(-1).detach().cpu().numpy()  # Flatten each weight tensor
-            for param in self.model.policy.actor.parameters()
-        ]
-        if len(actor_weights) != 0:
-            all_weights = np.concatenate(actor_weights)
-            self.logger.record("weights/policy_histogram", wandb.Histogram(all_weights))
-
-        # breakpoint()
         if (
             self.video_freq > 0 and self.n_calls % self.video_freq == 0
         ) or self.n_calls == 1:
