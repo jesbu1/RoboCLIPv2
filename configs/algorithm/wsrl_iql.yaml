@@ -30,13 +30,13 @@ model:
   qf_net_arch: [768, 512, 512]
 
 offline_training:
-  offline_training_steps: 64
+  offline_training_steps: 500000
   ckpt_path: null  # Path to load checkpoint from, if provided will skip offline training
   critic_update_ratio: 1
 
 online_training:
-  total_time_steps: 100000
+  total_time_steps: 200000
   mix_buffers_ratio: 0.0 # WSRL does not use old replay buffer
   warm_start_online_rl: true # main change for WSRL
-  learning_starts: 1000
+  learning_starts: 4000
   critic_update_ratio: 4

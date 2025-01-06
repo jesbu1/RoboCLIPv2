@@ -276,7 +276,6 @@ class IQL(OfflineRLAlgorithm):
         self.critic = self.policy.critic.to(th.float32)
         self.critic_target = self.policy.critic_target
 
-    @th.compile
     def train(
         self, gradient_steps: int, batch_size: int = 64, logging_prefix: str = "train"
     ) -> None:
