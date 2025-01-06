@@ -5,7 +5,7 @@ defaults:
 
 logging:
   eval_freq: 5000
-  video_freq: 5000
+  video_freq: 10000
 
 general_training:
   algo: sac
