@@ -181,6 +181,7 @@ class LearnedRewardWrapper(gym.Wrapper):
         self.dense_eval = dense_eval
 
         self.reward_at_every_step = self.reward_model.reward_at_every_step
+        self.reward_divisor = self.reward_model.reward_divisor
 
         if language_features is not None:
             self.reward_language_features = (
@@ -231,14 +232,20 @@ class LearnedRewardWrapper(gym.Wrapper):
                 obs = np.concatenate([obs, proprio])
 
         if self.reward_model.name == "dense" or self.dense_eval:
-            return obs, original_reward, done, info
+            reward = original_reward / self.reward_divisor
+
+            if info.get("success", False):
+                reward += self.reward_model.success_bonus
+
+            return obs, reward, done, info
         # Check if this is sparse/dense reward
         elif self.reward_model.name == "sparse":
             sparse_reward = (
                 self.reward_model.success_bonus if info.get("success", False) else 0.0
             )
-            reward = sparse_reward
-            return obs, reward, done, info
+            # Note: No reward divisor for sparse reward.
+
+            return obs, sparse_reward, done, info
 
         if encoded_image is not None:
             self.past_observations.append(encoded_image)
@@ -269,6 +276,8 @@ class LearnedRewardWrapper(gym.Wrapper):
                 self.past_observations = []
             else:
                 reward = 0
+
+        reward /= self.reward_divisor
 
         # Success bonus
         if info.get("success", False):
@@ -315,3 +324,13 @@ class RewardAtEndWrapper(gym.Wrapper):
             return obs, self.total_reward, done, info
         else:
             return obs, reward, done, info
+
+
+class RewardScaleWrapper(gym.Wrapper):
+    def __init__(self, env, divisor):
+        super(RewardScaleWrapper, self).__init__(env)
+        self.divisor = divisor
+
+    def step(self, action):
+        obs, reward, done, info = self.env.step(action)
+        return obs, reward / self.divisor, done, info

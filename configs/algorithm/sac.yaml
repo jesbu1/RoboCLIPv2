@@ -9,7 +9,8 @@ logging:
 
 general_training:
   algo: sac
-  action_noise: 0 # sigma
+  name: sac
+  action_noise: 0.1 # sigma
   learning_rate: 1e-3
 
 
@@ -17,10 +18,10 @@ model:
   policy_layer_norm: true
   critic_layer_norm: true
   pi_net_arch: [768, 512, 256]
-  qf_net_arch: [1024, 768, 512]
+  qf_net_arch: [768, 512, 512]
   
 offline_training:
   offline_training_steps: 0 # SAC is online-only
 
 online_training:
-  total_time_steps: 100000
+  total_time_steps: 500000

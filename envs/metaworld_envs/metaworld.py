@@ -280,15 +280,14 @@ def create_wrapped_env(
 
         dense_eval = True if (mode == "eval" or mode == "demo") else False
 
-        if reward_model is not None:
-            base_env = LearnedRewardWrapper(
-                base_env,
-                reward_model,
-                is_state_based=is_state_based,
-                language_features=language_features,
-                dense_eval=dense_eval,
-                use_proprio=use_proprio,
-            )
+        base_env = LearnedRewardWrapper(
+            base_env,
+            reward_model,
+            is_state_based=is_state_based,
+            language_features=language_features,
+            dense_eval=dense_eval,
+            use_proprio=use_proprio,
+        )
 
         # This adds the language features to the observation
         if language_features is not None:

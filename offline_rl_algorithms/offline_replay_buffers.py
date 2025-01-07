@@ -83,6 +83,7 @@ class H5ReplayBuffer(ReplayBuffer):
         image_encoder: BaseRewardModel = None,
         is_state_based: bool = False,
         use_proprio: bool = False,
+        reward_divisor: float = 1.0,
     ):
         """
         Initialize the replay buffer.
@@ -188,6 +189,9 @@ class H5ReplayBuffer(ReplayBuffer):
                 indices_to_keep = np.arange(observations.shape[0])
 
             self.indices_to_keep = np.array(indices_to_keep, dtype=int)
+
+        # Use the reward divisor
+        rewards /= reward_divisor
 
         if dense_rewards_at_end:
             new_rewards = np.zeros_like(rewards)
