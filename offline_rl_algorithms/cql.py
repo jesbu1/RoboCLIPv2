@@ -232,7 +232,6 @@ class CQL(OfflineRLAlgorithm):
     def train(
         self, gradient_steps: int, batch_size: int = 64, logging_prefix: str = "train"
     ) -> None:
-        
         # Switch to train mode (this affects batch norm / dropout)
         self.policy.set_training_mode(True)
         # Update optimizers learning rate
@@ -359,6 +358,16 @@ class CQL(OfflineRLAlgorithm):
                     bound_rate_next_cal_ql = (
                         (q_next_actions < cal_ql_lower_bounds).float().mean()
                     )
+
+                    import random
+
+                    if random.random() < 0.1:
+                        print(f"Bound rate next cal ql {bound_rate_next_cal_ql}")
+                        print(f"Bound rate cal ql {bound_rate_cal_ql}")
+                        print("q current max", q_current_actions.max())
+                        print("qlower max", cal_ql_lower_bounds.max())
+                        print()
+
                     q_current_actions = th.max(q_current_actions, cal_ql_lower_bounds)
                     q_next_actions = th.max(q_next_actions, cal_ql_lower_bounds)
 
@@ -494,7 +503,7 @@ class CQL(OfflineRLAlgorithm):
             metrics_dict[f"{logging_prefix}/bound_rate_next_cal_ql"] = (
                 bound_rate_next_cal_ql
             )
-        
+
         for metric in metrics_dict:
             self.logger.record(metric, metrics_dict[metric])
 

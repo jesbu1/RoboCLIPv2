@@ -19,3 +19,7 @@ environment:
   train_freq_type: 'step'
   env_id: "window-open-v2" # eval task
   ignore_language: false
+
+# Reward divisor is environment-dependent
+reward_model:
+  reward_divisor: 400

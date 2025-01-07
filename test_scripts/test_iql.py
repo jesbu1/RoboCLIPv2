@@ -130,28 +130,50 @@ def parse_reward_model(reward_cfg: DictConfig) -> BaseRewardModel:
     if reward_string is None:
         return None
     if reward_string == "roboclip":
-        return RoboclipRewardModel(
-            reward_cfg.model_path, batch_size=reward_cfg.batch_size
+        reward_model = RoboclipRewardModel(
+            reward_cfg.model_path,
+            batch_size=reward_cfg.batch_size,
+            success_bonus=reward_cfg.success_bonus,
         )
     elif reward_string == "vlc":
-        return VLCRewardModel(reward_cfg.model_path, batch_size=reward_cfg.batch_size)
+        reward_model = VLCRewardModel(
+            reward_cfg.model_path,
+            batch_size=reward_cfg.batch_size,
+            success_bonus=reward_cfg.success_bonus,
+        )
     elif reward_string == "roboclipv2":
-        return RoboclipV2RewardModel(
+        reward_model = RoboclipV2RewardModel(
             reward_cfg.model_path,
             use_pca=reward_cfg.use_pca,
             attention_heads=4,
             pca_model_dir=None,
             batch_size=reward_cfg.batch_size,
+            success_bonus=reward_cfg.success_bonus,
         )
 
     # TODO: get these models up
     elif reward_string == "sparse":
         # raise NotImplementedError("Sparse reward model not implemented yet.")
-        return EnvRewardModel(reward_type="sparse", model_path=reward_cfg.model_path)
+        reward_model = EnvRewardModel(
+            reward_type="sparse",
+            model_path=reward_cfg.model_path,
+            success_bonus=reward_cfg.success_bonus,
+        )
     elif reward_string == "dense":
-        return EnvRewardModel(reward_type="dense", model_path=reward_cfg.model_path)
+        reward_model = EnvRewardModel(
+            reward_type="dense",
+            model_path=reward_cfg.model_path,
+            success_bonus=reward_cfg.success_bonus,
+        )
     else:
         raise ValueError(f"Unknown reward model: {reward_string}")
+
+    # Set the success bonus
+    reward_model.set_success_bonus(reward_cfg.success_bonus)
+    reward_model.set_reward_divisor(reward_cfg.reward_divisor)
+    print(f"Success bonus: {reward_model.success_bonus}")
+
+    return reward_model
 
 
 # Define the function to initialize Hydra
@@ -191,9 +213,6 @@ def main(cfg: DictConfig):
         os.makedirs(log_dir)
 
     reward_model = parse_reward_model(cfg.reward_model)
-    # Set the success bonus
-    reward_model.set_success_bonus(cfg.reward_model.success_bonus)
-    print(f"Success bonus: {reward_model.success_bonus}")
 
     ### Create environment and callbacks ###
     envs, eval_env = create_envs(cfg, reward_model)
@@ -266,6 +285,7 @@ def main(cfg: DictConfig):
         calculate_mc_returns=training_config.use_calibrated_q,  # only used for cal-ql
         mc_return_gamma=training_config.gamma,
         dense_rewards_at_end=training_config.dense_rewards_at_end,
+        reward_divisor=cfg.reward_model.reward_divisor,
     )
 
     ### Learn offline
@@ -333,7 +353,10 @@ def main(cfg: DictConfig):
                 wandb.run.log({"model_dir": absolute_save_dir})
 
     # Set the replay buffer back to the original one
-    if cfg.online_training.mix_buffers_ratio > 0.0:
+    if (
+        isinstance(model, OfflineRLAlgorithm)
+        and cfg.online_training.mix_buffers_ratio > 0.0
+    ):
         model.set_combined_buffer(buffer, ratio=cfg.online_training.mix_buffers_ratio)
 
     ### Learn online ###

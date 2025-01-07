@@ -22,13 +22,22 @@ def mean_pooling(model_output, attention_mask):
 
 
 class BaseRewardModel(abc.ABC):
-    def __init__(self, device: str = "cuda", batch_size=64, success_bonus=10.0):
+    def __init__(
+        self,
+        device: str = "cuda",
+        batch_size=64,
+        success_bonus=10.0,
+        reward_divisor=1.0,
+    ):
         """
         Initialize the encoder. Subclasses can implement specific initialization as needed.
         """
         self.device = torch.device(device)
         self.batch_size = batch_size
         self.success_bonus = success_bonus
+
+        # Note: this is handled in the wrapper or offline replay buffer
+        self.reward_divisor = reward_divisor
 
         # Load minilm-12v2
         # Load model from HuggingFace Hub
@@ -149,6 +158,9 @@ class BaseRewardModel(abc.ABC):
 
     def set_success_bonus(self, success_bonus: float):
         self.success_bonus = success_bonus
+
+    def set_reward_divisor(self, reward_divisor: float):
+        self.reward_divisor = reward_divisor
 
     @abc.abstractmethod
     def _calculate_reward_batch(
