@@ -14,8 +14,6 @@ general_training:
   action_noise: 0.1 # sigma
   learning_rate: 1e-3
 
-  reward_divisor: 400
-
   # offline rl parameters
   n_critics: 5
   n_critics_to_sample: 2

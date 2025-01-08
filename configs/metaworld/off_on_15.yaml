@@ -14,9 +14,9 @@ environment:
   n_envs: 1
   train_freq_num: 1
   train_freq_type: 'step'
-  env_id: "coffee-pull-v2" # eval task
+  env_id: "button-press-topdown-v2" # eval task
   ignore_language: false
 
 # Reward divisor is environment-dependent
 reward_model:
-  reward_divisor: 100 
+  reward_divisor: 1.0
