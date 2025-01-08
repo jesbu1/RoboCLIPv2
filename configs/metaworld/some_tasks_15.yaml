@@ -22,4 +22,4 @@ environment:
 
 # Reward divisor is environment-dependent
 reward_model:
-  reward_divisor: 400
+  reward_divisor: 1.0

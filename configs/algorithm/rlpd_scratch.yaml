@@ -15,7 +15,7 @@ general_training:
   learning_rate: 1e-3
 
   # offline rl parameters
-  n_critics: 5
+  n_critics: 2
   n_critics_to_sample: 2
 
   # RLPD-specific parameters
@@ -26,8 +26,8 @@ general_training:
 model:
   policy_layer_norm: true
   critic_layer_norm: true
-  pi_net_arch: [768, 512, 256]
-  qf_net_arch: [768, 512, 512]
+  pi_net_arch: [1024, 768, 512]
+  qf_net_arch: [1024, 1024, 512]
 
 offline_training:
   offline_training_steps: 0
@@ -39,4 +39,4 @@ online_training:
   mix_buffers_ratio: 0.0 # WSRL does not use old replay buffer
   warm_start_online_rl: false # main change for WSRL
   learning_starts: 2000
-  critic_update_ratio: 4
+  critic_update_ratio: 1
