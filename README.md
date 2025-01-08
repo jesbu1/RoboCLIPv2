@@ -12,16 +12,28 @@ git clone https://github.com/sumedh7/RoboCLIP.git --recursive
 cd RoboCLIP
 conda env create -f environment_roboclip.yml
 conda activate roboclip
+
+# Get mjrl
+git clone https://github.com/aravindr93/mjrl.git
 pip install -e mjrl
+
+# Use metaworld fork
+rm -rf Metaworld
+git clone https://github.com/sumedh7/Metaworld.git
 pip install -e Metaworld
+
 pip install -e kitchen_alt
 pip install -e kitchen_alt/kitchen/envs
 wget https://www.rocq.inria.fr/cluster-willow/amiech/howto100m/s3d_howto100m.pth
 wget https://www.rocq.inria.fr/cluster-willow/amiech/howto100m/s3d_dict.npy
 git submodule init
 git submodule update --recursive
-pip install -e reward_models/LIV # TODO: fix how it gets rid of our pytorch version
+pip install -e reward_models/LIV 
 pip install -e reward_models/LIV/liv/models/clip
+
+# Reinstall pytorch>=2.0. https://pytorch.org/
+pip install torch # look at instructions at URL
+
 pip install -e .
 ```
 
