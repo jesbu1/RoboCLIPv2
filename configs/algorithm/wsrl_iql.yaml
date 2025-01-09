@@ -5,8 +5,8 @@ defaults:
 
 # Because RLPD is slower, we will log more frequently
 logging:
-  eval_freq: 20000
-  video_freq: 20000
+  eval_freq: 10000
+  video_freq: 10000
 
 general_training:
   algo: rlpd
@@ -26,11 +26,11 @@ general_training:
 model:
   policy_layer_norm: true
   critic_layer_norm: true
-  pi_net_arch: [768, 512, 256]
-  qf_net_arch: [768, 512, 512]
+  pi_net_arch: [1024, 768, 512]
+  qf_net_arch: [1024, 1024, 512]
 
 offline_training:
-  offline_training_steps: 200000
+  offline_training_steps: 500000
   ckpt_path: null  # Path to load checkpoint from, if provided will skip offline training
   critic_update_ratio: 1
 
@@ -39,4 +39,4 @@ online_training:
   mix_buffers_ratio: 0.0 # WSRL does not use old replay buffer
   warm_start_online_rl: true # main change for WSRL
   learning_starts: 4000
-  critic_update_ratio: 10
+  critic_update_ratio: 4

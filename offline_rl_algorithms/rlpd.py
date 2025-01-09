@@ -209,12 +209,21 @@ class RLPD(OfflineRLAlgorithm):
         if offline_algo is None and self.offline_algo is not None:
             return
 
+        old_policy_optimizer = self.policy.actor.optimizer
+        old_critic_optimizer = self.policy.critic.optimizer
+        old_ent_coef_optimizer = self.ent_coef_optimizer
+
         self.policy.actor = offline_algo.policy.actor
         self.policy.critic = offline_algo.policy.critic
         self.policy.critic_target = offline_algo.policy.critic_target
+        # This sets the optimizer to the offline_algo's optimizer
+        # self.policy.actor.optimizer = offline_algo.policy.actor.optimizer
+        # self.policy.critic.optimizer = offline_algo.policy.critic.optimizer
 
-        self.policy.actor.optimizer = offline_algo.policy.actor.optimizer
-        self.policy.critic.optimizer = offline_algo.policy.critic.optimizer
+        # This replaces the optimizer with the old (new) optimizer
+        self.policy.actor.optimizer = old_policy_optimizer
+        self.policy.critic.optimizer = old_critic_optimizer
+
         if (
             hasattr(offline_algo, "ent_coef_optimizer")
             and offline_algo.ent_coef_optimizer is not None
@@ -222,8 +231,10 @@ class RLPD(OfflineRLAlgorithm):
             print(
                 "Setting ent_coef_optimizer and ent coef to the old value of the offline algo"
             )
-            self.ent_coef_optimizer = offline_algo.ent_coef_optimizer
+            # self.ent_coef_optimizer = offline_algo.ent_coef_optimizer
             self.log_ent_coef = offline_algo.log_ent_coef
+            self.ent_coef_optimizer = old_ent_coef_optimizer
+
         elif hasattr(offline_algo, "ent_coef_tensor"):
             print(
                 f"Setting ent_coef_tensor to the old value of the offline algo: {offline_algo.ent_coef_tensor.item()}"
