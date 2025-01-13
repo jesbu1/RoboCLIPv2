@@ -18,30 +18,45 @@ from eval_utils import padding_video
 
 matplotlib.use('Agg')
 
+def shorten_name(name, separator=" ", max_length=5):
+    parts = name.split(separator)
+    return separator.join([part[:max_length] for part in parts])
+
+
 def plot_matrix_as_image(matrix, names, set, text):
     # Create a figure and axis
     # only keep 2 decimal points
     matrix = np.round(matrix, 2)
-    fig, ax = plt.subplots(figsize=(len(matrix), len(matrix)))
-    
-    # Plot the matrix with a colormap (darker = higher values)
-    cax = ax.matshow(matrix, cmap='viridis', interpolation='nearest')
 
-    # Add color bar
-    plt.colorbar(cax)
+    fig, ax = plt.subplots(figsize=(len(matrix) * 1.1, len(matrix)))
+
+    # Plot the matrix with a colormap (darker = higher values)
+    cax = ax.matshow(
+        matrix, cmap="blues", interpolation="nearest"
+    )  # originally was viridis
+
+    # Add color bar, make sure it is the same height as the matrix and doesn't overlap with the text
+    fig.colorbar(cax, fraction=0.046, pad=0.04)
 
     # Set x-axis and y-axis ticks
     ax.set_xticks(np.arange(len(names)))
     ax.set_yticks(np.arange(len(names)))
 
+    shortened_text = [shorten_name(name) for name in text]
+    shortened_names = [shorten_name(name) for name in names]
+
     # Label each row and column with the given names
-    ax.set_xticklabels(text, rotation=45, ha='left', fontsize=10)
-    ax.set_yticklabels(names)
+    ax.set_xticklabels(shortened_text, rotation=45, ha="left", fontsize=10)
+    ax.set_yticklabels(shortened_names)
 
     # Display the values in the matrix
     for (i, j), val in np.ndenumerate(matrix):
         ax.text(j, i, f'{val:.2f}', ha='center', va='center', color='white' if val > np.max(matrix)/2 else 'black',  fontsize=10)
-# keep 2 digit first 2 digit after decimal point {val:.2f}
+
+    # cax = fig.add_axes([ax.get_position().x1+0.01,ax.get_position().y0,0.02,ax.get_position().height])
+    # plt.colorbar(im, cax=cax)
+
+    # keep 2 digit first 2 digit after decimal point {val:.2f}
     # Adjust layout to fit labels
     plt.tight_layout()
 
@@ -52,6 +67,8 @@ def plot_matrix_as_image(matrix, names, set, text):
     # image = Image.open(buf)
     wandb.log({f"confusion_matrix/{set}_confusion_matrix": wandb.Image(fig)})
 
+    # save the figure to disk
+    plt.savefig(f"confusion_matrix_{set}.pdf", bbox_inches="tight")
     plt.close(fig)  # Close the figure to free memory
 
 
