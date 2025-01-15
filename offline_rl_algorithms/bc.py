@@ -213,6 +213,7 @@ class BC(OfflineRLAlgorithm):
         tb_log_name: str = "BC",
         reset_num_timesteps: bool = True,
         progress_bar: bool = False,
+        logger: Optional = None,
     ):
         return super().learn(
             total_timesteps=total_timesteps,
@@ -221,6 +222,7 @@ class BC(OfflineRLAlgorithm):
             tb_log_name=tb_log_name,
             reset_num_timesteps=reset_num_timesteps,
             progress_bar=progress_bar,
+            logger=logger,
         )
 
     def _excluded_save_params(self) -> List[str]:

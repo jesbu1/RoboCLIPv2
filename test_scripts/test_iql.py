@@ -21,11 +21,6 @@ import os
 import argparse
 from stable_baselines3.common.callbacks import EvalCallback, CallbackList
 
-import metaworld
-from metaworld.envs import (
-    ALL_V2_ENVIRONMENTS_GOAL_OBSERVABLE,
-    ALL_V2_ENVIRONMENTS_GOAL_HIDDEN,
-)
 
 # from kitchen_env_wrappers import readGif
 import imageio
@@ -53,12 +48,6 @@ from reward_model.vlc_reward_model import VLCRewardModel
 from reward_model.roboclipv2_reward_model import RoboclipV2RewardModel
 
 from reward_model.env_reward_model import EnvRewardModel
-
-from envs.metaworld_envs.metaworld import (
-    create_wrapped_env,
-    instruction_to_environment,
-    environment_to_instruction,
-)
 
 
 from stable_baselines3.common.policies import ActorCriticPolicy
@@ -224,10 +213,16 @@ def main(cfg: DictConfig):
     if training_config.algo == "rlpd":
         video_freq = 0
         eval_freq = 0
-        # eval_freq = offline_config.offline_training_steps * env_config.n_envs // (2)
+        video_freq = offline_config.offline_training_steps * env_config.n_envs // (10)
     else:
         video_freq = offline_config.offline_training_steps * env_config.n_envs // 10
         eval_freq = offline_config.offline_training_steps * env_config.n_envs // (10)
+
+        if logging_config.eval_freq == 0:
+            eval_freq = 0
+
+        if logging_config.video_freq == 0:
+            video_freq = 0
 
     # Use deterministic actions for evaluation
     eval_callback = OfflineEvalCallback(
@@ -279,13 +274,15 @@ def main(cfg: DictConfig):
         success_bonus=cfg.reward_model.success_bonus,
         sparsify_rewards=sparse_only,
         filter_instructions=offline_tasks,
-        image_encoder=reward_model,
+        reward_model=reward_model,
         is_state_based=env_config.is_state_based,
         use_proprio=env_config.use_proprio,
         calculate_mc_returns=training_config.use_calibrated_q,  # only used for cal-ql
         mc_return_gamma=training_config.gamma,
         dense_rewards_at_end=training_config.dense_rewards_at_end,
         reward_divisor=cfg.reward_model.reward_divisor,
+        is_metaworld="metaworld" in env_config.cfg_name,
+        normalize_actions_koch="koch" in env_config.cfg_name,
     )
 
     ### Learn offline
@@ -300,6 +297,18 @@ def main(cfg: DictConfig):
         #     h5_path = default_h5_path
         # else:
         #     h5_path = offline_config.offline_h5_path
+
+        if hasattr(training_config, "ckpt_path") and training_config.ckpt_path:
+            # Then let's load the model from the ckpt path and continue training
+            training_config.ckpt_path = to_absolute_path(training_config.ckpt_path)
+            print(f"Loading checkpoint from {training_config.ckpt_path}")
+
+            # Note we are skipping the loading of the offline algo
+            model = model.load(
+                training_config.ckpt_path, offline_algo=model.offline_algo, env=envs
+            )
+
+            model.set_logger(wandb_logger)
 
         if hasattr(offline_config, "ckpt_path") and offline_config.ckpt_path:
             # convert to absolute path from hydra
@@ -368,19 +377,34 @@ def main(cfg: DictConfig):
 
     if cfg.online_training.total_time_steps > 0:
         # logger only exists for offline algorithms
-        if isinstance(model, OfflineRLAlgorithm):
-            model.learn(
-                total_timesteps=int(cfg.online_training.total_time_steps),
-                callback=callback_list,
-                logger=logger,
-                progress_bar=True,
-            )
-        else:
-            model.learn(
-                total_timesteps=int(cfg.online_training.total_time_steps),
-                callback=callback_list,
-                progress_bar=True,
-            )
+        try:
+            if isinstance(model, OfflineRLAlgorithm):
+                model.learn(
+                    total_timesteps=int(cfg.online_training.total_time_steps),
+                    callback=callback_list,
+                    logger=logger,
+                    progress_bar=True,
+                )
+            else:
+                model.learn(
+                    total_timesteps=int(cfg.online_training.total_time_steps),
+                    callback=callback_list,
+                    progress_bar=True,
+                )
+        except Exception as e:
+            # If crashed, let's save the model
+            print("Crashing... Saving model")
+            model.save(log_dir)
+            print("Model saved at", log_dir)
+
+            # print error
+            print(e)
+
+            # show tracebackj
+            import traceback
+
+            traceback.print_exc()
+
     model.save(log_dir)
 
     if logging_config.wandb:
@@ -389,12 +413,25 @@ def main(cfg: DictConfig):
 
 def create_envs(cfg: DictConfig, reward_model: BaseRewardModel):
     env_config = cfg.environment
-    # Extract configuration
-    # env_id = env_config.env_id
-    # env_id = instruction_to_environment[env_config.text_string]
-    # text_instruction = env_config.text_string
-    env_id = env_config.env_id
-    text_instruction = environment_to_instruction[env_id]
+
+    if "metaworld" in env_config.cfg_name:
+        from envs.metaworld import (
+            create_wrapped_env,
+            environment_to_instruction,
+        )
+
+        # Extract configuration
+        # env_id = env_config.env_id
+        # env_id = instruction_to_environment[env_config.text_string]
+        # text_instruction = env_config.text_string
+        env_id = env_config.env_id
+        text_instruction = environment_to_instruction[env_id]
+
+    else:
+        from envs.koch_bimanual import create_wrapped_env
+
+        text_instruction = env_config.text_instruction
+        env_id = "koch_bimanual"  # Doesn't matter
 
     with th.no_grad():
         lang_feat = reward_model.encode_text_for_policy(text_instruction).squeeze()
@@ -437,39 +474,43 @@ def create_envs(cfg: DictConfig, reward_model: BaseRewardModel):
             ]
         )
 
-    if env_config.n_envs > 1:
-        eval_env = SubprocVecEnv(
-            [
-                create_wrapped_env(
-                    env_id,
-                    reward_model=reward_model,
-                    language_features=lang_feat if not ignore_language else None,
-                    success_bonus=cfg.reward_model.success_bonus,
-                    monitor=True,
-                    goal_observable=True,
-                    is_state_based=env_config.is_state_based,
-                    mode="eval",
-                    use_proprio=env_config.use_proprio,
-                )
-                for i in range(env_config.n_envs)
-            ]
-        )  # KitchenEnvDenseOriginalReward(time=True)
+    if "metaworld" in env_config.cfg_name:
+        if env_config.n_envs > 1:
+            eval_env = SubprocVecEnv(
+                [
+                    create_wrapped_env(
+                        env_id,
+                        reward_model=reward_model,
+                        language_features=lang_feat if not ignore_language else None,
+                        success_bonus=cfg.reward_model.success_bonus,
+                        monitor=True,
+                        goal_observable=True,
+                        is_state_based=env_config.is_state_based,
+                        mode="eval",
+                        use_proprio=env_config.use_proprio,
+                    )
+                    for i in range(env_config.n_envs)
+                ]
+            )  # KitchenEnvDenseOriginalReward(time=True)
+        else:
+            eval_env = DummyVecEnv(
+                [
+                    create_wrapped_env(
+                        env_id,
+                        reward_model=reward_model,
+                        language_features=lang_feat if not ignore_language else None,
+                        success_bonus=cfg.reward_model.success_bonus,
+                        monitor=True,
+                        goal_observable=True,
+                        is_state_based=env_config.is_state_based,
+                        mode="eval",
+                        use_proprio=env_config.use_proprio,
+                    )
+                ]
+            )  # KitchenEnvDenseOriginalReward(time=True)
     else:
-        eval_env = DummyVecEnv(
-            [
-                create_wrapped_env(
-                    env_id,
-                    reward_model=reward_model,
-                    language_features=lang_feat if not ignore_language else None,
-                    success_bonus=cfg.reward_model.success_bonus,
-                    monitor=True,
-                    goal_observable=True,
-                    is_state_based=env_config.is_state_based,
-                    mode="eval",
-                    use_proprio=env_config.use_proprio,
-                )
-            ]
-        )  # KitchenEnvDenseOriginalReward(time=True)
+        eval_env = envs
+
     return envs, eval_env
 
 

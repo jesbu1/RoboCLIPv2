@@ -1,53 +1,86 @@
 import h5py
 
 # h5_path = 'data/h5_buffers/orig/metaworld_traj_15_demos.h5'
-h5_path = "data/h5_buffers/updated_trajs/metaworld_traj_15_demos_dense.h5"
+# h5_path = "data/h5_buffers/updated_trajs/metaworld_traj_15_demos_dense.h5"
+h5_path = "data/real_robot/updated_trajs/pick_orange_left_right_sparse.h5"
 # h5_path = 'data/h5_buffers/orig/metaworld_traj_15_demos.h5'
 h5_file = h5py.File(h5_path, "r")
 
 print(h5_file.keys())
-breakpoint()
-
-# print action statistics for each dimension (N, 4)
-print(h5_file["action"].shape)
-for i in range(4):
-    print(
-        f"Action {i} {h5_file['action'][:, i].mean()} +/- {h5_file['action'][:, i].std()}"
-    )
-    print("Min/max", h5_file["action"][:, i].min(), h5_file["action"][:, i].max())
-    print()
-
-# draw a histogram and for each action in one plot
-import matplotlib.pyplot as plt
-
-plt.subplot(2, 2, 1)
-plt.hist(h5_file["action"][:, 0])
-plt.title("Action 0")
-
-plt.subplot(2, 2, 2)
-plt.hist(h5_file["action"][:, 1])
-plt.title("Action 1")
-
-plt.subplot(2, 2, 3)
-plt.hist(h5_file["action"][:, 2])
-plt.title("Action 2")
-
-plt.subplot(2, 2, 4)
-plt.hist(h5_file["action"][:, 3])
-plt.title("Action 3")
-
-plt.savefig("action_histogram.png")
+actions = h5_file["action"][()]
+dones = h5_file["done"][()]
 
 
-# Let's also print the observation space and the min/max of its values
-print(h5_file["state"].shape)
+from envs.koch_bimanual import KochBimanualEnv
 
-for i in range(39):
-    print(
-        f"Observation {i} {h5_file['state'][:, i].mean()} +/- {h5_file['state'][:, i].std()}"
-    )
-    print("Min/max", h5_file["state"][:, i].min(), h5_file["state"][:, i].max())
-    print()
+env = KochBimanualEnv(
+    "/home/abrar/koch_arms/lerobot/lerobot/configs/robot/koch_bimanual.yaml"
+)
+
+import time
+import torch
+import numpy as np
+
+# Let's compute the absolute actions by summing the actions offset
+# absolute_actions = np.cumsum(actions, axis=0)
+while True:
+    obs = env.reset()
+    i = 0
+    while dones[i] != 1:
+        i += 1
+        # Replay actions
+        # obs, reward, done, info = env.step(actions[i] / 3)
+        # env.robot.send_action(torch.tensor(absolute_actions[i]))
+
+        state = env.robot.capture_observation()["observation.state"]
+        env.robot.send_action(torch.tensor(actions[i]) + state)
+        time.sleep(1 / 30)
+
+    breakpoint()
+
+
+# Let's just replay the actions from the h5 file
+
+# # print action statistics for each dimension (N, 4)
+# print(h5_file["action"].shape)
+# for i in range(4):
+#     print(
+#         f"Action {i} {h5_file['action'][:, i].mean()} +/- {h5_file['action'][:, i].std()}"
+#     )
+#     print("Min/max", h5_file["action"][:, i].min(), h5_file["action"][:, i].max())
+#     print()
+
+# # draw a histogram and for each action in one plot
+# import matplotlib.pyplot as plt
+
+# plt.subplot(2, 2, 1)
+# plt.hist(h5_file["action"][:, 0])
+# plt.title("Action 0")
+
+# plt.subplot(2, 2, 2)
+# plt.hist(h5_file["action"][:, 1])
+# plt.title("Action 1")
+
+# plt.subplot(2, 2, 3)
+# plt.hist(h5_file["action"][:, 2])
+# plt.title("Action 2")
+
+# plt.subplot(2, 2, 4)
+# plt.hist(h5_file["action"][:, 3])
+# plt.title("Action 3")
+
+# plt.savefig("action_histogram.png")
+
+
+# # Let's also print the observation space and the min/max of its values
+# print(h5_file["state"].shape)
+
+# for i in range(39):
+#     print(
+#         f"Observation {i} {h5_file['state'][:, i].mean()} +/- {h5_file['state'][:, i].std()}"
+#     )
+#     print("Min/max", h5_file["state"][:, i].min(), h5_file["state"][:, i].max())
+# print()
 
 
 # breakpoint()

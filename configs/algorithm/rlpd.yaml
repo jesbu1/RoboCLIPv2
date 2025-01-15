@@ -5,17 +5,17 @@ defaults:
 
 # Because RLPD is slower, we will log more frequently
 logging:
-  eval_freq: 5000
+  eval_freq: 0
   video_freq: 10000
 
 general_training:
   algo: rlpd
   name: rlpd
-  action_noise: 0.1 # sigma
+  action_noise: 0.0 # sigma
   learning_rate: 1e-3
 
   # offline rl parameters
-  n_critics: 5
+  n_critics: 10
   n_critics_to_sample: 2
 
   # RLPD-specific parameters
@@ -26,8 +26,8 @@ general_training:
 model:
   policy_layer_norm: true
   critic_layer_norm: true
-  pi_net_arch: [768, 512, 256]
-  qf_net_arch: [768, 512, 512]
+  pi_net_arch: [1024, 768, 512]
+  qf_net_arch: [1024, 1024, 512]
 
 offline_training:
   offline_training_steps: 0
@@ -36,7 +36,7 @@ offline_training:
 
 online_training:
   total_time_steps: 100000
-  mix_buffers_ratio: 0.20
+  mix_buffers_ratio: 0.5
   warm_start_online_rl: false
-  learning_starts: 1000
+  learning_starts: 50
   critic_update_ratio: 4

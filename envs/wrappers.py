@@ -170,7 +170,8 @@ class LearnedRewardWrapper(gym.Wrapper):
                 low=-np.inf,
                 high=np.inf,
                 shape=(
-                    self.reward_model.img_output_dim + (4 if self.use_proprio else 0),
+                    self.reward_model.img_output_dim
+                    + (env.action_space.shape[0] if self.use_proprio else 0),
                 ),
                 dtype=np.float32,
             )
@@ -201,7 +202,7 @@ class LearnedRewardWrapper(gym.Wrapper):
         self.counter += 1
         obs, original_reward, done, info = self.env.step(action)
 
-        proprio = obs[0:4]
+        proprio = obs
 
         encoded_image = None
         # IF the model is state-based and is dense/sparse reward, we can skip this
@@ -250,9 +251,9 @@ class LearnedRewardWrapper(gym.Wrapper):
         if encoded_image is not None:
             self.past_observations.append(encoded_image)
 
-        assert (
-            self.reward_language_features is not None
-        ), "Language features are None in the reward model"
+        assert self.reward_language_features is not None, (
+            "Language features are None in the reward model"
+        )
         if self.reward_at_every_step:
             stacked_sequence = np.stack(self.past_observations, axis=1)
             stacked_sequence = (
@@ -298,7 +299,7 @@ class LearnedRewardWrapper(gym.Wrapper):
 
         if self.is_state_based is False:
             if self.use_proprio:
-                proprio = obs[0:4]
+                proprio = obs
                 obs = np.concatenate([encoded_image, proprio])
 
             else:

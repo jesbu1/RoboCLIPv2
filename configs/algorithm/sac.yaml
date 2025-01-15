@@ -4,14 +4,14 @@ defaults:
   - _self_
 
 logging:
-  eval_freq: 5000
+  eval_freq: 0
   video_freq: 10000
 
 general_training:
   algo: sac
   name: sac
-  action_noise: 0.1 # sigma
-  learning_rate: 1e-3
+  action_noise: 0.0 # sigma
+  learning_rate: 3e-4
 
 
 model:
@@ -19,9 +19,10 @@ model:
   critic_layer_norm: true
   pi_net_arch: [768, 512, 256]
   qf_net_arch: [768, 512, 512]
-  
+
 offline_training:
   offline_training_steps: 0 # SAC is online-only
 
 online_training:
   total_time_steps: 500000
+  learning_starts: 500

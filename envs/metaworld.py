@@ -10,7 +10,7 @@ from metaworld.envs import (
     ALL_V2_ENVIRONMENTS_GOAL_OBSERVABLE,
 )
 
-from envs.metaworld_envs.wrappers import *
+from envs.wrappers import *
 from reward_model.env_reward_model import EnvRewardModel
 
 environment_to_instruction = {
@@ -78,6 +78,7 @@ class MetaworldBase(Env):
         goal_observable=False,
         random_reset="train",
         max_episode_steps=128,
+        use_proprio=False,
     ):
         """
         Parameters
@@ -118,6 +119,8 @@ class MetaworldBase(Env):
         self.env_id = env_id
         self.random_reset = random_reset
 
+        self.use_proprio = use_proprio
+
     def step(self, action):
         """
         Run one timestep of the environment's dynamics. When end of
@@ -136,6 +139,10 @@ class MetaworldBase(Env):
             info (dict): contains auxiliary diagnostic information (helpful for debugging, and sometimes for learning)
         """
         obs, reward, done, info = self.base_env.step(action)
+
+        if self.use_proprio:
+            # Remove state info and use only first 4 elements
+            obs = obs[:4]
 
         # if success, we add "is_success" to the info
         if "success" in info and info["success"]:
@@ -256,15 +263,24 @@ def create_wrapped_env(
     def _init():
         if mode == "eval":
             base_env = MetaworldBase(
-                env_id, goal_observable=goal_observable, random_reset="eval"
+                env_id,
+                goal_observable=goal_observable,
+                random_reset="eval",
+                use_proprio=use_proprio,
             )
         elif mode == "train":
             base_env = MetaworldBase(
-                env_id, goal_observable=goal_observable, random_reset="train"
+                env_id,
+                goal_observable=goal_observable,
+                random_reset="train",
+                use_proprio=use_proprio,
             )
         elif mode == "demo":
             base_env = MetaworldBase(
-                env_id, goal_observable=goal_observable, random_reset="demo"
+                env_id,
+                goal_observable=goal_observable,
+                random_reset="demo",
+                use_proprio=use_proprio,
             )
         else:
             raise ValueError("Invalid mode")

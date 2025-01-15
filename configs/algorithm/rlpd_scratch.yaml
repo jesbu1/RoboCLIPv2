@@ -5,17 +5,17 @@ defaults:
 
 # Because RLPD is slower, we will log more frequently
 logging:
-  eval_freq: 5000
+  eval_freq: 0
   video_freq: 5000
 
 general_training:
   algo: rlpd
   name: rlpd_scratch
-  action_noise: 0.1 # sigma
-  learning_rate: 1e-3
+  action_noise: 0.0 # sigma
+  learning_rate: 3e-4
 
   # offline rl parameters
-  n_critics: 2
+  n_critics: 5
   n_critics_to_sample: 2
 
   # RLPD-specific parameters
@@ -23,11 +23,14 @@ general_training:
   # Note: RLPD's offline step uses default params defined in base_config.yaml
   rlpd_offline_algo: iql
 
+  entropy_term: 0.1
+
 model:
   policy_layer_norm: true
   critic_layer_norm: true
   pi_net_arch: [1024, 768, 512]
   qf_net_arch: [1024, 1024, 512]
+
 
 offline_training:
   offline_training_steps: 0
@@ -38,5 +41,5 @@ online_training:
   total_time_steps: 500000
   mix_buffers_ratio: 0.0 # WSRL does not use old replay buffer
   warm_start_online_rl: false # main change for WSRL
-  learning_starts: 2000
+  learning_starts: 500
   critic_update_ratio: 1

@@ -76,14 +76,16 @@ class H5ReplayBuffer(ReplayBuffer):
         use_language_embeddings: bool = True,
         calculate_mc_returns: bool = False,
         mc_return_gamma: float = 0.99,
-        clip_actions: bool = True,
+        clip_actions: bool = False,
         sparsify_rewards: bool = False,
         dense_rewards_at_end: bool = False,
         filter_instructions: List[str] = None,
-        image_encoder: BaseRewardModel = None,
+        reward_model: BaseRewardModel = None,
         is_state_based: bool = False,
         use_proprio: bool = False,
         reward_divisor: float = 1.0,
+        is_metaworld: bool = False,
+        normalize_actions_koch: bool = False,
     ):
         """
         Initialize the replay buffer.
@@ -100,9 +102,9 @@ class H5ReplayBuffer(ReplayBuffer):
         :param sparsify_rewards: Converts reward to done
         :param dense_rewards_at_end: Whether to use the reward sum at the end of the episode instead.
         """
-        assert not (
-            dense_rewards_at_end and sparsify_rewards
-        ), "Cannot use both dense rewards at end and sparsify as a precaution"
+        assert not (dense_rewards_at_end and sparsify_rewards), (
+            "Cannot use both dense rewards at end and sparsify as a precaution"
+        )
 
         print(f"Loading transitions from {h5_path}")
         images = None
@@ -115,10 +117,21 @@ class H5ReplayBuffer(ReplayBuffer):
             # if 'img' in f.keys() and image_encoder is not None:
             # images = f["img"][()]
 
-            if clip_actions:
-                actions = np.clip(actions, -1, 1)
+            # if normalize_actions_koch:
+            # actions = actions.astype(np.float32) / 3.0  # Normalize the actions
+
+            # if clip_actions:
+            # actions = np.clip(actions, -3, 3)
+            # actions /= 3.0
+
+            actions /= 180  # normalize between -1 and 1
+            actions = np.clip(actions, -1, 1)
+
+            # actions = -actions
+
             if sparsify_rewards:
                 rewards = f["done"][()]
+                rewards = rewards.astype(np.float32)
             else:
                 rewards = f["rewards"][()]
             dones = f["done"][()]
@@ -164,7 +177,10 @@ class H5ReplayBuffer(ReplayBuffer):
                 image_encodings = f["img_embedding"][()]
                 # If we're using images, let's replace the observations with the encoded
                 # proprio is the first 4 observations
-                proprio = observations[:, :4]
+                if is_metaworld:
+                    proprio = observations[:, :4]
+                else:
+                    proprio = observations
 
                 img_obs = image_encodings
                 if use_proprio:
@@ -173,7 +189,7 @@ class H5ReplayBuffer(ReplayBuffer):
                 observations = img_obs
                 next_observations = img_obs
 
-            if filter_instructions is not None:
+            if filter_instructions is not None and len(filter_instructions) > 0:
                 instructions = f["env_id"][()]
                 indices_to_keep = []
                 for i in range(len(instructions)):
@@ -239,7 +255,7 @@ class H5ReplayBuffer(ReplayBuffer):
         self.next_observations = next_observations
         self.actions = actions.astype(np.float32)
         self.rewards = rewards.astype(np.float32)
-        self.dones = dones
+        self.dones = dones.astype(np.float32)
         self.timesteps = timesteps
         self.lang_embeddings = np.squeeze(lang_embeddings)
 

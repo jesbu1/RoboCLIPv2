@@ -1,5 +1,8 @@
+# @package _global_
+
 defaults:
   - _self_
+  - koch: null
   - metaworld: null
   - algorithm: null
   - reward: null
@@ -46,6 +49,8 @@ general_training:
   time_reward: 1.0
   threshold_reward: false
   time_penalty: 0.0
+
+  ckpt_path: null
 
 
 online_training:

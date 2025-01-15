@@ -46,7 +46,7 @@ from offline_rl_algorithms.callbacks import CustomWandbCallback, OfflineEvalCall
 from encoders.xclip_encoder import XCLIPEncoder
 
 
-from envs.metaworld_envs.metaworld import (
+from envs.metaworld import (
     create_wrapped_env,
     instruction_to_environment,
     environment_to_instruction,

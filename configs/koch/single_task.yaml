@@ -1,0 +1,22 @@
+# @package _global_
+
+defaults:
+  - _self_
+
+# tentatively unused
+offline_training:
+  offline_h5_path: "data/real_robot/updated_trajs/pick_orange_left_right_{}.h5"
+  
+  offline_tasks: null
+
+environment:
+  cfg_name: "koch_single_task"
+  text_instruction: "pick_all"
+  n_envs: 1
+  train_freq_num: 500
+  train_freq_type: 'episode'
+  ignore_language: false
+
+# Reward divisor is environment-dependent
+reward_model:
+  reward_divisor: 1.0

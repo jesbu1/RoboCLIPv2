@@ -13,14 +13,18 @@ from reward_model import VLCRewardModel, RoboclipV2RewardModel
 from reward_model.env_reward_model import EnvRewardModel
 # RoboCLIPEncoder
 
+
 def label_trajectories_iteratively(args, traj_h5, output_file):
     """
     Processes trajectories iteratively, computes rewards, and saves data directly to the output HDF5 file.
     If the output file already exists with embeddings, only updates the rewards.
     """
     # Check if this is just a reward update
-    is_reward_update = all(key in output_file.keys() for key in ['img_embedding', 'lang_embedding', 'img', 'timesteps'])
-    
+    is_reward_update = all(
+        key in output_file.keys()
+        for key in ["img_embedding", "lang_embedding", "img", "timesteps"]
+    )
+
     # Initialize the specified encoder
     if args.reward_model == "roboclip":
         reward_model = RoboCLIPEncoder(
@@ -42,25 +46,27 @@ def label_trajectories_iteratively(args, traj_h5, output_file):
             batch_size=args.batch_size,
         )
     elif args.reward_model == "sparse":
-        reward_model = EnvRewardModel(model_path=None) # Uses a LIV encoder
+        reward_model = EnvRewardModel(model_path=None)  # Uses a LIV encoder
     elif args.reward_model == "dense":
-        reward_model = EnvRewardModel(model_path=None) # Uses a LIV encoder
+        reward_model = EnvRewardModel(model_path=None)  # Uses a LIV encoder
 
     # If this is just a reward update, we can skip the embedding computation
     if is_reward_update:
         print("Output file exists with embeddings. Only updating rewards...")
         traj_keys = list(traj_h5.keys())
         total_timesteps = sum(len(traj_h5[traj_id]["reward"]) for traj_id in traj_keys)
-        
+
         if "rewards" in output_file:
             del output_file["rewards"]  # Delete existing rewards
-        rewards = output_file.create_dataset("rewards", (total_timesteps,), dtype="float32")
-        
+        rewards = output_file.create_dataset(
+            "rewards", (total_timesteps,), dtype="float32"
+        )
+
         current_timestep = 0
         for traj_id in tqdm(traj_keys, desc="Updating rewards"):
             traj_data = traj_h5[traj_id]
             num_steps = len(traj_data["done"])
-            
+
             for i in range(num_steps):
                 if not traj_data["done"][i]:
                     if args.reward_model == "dense":
@@ -79,15 +85,23 @@ def label_trajectories_iteratively(args, traj_h5, output_file):
                         start_idx = max(0, i - args.window_length + 1)
                         video_embeddings = []
                         for j in range(start_idx, i + 1):
-                            video_embeddings.append(output_file["img_embedding"][current_timestep - (i - j)])
+                            video_embeddings.append(
+                                output_file["img_embedding"][current_timestep - (i - j)]
+                            )
                         video_embedding = np.stack(video_embeddings)
                         text_embedding = output_file["lang_embedding"][current_timestep]
-                        
+
                         # Convert to torch tensors and reshape
                         video_embedding = torch.from_numpy(video_embedding)[None, ...]
-                        text_embedding = torch.from_numpy(text_embedding).unsqueeze(0).repeat(1, video_embedding.shape[1], 1)
+                        text_embedding = (
+                            torch.from_numpy(text_embedding)
+                            .unsqueeze(0)
+                            .repeat(1, video_embedding.shape[1], 1)
+                        )
                         # Calculate reward
-                        reward = reward_model.calculate_rewards(text_embedding, video_embedding)
+                        reward = reward_model.calculate_rewards(
+                            text_embedding, video_embedding
+                        )
                         rewards[current_timestep] = reward
 
                 current_timestep += 1
@@ -99,10 +113,14 @@ def label_trajectories_iteratively(args, traj_h5, output_file):
     total_timesteps = sum(len(traj_h5[traj_id]["reward"]) for traj_id in traj_keys)
     output_file.create_dataset("rewards", (total_timesteps,), dtype="float32")
     output_file.create_dataset(
-        "lang_embedding", (total_timesteps, reward_model.text_output_dim), dtype="float32"
+        "lang_embedding",
+        (total_timesteps, reward_model.text_output_dim),
+        dtype="float32",
     )
     output_file.create_dataset(
-        "policy_lang_embedding", (total_timesteps, reward_model.policy_text_output_dim), dtype="float32"
+        "policy_lang_embedding",
+        (total_timesteps, reward_model.policy_text_output_dim),
+        dtype="float32",
     )
     output_file.create_dataset(
         "img_embedding", (total_timesteps, reward_model.img_output_dim), dtype="float32"
@@ -130,13 +148,15 @@ def label_trajectories_iteratively(args, traj_h5, output_file):
         traj_data = traj_h5[traj_id]
         num_steps = len(traj_data["done"])
 
-        for i in range(num_steps):
+        for i in tqdm(range(num_steps)):
             # Encode text only if the instruction changes
             if traj_data["string"][i] != previous_instruction:
                 traj_string = traj_data["string"][i].decode("utf-8")
                 text_embedding = reward_model.encode_text(traj_string)[0]
 
-                policy_lang_embedding = reward_model.encode_text_for_policy(traj_string)[0]
+                policy_lang_embedding = reward_model.encode_text_for_policy(
+                    traj_string
+                )[0]
 
                 assert len(text_embedding.shape) == 1
                 previous_instruction = traj_string
@@ -147,7 +167,7 @@ def label_trajectories_iteratively(args, traj_h5, output_file):
             timesteps[current_timestep] = current_timestep
 
             # Use the image to get the image embedding
-            img = traj_data["img"][i][None, None,...]
+            img = traj_data["img"][i][None, None, ...]
             img_embedding = reward_model.encode_images(img).squeeze()
 
             img_embeds[current_timestep] = img_embedding
@@ -176,8 +196,14 @@ def label_trajectories_iteratively(args, traj_h5, output_file):
                     video_frames = np.stack(video_frames)[None, ...]
                     video_embedding = reward_model.encode_images(video_frames)
                     # repeat the text embedding to match the batch size
-                    text_embedding = torch.from_numpy(text_embedding).unsqueeze(0).repeat(1, video_embedding.shape[0], 1)
-                    reward = reward_model.calculate_rewards(text_embedding, torch.from_numpy(video_embedding))
+                    text_embedding = (
+                        torch.from_numpy(text_embedding)
+                        .unsqueeze(0)
+                        .repeat(1, video_embedding.shape[0], 1)
+                    )
+                    reward = reward_model.calculate_rewards(
+                        text_embedding, torch.from_numpy(video_embedding)
+                    )
 
                     rewards[current_timestep] = reward
 
@@ -237,29 +263,37 @@ def main():
 
     args = parser.parse_args()
 
+    # The path should be data/{path after data}/updated_trajs/{original file name}_{reward model}.h5
+    path = f"data/{args.trajs_to_label.split('data/')[1].split('/')[0]}"
     # Create output file path in updated_traj folder
-    output_path = f"data/h5_buffers/updated_trajs/{os.path.basename(args.trajs_to_label[:-3])}_{args.reward_model}.h5"
+    output_path = f"{path}/updated_trajs/{os.path.basename(args.trajs_to_label[:-3])}_{args.reward_model}.h5"
+
+    # Make sure directory exists
+    if not os.path.exists(f"{path}/updated_trajs"):
+        os.makedirs(f"{path}/updated_trajs")
 
     print(f"Saving to {output_path}")
 
     print("Loading trajectories...")
     with h5py.File(args.trajs_to_label, "r") as traj_file:
         if os.path.exists(output_path):
+            # if False:
             print("Output file already exists. Updating rewards...")
             with h5py.File(output_path, "a") as output_file:
                 label_trajectories_iteratively(args, traj_file, output_file)
         else:
             with h5py.File(output_path, "w") as output_file:
                 label_trajectories_iteratively(args, traj_file, output_file)
-
-                for key in traj_file["0"].keys():
+                first_key = [key for key in traj_file.keys()][0]
+                for key in traj_file[first_key].keys():
                     if key not in ["rewards", "img"]:
                         print(f"Saving {key}...")
                         items = []
-                        for i in range(len(traj_file.keys())):
+                        for i in traj_file.keys():
                             items.extend(traj_file[str(i)][key])
 
                         try:
+                            # breakpoint()
                             array_data = np.array(items)
                             output_file.create_dataset(
                                 key, data=array_data, dtype=array_data.dtype

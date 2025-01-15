@@ -12,7 +12,7 @@ import imageio
 from tqdm import tqdm
 import h5py
 
-from envs.metaworld_envs.metaworld import create_wrapped_env, environment_to_instruction
+from envs.metaworld import create_wrapped_env, environment_to_instruction
 
 resolution = (640, 480)
 camera = "corner2"  # one of ['corner', 'topview', 'behindGripper', 'gripperPOV']

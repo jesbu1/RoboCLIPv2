@@ -275,9 +275,9 @@ class RLPD(OfflineRLAlgorithm):
             init_value = 1.0
             if "_" in self.ent_coef:
                 init_value = float(self.ent_coef.split("_")[1])
-                assert (
-                    init_value > 0.0
-                ), "The initial value of ent_coef must be greater than 0"
+                assert init_value > 0.0, (
+                    "The initial value of ent_coef must be greater than 0"
+                )
 
             # Note: we optimize the log of the entropy coeff which is slightly different from the paper
             # as discussed in https://github.com/rail-berkeley/softlearning/issues/37
@@ -541,6 +541,7 @@ class RLPD(OfflineRLAlgorithm):
             "actor",
             "critic",
             "critic_target",
+            "env",
         ]  # noqa: RUF005
 
     def _get_torch_save_params(self) -> Tuple[List[str], List[str]]:
