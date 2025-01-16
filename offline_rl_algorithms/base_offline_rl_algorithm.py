@@ -17,6 +17,7 @@ from offline_rl_algorithms.custom_policies import (
     CustomContinuousCritic,
     CustomCnnPolicy,
     CustomMlpPolicy,
+    CustomRNNMlpPolicy,
     CustomMultiInputPolicy,
 )
 
@@ -81,6 +82,7 @@ class OfflineRLAlgorithm(OffPolicyAlgorithm):
     policy_aliases: ClassVar[Dict[str, Type[BasePolicy]]] = {
         "MlpPolicy": CustomMlpPolicy,
         "CnnPolicy": CustomCnnPolicy,
+        "RnnMlpPolicy": CustomRNNMlpPolicy,
         "MultiInputPolicy": CustomMultiInputPolicy,
     }
     policy: CustomSACPolicy
@@ -314,6 +316,24 @@ class OfflineRLAlgorithm(OffPolicyAlgorithm):
             buffer_action = unscaled_action
             action = buffer_action
         return action, buffer_action
+
+    def get_log_prob(self, distribution, actions: th.Tensor) -> th.Tensor:
+        # handles getting log prob even in action chunked case where we average among the chunk
+        if actions.ndim == 3:
+            actions_for_logprob = actions.reshape(
+                actions.shape[0] * actions.shape[1],
+                actions.shape[2],
+            )
+            log_prob = distribution.log_prob(actions_for_logprob)
+            log_prob = log_prob.reshape(
+                actions.shape[0],
+                actions.shape[1],
+                actions.shape[2],
+            )
+            log_prob = log_prob.mean(dim=1, keepdim=False)
+        else:
+            log_prob = distribution.log_prob(actions)
+        return log_prob
 
 
 class ChunkingWrapper(gym.Wrapper):

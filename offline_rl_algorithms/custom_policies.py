@@ -251,6 +251,7 @@ class ActionSequenceActor(CustomActor):
         :param obs:
         :return:
             Mean, standard deviation and optional keyword arguments.
+            Mean, log_std will be of shape (batch_size * sequence_length, action_dim)
         """
         features = self.extract_features(obs, self.features_extractor)
         latent_pi = self.latent_pi(features)
@@ -275,10 +276,10 @@ class ActionSequenceActor(CustomActor):
         # Original Implementation to cap the standard deviation
         log_std = th.clamp(log_std, LOG_STD_MIN, LOG_STD_MAX)
 
-        mean_actions = mean_actions.reshape(
-            -1, self.action_sequence_length, mean_actions.shape[-1]
-        )
-        log_std = log_std.reshape(-1, self.action_sequence_length, log_std.shape[-1])
+        # mean_actions = mean_actions.reshape(
+        #    -1, self.action_sequence_length, mean_actions.shape[-1]
+        # )
+        # log_std = log_std.reshape(-1, self.action_sequence_length, log_std.shape[-1])
         return mean_actions, log_std, {}
 
     def forward(self, obs: PyTorchObs, deterministic: bool = False) -> th.Tensor:
@@ -668,9 +669,73 @@ class CustomSACPolicy(SACPolicy):
             self.critic_kwargs, features_extractor
         )
         return CustomContinuousCritic(**critic_kwargs).to(self.device)
+class CustomRNNSACPolicy(CustomSACPolicy):
+    def __init__(
+        self,
+        observation_space: spaces.Space,
+        action_space: spaces.Space,
+        lr_schedule: Schedule,
+        net_arch: Optional[Union[List[int], Dict[str, List[int]]]] = None,
+        activation_fn: Type[nn.Module] = nn.ReLU,
+        use_sde: bool = False,
+        log_std_init: float = -3,
+        use_expln: bool = False,
+        clip_mean: float = 2.0,
+        features_extractor_class: Type[BaseFeaturesExtractor] = FlattenExtractor,
+        features_extractor_kwargs: Optional[Dict[str, Any]] = None,
+        normalize_images: bool = True,
+        optimizer_class: Type[th.optim.Optimizer] = th.optim.Adam,
+        optimizer_kwargs: Optional[Dict[str, Any]] = None,
+        n_critics: int = 2,
+        share_features_extractor: bool = False,
+        policy_layer_norm: bool = False,
+        critic_layer_norm: bool = False,
+        action_sequence_length: int = 1,
+    ):
+        super(CustomRNNSACPolicy).__init__(
+            self,
+            observation_space,
+            action_space,
+            lr_schedule,
+            net_arch,
+            activation_fn,
+            use_sde,
+            log_std_init,
+            use_expln,
+            clip_mean,
+            features_extractor_class,
+            features_extractor_kwargs,
+            normalize_images,
+            optimizer_class,
+            optimizer_kwargs,
+            n_critics,
+            share_features_extractor,
+            policy_layer_norm,
+            critic_layer_norm,
+        )
+        self.action_sequence_length = action_sequence_length
+
+    def make_actor(
+        self, features_extractor: Optional[BaseFeaturesExtractor] = None
+    ) -> ActionSequenceActor:
+        actor_kwargs = self._update_features_extractor(
+            self.actor_kwargs, features_extractor
+        )
+        actor_kwargs.update({"action_sequence_length": self.action_sequence_length})
+        return ActionSequenceActor(**actor_kwargs).to(self.device)
+
+    def make_critic(
+        self, features_extractor: Optional[BaseFeaturesExtractor] = None
+    ) -> CustomContinuousCritic:
+        critic_kwargs = self._update_features_extractor(
+            self.critic_kwargs, features_extractor
+        )
+        critic_kwargs.update({"recurrent_action": True})
+        return CustomContinuousCritic(**critic_kwargs).to(self.device)
 
 
 CustomMlpPolicy = CustomSACPolicy
+CustomRNNMlpPolicy = CustomRNNSACPolicy
 
 
 class CustomCnnPolicy(CustomSACPolicy):

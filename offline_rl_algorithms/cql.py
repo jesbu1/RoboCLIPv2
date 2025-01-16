@@ -17,6 +17,7 @@ from offline_rl_algorithms.custom_policies import (
     CustomSACPolicy,
     CustomCnnPolicy,
     CustomMlpPolicy,
+    CustomRNNMlpPolicy,
     CustomMultiInputPolicy,
 )
 
@@ -81,6 +82,7 @@ class CQL(OfflineRLAlgorithm):
     policy_aliases: ClassVar[Dict[str, Type[BasePolicy]]] = {
         "MlpPolicy": CustomMlpPolicy,
         "CnnPolicy": CustomCnnPolicy,
+        "RnnMlpPolicy": CustomRNNMlpPolicy,
         "MultiInputPolicy": CustomMultiInputPolicy,
     }
     policy: CustomSACPolicy

@@ -19,6 +19,7 @@ from offline_rl_algorithms.custom_policies import (
     CustomSACPolicy,
     CustomCnnPolicy,
     CustomMlpPolicy,
+    CustomRNNMlpPolicy,
     CustomMultiInputPolicy,
 )
 
@@ -144,6 +145,7 @@ class IQL(OfflineRLAlgorithm):
     policy_aliases: ClassVar[Dict[str, Type[BasePolicy]]] = {
         "MlpPolicy": CustomMlpPolicy,
         "CnnPolicy": CustomCnnPolicy,
+        "RnnMlpPolicy": CustomRNNMlpPolicy,
         "MultiInputPolicy": CustomMultiInputPolicy,
     }
     policy: CustomSACPolicy
@@ -397,8 +399,8 @@ class IQL(OfflineRLAlgorithm):
                 distribution = self.actor.action_dist.proba_distribution(
                     mean_actions, log_std
                 )
-                log_prob = distribution.log_prob(replay_data.actions)
 
+                log_prob = self.get_log_prob(distribution, replay_data.actions)
                 log_prob = log_prob.reshape(-1, 1)
                 policy_loss = -th.mean(weights * log_prob)
             elif self.policy_extraction == "ddpg":
@@ -412,7 +414,7 @@ class IQL(OfflineRLAlgorithm):
                 distribution = self.actor.action_dist.proba_distribution(
                     mean_actions, log_std
                 )
-                log_prob = distribution.log_prob(replay_data.actions)
+                log_prob = self.get_log_prob(distribution, replay_data.actions)
 
                 actions_pi = distribution.actions_from_params(mean_actions, log_std)
 

@@ -14,6 +14,7 @@ from offline_rl_algorithms.custom_policies import (
     CustomSACPolicy,
     CustomCnnPolicy,
     CustomMlpPolicy,
+    CustomRNNMlpPolicy,
     CustomMultiInputPolicy,
 )
 
@@ -67,6 +68,7 @@ class BC(OfflineRLAlgorithm):
 
     policy_aliases: ClassVar[Dict[str, Type[BasePolicy]]] = {
         "MlpPolicy": CustomMlpPolicy,
+        "RnnMlpPolicy": CustomRNNMlpPolicy,
         "CnnPolicy": CustomCnnPolicy,
         "MultiInputPolicy": CustomMultiInputPolicy,
     }
@@ -178,7 +180,7 @@ class BC(OfflineRLAlgorithm):
             distribution = self.actor.action_dist.proba_distribution(
                 mean_actions, log_std
             )
-            log_prob = distribution.log_prob(replay_data.actions)
+            log_prob = self.get_log_prob(distribution, replay_data.actions)
             policy_loss = -log_prob.mean()
 
             # Optimize the policy
