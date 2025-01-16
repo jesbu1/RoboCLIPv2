@@ -1,6 +1,7 @@
 # the main difference in this file is to add the layer normalization to the actor and critic networks without needing to
 # overwrite SB3 classes directly/create a new fork
 import torch as th
+import numpy as np
 from gym import spaces
 from stable_baselines3.common.distributions import (
     SquashedDiagGaussianDistribution,
@@ -15,7 +16,14 @@ from stable_baselines3.common.policies import (
     BaseModel,
     ContinuousCritic,
 )
-from stable_baselines3.sac.policies import SACPolicy, get_actor_critic_arch, Actor
+from stable_baselines3.sac.policies import (
+    SACPolicy,
+    get_actor_critic_arch,
+    Actor,
+    LOG_STD_MAX,
+    LOG_STD_MIN,
+)
+from stable_baselines3.common.type_aliases import PyTorchObs, Schedule
 from stable_baselines3.common.torch_layers import (
     BaseFeaturesExtractor,
     FlattenExtractor,
@@ -178,6 +186,224 @@ class CustomActor(Actor):
         return data
 
 
+class ActionSequenceActor(CustomActor):
+    # uses an RNN to output an action sequence
+
+    action_space: spaces.Box
+
+    def __init__(
+        self,
+        observation_space: spaces.Space,
+        action_space: spaces.Box,
+        net_arch: List[int],
+        features_extractor: nn.Module,
+        features_dim: int,
+        action_sequence_length: int,
+        activation_fn: Type[nn.Module] = nn.ReLU,
+        use_sde: bool = False,
+        log_std_init: float = -3,
+        full_std: bool = True,
+        use_expln: bool = False,
+        clip_mean: float = 2.0,
+        normalize_images: bool = True,
+    ):
+        BasePolicy.__init__(
+            self,
+            observation_space,
+            action_space,
+            features_extractor=features_extractor,
+            normalize_images=normalize_images,
+            squash_output=True,
+        )
+
+        # Save arguments to re-create object at loading
+        assert not use_sde, "ActionSequenceActor does not support gSDE"
+        self.use_sde = use_sde
+        self.sde_features_extractor = None
+        self.net_arch = net_arch
+        self.features_dim = features_dim
+        self.activation_fn = activation_fn
+        self.log_std_init = log_std_init
+        self.use_expln = use_expln
+        self.full_std = full_std
+        self.clip_mean = clip_mean
+
+        action_dim = get_action_dim(self.action_space)
+        latent_pi_net = create_mlp(features_dim, -1, net_arch, activation_fn)
+        self.latent_pi = nn.Sequential(*latent_pi_net)
+        last_layer_dim = net_arch[-1] if len(net_arch) > 0 else features_dim
+
+        self.action_dist = SquashedDiagGaussianDistribution(action_dim)  # type: ignore[assignment]
+        self.mu = nn.GRU(last_layer_dim, last_layer_dim, num_layers=1, batch_first=True)
+        self.mu_processor = nn.Linear(last_layer_dim, action_dim)
+        self.log_std = nn.GRU(
+            last_layer_dim, last_layer_dim, num_layers=1, batch_first=True
+        )
+        self.log_std_processor = nn.Linear(last_layer_dim, action_dim)
+        self.action_sequence_length = action_sequence_length
+
+    def get_action_dist_params(
+        self, obs: PyTorchObs
+    ) -> Tuple[th.Tensor, th.Tensor, Dict[str, th.Tensor]]:
+        """
+        Get the parameters for the action distribution.
+
+        :param obs:
+        :return:
+            Mean, standard deviation and optional keyword arguments.
+        """
+        features = self.extract_features(obs, self.features_extractor)
+        latent_pi = self.latent_pi(features)
+        # run the rnn  for self.action_sequence_length for mu and log_std
+        mean_actions_intermediate, _ = self.mu(
+            latent_pi.unsqueeze(1).repeat(1, self.action_sequence_length, 1)
+        )
+        mean_actions_intermediate = mean_actions_intermediate.reshape(
+            -1, mean_actions_intermediate.shape[-1]
+        )
+        mean_actions = self.mu_processor(
+            self.activation_fn()(mean_actions_intermediate)
+        )
+        log_std_intermediate, _ = self.log_std(
+            latent_pi.unsqueeze(1).repeat(1, self.action_sequence_length, 1)
+        )
+        log_std_intermediate = log_std_intermediate.reshape(
+            -1, log_std_intermediate.shape[-1]
+        )
+        log_std = self.log_std_processor(self.activation_fn()(log_std_intermediate))
+
+        # Original Implementation to cap the standard deviation
+        log_std = th.clamp(log_std, LOG_STD_MIN, LOG_STD_MAX)
+
+        mean_actions = mean_actions.reshape(
+            -1, self.action_sequence_length, mean_actions.shape[-1]
+        )
+        log_std = log_std.reshape(-1, self.action_sequence_length, log_std.shape[-1])
+        return mean_actions, log_std, {}
+
+    def forward(self, obs: PyTorchObs, deterministic: bool = False) -> th.Tensor:
+        mean_actions, log_std, kwargs = self.get_action_dist_params(obs)
+        # Note: the action is squashed
+        # reshape everything to be (batch_size * action_sequence_length, action_dim)
+        batch_size = mean_actions.shape[0]
+        action_dim = mean_actions.shape[-1]
+        mean_actions = mean_actions.reshape(
+            batch_size * self.action_sequence_length, action_dim
+        )
+        log_std = log_std.reshape(batch_size * self.action_sequence_length, action_dim)
+
+        actions = self.action_dist.actions_from_params(
+            mean_actions, log_std, deterministic=deterministic, **kwargs
+        )
+        return actions.reshape(batch_size, self.action_sequence_length, action_dim)
+
+    def action_log_prob(self, obs: PyTorchObs) -> Tuple[th.Tensor, th.Tensor]:
+        mean_actions, log_std, kwargs = self.get_action_dist_params(obs)
+        batch_size = mean_actions.shape[0]
+        action_dim = mean_actions.shape[-1]
+        mean_actions = mean_actions.reshape(
+            batch_size * self.action_sequence_length, action_dim
+        )
+        # return action and associated log prob
+        actions, log_prob = self.action_dist.log_prob_from_params(
+            mean_actions, log_std, **kwargs
+        )
+        return actions.reshape(
+            batch_size, self.action_sequence_length, action_dim
+        ), log_prob.reshape(batch_size, self.action_sequence_length)
+
+    def _predict(
+        self, observation: PyTorchObs, deterministic: bool = False
+    ) -> th.Tensor:
+        return self(observation, deterministic)
+
+    def predict(
+        self,
+        observation: Union[np.ndarray, Dict[str, np.ndarray]],
+        state: Optional[Tuple[np.ndarray, ...]] = None,
+        episode_start: Optional[np.ndarray] = None,
+        deterministic: bool = False,
+    ) -> Tuple[np.ndarray, Optional[Tuple[np.ndarray, ...]]]:
+        """
+        Get the policy action from an observation (and optional hidden state).
+        Includes sugar-coating to handle different observations (e.g. normalizing images).
+
+        :param observation: the input observation
+        :param state: The last hidden states (can be None, used in recurrent policies)
+        :param episode_start: The last masks (can be None, used in recurrent policies)
+            this correspond to beginning of episodes,
+            where the hidden states of the RNN must be reset.
+        :param deterministic: Whether or not to return deterministic actions.
+        :return: the model's action and the next hidden state
+            (used in recurrent policies)
+        """
+        # Switch to eval mode (this affects batch norm / dropout)
+        self.set_training_mode(False)
+
+        # Check for common mistake that the user does not mix Gym/VecEnv API
+        # Tuple obs are not supported by SB3, so we can safely do that check
+        if (
+            isinstance(observation, tuple)
+            and len(observation) == 2
+            and isinstance(observation[1], dict)
+        ):
+            raise ValueError(
+                "You have passed a tuple to the predict() function instead of a Numpy array or a Dict. "
+                "You are probably mixing Gym API with SB3 VecEnv API: `obs, info = env.reset()` (Gym) "
+                "vs `obs = vec_env.reset()` (SB3 VecEnv). "
+                "See related issue https://github.com/DLR-RM/stable-baselines3/issues/1694 "
+                "and documentation for more information: https://stable-baselines3.readthedocs.io/en/master/guide/vec_envs.html#vecenv-api-vs-gym-api"
+            )
+
+        obs_tensor, vectorized_env = self.obs_to_tensor(observation)
+
+        with th.no_grad():
+            actions = self._predict(obs_tensor, deterministic=deterministic)
+        # Convert to numpy, and reshape to the original action shape
+        actions = actions.cpu().numpy().reshape((-1, *self.action_space.shape))  # type: ignore[misc]
+
+        if isinstance(self.action_space, spaces.Box):
+            if self.squash_output:
+                # Rescale to proper domain when using squashing
+                actions = self.unscale_action(actions)  # type: ignore[assignment, arg-type]
+            else:
+                # Actions could be on arbitrary scale, so clip the actions to avoid
+                # out of bound error (e.g. if sampling from a Gaussian distribution)
+                actions = np.clip(
+                    actions, self.action_space.low, self.action_space.high
+                )  # type: ignore[assignment, arg-type]
+
+        # Remove batch dimension if needed
+        if not vectorized_env:
+            assert isinstance(actions, np.ndarray)
+            actions = actions.squeeze(axis=0)
+
+        return actions, state  # type: ignore[return-value]
+
+
+class RecurrentQNetwork(nn.Module):
+    def __init__(self, action_dim, features_dim, activation_fn, q_network):
+        super().__init__()
+        self.action_feature_extractor = nn.Linear(action_dim, features_dim)
+        self.activation_fn = activation_fn()
+        self.recurrent_action_processor = nn.GRU(
+            features_dim, features_dim, batch_first=True
+        )
+        self.q_network = q_network
+
+    def forward(self, obs, actions):
+        # reshape actions to be (batch_size * action_sequence_length, action_dim)
+        batch_size = actions.shape[0]
+        action_dim = actions.shape[-1]
+        actions = actions.reshape(batch_size * actions.shape[1], action_dim)
+        action_features = self.action_feature_extractor(actions)
+        action_features = self.nonlinearity(action_features)
+        action_features = action_features.reshape(batch_size, actions.shape[1], -1)
+        action_features, _ = self.recurrent_action_processor(action_features)
+        q_input = th.cat([obs, action_features], dim=1)
+        return self.q_network(q_input)
+
+
 class CustomContinuousCritic(ContinuousCritic):
     """
     Critic network(s) for DDPG/SAC/TD3.
@@ -219,6 +445,7 @@ class CustomContinuousCritic(ContinuousCritic):
         share_features_extractor: bool = True,
         use_layer_norm: bool = True,
         parallelize: bool = False,
+        recurrent_action: bool = False,
     ):
         BaseModel.__init__(
             self,
@@ -233,15 +460,23 @@ class CustomContinuousCritic(ContinuousCritic):
         self.share_features_extractor = share_features_extractor
         self.n_critics = n_critics
         self.q_networks = []
+        self.recurrent_action = recurrent_action
         for idx in range(n_critics):
             q_net = create_mlp(
-                features_dim + action_dim,
+                features_dim + action_dim if not recurrent_action else features_dim * 2,
                 1,
                 net_arch,
                 activation_fn,
                 use_layer_norm=use_layer_norm,
             )
             q_net = nn.Sequential(*q_net)
+            if recurrent_action:
+                q_net = RecurrentQNetwork(
+                    action_dim,
+                    features_dim,
+                    activation_fn,
+                    q_net,
+                )
             if not parallelize:
                 self.add_module(f"qf{idx}", q_net)
 
