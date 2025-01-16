@@ -33,7 +33,7 @@ import pybullet_data
 
 
 class KochBimanualEnv(Env):
-    def __init__(self, robot_path, max_episode_steps=500, fps=20):
+    def __init__(self, robot_path, max_episode_steps=500, fps=15):
         self.max_episode_steps = max_episode_steps
         self.fps = fps
 
@@ -116,8 +116,8 @@ class KochBimanualEnv(Env):
 
         dt_s = time.perf_counter() - self.prev_time
         print(dt_s, 1 / self.fps - dt_s)
-        # busy_wait(dt_s)
-        busy_wait(1 / self.fps)
+        busy_wait(dt_s)
+        # busy_wait(1 / self.fps - dt_s)
         # busy_wait(1 / self.fps)
 
         dt_s = time.perf_counter() - self.prev_time

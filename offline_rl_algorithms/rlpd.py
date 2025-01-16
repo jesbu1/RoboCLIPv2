@@ -241,6 +241,8 @@ class RLPD(OfflineRLAlgorithm):
             )
             self.ent_coef_tensor = offline_algo.ent_coef_tensor
 
+        self.learned_offline = True
+
         self._create_aliases()
 
     def _setup_model(self) -> None:
