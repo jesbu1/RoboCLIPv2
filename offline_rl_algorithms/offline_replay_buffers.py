@@ -86,6 +86,7 @@ class H5ReplayBuffer(ReplayBuffer):
         reward_divisor: float = 1.0,
         is_metaworld: bool = False,
         normalize_actions_koch: bool = False,
+        action_chunk_size: int = 1,
     ):
         """
         Initialize the replay buffer.
@@ -101,6 +102,7 @@ class H5ReplayBuffer(ReplayBuffer):
         :param clip_actions: Whether to clip the actions to the action space to [-1, 1]
         :param sparsify_rewards: Converts reward to done
         :param dense_rewards_at_end: Whether to use the reward sum at the end of the episode instead.
+        :param action_chunk_size: The size of the action chunk to use
         """
         assert not (dense_rewards_at_end and sparsify_rewards), (
             "Cannot use both dense rewards at end and sparsify as a precaution"
@@ -270,6 +272,7 @@ class H5ReplayBuffer(ReplayBuffer):
         self.add_timestep = add_timestep
         self.use_language_embeddings = use_language_embeddings
         self.calculate_mc_returns = calculate_mc_returns
+        self.action_chunk_size = action_chunk_size
 
     def add(
         self,
@@ -295,13 +298,18 @@ class H5ReplayBuffer(ReplayBuffer):
         # Sample randomly the env idx
         if self.optimize_memory_usage:
             next_obs = self._normalize_obs(
-                self.observations[(batch_inds + 1) % self.buffer_size, :],
+                self.observations[
+                    (batch_inds + self.action_chunk_size) % self.buffer_size, :
+                ],
                 env=None,
             )
             # add timestep into the observation
             if self.add_timestep:
                 timesteps = (
-                    self.timesteps[(batch_inds + 1) % self.buffer_size] / 500
+                    self.timesteps[
+                        (batch_inds + self.action_chunk_size) % self.buffer_size
+                    ]
+                    / 500
                 )  # 500 is the max episode length
                 next_obs = np.concatenate((next_obs, timesteps.reshape(-1, 1)), axis=1)
 
@@ -309,14 +317,17 @@ class H5ReplayBuffer(ReplayBuffer):
                 next_obs = np.concatenate(
                     (
                         next_obs,
-                        self.lang_embeddings[(batch_inds + 1) % self.buffer_size, :],
+                        self.lang_embeddings[
+                            (batch_inds + self.action_chunk_size) % self.buffer_size, :
+                        ],
                     ),
                     axis=1,
                 )
 
         else:
             next_obs = self._normalize_obs(
-                self.next_observations[batch_inds, :], env=None
+                self.next_observations[batch_inds + self.action_chunk_size - 1, :],
+                env=None,
             )
             if self.add_timestep:
                 timesteps = (
@@ -325,6 +336,7 @@ class H5ReplayBuffer(ReplayBuffer):
                 next_obs = np.concatenate((next_obs, timesteps.reshape(-1, 1)), axis=1)
 
             if self.use_language_embeddings:
+                # assumes language is the same throughout the entire epipsode
                 next_obs = np.concatenate(
                     (next_obs, self.lang_embeddings[batch_inds, :]), axis=1
                 )
@@ -333,6 +345,7 @@ class H5ReplayBuffer(ReplayBuffer):
 
         # add the timestep into the observation
         if self.add_timestep:
+            assert not self.action_chunk_size > 1, "not supported with action chunking"
             timesteps = (
                 self.timesteps[batch_inds] / 500
             )  # 500 is the max episode length
@@ -349,21 +362,63 @@ class H5ReplayBuffer(ReplayBuffer):
         observation = observation.astype(np.float32)
         next_obs = next_obs.astype(np.float32)
 
-        rewards = self.rewards[batch_inds].reshape(-1, 1)
+        if self.action_chunk_size > 1:
+            dones = self.dones[batch_inds]
+            all_actions = []
+            all_rewards = []
+            all_dones = []
+            # build the actions, dones, rewards, etc. based on the action chunk size
+            for i, batch_ind in enumerate(batch_inds):
+                assert len(dones[i].shape) == 1
+                done_indices = np.nonzero(dones[i])[0]
+                if len(done_indices) == 0:
+                    # if no done or timeout, then use the whole action chunk
+                    end_offset = self.action_chunk_size
+                else:
+                    end_offset = done_indices[0] + 1
+                action = self.actions[batch_inds : batch_inds + end_offset]
+                rew_sum = np.sum(self.rewards[batch_inds : batch_inds + end_offset])
+                done = np.any(
+                    self.dones[batch_inds : batch_inds + end_offset]
+                    * (1 - self.timeouts[batch_inds : batch_inds + end_offset])
+                )
+                # pad action if needed
+                if len(action) < self.action_chunk_size:
+                    action = np.pad(
+                        action,
+                        ((0, self.action_chunk_size - len(action)), (0, 0)),
+                        mode="constant",
+                        constant_values=(
+                            action[-1] if self.pad_action_chunk_with_last_action else 0
+                        ),
+                    )
+                all_actions.append(action)
+                all_rewards.append(rew_sum)
+                all_dones.append(done)
 
+            actions = np.array(all_actions)
+            rewards = np.array(all_rewards).reshape(-1, 1)
+            dones = np.array(all_dones)
+        else:
+            rewards = self.rewards[batch_inds].reshape(-1, 1)
+            dones = self.dones[batch_inds].reshape(-1, 1)
+            actions = self.actions[batch_inds, :]
+
+        if self.calculate_mc_returns:
+            mc_returns = self.mc_returns[batch_inds].reshape(-1, 1)
+        else:
+            mc_returns = rewards
         # # set rewards to have all zeros
         # rewards = np.zeros_like(rewards)
         data = (
             observation,
-            self.actions[batch_inds, :],
+            actions,
             next_obs,
             # Only use dones that are not due to timeouts
             # deactivated by default (timeouts is initialized as an array of False)
-            self.dones[batch_inds].reshape(-1, 1),
+            dones,
             rewards,
-            self.mc_returns[batch_inds].reshape(-1, 1)
-            if self.calculate_mc_returns
-            else rewards,
+            mc_returns,
             np.ones_like(rewards),  # offline_data_mask is 1 for all offline data,
         )
         return CombinedBufferSamples(*tuple(map(self.to_torch, data)))
@@ -441,6 +496,111 @@ class CombinedBuffer(ReplayBuffer):
         :return: The total size of the buffer
         """
         return self.new_buffer.size() + self.old_buffer.size()
+
+
+class ActionChunkedReplayBuffer(ReplayBuffer):
+    def __init__(
+        self,
+        action_chunk_size,
+        pad_action_chunk_with_last_action,  # if True, pad the action chunk with the last action otherwise, pad with zeros. zeros is for delta control, last action is for absolute control
+        buffer_size: int,
+        observation_space: spaces.Space,
+        action_space: spaces.Space,
+        device: Union[th.device, str] = "auto",
+        n_envs: int = 1,
+        optimize_memory_usage: bool = False,
+        handle_timeout_termination: bool = True,
+    ):
+        super(ActionChunkedReplayBuffer, self).__init__(
+            buffer_size,
+            observation_space,
+            action_space,
+            device,
+            n_envs,
+            optimize_memory_usage,
+            handle_timeout_termination,
+        )
+        self.action_chunk_size = action_chunk_size
+        self.pad_action_chunk_with_last_action = pad_action_chunk_with_last_action
+
+    def _get_samples(
+        self, batch_inds: np.ndarray, env: Optional[VecNormalize] = None
+    ) -> ReplayBufferSamples:
+        # Sample randomly the env idx
+        env_indices = np.random.randint(0, high=self.n_envs, size=(len(batch_inds),))
+
+        if self.optimize_memory_usage:
+            next_obs = self._normalize_obs(
+                self.observations[
+                    (batch_inds + self.action_chunk_size) % self.buffer_size,
+                    env_indices,
+                    :,
+                ],
+                env,
+            )
+        else:
+            # - 1 offset here because the next_observations are the observations after the actions
+            next_obs = self._normalize_obs(
+                self.next_observations[
+                    (batch_inds + self.action_chunk_size - 1) % self.buffer_size,
+                    env_indices,
+                    :,
+                ],
+                env,
+            )
+
+        # get the index of when there's a done or timeout in this action chunk
+        dones_or_timeouts = (
+            self.dones[batch_inds, env_indices] + self.timeouts[batch_inds, env_indices]
+        )
+        all_actions = []
+        all_rewards = []
+        all_dones = []
+        # build the actions, dones, rewards, etc. based on the action chunk size
+        for i, batch_ind in enumerate(batch_inds):
+            assert len(dones_or_timeouts[i].shape) == 1
+            done_indices = np.nonzero(dones_or_timeouts[i])[0]
+            if len(done_indices) == 0:
+                # if no done or timeout, then use the whole action chunk
+                end_offset = self.action_chunk_size
+            else:
+                end_offset = done_indices[0] + 1
+            action = self.actions[batch_inds : batch_inds + end_offset, env_indices]
+            rew_sum = np.sum(
+                self.rewards[batch_inds : batch_inds + end_offset, env_indices]
+            )
+            done = np.any(
+                self.dones[batch_inds : batch_inds + end_offset, env_indices]
+                * (1 - self.timeouts[batch_inds : batch_inds + end_offset, env_indices])
+            )
+            # pad action if needed
+            if len(action) < self.action_chunk_size:
+                action = np.pad(
+                    action,
+                    ((0, self.action_chunk_size - len(action)), (0, 0)),
+                    mode="constant",
+                    constant_values=(
+                        action[-1] if self.pad_action_chunk_with_last_action else 0
+                    ),
+                )
+            all_actions.append(action)
+            all_rewards.append(rew_sum)
+            all_dones.append(done)
+
+        all_actions = np.array(all_actions)
+        all_rewards = np.array(all_rewards)
+        all_dones = np.array(all_dones)
+
+        data = (
+            self._normalize_obs(self.observations[batch_inds, env_indices, :], env),
+            all_actions,
+            next_obs,
+            # Only use dones that are not due to timeouts
+            # deactivated by default (timeouts is initialized as an array of False)
+            all_dones.reshape(-1, 1),
+            self._normalize_reward(all_rewards.reshape(-1, 1), env),
+        )
+        return ReplayBufferSamples(*tuple(map(self.to_torch, data)))
 
 
 if __name__ == "__main__":
