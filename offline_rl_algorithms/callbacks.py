@@ -158,15 +158,18 @@ class OfflineEvalCallback(EvalCallback):
     def record_video(self):
         frames = []
         obs = self.eval_env.reset()
-
-        for _ in range(128):  # You can adjust the number of steps for recording
+        for _ in range(
+            self.eval_env.get_attr("max_episode_steps")[0]
+        ):  # You can adjust the number of steps for recording
             frame = self.eval_env.render(mode="rgb_array")
             # downsample frame
             frame = frame[::3, ::3, :3]
             frames.append(frame)
             action, _ = self.model.predict(obs, deterministic=False)
 
-            obs, _, _, info = self.eval_env.step(action)
+            obs, reward, done, info = self.eval_env.step(action)
+            if done:
+                break
 
         video_buffer = io.BytesIO()
 
