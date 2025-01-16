@@ -22,6 +22,8 @@ from offline_rl_algorithms.custom_policies import (
 
 from offline_rl_algorithms.offline_replay_buffers import CombinedBuffer
 
+import gym
+
 
 class OfflineRLAlgorithm(OffPolicyAlgorithm):
     """
@@ -312,3 +314,38 @@ class OfflineRLAlgorithm(OffPolicyAlgorithm):
             buffer_action = unscaled_action
             action = buffer_action
         return action, buffer_action
+
+
+class ChunkingWrapper(gym.Wrapper):
+    def __init__(self, env, chunk_size=15):
+        super(ChunkingWrapper, self).__init__(env)
+        self.chunk_size = chunk_size
+
+        self.chunk = []
+
+    def step(self, chunked_action: np.ndarray):
+        # Unpack action
+
+        if self.is_chunk_empty:
+            # Then let the action replace the chunk
+            self.chunk = chunked_action
+        else:
+            # If chunk is not empty, we will assert that chunked_action is None
+            assert chunked_action is None
+
+        popped_action = self.chunk[0]
+        self.chunk = self.chunk[1:]
+
+        obs, reward, done, info = self.env.step(popped_action)
+
+        info["action"] = popped_action
+
+        return obs, reward, done, info
+
+    @property
+    def is_chunk_empty(self):
+        return len(self.chunk) == 0
+
+    def reset(self):
+        self.chunk = []
+        return self.env.reset()
