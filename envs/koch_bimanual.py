@@ -33,7 +33,7 @@ import pybullet_data
 
 
 class KochBimanualEnv(Env):
-    def __init__(self, robot_path, max_episode_steps=128, fps=30):
+    def __init__(self, robot_path, max_episode_steps=500, fps=30):
         self.max_episode_steps = max_episode_steps
         self.fps = fps
 
@@ -114,22 +114,19 @@ class KochBimanualEnv(Env):
 
         self.robot.send_action(safe_action)
 
-        # dt_s = time.perf_counter() - self.prev_time
-        # print(dt_s, 1 / self.fps - dt_s)
-        # busy_wait(1 / 60)
-        # busy_wait(1 / self.fps - dt_s)
-        busy_wait(1 / self.fps)
+        dt_s = time.perf_counter() - self.prev_time
+        busy_wait(1 / self.fps - dt_s)
+        # busy_wait(dt_s)
 
         # dt_s = time.perf_counter() - self.prev_time
         # log_control_info(self.robot, dt_s, fps=self.fps)
+        self.prev_time = time.perf_counter()
 
         observation = self.robot.capture_observation()
 
         self.current_observation = observation
 
         state = observation["observation.state"]
-
-        self.prev_time = time.perf_counter()
 
         # # # Let us set the task to be to approach a specific goal position
         # goal_position = [
@@ -181,8 +178,8 @@ class KochBimanualEnv(Env):
         # turn into a numpy array
         obs = obs.numpy()
 
-        self.im1.set_data(obs)
-        plt.pause(1 / self.fps)
+        # self.im1.set_data(obs)
+        # plt.pause(1 / self.fps)
 
         return obs
 
@@ -347,6 +344,7 @@ def create_wrapped_env(
     mode="train",
     use_proprio=True,  # this flag is not used
     dense_rewards_at_end=False,
+    action_chunk_size=1,
 ):
     """
     Creates a wrapped MetaWorld environment with the given options.
@@ -408,6 +406,9 @@ def create_wrapped_env(
         #     elif reward_model.name == 'dense':
         #         use_sparse = False
         #     base_env = RewardWrapper(base_env, sparse=use_sparse, success_bonus=reward_model.success_bonus)
+
+        if action_chunk_size > 1:
+            base_env = ActionChunkingWrapper(base_env, action_chunk_size)
 
         if monitor:
             base_env = Monitor(base_env)

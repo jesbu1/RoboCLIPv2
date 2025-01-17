@@ -190,6 +190,7 @@ class IQL(OfflineRLAlgorithm):
         online_critic_update_ratio: int = 1,  # number of critic updates per actor update
         n_critics_to_sample: int = 2,  # number of critics to sample from
         warm_start_online_rl: bool = True,
+        action_chunk_size: int = 1,
     ):
         super().__init__(
             policy,
@@ -218,6 +219,7 @@ class IQL(OfflineRLAlgorithm):
             supported_action_spaces=(spaces.Box,),
             support_multi_env=True,
             warm_start_online_rl=warm_start_online_rl,
+            action_chunk_size=action_chunk_size,
         )
 
         # Entropy coefficient / Entropy temperature
@@ -425,9 +427,9 @@ class IQL(OfflineRLAlgorithm):
                     replay_data.observations, actions_pi, critic_indices=critic_indices
                 )
                 min_qf_pi = th.min(*q_values_pi).squeeze(-1)
-                assert (
-                    min_qf_pi.shape == log_prob.shape
-                ), f"{min_qf_pi.shape} != {log_prob.shape}"
+                assert min_qf_pi.shape == log_prob.shape, (
+                    f"{min_qf_pi.shape} != {log_prob.shape}"
+                )
                 policy_loss = -th.mean(min_qf_pi + scaled_ddpg_bc_weight * log_prob)
                 # print proportion of policy loss contributed to by each term
                 # policy_loss = -th.mean(min_qf_pi + self.ddpg_bc_weight * log_prob)

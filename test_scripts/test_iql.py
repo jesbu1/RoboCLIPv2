@@ -213,7 +213,7 @@ def main(cfg: DictConfig):
     if training_config.algo == "rlpd":
         video_freq = 0
         eval_freq = 0
-        video_freq = offline_config.offline_training_steps * env_config.n_envs // (10)
+        # video_freq = offline_config.offline_training_steps * env_config.n_envs // (10)
     else:
         video_freq = offline_config.offline_training_steps * env_config.n_envs // 10
         eval_freq = offline_config.offline_training_steps * env_config.n_envs // (10)
@@ -441,40 +441,24 @@ def create_envs(cfg: DictConfig, reward_model: BaseRewardModel):
 
     ignore_language = env_config.ignore_language
 
+    wrapped_env_func = create_wrapped_env(
+        env_id,
+        language_features=lang_feat if not ignore_language else None,
+        reward_model=reward_model,
+        goal_observable=True,
+        success_bonus=cfg.reward_model.success_bonus,
+        is_state_based=env_config.is_state_based,
+        use_proprio=env_config.use_proprio,
+        mode="train",
+        dense_rewards_at_end=cfg.general_training.dense_rewards_at_end,
+        action_chunk_size=cfg.general_training.action_chunk_size,
+    )
+
     # Define envs (dummy example for illustration)
     if env_config.n_envs > 1:
-        envs = SubprocVecEnv(
-            [
-                create_wrapped_env(
-                    env_id,
-                    language_features=lang_feat if not ignore_language else None,
-                    reward_model=reward_model,
-                    goal_observable=True,
-                    success_bonus=cfg.reward_model.success_bonus,
-                    is_state_based=env_config.is_state_based,
-                    use_proprio=env_config.use_proprio,
-                    mode="train",
-                    dense_rewards_at_end=cfg.general_training.dense_rewards_at_end,
-                )
-                for _ in range(env_config.n_envs)
-            ]
-        )
+        envs = SubprocVecEnv([wrapped_env_func for _ in range(env_config.n_envs)])
     else:
-        envs = DummyVecEnv(
-            [
-                create_wrapped_env(
-                    env_id,
-                    success_bonus=cfg.reward_model.success_bonus,
-                    language_features=lang_feat if not ignore_language else None,
-                    reward_model=reward_model,
-                    goal_observable=True,
-                    is_state_based=env_config.is_state_based,
-                    use_proprio=env_config.use_proprio,
-                    mode="train",
-                    dense_rewards_at_end=cfg.general_training.dense_rewards_at_end,
-                )
-            ]
-        )
+        envs = DummyVecEnv([wrapped_env_func])
 
     if "metaworld" in env_config.cfg_name:
         if env_config.n_envs > 1:
@@ -537,7 +521,10 @@ def get_policy_algorithm(cfg: DictConfig, envs: VecEnv, log_dir: str):
         "critic_layer_norm": model_config.critic_layer_norm,
     }
 
-    if cfg.general_training.action_chunk_size > 1:
+    if (
+        cfg.general_training.action_chunk_size > 1
+        and cfg.model.policy_type == "RnnMlpPolicy"
+    ):
         policy_kwargs["action_sequence_length"] = cfg.general_training.action_chunk_size
 
     # everything except BC, SAC, and PPO require n_critics
@@ -603,7 +590,7 @@ def get_policy_algorithm(cfg: DictConfig, envs: VecEnv, log_dir: str):
         model_class = CQL
         if not args.pretrained:
             model = model_class(
-                "MlpPolicy",
+                cfg.model.policy_type,
                 envs,
                 verbose=1,
                 tensorboard_log=log_dir,
@@ -636,7 +623,7 @@ def get_policy_algorithm(cfg: DictConfig, envs: VecEnv, log_dir: str):
         # policy = SACPolicy(observation_space=envs.observation_space, action_space=envs.action_space, net_arch=[32, 32], lr_schedule=None)
         if not args.pretrained:
             model = model_class(
-                "MlpPolicy",
+                cfg.model.policy_type,
                 envs,
                 verbose=1,
                 tensorboard_log=log_dir,
@@ -658,6 +645,7 @@ def get_policy_algorithm(cfg: DictConfig, envs: VecEnv, log_dir: str):
                 n_critics_to_sample=cfg.general_training.n_critics_to_sample,
                 warm_start_online_rl=cfg.online_training.warm_start_online_rl,
                 gamma=cfg.general_training.gamma,
+                action_chunk_size=cfg.general_training.action_chunk_size,
             )
         else:
             model = model_class.load(args.pretrained, env=envs, tensorboard_log=log_dir)
@@ -665,7 +653,7 @@ def get_policy_algorithm(cfg: DictConfig, envs: VecEnv, log_dir: str):
         model_class = BC
         if not args.pretrained:
             model = model_class(
-                "RnnMlpPolicy",
+                cfg.model.policy_type,
                 envs,
                 verbose=1,
                 tensorboard_log=log_dir,
@@ -690,7 +678,7 @@ def get_policy_algorithm(cfg: DictConfig, envs: VecEnv, log_dir: str):
 
         if not args.pretrained:
             model = model_class(
-                "MlpPolicy",
+                cfg.model.policy_type,
                 envs,
                 offline_algo=model,
                 verbose=1,
@@ -712,6 +700,7 @@ def get_policy_algorithm(cfg: DictConfig, envs: VecEnv, log_dir: str):
                 train_critic_with_entropy=cfg.general_training.rlpd_train_critic_with_entropy,
                 warm_start_online_rl=cfg.online_training.warm_start_online_rl,
                 gamma=cfg.general_training.gamma,
+                action_chunk_size=cfg.general_training.action_chunk_size,
             )
         else:
             model = model_class.load(args.pretrained, env=envs, tensorboard_log=log_dir)

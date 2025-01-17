@@ -30,7 +30,7 @@ general_training:
 
   # offline rl parameters
   critic_update_ratio: 1 # iql and cql
-  gamma: 0.99
+  gamma: 0.998 # (1/(1-gamma)) = 500 steps
 
   # IQL-specific parameters
   policy_extraction: 'awr' # awr or ddpg
@@ -42,7 +42,7 @@ general_training:
   cql_min_q_temp: 1.0
   use_calibrated_q: false # calibrated QL https://arxiv.org/pdf/2303.05479
 
-  action_chunk_size: 30
+  action_chunk_size: 15
 
   # below not used for now
   random_reset: false
@@ -60,6 +60,7 @@ online_training:
   mix_buffers_ratio: 0.50 # Ratio of offline data during online training. Set to 0 for no offline data
   warm_start_online_rl: true
   learning_starts: 1000
+  gradient_steps: 1
 
 offline_training:
   offline_h5_path: null # Set to null so you must set environment yaml
@@ -68,6 +69,7 @@ offline_training:
   ckpt_path: null
 
 model:
+  policy_type: 'RnnMlpPolicy'
   policy_layer_norm: true
   critic_layer_norm: true
   pi_net_arch: [256, 256]

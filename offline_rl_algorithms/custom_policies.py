@@ -308,7 +308,7 @@ class ActionSequenceActor(CustomActor):
 
     def action_log_prob(self, obs: PyTorchObs) -> Tuple[th.Tensor, th.Tensor]:
         mean_actions, log_std, kwargs = self.get_action_dist_params(obs)
-        batch_size = mean_actions.shape[0]
+        batch_size = mean_actions.shape[0] // self.action_sequence_length
         action_dim = mean_actions.shape[-1]
         mean_actions = mean_actions.reshape(
             batch_size * self.action_sequence_length, action_dim
@@ -400,16 +400,20 @@ class RecurrentQNetwork(nn.Module):
         )
         self.q_network = q_network
 
-    def forward(self, obs, actions):
+    def forward(self, q_input: Tuple[th.Tensor, th.Tensor]) -> th.Tensor:
+        obs, actions = q_input
         # reshape actions to be (batch_size * action_sequence_length, action_dim)
         batch_size = actions.shape[0]
         action_dim = actions.shape[-1]
         actions = actions.reshape(batch_size * actions.shape[1], action_dim)
         action_features = self.action_feature_extractor(actions)
-        action_features = self.nonlinearity(action_features)
-        action_features = action_features.reshape(batch_size, actions.shape[1], -1)
+        action_features = self.activation_fn(action_features)
+        action_features = action_features.reshape(
+            batch_size, -1, action_features.shape[-1]
+        )
         action_features, _ = self.recurrent_action_processor(action_features)
-        q_input = th.cat([obs, action_features], dim=1)
+        last_action_features = action_features[:, -1, :]
+        q_input = th.cat([obs, last_action_features], dim=1)
         return self.q_network(q_input)
 
 
@@ -510,7 +514,10 @@ class CustomContinuousCritic(ContinuousCritic):
     ) -> Tuple[th.Tensor, ...]:
         with th.set_grad_enabled(not self.share_features_extractor):
             features = self.extract_features(obs, self.features_extractor)
-        qvalue_input = th.cat([features, actions], dim=1)
+        if self.recurrent_action:
+            qvalue_input = (features, actions)
+        else:
+            qvalue_input = th.cat([features, actions], dim=1)
 
         if not self.parallelize:
             if critic_indices is not None:

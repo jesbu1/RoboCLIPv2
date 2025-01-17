@@ -6,7 +6,7 @@ defaults:
 # Because RLPD is slower, we will log more frequently
 logging:
   eval_freq: 0
-  video_freq: 10000
+  video_freq: 0
 
 general_training:
   algo: rlpd
@@ -40,3 +40,4 @@ online_training:
   warm_start_online_rl: false
   learning_starts: 50
   critic_update_ratio: 4
+  gradient_steps: 500

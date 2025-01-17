@@ -152,16 +152,16 @@ class OfflineEvalCallback(EvalCallback):
                     "weights/policy_histogram", wandb.Histogram(all_weights)
                 )
 
-        if (
-            self.video_freq > 0 and self.n_calls % self.video_freq == 0
-        ) or self.n_calls == 1:
-            video_buffer = self.record_video()
-            # self.logger.record({f"evaluation_video": wandb.Video(video_buffer, fps=20, format="mp4")}, commit=False)
-            self.logger.record(
-                "eval/evaluation_video", wandb.Video(video_buffer, fps=20, format="mp4")
-            )
-            # self.logger.record({f"eval/evaluate_succ": success}, step = self.n_calls)
-            print("video logged")
+        # if (
+        #     self.video_freq > 0 and self.n_calls % self.video_freq == 0
+        # ) or self.n_calls == 1:
+        #     video_buffer = self.record_video()
+        #     # self.logger.record({f"evaluation_video": wandb.Video(video_buffer, fps=20, format="mp4")}, commit=False)
+        #     self.logger.record(
+        #         "eval/evaluation_video", wandb.Video(video_buffer, fps=20, format="mp4")
+        #     )
+        #     # self.logger.record({f"eval/evaluate_succ": success}, step = self.n_calls)
+        #     print("video logged")
 
         self.logger.record("num_timesteps", self.num_timesteps)
 

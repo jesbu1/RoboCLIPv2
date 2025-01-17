@@ -3,6 +3,10 @@
 defaults:
   - _self_
 
+logging:
+  eval_freq: 0
+  video_freq: 0
+
 general_training:
   algo: iql
   name: iql
@@ -24,13 +28,13 @@ model:
   qf_net_arch: [1024, 768, 512]
 
 offline_training:
-  offline_training_steps: 50000
+  offline_training_steps: 150000
   ckpt_path: null  # Path to load checkpoint from, if provided will skip offline training
   critic_update_ratio: 1 
 
 online_training:
   total_time_steps: 50000
   warm_start_online_rl: true
-  learning_starts: 1000
+  learning_starts: 0
   critic_update_ratio: 4
   mix_buffers_ratio: 0.50

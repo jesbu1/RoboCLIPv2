@@ -335,3 +335,49 @@ class RewardScaleWrapper(gym.Wrapper):
     def step(self, action):
         obs, reward, done, info = self.env.step(action)
         return obs, reward / self.divisor, done, info
+
+
+class ActionChunkingWrapper(gym.Wrapper):
+    def __init__(self, env, chunk_size=15):
+        super(ActionChunkingWrapper, self).__init__(env)
+        self.chunk_size = chunk_size
+
+        self.chunk = []
+
+    def step(self, chunked_action: np.ndarray):
+        # Unpack action
+
+        if chunked_action is not None and chunked_action.ndim == 1:
+            print("**" * 10)
+            print()
+            print("THE ACTION IS NOT CHUNKED")
+            print("This may be okay if random exploration from SB3 is used")
+            print()
+            print("**" * 10)
+            obs, reward, done, info = self.env.step(chunked_action)
+            info["action"] = chunked_action[None, :]
+            return obs, reward, done, info
+
+        if self.is_chunk_empty:
+            # Then let the action replace the chunk
+            self.chunk = chunked_action
+        else:
+            # If chunk is not empty, we will assert that chunked_action is None
+            assert chunked_action is None
+
+        popped_action = self.chunk[0]
+        self.chunk = self.chunk[1:]
+
+        obs, reward, done, info = self.env.step(popped_action)
+
+        info["action"] = popped_action
+
+        return obs, reward, done, info
+
+    @property
+    def is_chunk_empty(self):
+        return len(self.chunk) == 0
+
+    def reset(self):
+        self.chunk = []
+        return self.env.reset()

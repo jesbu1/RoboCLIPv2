@@ -136,6 +136,7 @@ class RLPD(OfflineRLAlgorithm):
         n_critics_to_sample: int = 2,  # number of critics to sample from
         train_critic_with_entropy: bool = False,  # whether to train the critic with the entropy term
         warm_start_online_rl: bool = True,
+        action_chunk_size: int = 1,
     ):
         # NOTE: Asserntions currently commonted out due to saving/loading logic. Must fix this later TODO
         # assert (
@@ -177,6 +178,7 @@ class RLPD(OfflineRLAlgorithm):
             supported_action_spaces=(spaces.Box,),
             support_multi_env=True,
             warm_start_online_rl=warm_start_online_rl,
+            action_chunk_size=action_chunk_size,
         )
 
         self.target_entropy = target_entropy
@@ -370,6 +372,8 @@ class RLPD(OfflineRLAlgorithm):
         q_next_values_list = []
         reward_values = []
 
+        print(f"Going to take {gradient_steps} training steps")
+
         for gradient_step in range(gradient_steps):
             # We need to sample because `log_std` may have changed between two gradient steps
             if self.use_sde:
@@ -391,6 +395,10 @@ class RLPD(OfflineRLAlgorithm):
                     next_actions, next_log_prob = self.actor.action_log_prob(
                         replay_data.next_observations
                     )
+
+                    if next_actions.ndim == 3:
+                        # Take the mean of the logprob
+                        next_log_prob = next_log_prob.mean(dim=1, keepdim=True)
                     # Compute the next Q values: min over all critics targets
                     # sample a random subset of self.n_critics_to_sample critics. no replacement
                     critic_indices = th.randperm(self.policy_kwargs["n_critics"])[
@@ -449,6 +457,11 @@ class RLPD(OfflineRLAlgorithm):
                     )
             # Action by the current actor for the sampled state
             actions_pi, log_prob = self.actor.action_log_prob(replay_data.observations)
+
+            if actions_pi.ndim == 3:
+                # Take the mean of the logprob
+                log_prob = log_prob.mean(dim=1, keepdim=True)
+
             log_prob = log_prob.reshape(-1, 1)
 
             ent_coef_loss = None
