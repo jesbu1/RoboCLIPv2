@@ -85,9 +85,15 @@ def plot_progress(h5_file, model_name, set, self_attention_model, args):
             video_frame_data = traj_data[0:i+1]
             video_frame_data = video_frame_data.unsqueeze(0)
 
-            predicted_score = self_attention_model(video_frame_data, mask=None, text_array=env_text_embedding)
+            predicted_score, two_step_class = self_attention_model(video_frame_data, mask=None, text_array=env_text_embedding)
+            if args.two_step_training:
+                pred_two_class = torch.argmax(two_step_class, dim = 1)
+                predicted_score = predicted_score * pred_two_class.unsqueeze(1)
             predicted_progress.append(predicted_score.squeeze().detach().cpu().numpy())
-            wrong_text_score = self_attention_model(video_frame_data, mask=None, text_array=wrong_text_embedding)
+            wrong_text_score, wrong_two_step_class = self_attention_model(video_frame_data, mask=None, text_array=wrong_text_embedding)
+            if args.two_step_training:
+                wrong_pred_two_class = torch.argmax(wrong_two_step_class, dim = 1)
+                wrong_text_score = wrong_text_score * wrong_pred_two_class.unsqueeze(1)
             wrong_text_progress.append(wrong_text_score.squeeze().detach().cpu().numpy())
         predicted_progress = np.array(predicted_progress)
         wrong_text_progress = np.array(wrong_text_progress)
@@ -130,7 +136,8 @@ def plot_progress_class(h5_file, model_name, set, self_attention_model, args):
         eval_envs = json.load(open("task_subset.json"))["evaluate_tasks"]
         text = json.load(open("task_subset.json"))["eval_annotation"]
     text_embeddings = embedding_text(model, tokenizer, text).to(device).float()
-    text_embeddings = normalize_embeddings(text_embeddings)
+    if args.normalize_embedding:
+        text_embeddings = normalize_embeddings(text_embeddings)
 
     wrong_text = "Hello World"
     wrong_text_embedding = embedding_text(model, tokenizer, [wrong_text]).to(device).float()
@@ -164,9 +171,15 @@ def plot_progress_class(h5_file, model_name, set, self_attention_model, args):
             video_frame_data = traj_data[0:i+1]
             video_frame_data = video_frame_data.unsqueeze(0)
 
-            predicted_class = self_attention_model(video_frame_data, mask=None, text_array=env_text_embedding)
+            predicted_class, two_step_class = self_attention_model(video_frame_data, mask=None, text_array=env_text_embedding)
+            if args.two_step_training:
+                pred_two_class = torch.argmax(two_step_class, dim = 1)
+                predicted_class = pred_two_class * predicted_class
             predicted_classes.append(predicted_class.squeeze().detach().cpu().numpy())
-            wrong_text_class = self_attention_model(video_frame_data, mask=None, text_array=wrong_text_embedding)
+            wrong_text_class, wrong_two_step_class = self_attention_model(video_frame_data, mask=None, text_array=wrong_text_embedding)
+            if args.two_step_training:
+                wrong_pred_two_class = torch.argmax(wrong_two_step_class, dim = 1)
+                wrong_text_class = wrong_pred_two_class * wrong_text_class
             wrong_text_classes.append(wrong_text_class.squeeze().detach().cpu().numpy())
         predicted_classes = np.array(predicted_classes)
         wrong_text_classes = np.array(wrong_text_classes)
@@ -198,6 +211,18 @@ def sample_video_frames(frames, num_frames = 32):
 
     return frames
 
+def sample_embedding_frames(embeddings, num_frames = 32):
+    total_frames = embeddings.shape[0]
+    if total_frames > num_frames:
+        embeddings = embeddings[::total_frames//num_frames]
+    else:
+        # padding 1st frame
+        padding_num = num_frames - total_frames
+        first_frame = embeddings[0].unsqueeze(0)
+        padding_frames = first_frame.repeat(padding_num, 1)
+        embeddings = torch.cat([padding_frames, embeddings], dim=0)
+    return embeddings
+
 def plot_videos(model_name, self_attention_model, args):
     device = next(self_attention_model.parameters()).device
     model, processor, tokenizer = load_model(model_name)
@@ -207,7 +232,7 @@ def plot_videos(model_name, self_attention_model, args):
     tasks = [
             "button_press",
             "button_press_wall", 
-            # "coffee_pull",
+            "coffee_pull",
             "door_open",
             "drawer_close",
             "faucet_open",
@@ -218,16 +243,16 @@ def plot_videos(model_name, self_attention_model, args):
             ]
 
     texts = {
-            "button_press": "pressing button from side",
-            "button_press_wall": "pressing button from side",
-            # "coffee_pull": "pulling coffee",
-            "door_open": "opening door",
-            "drawer_close": "closing drawer",
-            "faucet_open": "opening faucet",
-            "handle_press_side": "pressing handle from side",
-            "handle_pull_side": "pulling handle from side",
-            "topdown": "pressing button from top",
-            "windowclose": "closing window"
+            "button_press": "Pressing button from side",
+            "button_press_wall": "Pressing button from side",
+            "coffee_pull": "pulling coffee",
+            "door_open": "Opening door",
+            "drawer_close": "Closing drawer",
+            "faucet_open": "Opening faucet",
+            "handle_press_side": "Pressing handle from side",
+            "handle_pull_side": "Pulling handle from side",
+            "topdown": "Pressing button from top",
+            "windowclose": "Closing window"
             }
 
 
@@ -245,11 +270,8 @@ def plot_videos(model_name, self_attention_model, args):
                 frames = imageio.mimread(gif_path)
                 frames = [frame[:,:,0:3] for frame in frames]
                 
-                if args.subsample_video:
-                    frames = sample_video_frames(frames, num_frames = args.max_length)
 
                 image_embeddings = []
-                # select 32 frames
                 for frame in frames:
                     image_embedding = embedding_image(model, processor, frame)
                     if args.normalize_embedding:
@@ -260,9 +282,14 @@ def plot_videos(model_name, self_attention_model, args):
                 predicted_output = list()
                 for i in range(len(image_embeddings)):
                     image = image_embeddings[:i+1]
+                    if args.subsample_video:
+                        image = sample_embedding_frames(image, num_frames = args.max_length)
 
                     image = image.unsqueeze(0)
-                    progress_score = self_attention_model(image, mask=None, text_array=text_embeddings)
+                    progress_score, two_step_class = self_attention_model(image, mask=None, text_array=text_embeddings)
+                    if args.two_step_training:
+                        two_step_class =  torch.argmax(two_step_class, dim=1).unsqueeze(1)
+                        progress_score = two_step_class * progress_score
                     predicted_output.append(progress_score.squeeze().detach().cpu().numpy())
                 predicted_output = np.array(predicted_output)
 
@@ -311,27 +338,27 @@ def plot_videos_class(model_name, self_attention_model, args):
     tasks = [
             "button_press",
             "button_press_wall", 
-            # "coffee_pull",
+            "coffee_pull",
             "door_open",
             "drawer_close",
             "faucet_open",
             "handle_press_side",
             "handle_pull_side",
             "topdown", 
-            "window_close"
+            "windowclose"
             ]
 
     texts = {
-            "button_press": "pressing button from side",
-            "button_press_wall": "pressing button from side",
-            # "coffee_pull": "pulling coffee",
-            "door_open": "opening door",
-            "drawer_close": "closing drawer",
-            "faucet_open": "opening faucet",
-            "handle_press_side": "pressing handle from side",
-            "handle_pull_side": "pulling handle from side",
-            "topdown": "pressing button from top",
-            "windowclose": "closing window"
+            "button_press": "Pressing button from side",
+            "button_press_wall": "Pressing button from side",
+            "coffee_pull": "pulling coffee",
+            "door_open": "Opening door",
+            "drawer_close": "Closing drawer",
+            "faucet_open": "Opening faucet",
+            "handle_press_side": "Pressing handle from side",
+            "handle_pull_side": "Pulling handle from side",
+            "topdown": "Pressing button from top",
+            "windowclose": "Closing window"
             }
 
 
@@ -349,8 +376,8 @@ def plot_videos_class(model_name, self_attention_model, args):
                 frames = imageio.mimread(gif_path)
                 frames = [frame[:,:,0:3] for frame in frames]
                 
-                if args.subsample_video:
-                    frames = sample_video_frames(frames, num_frames = args.max_length)
+                # if args.subsample_video:
+                #     frames = sample_video_frames(frames, num_frames = args.max_length)
 
                 image_embeddings = []
                 # select 32 frames
@@ -364,13 +391,16 @@ def plot_videos_class(model_name, self_attention_model, args):
                 predicted_output = list()
                 for i in range(len(image_embeddings)):
                     image = image_embeddings[:i+1]
-
+                    if args.subsample_video:
+                        image = sample_embedding_frames(image, num_frames = args.max_length)
                     image = image.unsqueeze(0)
-                    progress_score = self_attention_model(image, mask=None, text_array=text_embeddings)
+                    progress_score, two_step_class = self_attention_model(image, mask=None, text_array=text_embeddings)
                     progress_score = torch.argmax(progress_score, dim=1)
+                    if args.two_step_training:
+                        two_step_class = torch.argmax(two_step_class, dim=1)
+                        progress_score = two_step_class * progress_score
                     predicted_output.append(progress_score.squeeze().detach().cpu().numpy())
                 predicted_output = np.array(predicted_output)
-
                 frame_index = np.linspace(1, len(predicted_output), len(predicted_output))
 
                 figure = plt.figure()

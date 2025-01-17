@@ -28,6 +28,30 @@ class TwoLayerMLPClass(torch.nn.Module):
         return x
 
 
+class CosPositionalEncoding(nn.Module):
+    def __init__(self, embed_dim, max_len=200):
+        super(CosPositionalEncoding, self).__init__()
+        self.embed_dim = embed_dim
+        self.max_len = max_len
+        self.positional_encoding = self._generate_positional_encoding()
+
+    def _generate_positional_encoding(self):
+        pe = torch.zeros(self.max_len, self.embed_dim)
+        position = torch.arange(0, self.max_len).unsqueeze(1).float()
+        div_term = torch.exp(torch.arange(0, self.embed_dim, 2).float() * -(math.log(10000.0) / self.embed_dim))
+        pe[:, 0::2] = torch.sin(position * div_term)
+        pe[:, 1::2] = torch.cos(position * div_term)
+        return pe
+
+    def forward(self, x):
+        batch_size, seq_len, _ = x.size()
+        pe = self.positional_encoding[:seq_len].unsqueeze(0).repeat(batch_size, 1, 1).to(x.device)
+        x = x + pe
+        return x
+
+
+
+
 class DecoderOnlyBlock(nn.Module):
     def __init__(self, embed_dim, num_heads, ff_dim, layer_norm):
         super(DecoderOnlyBlock, self).__init__()
@@ -104,10 +128,33 @@ class RewardPredictor(nn.Module):
             self.classifier = TwoLayerMLP(input_dim)
         else:
             self.classifier = TwoLayerMLPClass(input_dim, class_num)
+        self.class_num = class_num
+        self.positional_encoding = args.positional_encoding
+        if args.positional_encoding:
+            self.position_embedding = self._get_cosine_positional_encoding(200, input_dim)
+
+
+    def _get_cosine_positional_encoding(self, max_seq_len, embed_dim):
+        """
+        Generate a static positional encoding matrix using sine and cosine functions.
+        """
+        position = torch.arange(max_seq_len).unsqueeze(1)  # Shape: [max_seq_len, 1]
+        div_term = torch.exp(torch.arange(0, embed_dim, 2) * -(math.log(10000.0) / embed_dim))
+        pe = torch.zeros(max_seq_len, embed_dim)
+        pe[:, 0::2] = torch.sin(position * div_term)  # Even indices
+        pe[:, 1::2] = torch.cos(position * div_term)  # Odd indices
+        pe /= 100
+        return pe.unsqueeze(0)
+
 
     def forward(self, x, triangular_mask, text_array, mask):
-        x = self.transformer_decoder(x, triangular_mask)
         batch_size, seq_len, _ = x.size()
+        if self.positional_encoding:
+            positional_embedding = self.position_embedding[:, seq_len, :].to(x.device)
+            x = x + positional_embedding
+
+        x = self.transformer_decoder(x, triangular_mask)
+        
         x = x.view(batch_size * seq_len, -1)
         text_array = text_array.unsqueeze(1).repeat(1, seq_len, 1).view(batch_size * seq_len, -1)
         mask = mask.view(batch_size * seq_len).bool()
@@ -116,6 +163,8 @@ class RewardPredictor(nn.Module):
 
         x = x - text_array
         x = self.classifier(x)
+        if self.class_num == 1:
+            x = torch.clamp(x, 0, 1)
 
         return x, None
 

@@ -40,21 +40,10 @@ class OneLayerMLP(torch.nn.Module):
         return x
 
 
-class MultiHeadAttentionModel(nn.Module):
-    def __init__(self, embed_dim, num_heads, class_num=1, dropout=0.1, enlarge = False):
-        super(MultiHeadAttentionModel, self).__init__()
-        self.enlarge = False
-        if enlarge:
-            
-            self.enlarge = True
-            self.text_enlarge_model = OneLayerMLP(embed_dim)
-            self.image_enlarge_model = OneLayerMLP(embed_dim)
-            embed_dim = embed_dim * 2
-        
-
-
+class MultiHeadAttentionDecoderModel(nn.Module):
+    def __init__(self, embed_dim, num_heads, class_num=1, dropout=0.1):
+        super(MultiHeadAttentionDecoderModel, self).__init__()
         assert embed_dim % num_heads == 0, "Embedding dimension must be divisible by the number of heads."
-
 
         self.embed_dim = embed_dim
         self.num_heads = num_heads
@@ -80,6 +69,14 @@ class MultiHeadAttentionModel(nn.Module):
         else:
             self.transform_model = TwoLayerMLPClass(embed_dim, class_num)
 
+    def _create_triangular_mask(self, seq_length, device):
+        """
+        Create a triangular mask with a limited attention window.
+        """
+        mask = torch.ones(seq_length, seq_length, device=device)
+        for i in range(seq_length):
+            mask[i, max(0, i - self.window_size):i + 1] = 0
+        return mask.bool()
 
     def forward(self, x, mask, text_array):
         if mask is None:

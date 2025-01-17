@@ -79,7 +79,9 @@ class LivVideoDataset(Dataset):
         return  output_dict
 
     def sample_text_feature(self, env_name):
-        text_env_name = env_name + "_text"
+        # text_env_name = env_name + "_text"
+        text_env_name = env_name + "_text_norobot"
+
         text_dataset = self.h5_file[self.model_name][text_env_name]
         # choose index
         idx = random.randint(0, len(text_dataset)-1)
@@ -299,5 +301,67 @@ def video_collate_fn(batch):
     }
 
     return output_dict
+
+
+def video_collate_triangular_fn(batch):
+    # Find the maximum video length (number of frames) in the batch
+
+    length = [data["video_array"].shape[0] for data in batch]
+    max_length = max(length)
+
+    embedding_size = batch[0]["video_array"].shape[1]
+    batch_size = len(batch)
+
+
+
+    
+    video_output = list()
+    mask_output = list()
+    text_output = list()
+    progress_output = list()
+    class_label_output = list()
+    triangular_mask_output = list()
+    
+
+    for i in range(batch_size):
+        video = batch[i]["video_array"]
+        if type(video) == np.ndarray:
+            video = th.tensor(video) 
+        padding = th.zeros((max_length - video.shape[0], embedding_size))
+        padded_video = th.cat((video, padding), dim=0)
+        mask = th.zeros(max_length)
+        mask[:video.shape[0]] = 1
+
+        # generate triangular mask
+        triangular_mask = th.zeros((max_length, max_length))
+        for j in range(video.shape[0]):
+            triangular_mask[j, :j+1] = 1
+
+
+
+        text = th.tensor(batch[i]["text_array"])
+        progress = th.tensor(batch[i]["progress"])
+        class_label = th.tensor(batch[i]["class_label"])
+        
+
+        video_output.append(padded_video)
+        mask_output.append(mask)
+        text_output.append(text)
+        progress_output.append(progress)
+        class_label_output.append(class_label)
+        triangular_mask_output.append(triangular_mask)
+
+
+    output_dict = {
+        "video_array": th.stack(video_output),
+        "mask": th.stack(mask_output),
+        "text_array": th.stack(text_output),
+        "progress": th.stack(progress_output),
+        "class_label": th.stack(class_label_output),
+        "triangular_mask": th.stack(triangular_mask_output)
+    }
+
+    return output_dict
+
 
 

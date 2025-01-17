@@ -66,7 +66,8 @@ def plot_confusion_matrix_pca(h5_file, model_name, set, self_attention_model, pc
         eval_envs = json.load(open("task_subset.json"))["evaluate_tasks"]
         text = json.load(open("task_subset.json"))["eval_annotation"]
     text_embeddings = embedding_text(model, tokenizer, text).to(device).float()
-    text_embeddings = normalize_embeddings(text_embeddings)
+    if args.normalize_embedding:
+        text_embeddings = normalize_embeddings(text_embeddings)
     if pca_text_model is not None:
         text_embeddings = pca_text_model.transform(text_embeddings.cpu().detach().numpy())
         text_embeddings = torch.tensor(text_embeddings).to(device).float()
@@ -102,7 +103,11 @@ def plot_confusion_matrix_pca(h5_file, model_name, set, self_attention_model, pc
         video_frame_data = video_frame_data.unsqueeze(0)
         video_frame_data = video_frame_data.repeat(text_embeddings.shape[0], 1, 1)
 
-        predicted_score = self_attention_model(video_frame_data, mask=None, text_array=text_embeddings)
+        predicted_score, two_step_class = self_attention_model(video_frame_data, mask=None, text_array=text_embeddings)
+        if args.two_step_training:
+            pred_two_class = torch.argmax(two_step_class, dim = 1).unsqueeze(1)
+            predicted_score = pred_two_class * predicted_score
+
         predicted_progress = np.array(predicted_score.squeeze().detach().cpu().numpy())
         predicted_progress_row.append(predicted_progress)
     predicted_progress_row = np.array(predicted_progress_row)
@@ -157,8 +162,12 @@ def plot_confusion_matrix_pca_class(h5_file, model_name, set, self_attention_mod
         video_frame_data = video_frame_data.unsqueeze(0)
         video_frame_data = video_frame_data.repeat(text_embeddings.shape[0], 1, 1)
 
-        pred_class = self_attention_model(video_frame_data, mask=None, text_array=text_embeddings)
+        pred_class, two_step_class = self_attention_model(video_frame_data, mask=None, text_array=text_embeddings)
+
         class_label = torch.argmax(pred_class, dim = 1)
+        if args.two_step_training:
+            pred_two_class = torch.argmax(two_step_class, dim = 1)
+            class_label = pred_two_class * class_label
         # non_zero_index = class_label != 0
         # predicted_score[non_zero_index] = 0
 

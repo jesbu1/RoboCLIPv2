@@ -245,36 +245,71 @@ def sample_embedding_frames(embeddings, num_frames = 32):
 
 
 def plot_videos_class(model_name, self_attention_model, args):
+    tasks_file = "new_task_v2.json"
+    tasks_file = json.load(open(tasks_file))
+    tasks = tasks_file["eval_tasks"]
     device = next(self_attention_model.parameters()).device
     model, processor, tokenizer = load_model(model_name)
-    video_base_path = "/home/jzhang96/RoboCLIPv2/clip/reward_eval_videos"
-    video_idxs = ["1", "2"]
-    diffs = ["GT", "all_fail", "close_succ", "success"]
-    tasks = [
-            "button_press",
-            "button_press_wall", 
-            "coffee_pull",
-            "door_open",
-            "drawer_close",
-            "faucet_open",
-            "handle_press_side",
-            "handle_pull_side",
-            "topdown", 
-            "windowclose"
-            ]
+    video_base_path = "/home/jzhang96/RoboCLIPv2/liv_train_final/eval_tasks_v2"
+    video_idxs = ["1"]
+    diffs = ["all_fail", "close_succ"]
+    # tasks = [
+    #         "button_press",
+    #         "button_press_topdown", 
+    #         "button_press_topdown_wall",
+    #         "coffee_button",
+    #         "door_lock",
+    #         "door_unlock",
+    #         "handle_press_side",
+    #         "handle_pull_side",
+    #         "pick_place_wall",
+    #         "plate_slide_back_side",
+    #         "plate_slide_side",
+    #         "push_wall",
+    #         "reach_wall", 
+    #         "soccer",
+    #         "window_close",
+    #         "window_open",
+    #         ]
 
+    # texts = {
+    #         "button_press": "Pressing the button from side",
+    #         "button_press_topdown": "Pressing the button from top",
+    #         "button_press_topdown_wall": "Pressing the button from top",
+    #         "coffee_button": "Pressing the coffee button",
+    #         "door_lock": "Turning door lock counter-clockwise",
+    #         "door_unlock": "Turning door lock clockwise",
+    #         "handle_press_side": "Pressing the handle from side",
+    #         "handle_pull_side": "Pulling the handle up from the side",
+    #         "pick_place_wall": "Picking up the block and placing it to the goal position",
+    #         "plate_slide_back_side": "Sliding the plate out of the gate",
+    #         "plate_slide_side": "Sliding the plate into the gate",
+    #         "push_wall": "Pushing the block to the goal",
+    #         "reach_wall": "Reaching the goal",
+    #         "soccer": "Sliding the ball into the gate",
+    #         "window_close": "Closing the window",
+    #         "window_open": "Opening the window",
+    #         }
     texts = {
-            "button_press": "Pressing button from side",
-            "button_press_wall": "Pressing button from side",
-            "coffee_pull": "Pulling cup",
-            "door_open": "Opening door",
-            "drawer_close": "Closing drawer",
-            "faucet_open": "Opening faucet",
-            "handle_press_side": "Pressing handle from side",
-            "handle_pull_side": "Pulling handle from side",
-            "topdown": "Pressing button from top",
-            "windowclose": "Closing window"
-            }
+        "button-press-wall-v2": "Pressing the button from side",
+        "button-press-topdown-v2": "Pressing the button from top",
+        "coffee-push-v2": "Pushing the coffee cup",
+        "coffee-button-v2": "Pressing the coffee button",
+        "door-close-v2": "Cloing the door",
+        "door-lock-v2": "Turning door lock counter-clockwise",
+        "faucet-close-v2": "Closing the faucet",
+        "handle-press-side-v2": "Pressing the handle from side",
+        "handle-pull-v2": "Pulling the handle",
+        "pick-place-wall-v2": "Picking up the block and placing it to the goal position",
+        "plate-slide-back-v2": "Sliding the plate out of the gate",
+        "plate-slide-side-v2": "Sliding the plate into the gate from the side",
+        "push-back-v2": "Pushing the block back to the goal",
+        "reach-wall-v2": "Reaching the goal",
+        "soccer-v2": "Sliding the ball into the gate",
+        "window-close-v2": "Closing the window",
+        "sweep-into-v2": "Sweeping the block into the hole",
+        "door-unlock-v2": "Turning door lock clockwise"
+    }
 
 
     for task in tasks:

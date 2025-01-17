@@ -20,7 +20,7 @@ def main(model_name, video_base_path):
     env_names = os.listdir(video_base_path)
     print(env_names, len(env_names))
     # add data
-    data_file = h5py.File("/scr/jzhang96/metaworld_25_for_clip_liv_nonorm.h5", "w")
+    data_file = h5py.File("/scr/jzhang96/metaworld_25_for_clip_liv_norobot.h5", "w")
     if model_name not in data_file.keys():
         model_group = data_file.create_group(model_name)
 
@@ -28,7 +28,7 @@ def main(model_name, video_base_path):
         if env_name.endswith("-v2"):
             env_path = os.path.join(video_base_path, env_name)
             video_names = os.listdir(env_path)
-
+            print(env_name, len(video_names))
             env_group = model_group.create_group(env_name)
 
 
@@ -49,9 +49,7 @@ def main(model_name, video_base_path):
 
                         image_embeddings = embedding_image(model, processor, Image.fromarray(frame.astype(np.uint8))).squeeze(0)
                         # embedding norm
-                        embedding_norm = torch.norm(image_embeddings.unsqueeze(0), dim=1, keepdim=True)
-                        print(embedding_norm)
-                        import pdb; pdb.set_trace()
+
 
 
                         embeddings.append(image_embeddings.detach().cpu().numpy())
