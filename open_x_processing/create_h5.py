@@ -124,6 +124,11 @@ with h5py.File(SAVE_H5_NAME, "w") as f:
                 (len(episode_images), 1024)
             )  # TODO: here
             # create a dataset with the embeddings
-            task_group.create_dataset(task_group_len_str, data=episode_image_embeddings)
+            task_group.create_dataset(
+                task_group_len_str,
+                data=episode_image_embeddings,
+                compression="gzip",
+                compression_opts=5,
+            )
 
             valid_samples += 1
