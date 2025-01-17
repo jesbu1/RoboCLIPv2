@@ -28,30 +28,6 @@ class TwoLayerMLPClass(torch.nn.Module):
         return x
 
 
-class CosPositionalEncoding(nn.Module):
-    def __init__(self, embed_dim, max_len=200):
-        super(CosPositionalEncoding, self).__init__()
-        self.embed_dim = embed_dim
-        self.max_len = max_len
-        self.positional_encoding = self._generate_positional_encoding()
-
-    def _generate_positional_encoding(self):
-        pe = torch.zeros(self.max_len, self.embed_dim)
-        position = torch.arange(0, self.max_len).unsqueeze(1).float()
-        div_term = torch.exp(torch.arange(0, self.embed_dim, 2).float() * -(math.log(10000.0) / self.embed_dim))
-        pe[:, 0::2] = torch.sin(position * div_term)
-        pe[:, 1::2] = torch.cos(position * div_term)
-        return pe
-
-    def forward(self, x):
-        batch_size, seq_len, _ = x.size()
-        pe = self.positional_encoding[:seq_len].unsqueeze(0).repeat(batch_size, 1, 1).to(x.device)
-        x = x + pe
-        return x
-
-
-
-
 class DecoderOnlyBlock(nn.Module):
     def __init__(self, embed_dim, num_heads, ff_dim, layer_norm):
         super(DecoderOnlyBlock, self).__init__()
@@ -143,7 +119,7 @@ class RewardPredictor(nn.Module):
         pe = torch.zeros(max_seq_len, embed_dim)
         pe[:, 0::2] = torch.sin(position * div_term)  # Even indices
         pe[:, 1::2] = torch.cos(position * div_term)  # Odd indices
-        pe /= 100
+        pe /= 100 # reduce the scale of positional encoding otherwise it will dominate the input embeddings
         return pe.unsqueeze(0)
 
 

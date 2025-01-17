@@ -24,7 +24,7 @@ device = "cuda" if torch.cuda.is_available() else "cpu"
 
 
 
-def load_model(model_name):
+def load_model(model_name = "liv"):
     if model_name == "clip":
         model = CLIPModel.from_pretrained("openai/clip-vit-large-patch14")
         processor = AutoProcessor.from_pretrained("openai/clip-vit-large-patch14")
