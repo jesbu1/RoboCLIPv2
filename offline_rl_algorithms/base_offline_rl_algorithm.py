@@ -335,6 +335,24 @@ class OfflineRLAlgorithm(OffPolicyAlgorithm):
             log_prob = distribution.log_prob(actions)
         return log_prob
 
+    def predict(
+        self,
+        observation: Union[np.ndarray, Dict[str, np.ndarray]],
+        state: Optional[Tuple[np.ndarray, ...]] = None,
+        episode_start: Optional[np.ndarray] = None,
+        deterministic: bool = False,
+    ):
+        if self.action_chunk_size > 1:
+            assert self.n_envs == 1, "Action chunking only supported for single env"
+            assert episode_start is not None, "Need episode_start for action chunking"
+            if episode_start[0] is True:
+                self.env.chunk = []
+            elif self.env.is_chunk_empty:
+                return super().predict(observation, state, episode_start, deterministic)
+            else:
+                return None
+        return super().predict(observation, state, episode_start, deterministic)
+
 
 class ChunkingWrapper(gym.Wrapper):
     def __init__(self, env, chunk_size=15):
