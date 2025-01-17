@@ -126,7 +126,7 @@ class RewardPredictor(nn.Module):
     def forward(self, x, triangular_mask, text_array, mask):
         batch_size, seq_len, _ = x.size()
         if self.positional_encoding:
-            positional_embedding = self.position_embedding[:, seq_len, :].to(x.device)
+            positional_embedding = self.position_embedding[:, :seq_len, :].to(x.device)
             x = x + positional_embedding
 
         x = self.transformer_decoder(x, triangular_mask)
