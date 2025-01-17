@@ -23,7 +23,6 @@ from stable_baselines3.sac.policies import (
     LOG_STD_MAX,
     LOG_STD_MIN,
 )
-from stable_baselines3.common.type_aliases import PyTorchObs, Schedule
 from stable_baselines3.common.torch_layers import (
     BaseFeaturesExtractor,
     FlattenExtractor,
@@ -33,6 +32,10 @@ from stable_baselines3.common.torch_layers import (
 from stable_baselines3.common.type_aliases import Schedule
 
 import copy
+
+# Type definitions
+TensorDict = dict[str, th.Tensor]
+PyTorchObs = Union[th.Tensor, TensorDict]
 
 
 def create_mlp(
@@ -206,6 +209,7 @@ class ActionSequenceActor(CustomActor):
         use_expln: bool = False,
         clip_mean: float = 2.0,
         normalize_images: bool = True,
+        use_layer_norm: bool = False,
     ):
         BasePolicy.__init__(
             self,
@@ -229,7 +233,11 @@ class ActionSequenceActor(CustomActor):
         self.clip_mean = clip_mean
 
         action_dim = get_action_dim(self.action_space)
-        latent_pi_net = create_mlp(features_dim, -1, net_arch, activation_fn)
+        latent_pi_net = create_mlp(
+            features_dim, -1, net_arch, activation_fn, use_layer_norm=use_layer_norm
+        )
+        self.use_layer_norm = use_layer_norm
+
         self.latent_pi = nn.Sequential(*latent_pi_net)
         last_layer_dim = net_arch[-1] if len(net_arch) > 0 else features_dim
 
@@ -286,7 +294,7 @@ class ActionSequenceActor(CustomActor):
         mean_actions, log_std, kwargs = self.get_action_dist_params(obs)
         # Note: the action is squashed
         # reshape everything to be (batch_size * action_sequence_length, action_dim)
-        batch_size = mean_actions.shape[0]
+        batch_size = mean_actions.shape[0] // self.action_sequence_length
         action_dim = mean_actions.shape[-1]
         mean_actions = mean_actions.reshape(
             batch_size * self.action_sequence_length, action_dim
@@ -340,7 +348,7 @@ class ActionSequenceActor(CustomActor):
         """
         # Switch to eval mode (this affects batch norm / dropout)
         self.set_training_mode(False)
-
+        breakpoint()
         # Check for common mistake that the user does not mix Gym/VecEnv API
         # Tuple obs are not supported by SB3, so we can safely do that check
         if (
@@ -669,6 +677,8 @@ class CustomSACPolicy(SACPolicy):
             self.critic_kwargs, features_extractor
         )
         return CustomContinuousCritic(**critic_kwargs).to(self.device)
+
+
 class CustomRNNSACPolicy(CustomSACPolicy):
     def __init__(
         self,
@@ -690,10 +700,11 @@ class CustomRNNSACPolicy(CustomSACPolicy):
         share_features_extractor: bool = False,
         policy_layer_norm: bool = False,
         critic_layer_norm: bool = False,
-        action_sequence_length: int = 1,
+        action_sequence_length: int = 3,
     ):
-        super(CustomRNNSACPolicy).__init__(
-            self,
+        self.action_sequence_length = action_sequence_length
+
+        super().__init__(
             observation_space,
             action_space,
             lr_schedule,
@@ -713,7 +724,6 @@ class CustomRNNSACPolicy(CustomSACPolicy):
             policy_layer_norm,
             critic_layer_norm,
         )
-        self.action_sequence_length = action_sequence_length
 
     def make_actor(
         self, features_extractor: Optional[BaseFeaturesExtractor] = None

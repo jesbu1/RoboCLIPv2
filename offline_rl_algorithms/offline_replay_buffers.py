@@ -87,6 +87,7 @@ class H5ReplayBuffer(ReplayBuffer):
         is_metaworld: bool = False,
         normalize_actions_koch: bool = False,
         action_chunk_size: int = 1,
+        pad_action_chunk_with_last_action: bool = True,
     ):
         """
         Initialize the replay buffer.
@@ -273,6 +274,7 @@ class H5ReplayBuffer(ReplayBuffer):
         self.use_language_embeddings = use_language_embeddings
         self.calculate_mc_returns = calculate_mc_returns
         self.action_chunk_size = action_chunk_size
+        self.pad_action_chunk_with_last_action = pad_action_chunk_with_last_action
 
     def add(
         self,
@@ -298,18 +300,13 @@ class H5ReplayBuffer(ReplayBuffer):
         # Sample randomly the env idx
         if self.optimize_memory_usage:
             next_obs = self._normalize_obs(
-                self.observations[
-                    (batch_inds + self.action_chunk_size) % self.buffer_size, :
-                ],
+                self.observations[(batch_inds) % self.buffer_size, :],
                 env=None,
             )
             # add timestep into the observation
             if self.add_timestep:
                 timesteps = (
-                    self.timesteps[
-                        (batch_inds + self.action_chunk_size) % self.buffer_size
-                    ]
-                    / 500
+                    self.timesteps[(batch_inds) % self.buffer_size] / 500
                 )  # 500 is the max episode length
                 next_obs = np.concatenate((next_obs, timesteps.reshape(-1, 1)), axis=1)
 
@@ -317,16 +314,14 @@ class H5ReplayBuffer(ReplayBuffer):
                 next_obs = np.concatenate(
                     (
                         next_obs,
-                        self.lang_embeddings[
-                            (batch_inds + self.action_chunk_size) % self.buffer_size, :
-                        ],
+                        self.lang_embeddings[(batch_inds) % self.buffer_size, :],
                     ),
                     axis=1,
                 )
 
         else:
             next_obs = self._normalize_obs(
-                self.next_observations[batch_inds + self.action_chunk_size - 1, :],
+                self.next_observations[batch_inds - 1, :],
                 env=None,
             )
             if self.add_timestep:
@@ -369,29 +364,29 @@ class H5ReplayBuffer(ReplayBuffer):
             all_dones = []
             # build the actions, dones, rewards, etc. based on the action chunk size
             for i, batch_ind in enumerate(batch_inds):
-                assert len(dones[i].shape) == 1
                 done_indices = np.nonzero(dones[i])[0]
                 if len(done_indices) == 0:
                     # if no done or timeout, then use the whole action chunk
                     end_offset = self.action_chunk_size
                 else:
                     end_offset = done_indices[0] + 1
-                action = self.actions[batch_inds : batch_inds + end_offset]
-                rew_sum = np.sum(self.rewards[batch_inds : batch_inds + end_offset])
-                done = np.any(
-                    self.dones[batch_inds : batch_inds + end_offset]
-                    * (1 - self.timeouts[batch_inds : batch_inds + end_offset])
-                )
-                # pad action if needed
-                if len(action) < self.action_chunk_size:
-                    action = np.pad(
-                        action,
-                        ((0, self.action_chunk_size - len(action)), (0, 0)),
-                        mode="constant",
-                        constant_values=(
-                            action[-1] if self.pad_action_chunk_with_last_action else 0
-                        ),
-                    )
+                action = self.actions[batch_ind : batch_ind + end_offset]
+                rew_sum = np.sum(self.rewards[batch_ind : batch_ind + end_offset])
+                done = np.any(self.dones[batch_ind : batch_ind + end_offset])
+
+                padding_rows = self.action_chunk_size - action.shape[0]
+                if padding_rows > 0:
+                    if self.pad_action_chunk_with_last_action:
+                        padding_values = np.tile(
+                            action[-1], (padding_rows, 1)
+                        )  # Repeat last row
+                    else:
+                        padding_values = np.zeros(
+                            (padding_rows, action.shape[1])
+                        )  # Zero padding
+
+                    # Concatenate the original array with padding
+                    action = np.vstack((action, padding_values))
                 all_actions.append(action)
                 all_rewards.append(rew_sum)
                 all_dones.append(done)

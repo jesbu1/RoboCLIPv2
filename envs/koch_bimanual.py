@@ -33,7 +33,7 @@ import pybullet_data
 
 
 class KochBimanualEnv(Env):
-    def __init__(self, robot_path, max_episode_steps=500, fps=15):
+    def __init__(self, robot_path, max_episode_steps=128, fps=30):
         self.max_episode_steps = max_episode_steps
         self.fps = fps
 
@@ -109,19 +109,19 @@ class KochBimanualEnv(Env):
         current_state = self.current_observation["observation.state"]
 
         safe_action = self.ensure_safe_goal_position(
-            goal_pos=action, present_pos=current_state, max_relative_target=5.0
+            goal_pos=action, present_pos=current_state, max_relative_target=3.0
         )
 
         self.robot.send_action(safe_action)
 
-        dt_s = time.perf_counter() - self.prev_time
-        print(dt_s, 1 / self.fps - dt_s)
-        busy_wait(dt_s)
+        # dt_s = time.perf_counter() - self.prev_time
+        # print(dt_s, 1 / self.fps - dt_s)
+        # busy_wait(1 / 60)
         # busy_wait(1 / self.fps - dt_s)
-        # busy_wait(1 / self.fps)
+        busy_wait(1 / self.fps)
 
-        dt_s = time.perf_counter() - self.prev_time
-        log_control_info(self.robot, dt_s, fps=self.fps)
+        # dt_s = time.perf_counter() - self.prev_time
+        # log_control_info(self.robot, dt_s, fps=self.fps)
 
         observation = self.robot.capture_observation()
 

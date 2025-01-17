@@ -21,7 +21,10 @@ from offline_rl_algorithms.custom_policies import (
     CustomMultiInputPolicy,
 )
 
-from offline_rl_algorithms.offline_replay_buffers import CombinedBuffer
+from offline_rl_algorithms.offline_replay_buffers import (
+    CombinedBuffer,
+    ActionChunkedReplayBuffer,
+)
 
 import gym
 
@@ -122,6 +125,7 @@ class OfflineRLAlgorithm(OffPolicyAlgorithm):
         supported_action_spaces: Optional[Tuple[spaces.Space]] = (spaces.Box,),
         support_multi_env: bool = True,
         warm_start_online_rl: bool = True,
+        action_chunk_size: int = 3,
     ):
         super().__init__(
             policy,
@@ -161,6 +165,24 @@ class OfflineRLAlgorithm(OffPolicyAlgorithm):
 
         self.warm_start_online_rl = warm_start_online_rl
         self.learned_offline = False
+
+        self.action_chunk_size = action_chunk_size
+
+        if action_chunk_size > 1:
+            # Add a wrapper for action chunking to the env
+            self.env = ActionChunkingWrapper(self.env, chunk_size=action_chunk_size)
+
+            # Replace the replay buffer with ActionChunkedReplayBuffer
+            self.replay_buffer = ActionChunkedReplayBuffer(
+                action_chunk_size=action_chunk_size,
+                pad_action_chunk_with_last_action=True,
+                buffer_size=self.buffer_size,
+                observation_space=self.observation_space,
+                action_space=self.action_space,
+                device=self.device,
+                n_envs=self.n_envs,
+                optimize_memory_usage=self.optimize_memory_usage,
+            )
 
         if _init_setup_model:
             self._setup_model()
@@ -328,7 +350,6 @@ class OfflineRLAlgorithm(OffPolicyAlgorithm):
             log_prob = log_prob.reshape(
                 actions.shape[0],
                 actions.shape[1],
-                actions.shape[2],
             )
             log_prob = log_prob.mean(dim=1, keepdim=False)
         else:
@@ -336,9 +357,9 @@ class OfflineRLAlgorithm(OffPolicyAlgorithm):
         return log_prob
 
 
-class ChunkingWrapper(gym.Wrapper):
+class ActionChunkingWrapper(gym.Wrapper):
     def __init__(self, env, chunk_size=15):
-        super(ChunkingWrapper, self).__init__(env)
+        super(ActionChunkingWrapper, self).__init__(env)
         self.chunk_size = chunk_size
 
         self.chunk = []

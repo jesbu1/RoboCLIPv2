@@ -283,6 +283,7 @@ def main(cfg: DictConfig):
         reward_divisor=cfg.reward_model.reward_divisor,
         is_metaworld="metaworld" in env_config.cfg_name,
         normalize_actions_koch="koch" in env_config.cfg_name,
+        action_chunk_size=cfg.general_training.action_chunk_size,
     )
 
     ### Learn offline
@@ -333,6 +334,7 @@ def main(cfg: DictConfig):
                 model = model.load(offline_config.ckpt_path, env=envs, **kwargs)
                 model.offline_algo = new_offline_algo
                 model.set_logger(wandb_logger)
+                model.learned_offline = True
 
             else:
                 model.load(offline_config.ckpt_path, env=envs)
@@ -535,6 +537,9 @@ def get_policy_algorithm(cfg: DictConfig, envs: VecEnv, log_dir: str):
         "critic_layer_norm": model_config.critic_layer_norm,
     }
 
+    if cfg.general_training.action_chunk_size > 1:
+        policy_kwargs["action_sequence_length"] = cfg.general_training.action_chunk_size
+
     # everything except BC, SAC, and PPO require n_critics
     if (
         cfg.general_training.algo == "iql"
@@ -660,7 +665,7 @@ def get_policy_algorithm(cfg: DictConfig, envs: VecEnv, log_dir: str):
         model_class = BC
         if not args.pretrained:
             model = model_class(
-                "MlpPolicy",
+                "RnnMlpPolicy",
                 envs,
                 verbose=1,
                 tensorboard_log=log_dir,
@@ -674,6 +679,7 @@ def get_policy_algorithm(cfg: DictConfig, envs: VecEnv, log_dir: str):
                     cfg.environment.train_freq_num,
                     cfg.environment.train_freq_type,
                 ),  # useless
+                action_chunk_size=cfg.general_training.action_chunk_size,
             )
         else:
             model = model_class.load(args.pretrained, env=envs, tensorboard_log=log_dir)

@@ -102,6 +102,7 @@ class BC(OfflineRLAlgorithm):
         seed: Optional[int] = None,
         device: Union[th.device, str] = "auto",
         _init_setup_model: bool = True,
+        action_chunk_size: int = 1,
     ):
         super().__init__(
             policy,
@@ -129,6 +130,7 @@ class BC(OfflineRLAlgorithm):
             optimize_memory_usage=optimize_memory_usage,
             supported_action_spaces=(spaces.Box,),
             support_multi_env=True,
+            action_chunk_size=action_chunk_size,
         )
 
         # Entropy coefficient / Entropy temperature

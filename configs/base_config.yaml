@@ -42,6 +42,8 @@ general_training:
   cql_min_q_temp: 1.0
   use_calibrated_q: false # calibrated QL https://arxiv.org/pdf/2303.05479
 
+  action_chunk_size: 30
+
   # below not used for now
   random_reset: false
   norm_input: false

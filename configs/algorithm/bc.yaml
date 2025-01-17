@@ -20,7 +20,7 @@ model:
   qf_net_arch: [1024, 1024, 512]
 
 offline_training:
-  offline_training_steps: 100000
+  offline_training_steps: 150000
 
 online_training:
   total_time_steps: 10000

@@ -240,7 +240,6 @@ class RLPD(OfflineRLAlgorithm):
                 f"Setting ent_coef_tensor to the old value of the offline algo: {offline_algo.ent_coef_tensor.item()}"
             )
             self.ent_coef_tensor = offline_algo.ent_coef_tensor
-
         self.learned_offline = True
 
         self._create_aliases()
