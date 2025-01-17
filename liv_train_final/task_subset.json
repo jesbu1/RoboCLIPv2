@@ -100,31 +100,60 @@
         "33"
     ],
     "eval_annotation":[
-        "pressing button from top.",
-        "pressing button from side.",
-        "pulling cup",
-        "opening door",
-        "unlocking door",
-        "opening drawer",
-        "pulling handle",
-        "opening faucet",
-        "pushing stick",
-        "closing window",
-        "sweeping block",
-        "pushing block"
+        "Pressing button from top.",
+        "Pressing button from side.",
+        "Pulling cup",
+        "Opening door",
+        "Unlocking door",
+        "Opening drawer",
+        "Pulling handle",
+        "Opening faucet",
+        "Pressing stick",
+        "Closing window",
+        "Sweeping block",
+        "Pushing block"
     ],
     "train_annotation":[
-        "closing door.",
-        "closing drawer.",
-        "pressing button from side",
-        "opening window",
-        "pressing handle from side",
-        "pushing coffee cup",
-        "closing faucet",
-        "pulling stick",
-        "sweeping block into hole",
-        "pulling block back"
+        "Closing door.",
+        "Closing drawer.",
+        "Pressing button from side",
+        "Opening window",
+        "Pressing handle from side",
+        "Pushing coffee cup",
+        "Closing faucet",
+        "Pulling stick",
+        "Sweeping block into hole",
+        "Pulling block back"
+    ],
+    
+    "eval_dis_annotation":[
+        "Press button from top.",
+        "Press button from side.",
+        "Pull cup",
+        "Open door",
+        "Unlock door",
+        "Open drawer",
+        "Pull handle",
+        "Open faucet",
+        "Press stick",
+        "Close window",
+        "Sweep block",
+        "Push block"
+    ],
+    "train_dis_annotation":[
+        "Close door.",
+        "Close drawer.",
+        "Press button from side",
+        "Open window",
+        "Press handle from side",
+        "Push coffee cup",
+        "Close faucet",
+        "Pull stick",
+        "Sweep block into hole",
+        "Pull block back"
     ]
 
+
+    
 
 }

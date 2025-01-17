@@ -35,7 +35,7 @@ def main(args):
 
     WANDB_ENTITY_NAME = "clvr"
     WANDB_PROJECT_NAME = "roboclip-v2"
-    experiment_name = "RegressionRandom_" + args.model_name 
+    experiment_name = "RegressionRandomFixTextEval_" + args.model_name 
 
     if args.sample_neg:
         experiment_name += "_sample_neg"
@@ -74,7 +74,7 @@ def main(args):
     run = wandb.init(
         entity=WANDB_ENTITY_NAME,
         project=WANDB_PROJECT_NAME,
-        group="Regression_final_2nd",
+        group="Regression_final_7th",
         config=args,
         name=experiment_name,
     )
@@ -242,46 +242,46 @@ def main(args):
             torch.save(save_dict, os.path.join(save_path, f"model_{epoch}.pth"))
 
 
-            # if args.catagorical_progress:
+            if args.catagorical_progress:
                 
-            #     plot_progress_class(h5_file, args.model_name, "train", self_attention_model, args)
-            #     plot_progress_class(h5_file, args.model_name, "eval", self_attention_model, args)
-            #     plot_confusion_matrix_pca_class(h5_file = h5_file, 
-            #                               model_name = args.model_name, 
-            #                               set = "train", 
-            #                               self_attention_model = self_attention_model, 
-            #                               args = args)
-            #     plot_confusion_matrix_pca_class(h5_file = h5_file,
-            #                                     model_name = args.model_name,
-            #                                     set = "eval",
-            #                                     self_attention_model = self_attention_model,
-            #                                     args = args)
+                plot_progress_class(h5_file, args.model_name, "train", self_attention_model, args)
+                plot_progress_class(h5_file, args.model_name, "eval", self_attention_model, args)
+                plot_confusion_matrix_pca_class(h5_file = h5_file, 
+                                          model_name = args.model_name, 
+                                          set = "train", 
+                                          self_attention_model = self_attention_model, 
+                                          args = args)
+                plot_confusion_matrix_pca_class(h5_file = h5_file,
+                                                model_name = args.model_name,
+                                                set = "eval",
+                                                self_attention_model = self_attention_model,
+                                                args = args)
             
-            # else:
-            #     plot_progress(h5_file, args.model_name, "train", self_attention_model, args)
-            #     plot_progress(h5_file, args.model_name, "eval", self_attention_model, args)
-            #     plot_confusion_matrix_pca(h5_file = h5_file, 
-            #                               model_name = args.model_name, 
-            #                               set = "train", 
-            #                               self_attention_model = self_attention_model, 
-            #                               args = args)
-            #     plot_confusion_matrix_pca(h5_file = h5_file,
-            #                               model_name = args.model_name,
-            #                               set = "eval",
-            #                               self_attention_model = self_attention_model,
-            #                               args = args)
+            else:
+                plot_progress(h5_file, args.model_name, "train", self_attention_model, args)
+                plot_progress(h5_file, args.model_name, "eval", self_attention_model, args)
+                plot_confusion_matrix_pca(h5_file = h5_file, 
+                                          model_name = args.model_name, 
+                                          set = "train", 
+                                          self_attention_model = self_attention_model, 
+                                          args = args)
+                plot_confusion_matrix_pca(h5_file = h5_file,
+                                          model_name = args.model_name,
+                                          set = "eval",
+                                          self_attention_model = self_attention_model,
+                                          args = args)
 
-            # self_attention_model.train()
+            self_attention_model.train()
 
-        # if epoch % 30 == 29:
-        #     self_attention_model.eval()
+        if epoch % 50 == 49:
+            self_attention_model.eval()
 
-        #     if args.catagorical_progress:
-        #         plot_videos_class(args.model_name, self_attention_model, args)
-        #     else:
-        #         plot_videos(args.model_name, self_attention_model, args)
+            if args.catagorical_progress:
+                plot_videos_class(args.model_name, self_attention_model, args)
+            else:
+                plot_videos(args.model_name, self_attention_model, args)
 
-        #     self_attention_model.train()
+            self_attention_model.train()
 
             
 
@@ -293,7 +293,8 @@ def main(args):
 
 if __name__ == "__main__":
     argparser = argparse.ArgumentParser()
-    argparser.add_argument('--h5_embedding_path', type=str, default='/scr/jzhang96/metaworld_25_for_clip_liv.h5')
+    # argparser.add_argument('--h5_embedding_path', type=str, default='/scr/jzhang96/metaworld_25_for_clip_liv.h5')
+    argparser.add_argument('--h5_embedding_path', type=str, default='/scr/jzhang96/metaworld_25_for_clip_liv_norobot_test.h5')
     argparser.add_argument('--model_name', type=str, default='liv', choices=['clip', 'liv'])
     argparser.add_argument('--batch_size', type=int, default=32)
     argparser.add_argument('--epochs', type=int, default=200)
