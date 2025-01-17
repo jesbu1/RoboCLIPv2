@@ -23,7 +23,7 @@ from stable_baselines3.sac.policies import (
     LOG_STD_MAX,
     LOG_STD_MIN,
 )
-from stable_baselines3.common.type_aliases import PyTorchObs, Schedule
+from stable_baselines3.common.type_aliases import PythObs, Schedule
 from stable_baselines3.common.torch_layers import (
     BaseFeaturesExtractor,
     FlattenExtractor,
@@ -31,8 +31,28 @@ from stable_baselines3.common.torch_layers import (
     CombinedExtractor,
 )
 from stable_baselines3.common.type_aliases import Schedule
+import math
 
 import copy
+
+class PositionalEncoding(nn.Module):
+    def __init__(self, d_model, dropout=0.1, max_len=5000):
+        super(PositionalEncoding, self).__init__()
+        self.dropout = nn.Dropout(p=dropout)
+
+        pe = th.zeros(max_len, d_model)
+        position = th.arange(0, max_len, dtype=th.float).unsqueeze(1)
+        div_term = th.exp(
+            th.arange(0, d_model, 2).float() * (-math.log(10000.0) / d_model)
+        )
+        pe[:, 0::2] = th.sin(position * div_term)
+        pe[:, 1::2] = th.cos(position * div_term)
+        pe = pe.unsqueeze(0).transpose(0, 1)
+        self.register_buffer("pe", pe)
+
+    def forward(self, x):
+        x = x + self.pe[: x.size(0), :]
+        return self.dropout(x)
 
 
 def create_mlp(
@@ -234,16 +254,27 @@ class ActionSequenceActor(CustomActor):
         last_layer_dim = net_arch[-1] if len(net_arch) > 0 else features_dim
 
         self.action_dist = SquashedDiagGaussianDistribution(action_dim)  # type: ignore[assignment]
-        self.mu = nn.GRU(last_layer_dim, last_layer_dim, num_layers=1, batch_first=True)
-        self.mu_processor = nn.Linear(last_layer_dim, action_dim)
-        self.log_std = nn.GRU(
-            last_layer_dim, last_layer_dim, num_layers=1, batch_first=True
+        decoder_layer = nn.TransformerDecoderLayer(d_model=512, nhead=8)
+        self.action_transformer = nn.TransformerDecoder(
+            decoder_layer, num_layers=7, norm=nn.LayerNorm(512)
         )
+        self.triangular_mask = th.triu(
+            th.ones(action_sequence_length, action_sequence_length) * float("-inf"),
+            diagonal=1,
+        )
+        self.position_embedding = PositionalEncoding(
+            512, max_len=action_sequence_length
+        )
+        # self.mu = GRU(last_layer_dim, last_layer_dim, num_layers=1, batch_first=True)
+        self.mu_processor = nn.Linear(last_layer_dim, action_dim)
+        # self.log_std = nn.GRU(
+        #    last_layer_dim, last_layer_dim, num_layers=1, batch_first=True
+        # )
         self.log_std_processor = nn.Linear(last_layer_dim, action_dim)
         self.action_sequence_length = action_sequence_length
 
     def get_action_dist_params(
-        self, obs: PyTorchObs
+        self, obs: PythObs
     ) -> Tuple[th.Tensor, th.Tensor, Dict[str, th.Tensor]]:
         """
         Get the parameters for the action distribution.
@@ -256,8 +287,14 @@ class ActionSequenceActor(CustomActor):
         features = self.extract_features(obs, self.features_extractor)
         latent_pi = self.latent_pi(features)
         # run the rnn  for self.action_sequence_length for mu and log_std
-        mean_actions_intermediate, _ = self.mu(
+        # mean_actions_intermediate, _ = self.mu(
+        #    latent_pi.unsqueeze(1).repeat(1, self.action_sequence_length, 1)
+        # )
+        mean_actions_intermediate = self.position_embedding(
             latent_pi.unsqueeze(1).repeat(1, self.action_sequence_length, 1)
+        )
+        mean_actions_intermediate = self.action_transformer(
+            mean_actions_intermediate, memory=None, tgt_mask=self.triangular_mask
         )
         mean_actions_intermediate = mean_actions_intermediate.reshape(
             -1, mean_actions_intermediate.shape[-1]
@@ -282,7 +319,7 @@ class ActionSequenceActor(CustomActor):
         # log_std = log_std.reshape(-1, self.action_sequence_length, log_std.shape[-1])
         return mean_actions, log_std, {}
 
-    def forward(self, obs: PyTorchObs, deterministic: bool = False) -> th.Tensor:
+    def forward(self, obs: PythObs, deterministic: bool = False) -> th.Tensor:
         mean_actions, log_std, kwargs = self.get_action_dist_params(obs)
         # Note: the action is squashed
         # reshape everything to be (batch_size * action_sequence_length, action_dim)
@@ -298,7 +335,7 @@ class ActionSequenceActor(CustomActor):
         )
         return actions.reshape(batch_size, self.action_sequence_length, action_dim)
 
-    def action_log_prob(self, obs: PyTorchObs) -> Tuple[th.Tensor, th.Tensor]:
+    def action_log_prob(self, obs: PythObs) -> Tuple[th.Tensor, th.Tensor]:
         mean_actions, log_std, kwargs = self.get_action_dist_params(obs)
         batch_size = mean_actions.shape[0]
         action_dim = mean_actions.shape[-1]
@@ -313,9 +350,7 @@ class ActionSequenceActor(CustomActor):
             batch_size, self.action_sequence_length, action_dim
         ), log_prob.reshape(batch_size, self.action_sequence_length)
 
-    def _predict(
-        self, observation: PyTorchObs, deterministic: bool = False
-    ) -> th.Tensor:
+    def _predict(self, observation: PythObs, deterministic: bool = False) -> th.Tensor:
         return self(observation, deterministic)
 
     def predict(
@@ -383,13 +418,18 @@ class ActionSequenceActor(CustomActor):
 
 
 class RecurrentQNetwork(nn.Module):
-    def __init__(self, action_dim, features_dim, activation_fn, q_network):
+    def __init__(self, action_dim, features_dim, activation_fn, q_network, chunk_size):
         super().__init__()
         self.action_feature_extractor = nn.Linear(action_dim, features_dim)
         self.activation_fn = activation_fn()
-        self.recurrent_action_processor = nn.GRU(
-            features_dim, features_dim, batch_first=True
+        # self.recurrent_action_processor = nn.GRU(
+        #    features_dim, features_dim, batch_first=True
+        # )
+        encoder_layer = nn.TransformerEncoderLayer(d_model=512, nhead=8)
+        self.transformer_action_processor = nn.TransformerEncoder(
+            encoder_layer, num_layers=3, norm=nn.LayerNorm(512)
         )
+        self.position_embedding = PositionalEncoding(512, max_len=100)
         self.q_network = q_network
 
     def forward(self, obs, actions):
@@ -400,7 +440,9 @@ class RecurrentQNetwork(nn.Module):
         action_features = self.action_feature_extractor(actions)
         action_features = self.nonlinearity(action_features)
         action_features = action_features.reshape(batch_size, actions.shape[1], -1)
-        action_features, _ = self.recurrent_action_processor(action_features)
+        # action_features, _ = self.recurrent_action_processor(action_features)
+        action_features = self.position_embedding(action_features)
+        action_features = self.transformer_action_processor(action_features)
         q_input = th.cat([obs, action_features], dim=1)
         return self.q_network(q_input)
 
