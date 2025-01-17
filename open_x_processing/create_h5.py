@@ -8,10 +8,10 @@ import h5py
 from clip_utils import load_model, embedding_text, embedding_image
 from PIL import Image
 
-TFDS_PATH = ""
-SAVE_H5_NAME = ""  # name of the h5 file it'll be saved to
+TFDS_PATH = "/data/shared/openx_rlds_data"
+SAVE_H5_NAME = "openx_embeddings.h5"  # name of the h5 file it'll be saved to
 DEBUG = True  # will only make 5
-SPECIFIC_TASKS = "bridge,kuka"
+SPECIFIC_TASKS = None #"bridge"
 
 # prevent TFDS from taking up all GPU memory
 os.environ["TF_FORCE_GPU_ALLOW_GROWTH"] = "true"
@@ -22,42 +22,14 @@ POSSIBLE_LANG_INSTRUCTION_KEYS = [
 ]
 
 
-DATASET_TRANSFORMS = (
-    # Datasets used for OpenVLA: https://openvla.github.io/
-    "fractal20220817_data 0.1.0 resize_and_jpeg_encode",
-    "bridge 0.1.0 resize_and_jpeg_encode",
-    "kuka 0.1.0 resize_and_jpeg_encode,filter_success",
-    "taco_play 0.1.0 resize_and_jpeg_encode",
-    "jaco_play 0.1.0 resize_and_jpeg_encode",
-    "berkeley_cable_routing 0.1.0 resize_and_jpeg_encode",
-    "roboturk 0.1.0 resize_and_jpeg_encode",
-    "viola 0.1.0 resize_and_jpeg_encode",
-    "berkeley_autolab_ur5 0.1.0 resize_and_jpeg_encode,flip_wrist_image_channels",
-    "toto 0.1.0 resize_and_jpeg_encode",
-    "language_table 0.1.0 resize_and_jpeg_encode",
-    "stanford_hydra_dataset_converted_externally_to_rlds 0.1.0 resize_and_jpeg_encode,flip_wrist_image_channels,flip_image_channels",
-    "austin_buds_dataset_converted_externally_to_rlds 0.1.0 resize_and_jpeg_encode",
-    "nyu_franka_play_dataset_converted_externally_to_rlds 0.1.0 resize_and_jpeg_encode",
-    "furniture_bench_dataset_converted_externally_to_rlds 0.1.0 resize_and_jpeg_encode",
-    "ucsd_kitchen_dataset_converted_externally_to_rlds 0.1.0 resize_and_jpeg_encode",
-    "austin_sailor_dataset_converted_externally_to_rlds 0.1.0 resize_and_jpeg_encode",
-    "austin_sirius_dataset_converted_externally_to_rlds 0.1.0 resize_and_jpeg_encode",
-    "bc_z 0.1.0 resize_and_jpeg_encode",
-    "dlr_edan_shared_control_converted_externally_to_rlds 0.1.0 resize_and_jpeg_encode",
-    "iamlab_cmu_pickup_insert_converted_externally_to_rlds 0.1.0 resize_and_jpeg_encode",
-    "utaustin_mutex 0.1.0 resize_and_jpeg_encode,flip_wrist_image_channels,flip_image_channels",
-    "berkeley_fanuc_manipulation 0.1.0 resize_and_jpeg_encode,flip_wrist_image_channels,flip_image_channels",
-    "cmu_stretch 0.1.0 resize_and_jpeg_encode",
-    "dobbe 0.0.1 resize_and_jpeg_encode",
-    "fmb 0.0.1 resize_and_jpeg_encode",
-    "droid 1.0.0 resize_and_jpeg_encode",
-)
-
-
 model, processor, tokenizer = load_model("liv")
+model = model.cuda()
 
 
-dataset_names = [x.split()[0] for x in DATASET_TRANSFORMS]
+#dataset_names = [x.split()[0] for x in DATASET_TRANSFORMS]
+# load dataset names from the TFDS path
+dataset_names = os.listdir(TFDS_PATH)
+print(dataset_names)
 
 if SPECIFIC_TASKS is not None:
     # overwrite the dataset_names with the specific tasks
@@ -68,7 +40,11 @@ tasks_seen = set()
 
 with h5py.File(SAVE_H5_NAME, "w") as f:
     for dataset_name in tqdm(dataset_names):
-        dataset = tfds.load(dataset_name, data_dir=TFDS_PATH, split="train")
+        try:
+            dataset = tfds.load(dataset_name, data_dir=TFDS_PATH, split="train")
+        except Exception as e:
+            print(f"Failed to load dataset {dataset_name} with error: {e}")
+            continue
         n_samples = 5 if DEBUG else 1000000000000000000
         valid_samples = 0
         img_key_to_name = OXE_DATASET_CONFIGS[dataset_name][
@@ -97,21 +73,24 @@ with h5py.File(SAVE_H5_NAME, "w") as f:
                 for key in POSSIBLE_LANG_INSTRUCTION_KEYS:
                     if key in step["observation"]:
                         task = step["observation"][key].numpy().decode()
-                    # if the language instruction is None for some reason, skip the episode as it's weird
-                    if task is None or task == "":
-                        print(
-                            f"Skipping episode {i} of dataset {dataset_name} as the task is None or empty."
-                        )
                         break
+                # if the language instruction is None for some reason, skip the episode as it's weird
+                if task is None or task == "":
+                    print(
+                        f"Skipping episode {i + 1} of dataset {dataset_name} as the task is None or empty."
+                    )
+                    break
 
                 # extract video
                 episode_images.append(step["observation"][primary_img_key].numpy())
+
+            if task is None:
+               continue 
 
             # process task name to capitalize the first letter
             task = task.capitalize()
 
             if task not in tasks_seen:
-                model = model.cpu()
                 tasks_seen.add(task)
                 print(f"Tasks seen so far: {tasks_seen}")
                 f.create_group(task)
@@ -120,7 +99,6 @@ with h5py.File(SAVE_H5_NAME, "w") as f:
                 # task_embedding = np.zeros((1024))  # TODO here
                 # create a dataset with the embeddings
                 f[task].create_dataset("lang_embedding", data=task_embedding)
-                model = model.cuda()
 
             # get the task group
             task_group = f[task]
