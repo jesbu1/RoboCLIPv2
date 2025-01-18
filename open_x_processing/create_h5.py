@@ -9,9 +9,9 @@ from clip_utils import load_model, embedding_text, embedding_image
 from PIL import Image
 
 TFDS_PATH = "/data/shared/openx_rlds_data"
-SAVE_H5_NAME = "openx_embeddings.h5"  # name of the h5 file it'll be saved to
+SAVE_H5_NAME = "openx_embeddings_full.h5"  # name of the h5 file it'll be saved to
 DEBUG = False # will only make 5 per dataset
-SPECIFIC_TASKS = None #"bridge"
+SPECIFIC_TASKS = "bc_z,bridge,fractal20220817_data,jaco_play"#"bridge"
 
 # prevent TFDS from taking up all GPU memory
 os.environ["TF_FORCE_GPU_ALLOW_GROWTH"] = "true"
@@ -37,7 +37,7 @@ if SPECIFIC_TASKS is not None:
     dataset_names = SPECIFIC_TASKS.split(",")
 
 # make a set to keep track of the tasks we've seen
-tasks_seen = set()
+tasks_seen = dict()
 total_samples = 0
 with h5py.File(SAVE_H5_NAME, "w") as f:
     for dataset_name in tqdm(dataset_names):
@@ -50,12 +50,17 @@ with h5py.File(SAVE_H5_NAME, "w") as f:
 
         # get the image key that matches "primary" to get the main camera view
         primary_img_key = img_key_to_name["primary"]
-
-        try:
-            for i, episode in enumerate(dataset):
+        i = 0
+        len_of_dataset = min(dataset.cardinality().numpy(), n_samples)
+        # convert to iterator to be able to catch exception when failed to load an episode for any reason
+        dataset = iter(dataset)
+        num_failures_in_a_row = 0
+        while True:
+            try:
+                episode = next(dataset)
                 # print progress
                 print(
-                    f"------------------- Processing episode {i+1} out of {min(dataset.cardinality().numpy(), n_samples)} of dataset {dataset_name} -------------------"
+                    f"------------------- Processing episode {i+1} out of {len_of_dataset} of dataset {dataset_name} -------------------"
                 )
                 # skip if we have already saved the video
                 this_episode_name = f"{dataset_name}_ep{i}"
@@ -77,10 +82,6 @@ with h5py.File(SAVE_H5_NAME, "w") as f:
                             break
                     # extract video
                     episode_images.append(step["observation"][primary_img_key].numpy())
-                    # if the language instruction is None for some reason, skip the episode as it's weird
-                    if task is None or task == "":
-                        continue
-
 
                 if task is None:
                     print(
@@ -95,14 +96,19 @@ with h5py.File(SAVE_H5_NAME, "w") as f:
                 task = task.capitalize()
 
                 if task not in tasks_seen:
-                    tasks_seen.add(task)
-                    print(f"Tasks seen so far: {tasks_seen}")
+                    tasks_seen[task] = 1
+                    print(f"Tasks seen so far: {tasks_seen.keys()}")
                     f.create_group(task)
                     # TODO: get the lang embeddings for the task
                     task_embedding = embedding_text(model, tokenizer, [task]).detach().cpu().numpy()
                     # task_embedding = np.zeros((1024))  # TODO here
                     # create a dataset with the embeddings
                     f[task].create_dataset("lang_embedding", data=task_embedding)
+                else:
+                    tasks_seen[task] += 1
+                
+
+
 
                 # get the task group
                 task_group = f[task]
@@ -132,10 +138,15 @@ with h5py.File(SAVE_H5_NAME, "w") as f:
                 )
 
                 valid_samples_per_dataset += 1
+                i += 1
                 total_samples += 1
                 print(
                     f"Valid total samples: {total_samples} "
                 )
-        except Exception as e:
-            print(f"Failed to load dataset {dataset_name} with error: {e}")
-            continue
+            except StopIteration:
+                break
+            except Exception as e:
+                print(f"Failed to load dataset {dataset_name} with error: {e}")
+                num_failures_in_a_row += 1
+                if num_failures_in_a_row > 10:
+                    break
