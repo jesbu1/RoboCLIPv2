@@ -9,7 +9,7 @@ from clip_utils import load_model, embedding_text, embedding_image
 from PIL import Image
 
 TFDS_PATH = "/data/shared/openx_rlds_data"
-SAVE_H5_NAME = "openx_embeddings_full.h5"  # name of the h5 file it'll be saved to
+SAVE_H5_NAME = "openx_embeddings_full_uncompressed.h5"  # name of the h5 file it'll be saved to
 DEBUG = False # will only make 5 per dataset
 SPECIFIC_TASKS = "bc_z,bridge,fractal20220817_data,jaco_play"#"bridge"
 
@@ -133,8 +133,8 @@ with h5py.File(SAVE_H5_NAME, "w") as f:
                 task_group.create_dataset(
                     task_group_len_str,
                     data=episode_image_embeddings,
-                    compression="gzip",
-                    compression_opts=9,
+                    #compression="gzip",
+                    #compression_opts=9,
                 )
 
                 valid_samples_per_dataset += 1
