@@ -1,4 +1,5 @@
 import tensorflow_datasets as tfds
+import random
 from tqdm import tqdm
 import os
 from oxe_configs import OXE_DATASET_CONFIGS
@@ -99,7 +100,8 @@ with h5py.File(SAVE_H5_NAME, "w") as f:
 
                 if task not in tasks_seen:
                     tasks_seen[task] = 1
-                    print(f"Tasks seen so far: {tasks_seen.keys()}")
+                    if random.random() < 0.1:
+                        print(f"Tasks seen so far: {tasks_seen.keys()}")
                     f.create_group(task)
                     # TODO: get the lang embeddings for the task
                     task_embedding = embedding_text(model, tokenizer, [task]).detach().cpu().numpy()
