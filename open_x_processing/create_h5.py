@@ -11,7 +11,7 @@ from PIL import Image
 TFDS_PATH = "/data/shared/openx_rlds_data"
 SAVE_H5_NAME = "openx_embeddings_full_uncompressed.h5"  # name of the h5 file it'll be saved to
 DEBUG = False # will only make 5 per dataset
-SPECIFIC_TASKS = "bc_z,bridge,fractal20220817_data,jaco_play"#"bridge"
+SPECIFIC_TASKS = "bridge,bc_z,fractal20220817_data,jaco_play"#"bridge"
 
 # prevent TFDS from taking up all GPU memory
 os.environ["TF_FORCE_GPU_ALLOW_GROWTH"] = "true"
@@ -94,6 +94,8 @@ with h5py.File(SAVE_H5_NAME, "w") as f:
 
                 # process task name to capitalize the first letter
                 task = task.capitalize()
+                # process task name to not have a period at the end and strip other punctuation
+                task = task.strip(" .,!?-_")
 
                 if task not in tasks_seen:
                     tasks_seen[task] = 1
