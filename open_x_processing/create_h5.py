@@ -10,8 +10,8 @@ from PIL import Image
 
 TFDS_PATH = "/data/shared/openx_rlds_data"
 SAVE_H5_NAME = "openx_embeddings_full_uncompressed.h5"  # name of the h5 file it'll be saved to
-DEBUG = False # will only make 5 per dataset
-SPECIFIC_TASKS = "bridge,bc_z,fractal20220817_data,jaco_play"#"bridge"
+DEBUG = False # will only make 10 per dataset
+SPECIFIC_TASKS = "austin_sirius_dataset_converted_externally_to_rlds,austin_buds_dataset_converted_externally_to_rlds,ucsd_kitchen_dataset_converted_externally_to_rlds,stanford_hydra_dataset_converted_externally_to_rlds,iamlab_cmu_pickup_insert_converted_externally_to_rlds,cmu_stretch,berkeley_fanuc_manipulation,berkeley_autolab_ur5,bridge,bc_z,fractal20220817_data,jaco_play"#"bridge"
 
 # prevent TFDS from taking up all GPU memory
 os.environ["TF_FORCE_GPU_ALLOW_GROWTH"] = "true"
@@ -42,7 +42,7 @@ total_samples = 0
 with h5py.File(SAVE_H5_NAME, "w") as f:
     for dataset_name in tqdm(dataset_names):
         dataset = tfds.load(dataset_name, data_dir=TFDS_PATH, split="train")
-        n_samples = 5 if DEBUG else 1000000000000000000
+        n_samples = 10 if DEBUG else 1000000000000000000
         valid_samples_per_dataset = 0
         img_key_to_name = OXE_DATASET_CONFIGS[dataset_name][
             "image_obs_keys"
