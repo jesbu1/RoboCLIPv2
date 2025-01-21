@@ -38,6 +38,31 @@ def load_model(model_name = "liv"):
         raise ValueError(f"Model {model_name} not supported")
     return model, processor, tokenizer
 
+def get_full_liv_embedding(model, tokenizer, text):
+    if type(text) != list:
+        text = [text]
+    text_tokens = clip.tokenize(text)
+
+    def encode_text(model, text):
+        x = model.token_embedding(text).type(
+            model.dtype
+        )  # [batch_size, n_ctx, d_model]
+        x = x + model.positional_embedding.type(model.dtype)
+        x = x.permute(1, 0, 2)  # NLD -> LND
+        x = model.transformer(x)
+        x = x.permute(1, 0, 2)  # LND -> NLD
+        x = model.ln_final(x).type(model.dtype)
+
+        # x.shape = [batch_size, n_ctx, transformer.width]
+        # take features from the eot embedding (eot_token is the highest number in each sequence)
+        x = x @ model.text_projection
+        return x
+
+    text_embeddings = encode_text(model.model, text_tokens)
+
+    return text_embeddings
+
+
 def embedding_text(model, tokenizer, text):
     if type(text) != list:
         text = [text]
