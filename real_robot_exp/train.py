@@ -34,7 +34,7 @@ def main(args):
 
     WANDB_ENTITY_NAME = "clvr"
     WANDB_PROJECT_NAME = "roboclip-v2"
-    experiment_name = "OpenXLIVTraining"
+    experiment_name = "OpenXLIV"
 
 
     experiment_name += "_heads_" + str(args.attention_heads)
@@ -46,16 +46,19 @@ def main(args):
     if args.catagorical_progress:
         experiment_name += "_CatProgress"
     if args.subsample_video:
-        experiment_name += "_SubsampleVideo"
+        experiment_name += "_SubVideo"
         experiment_name += "_MaxLen" + str(args.max_length)
     if args.positional_encoding:
-        experiment_name += "_PositionalEncoding"
+        experiment_name += "_PosEmb"
     if args.extra_data:
         experiment_name += "_ExtraData"
     if args.openx_data:
         experiment_name += "_OpenXData"
     if args.two_step_training:
         experiment_name += "_TwoStep"
+    if args.cat_text:
+        experiment_name += "_CatText"
+    experiment_name += "_DecoderNum_" + str(args.decoder_num)
     experiment_name += "_epochs_" + str(args.epochs)
     # experiment_name += "_1_demo"
     
@@ -79,9 +82,9 @@ def main(args):
     if args.openx_data and args.extra_data:
         openx_dataset = LivRealVideoDataset(args, args.h5_embedding_path, split = False)
         extra_dataset = LivRealVideoDataset(args, "jesse_collect_dataset_new.h5", split = True)
-        openx_dataloader = DataLoader(openx_dataset, batch_size=args.batch_size * 2, shuffle=True, num_workers=args.worker, drop_last=True)
+        openx_dataloader = DataLoader(openx_dataset, batch_size=args.batch_size * 5, shuffle=True, num_workers=args.worker * 2, drop_last=True)
         extra_dataloader = DataLoader(extra_dataset, batch_size=args.batch_size, shuffle=True, num_workers=args.worker, drop_last=True)
-        batch_size = args.batch_size + args.batch_size * 2
+        batch_size = args.batch_size + args.batch_size * 5
 
 
     elif args.extra_data:
@@ -104,8 +107,10 @@ def main(args):
             progress_loss_function = mse_loss        
     elif args.catagorical_progress:
         progress_loss_function = CrossEntropyLoss()
+        classification_loss_function = None
     else:
         progress_loss_function = mse_loss
+        classification_loss_function = None
 
 
 
@@ -186,7 +191,7 @@ def main(args):
 
             
 
-        if epoch % 20 == 19:
+        if epoch % 20 == 0:
             self_attention_model.eval()
 
         #     save_path = os.path.join("/scr/jzhang96/roboclip_v2_decoder_models_fix_3rd", experiment_name)
@@ -236,7 +241,7 @@ def main(args):
 
 if __name__ == "__main__":
     argparser = argparse.ArgumentParser()
-    argparser.add_argument('--h5_embedding_path', type=str, default='/data/shared/roboclip/data/h5_buffers/openx_embeddings/openx_embeddings_full_fix.h5')
+    argparser.add_argument('--h5_embedding_path', type=str, default='/data/shared/roboclip/data/h5_buffers/openx_embeddings/openx_embeddings_full_uncompressed_processed.h5')
     argparser.add_argument('--batch_size', type=int, default=32)
     argparser.add_argument('--epochs', type=int, default=200)
     argparser.add_argument('--seed', type=int, default=42)
@@ -256,6 +261,7 @@ if __name__ == "__main__":
     argparser.add_argument('--layer_norm', action='store_true')
     argparser.add_argument('--two_step_training', action='store_true')
     argparser.add_argument('--cat_text', action='store_true')
+    argparser.add_argument('--decoder_num', type=int, default=1)
     args = argparser.parse_args()
     main(args)
 

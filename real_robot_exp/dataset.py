@@ -38,8 +38,8 @@ class LivRealVideoDataset(Dataset):
     def __len__(self):
         if self.split:
             
-            return 3200
-        return 6400
+            return self.args.batch_size * 100
+        return self.args.batch_size * 100 * 5
     
     def __getitem__(self, idx):
         # select a random key

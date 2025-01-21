@@ -185,7 +185,9 @@ class RewardTwoStepPredictor(nn.Module):
     def __init__(self, input_dim, args, class_num):
         super(RewardTwoStepPredictor, self).__init__()
         self.args = args
-        self.transformer_decoder = DecoderOnlyBlock(input_dim, args.attention_heads, input_dim, args.layer_norm)
+        decoder_num = args.decoder_num
+        self.transformer_decoder = nn.ModuleList([DecoderOnlyBlock(input_dim, args.attention_heads, input_dim, args.layer_norm) for _ in range(decoder_num)])
+        # self.transformer_decoder = DecoderOnlyBlock(input_dim, args.attention_heads, input_dim, args.layer_norm)
         if class_num == 1:
             if args.cat_text:
                 self.classifier = TwoLayerMLP(input_dim * 2)
@@ -227,7 +229,9 @@ class RewardTwoStepPredictor(nn.Module):
             positional_embedding = self.position_embedding[:, :seq_len, :].to(x.device)
             x = x + positional_embedding
 
-        x = self.transformer_decoder(x, triangular_mask)
+        for decoder in self.transformer_decoder:
+            x = decoder(x, triangular_mask)
+        # x = self.transformer_decoder(x, triangular_mask)
         
         x = x.view(batch_size * seq_len, -1)
         text_array = text_array.unsqueeze(1).repeat(1, seq_len, 1).view(batch_size * seq_len, -1)

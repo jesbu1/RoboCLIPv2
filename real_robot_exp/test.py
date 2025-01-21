@@ -2,7 +2,7 @@ import h5py
 from tqdm import tqdm
 dataset_info = dict()
 
-file_path = "/data/shared/roboclip/data/h5_buffers/openx_embeddings/openx_embeddings_full_fix.h5"
+file_path = "/data/shared/roboclip/data/h5_buffers/openx_embeddings/openx_embeddings_full_uncompressed_processed.h5"
 h5_file = h5py.File(file_path, 'a')
 key_num = len(h5_file.keys())
 dataset_info["key_num"] = key_num
@@ -17,21 +17,25 @@ for key in tqdm(h5_file.keys()):
     num = len(data_group) - 1
     total_num += num
     for sub_key in data_group.keys():
-        if sub_key != "lang_embedding":
-            length = len(data_group[sub_key])
-            if length <= 5:
-                print(key, sub_key)
-                # print(key, sub_key)
-                del data_group[sub_key]
-                # import pdb; pdb.set_trace()
-                if len(data_group) == 1:
-                    del h5_file[key]
-                shorter_length += 1
-            if length > max_length:
-                max_length = length
-            if length < min_length:
-                min_length = length
-            total_length.append(length)
+        if "lang_embedding" not in list(data_group.keys()):
+            print(key, sub_key, "no lang_embedding")
+            del data_group[sub_key]
+        else:
+            if sub_key != "lang_embedding":
+                length = len(data_group[sub_key])
+                if length <= 5:
+                    print(key, sub_key, "length <= 5", length)
+                    # print(key, sub_key)
+                    del data_group[sub_key]
+                    # import pdb; pdb.set_trace()
+                    if len(data_group) == 1:
+                        del h5_file[key]
+                    shorter_length += 1
+                if length > max_length:
+                    max_length = length
+                if length < min_length:
+                    min_length = length
+                total_length.append(length)
 
 dataset_info["total_num"] = total_num
 dataset_info["max_length"] = max_length
@@ -43,5 +47,5 @@ print(dataset_info)
 
 h5_file.close()
 import json
-with open("openx_dataset_info.json", "w") as f:
+with open("openx_dataset_info_new.json", "w") as f:
     json.dump(dataset_info, f, indent=4)
