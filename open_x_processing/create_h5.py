@@ -13,6 +13,7 @@ TFDS_PATH = "/data/shared/openx_rlds_data"
 SAVE_H5_NAME = "openx_embeddings_full_uncompressed.h5"  # name of the h5 file it'll be saved to
 DEBUG = False # will only make 10 per dataset
 SPECIFIC_TASKS = "austin_sirius_dataset_converted_externally_to_rlds,austin_buds_dataset_converted_externally_to_rlds,ucsd_kitchen_dataset_converted_externally_to_rlds,stanford_hydra_dataset_converted_externally_to_rlds,iamlab_cmu_pickup_insert_converted_externally_to_rlds,cmu_stretch,berkeley_fanuc_manipulation,berkeley_autolab_ur5,bridge,bc_z,fractal20220817_data,jaco_play"#"bridge"
+MAX_NUM_FRAMES_PER_EPISODE = 128
 
 # prevent TFDS from taking up all GPU memory
 os.environ["TF_FORCE_GPU_ALLOW_GROWTH"] = "true"
@@ -122,10 +123,20 @@ with h5py.File(SAVE_H5_NAME, "w") as f:
                 task_group_len_str = str(task_group_len)
 
                 embedding_list = []
-                for img in episode_images:
-                    # center crop 224x224
+                # linspace to get the indices of the frames to sample
+                indices = np.linspace(
+                    0, len(episode_images) - 1, MAX_NUM_FRAMES_PER_EPISODE, dtype=int
+                )
+                # make sure there are no duplicates
+                indices = list(set(indices))
+
+                episode_images = [episode_images[i] for i in indices]
+
+
+                # center crop 224x224
+                for ep_img in episode_images:
                     image_embeddings = embedding_image(
-                        model, processor, Image.fromarray(img.astype(np.uint8))
+                        model, processor, Image.fromarray(ep_img.astype(np.uint8))
                     ).squeeze().detach().cpu().numpy()
                     embedding_list.append(image_embeddings)
                 episode_image_embeddings = np.array(embedding_list) # TODO check dim, (n_frame, 1024)
