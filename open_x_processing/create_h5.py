@@ -104,9 +104,9 @@ with h5py.File(SAVE_H5_NAME, "w") as f:
                     if random.random() < 0.1:
                         print(f"Tasks seen so far: {tasks_seen.keys()}")
                     f.create_group(task)
-                    # TODO: get the lang embeddings for the task
-                    task_embedding = embedding_text(model, tokenizer, [task]).detach().cpu().numpy()
-                    # task_embedding = np.zeros((1024))  # TODO here
+                    task_embedding = (
+                        embedding_text(model, tokenizer, [task]).detach().cpu().numpy()
+                    )
                     # create a dataset with the embeddings
                     f[task].create_dataset("lang_embedding", data=task_embedding)
                 else:
@@ -139,11 +139,7 @@ with h5py.File(SAVE_H5_NAME, "w") as f:
                         model, processor, Image.fromarray(ep_img.astype(np.uint8))
                     ).squeeze().detach().cpu().numpy()
                     embedding_list.append(image_embeddings)
-                episode_image_embeddings = np.array(embedding_list) # TODO check dim, (n_frame, 1024)
-                # TODO: get the embeddings for the images
-                # episode_image_embeddings = np.zeros(
-                #     (len(episode_images), 1024)
-                # )  # TODO: here
+                episode_image_embeddings = np.array(embedding_list)
                 # create a dataset with the embeddings
                 task_group.create_dataset(
                     task_group_len_str,
