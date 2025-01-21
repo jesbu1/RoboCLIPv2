@@ -101,13 +101,19 @@ class RewardPredictor(nn.Module):
         self.args = args
         self.transformer_decoder = DecoderOnlyBlock(input_dim, args.attention_heads, input_dim, args.layer_norm)
         if class_num == 1:
-            self.classifier = TwoLayerMLP(input_dim)
+            if args.cat_text:
+                self.classifier = TwoLayerMLP(input_dim * 2)
+            else:
+                self.classifier = TwoLayerMLP(input_dim)
         else:
-            self.classifier = TwoLayerMLPClass(input_dim, class_num)
+            if args.cat_text:
+                self.classifier = TwoLayerMLPClass(input_dim * 2, class_num)
+            else:
+                self.classifier = TwoLayerMLPClass(input_dim, class_num)
         self.class_num = class_num
         self.positional_encoding = args.positional_encoding
         if args.positional_encoding:
-            self.position_embedding = self._get_cosine_positional_encoding(200, input_dim)
+            self.position_embedding = self._get_cosine_positional_encoding(50, input_dim)
 
 
     def _get_cosine_positional_encoding(self, max_seq_len, embed_dim):
@@ -123,7 +129,7 @@ class RewardPredictor(nn.Module):
         return pe.unsqueeze(0)
 
 
-    def forward(self, x, triangular_mask, text_array, mask):
+    def forward(self, x, triangular_mask, text_array, mask = None):
         batch_size, seq_len, _ = x.size()
         if self.positional_encoding:
             positional_embedding = self.position_embedding[:, :seq_len, :].to(x.device)
@@ -133,16 +139,46 @@ class RewardPredictor(nn.Module):
         
         x = x.view(batch_size * seq_len, -1)
         text_array = text_array.unsqueeze(1).repeat(1, seq_len, 1).view(batch_size * seq_len, -1)
-        mask = mask.view(batch_size * seq_len).bool()
-        x = x[mask]
-        text_array = text_array[mask]
+        if mask is not None:
+            mask = mask.view(batch_size * seq_len).bool()
+            x = x[mask]
+            text_array = text_array[mask]
 
-        x = x - text_array
+        if self.args.cat_text:
+            x = torch.cat([x, text_array], dim=1)
+        else:
+            x = x - text_array
         x = self.classifier(x)
         if self.class_num == 1:
             x = torch.clamp(x, 0, 1)
 
         return x, None
+
+
+# class RewardTwoStepPredictor(nn.Module):
+#     def __init__(self, input_dim, args, class_num):
+#         super(RewardTwoStepPredictor, self).__init__()
+#         self.args = args
+#         self.transformer_decoder = DecoderOnlyBlock(input_dim, args.attention_heads, input_dim, args.layer_norm)
+#         if class_num == 1:
+#             self.classifier = TwoLayerMLP(input_dim)
+#         else:
+#             self.classifier = TwoLayerMLPClass(input_dim, class_num)
+#         self.twostep_classifier = TwoLayerMLPClass(input_dim, 2)
+
+#     def forward(self, x, triangular_mask, text_array, mask):
+#         x = self.transformer_decoder(x, triangular_mask)
+#         batch_size, seq_len, _ = x.size()
+#         x = x.view(batch_size * seq_len, -1)
+#         text_array = text_array.unsqueeze(1).repeat(1, seq_len, 1).view(batch_size * seq_len, -1)
+#         mask = mask.view(batch_size * seq_len).bool()
+#         x = x[mask]
+#         text_array = text_array[mask]
+#         x = x - text_array
+#         two_step_label = self.twostep_classifier(x)
+#         progress = self.classifier(x)
+
+#         return progress, two_step_label
 
 
 class RewardTwoStepPredictor(nn.Module):
@@ -151,23 +187,66 @@ class RewardTwoStepPredictor(nn.Module):
         self.args = args
         self.transformer_decoder = DecoderOnlyBlock(input_dim, args.attention_heads, input_dim, args.layer_norm)
         if class_num == 1:
-            self.classifier = TwoLayerMLP(input_dim)
+            if args.cat_text:
+                self.classifier = TwoLayerMLP(input_dim * 2)
+            else:
+                self.classifier = TwoLayerMLP(input_dim)
         else:
-            self.classifier = TwoLayerMLPClass(input_dim, class_num)
-        self.twostep_classifier = TwoLayerMLPClass(input_dim, 2)
+            if args.cat_text:
+                self.classifier = TwoLayerMLPClass(input_dim * 2, class_num)
+            else:
+                self.classifier = TwoLayerMLPClass(input_dim, class_num)
 
-    def forward(self, x, triangular_mask, text_array, mask):
-        x = self.transformer_decoder(x, triangular_mask)
+        if args.cat_text:
+            self.twostep_classifier = TwoLayerMLPClass(input_dim * 2, 2)
+        else:
+            self.twostep_classifier = TwoLayerMLPClass(input_dim, 2)
+
+        self.class_num = class_num
+        self.positional_encoding = args.positional_encoding
+        if args.positional_encoding:
+            self.position_embedding = self._get_cosine_positional_encoding(50, input_dim)
+
+
+    def _get_cosine_positional_encoding(self, max_seq_len, embed_dim):
+        """
+        Generate a static positional encoding matrix using sine and cosine functions.
+        """
+        position = torch.arange(max_seq_len).unsqueeze(1)  # Shape: [max_seq_len, 1]
+        div_term = torch.exp(torch.arange(0, embed_dim, 2) * -(math.log(10000.0) / embed_dim))
+        pe = torch.zeros(max_seq_len, embed_dim)
+        pe[:, 0::2] = torch.sin(position * div_term)  # Even indices
+        pe[:, 1::2] = torch.cos(position * div_term)  # Odd indices
+        pe /= 100 # reduce the scale of positional encoding otherwise it will dominate the input embeddings
+        return pe.unsqueeze(0)
+
+
+    def forward(self, x, triangular_mask, text_array, mask = None):
         batch_size, seq_len, _ = x.size()
+        if self.positional_encoding:
+            positional_embedding = self.position_embedding[:, :seq_len, :].to(x.device)
+            x = x + positional_embedding
+
+        x = self.transformer_decoder(x, triangular_mask)
+        
         x = x.view(batch_size * seq_len, -1)
         text_array = text_array.unsqueeze(1).repeat(1, seq_len, 1).view(batch_size * seq_len, -1)
-        mask = mask.view(batch_size * seq_len).bool()
-        x = x[mask]
-        text_array = text_array[mask]
-        x = x - text_array
-        two_step_label = self.twostep_classifier(x)
-        progress = self.classifier(x)
+        if mask is not None:
+            mask = mask.view(batch_size * seq_len).bool()
+            x = x[mask]
+            text_array = text_array[mask]
 
-        return progress, two_step_label
+        if self.args.cat_text:
+            x = torch.cat([x, text_array], dim=1)
+        else:
+            x = x - text_array
+
+        two_step_label = self.twostep_classifier(x)
+        x = self.classifier(x)
+        if self.class_num == 1:
+            x = torch.clamp(x, 0, 1)
+        x = x.view(batch_size, seq_len, -1)
+        two_step_label = two_step_label.view(batch_size, seq_len, -1)
+        return x, two_step_label
 
 

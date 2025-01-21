@@ -9,10 +9,11 @@ import copy
 import json
 import pickle
 import torch.nn.functional as F
+import json
 
 def normalize_embeddings(embeddings, return_tensor=True):
     if isinstance(embeddings, np.ndarray):
-        embeddings = th.tensor(embeddings)
+        embeddings = th.tensor(embeddings).float()
     normalized_embeddings = F.normalize(embeddings, p=2, dim=1)
     if return_tensor:
         return normalized_embeddings
@@ -22,18 +23,26 @@ def normalize_embeddings(embeddings, return_tensor=True):
 
 class LivRealVideoDataset(Dataset):
 
-    def __init__(self, args, h5_file):
+    def __init__(self, args, h5_file, split=False):
+        h5_file = h5py.File(h5_file, "r")
         self.h5_file = h5_file
         self.args = args
+        self.split = split
+        self.keys = list(self.h5_file.keys())
+        if self.split:
+            self.keys = self.keys[:int(len(self.keys)*0.5)]
+            eval_keys = self.keys[int(len(self.keys)*0.5):]
+            json.dump(eval_keys, open("eval_keys.json", "w"), indent=4)
 
 
     def __len__(self):
-        return len(self.h5_file.keys())
+        if self.split:
+            
+            return 3200
+        return 6400
     
     def __getitem__(self, idx):
         # select a random key
-
-        self.keys = list(self.h5_file.keys())
         key_id = random.randint(0, len(self.keys)-1)
         key = self.keys[key_id]
         data_group = self.h5_file[key]
@@ -41,13 +50,37 @@ class LivRealVideoDataset(Dataset):
         # sample text sample
         text_array = self.sample_text_feature(data_group)
 
-        if self.args.sample_neg:
-            if random.random() > 0.75:
-                video_array, progress, class_label = self.sample_negative_video_feature(key)
+        if not self.split:
+            if self.args.sample_neg:
+                if random.random() > 0.75:
+                    video_array, progress, class_label = self.sample_negative_video_feature(key)
+                else:
+                    video_array, progress, class_label = self.sample_video_feature(data_group)
             else:
                 video_array, progress, class_label = self.sample_video_feature(data_group)
         else:
-            video_array, progress, class_label = self.sample_video_feature(data_group)
+            if self.args.sample_neg:
+                if self.args.reverse_video:
+                    random_num = random.random()
+                    if random_num < 0.35:
+                        video_array, progress, class_label = self.sample_negative_video_feature(key)
+                    elif random_num > 0.50:
+                        video_array, progress, class_label = self.sample_reverse_video_feature(data_group)
+                    else:
+                        video_array, progress, class_label = self.sample_video_feature(data_group)
+                else:
+                    random_num = random.random()
+                    if random_num < 0.35:
+                        video_array, progress, class_label = self.sample_negative_video_feature(key)
+                    else:
+                        video_array, progress, class_label = self.sample_video_feature(data_group)
+            else:
+                video_array, progress, class_label = self.sample_video_feature(data_group)
+
+
+
+
+
 
 
         output_dict = {
@@ -60,6 +93,8 @@ class LivRealVideoDataset(Dataset):
 
     def sample_text_feature(self, data_group):
         lang_embedding = np.array(data_group["lang_embedding"])
+        if lang_embedding.shape[0] == 1024:
+            lang_embedding = np.expand_dims(lang_embedding, axis=0)
         if self.args.normalize_embedding:
             lang_embedding = normalize_embeddings(lang_embedding, return_tensor=True)
 
@@ -99,7 +134,7 @@ class LivRealVideoDataset(Dataset):
             if self.args.sample_neg:
                 video_progress += 1
 
-        return video_frames, video_progress, 1
+        return video_frames, video_progress, np.ones(video_progress.shape[0])
 
     def sample_negative_video_feature(self, env_name):
 
@@ -125,7 +160,53 @@ class LivRealVideoDataset(Dataset):
             negative_video_frames = self.padding_video(negative_video_frames, self.args.max_length)
         video_progress = np.zeros(negative_video_frames.shape[0])
 
-        return negative_video_frames, video_progress, 0
+        return negative_video_frames, video_progress, np.zeros(video_progress.shape[0])
+
+
+    def sample_reverse_video_feature(self, data_group):
+        traj_lists = list(data_group.keys())
+        traj_lists.remove("lang_embedding")
+        random_name = random.choice(traj_lists)
+
+        progress_dataset = np.asarray(data_group[random_name]) # all video data
+
+        start_idx = random.randint(0, len(progress_dataset)-3)
+        end_idx = random.randint(start_idx+3, len(progress_dataset))
+
+        video_frames = np.array(progress_dataset)[start_idx:end_idx]
+        full_frames = np.array(progress_dataset)[start_idx:]
+        progress_idx= np.arange(0, video_frames.shape[0]) + 1
+        progress = progress_idx / len(full_frames)
+
+        if self.args.catagorical_progress:
+            progress = np.floor(progress * self.args.catagorical_progress_bins) 
+            if progress[-1] == self.args.catagorical_progress_bins:
+                progress[-1] = self.args.catagorical_progress_bins - 1
+            if self.args.sample_neg:
+                progress += 1
+
+        reverse_frame = video_frames[::-1][1:]
+        reverse_progress = progress[::-1][1:]
+
+        video_frames = np.concatenate([video_frames, reverse_frame], axis=0)
+        progress = np.concatenate([progress, reverse_progress], axis=0)
+
+        if self.args.normalize_embedding:
+            video_frames = normalize_embeddings(video_frames, return_tensor=True)
+
+        if self.args.subsample_video:
+            video_frames = self.padding_video(video_frames, self.args.max_length)
+
+            progress = np.expand_dims(progress, axis=1)
+            progress = self.padding_video(progress, self.args.max_length).detach().cpu().numpy()
+            progress = np.squeeze(progress, axis=1)
+            return video_frames, progress, np.ones(progress.shape[0])
+        else:
+            return video_frames, progress, np.ones(progress.shape[0])
+        
+
+
+
 
     def padding_video(self, video_frames, max_length):
         video_length = len(video_frames)
@@ -146,118 +227,3 @@ class LivRealVideoDataset(Dataset):
 
 
         
-
-def video_collate_fn(batch):
-    # Find the maximum video length (number of frames) in the batch
-
-    length = [data["video_array"].shape[0] for data in batch]
-    max_length = max(length)
-
-    embedding_size = batch[0]["video_array"].shape[1]
-    batch_size = len(batch)
-
-
-
-    
-    video_output = list()
-    mask_output = list()
-    text_output = list()
-    progress_output = list()
-    class_label_output = list()
-    
-
-    for i in range(batch_size):
-        video = batch[i]["video_array"]
-        if type(video) == np.ndarray:
-            video = th.tensor(video) 
-        padding = th.zeros((max_length - video.shape[0], embedding_size))
-        padded_video = th.cat((video, padding), dim=0)
-        mask = th.zeros(max_length)
-        mask[:video.shape[0]] = 1
-        text = th.tensor(batch[i]["text_array"])
-        progress = th.tensor(batch[i]["progress"])
-        class_label = th.tensor(batch[i]["class_label"])
-
-        video_output.append(padded_video)
-        mask_output.append(mask)
-        text_output.append(text)
-        progress_output.append(progress)
-        class_label_output.append(class_label)
-
-
-    output_dict = {
-        "video_array": th.stack(video_output),
-        "mask": th.stack(mask_output),
-        "text_array": th.stack(text_output),
-        "progress": th.stack(progress_output),
-        "class_label": th.stack(class_label_output)
-    }
-
-    return output_dict
-
-
-def video_collate_triangular_fn(batch):
-    # Find the maximum video length (number of frames) in the batch
-
-    length = [data["video_array"].shape[0] for data in batch]
-    max_length = max(length)
-
-    embedding_size = batch[0]["video_array"].shape[1]
-    batch_size = len(batch)
-
-
-
-    
-    video_output = list()
-    mask_output = list()
-    text_output = list()
-    progress_output = list()
-    class_label_output = list()
-    triangular_mask_output = list()
-    
-    
-    for i in range(batch_size):
-        video = batch[i]["video_array"]
-        if type(video) == np.ndarray:
-            video = th.tensor(video) 
-        padding = th.zeros((max_length - video.shape[0], embedding_size))
-        padded_video = th.cat((video, padding), dim=0)
-        mask = th.zeros(max_length)
-        mask[:video.shape[0]] = 1
-
-        # generate triangular mask
-        triangular_mask = th.zeros((max_length, max_length))
-        for j in range(video.shape[0]):
-            triangular_mask[j, :j+1] = 1
-        
-        padding_zeros = th.zeros(max_length - video.shape[0])
-        progress = th.tensor(batch[i]["progress"])
-        class_label = th.tensor(batch[i]["class_label"])
-
-        text = th.tensor(batch[i]["text_array"])
-
-        progress = th.cat([progress, padding_zeros], dim=0)
-        
-        class_label = class_label.repeat(max_length)
-        
-
-        video_output.append(padded_video)
-        mask_output.append(mask)
-        text_output.append(text)
-        progress_output.append(progress)
-        class_label_output.append(class_label)
-        triangular_mask_output.append(triangular_mask)
-
-    output_dict = {
-        "video_array": th.stack(video_output),
-        "mask": th.stack(mask_output),
-        "text_array": th.stack(text_output),
-        "progress": th.stack(progress_output),
-        "class_label": th.stack(class_label_output),
-        "triangular_mask": th.stack(triangular_mask_output)
-    }
-
-    return output_dict
-
-
-
