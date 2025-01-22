@@ -14,7 +14,7 @@ from clip_utils import (
 )
 from PIL import Image
 
-LOAD_H5_NAME = "/data/shared/roboclip/openx_embeddings_full_uncompressed.h5"  # TODO: grab the right one
+LOAD_H5_NAME = "/data/shared/roboclip/data/h5_buffers/openx_embeddings/openx_embeddings_full_uncompressed_processed.h5" #"/data/shared/roboclip/openx_embeddings_full_uncompressed.h5"  # TODO: grab the right one
 DEBUG = False  # will only make 10 per dataset
 
 model, processor, tokenizer = load_model("liv")
@@ -23,10 +23,11 @@ model = model.cuda()
 
 # make a set to keep track of the tasks we've seen
 total_samples = 0
-with h5py.File(LOAD_H5_NAME, "w") as f:
+with h5py.File(LOAD_H5_NAME, 'a') as f:
     for task in tqdm(f.keys()):
         task_embedding = (
             get_full_liv_embedding(model, tokenizer, [task]).detach().cpu().numpy()
         )
         # create a dataset with the embeddings
-        f[task].create_dataset("lang_embedding_individual", data=task_embedding)
+        if "lang_embedding_individual" not in f[task].keys():
+            f[task].create_dataset("lang_embedding_individual", data=task_embedding)

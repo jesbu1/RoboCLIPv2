@@ -41,7 +41,7 @@ def load_model(model_name = "liv"):
 def get_full_liv_embedding(model, tokenizer, text):
     if type(text) != list:
         text = [text]
-    text_tokens = clip.tokenize(text)
+    text_tokens = clip.tokenize(text).to(model.module.device)
 
     def encode_text(model, text):
         x = model.token_embedding(text).type(
@@ -58,7 +58,10 @@ def get_full_liv_embedding(model, tokenizer, text):
         x = x @ model.text_projection
         return x
 
-    text_embeddings = encode_text(model.model, text_tokens)
+    text_embeddings = encode_text(model.module.model, text_tokens)
+    # truncate it
+    zero_indices = torch.nonzero(text_tokens == 0)
+    text_embeddings = text_embeddings[:, :zero_indices[0][1]]
 
     return text_embeddings
 
