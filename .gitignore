@@ -170,3 +170,6 @@ metaworld
 kitchem_alt
 losses/wandb
 metaworld_runs/wandb
+
+# mac
+.DS_Store

@@ -6,14 +6,21 @@ from oxe_configs import OXE_DATASET_CONFIGS
 import json
 import numpy as np
 import h5py
-from clip_utils import load_model, embedding_text, embedding_image
+from clip_utils import (
+    load_model,
+    embedding_text,
+    embedding_image,
+    get_full_liv_embedding,
+)
 from PIL import Image
 
 TFDS_PATH = "/data/shared/openx_rlds_data"
-SAVE_H5_NAME = "openx_embeddings_full_uncompressed.h5"  # name of the h5 file it'll be saved to
-DEBUG = False # will only make 10 per dataset
-SPECIFIC_TASKS = "austin_sirius_dataset_converted_externally_to_rlds,austin_buds_dataset_converted_externally_to_rlds,ucsd_kitchen_dataset_converted_externally_to_rlds,stanford_hydra_dataset_converted_externally_to_rlds,iamlab_cmu_pickup_insert_converted_externally_to_rlds,cmu_stretch,berkeley_fanuc_manipulation,berkeley_autolab_ur5,bridge,bc_z,fractal20220817_data,jaco_play"#"bridge"
+SAVE_H5_NAME = "openx_embeddings_lang_table.h5"  # name of the h5 file it'll be saved to
+DEBUG = False  # will only make 10 per dataset
+SPECIFIC_TASKS = "language_table,austin_sirius_dataset_converted_externally_to_rlds,austin_buds_dataset_converted_externally_to_rlds,ucsd_kitchen_dataset_converted_externally_to_rlds,stanford_hydra_dataset_converted_externally_to_rlds,iamlab_cmu_pickup_insert_converted_externally_to_rlds,cmu_stretch,berkeley_fanuc_manipulation,berkeley_autolab_ur5,bridge,bc_z,fractal20220817_data,jaco_play"
 MAX_NUM_FRAMES_PER_EPISODE = 128
+TRAIN_SPLIT = "train"  # "test"
+MAX_EPISODES_FOR_LANG_TABLE = 25000
 
 # prevent TFDS from taking up all GPU memory
 os.environ["TF_FORCE_GPU_ALLOW_GROWTH"] = "true"
@@ -29,7 +36,7 @@ model, processor, tokenizer = load_model("liv")
 model = model.cuda()
 
 
-#dataset_names = [x.split()[0] for x in DATASET_TRANSFORMS]
+# dataset_names = [x.split()[0] for x in DATASET_TRANSFORMS]
 # load dataset names from the TFDS path
 dataset_names = os.listdir(TFDS_PATH)
 print(dataset_names)
@@ -43,7 +50,11 @@ tasks_seen = dict()
 total_samples = 0
 with h5py.File(SAVE_H5_NAME, "w") as f:
     for dataset_name in tqdm(dataset_names):
-        dataset = tfds.load(dataset_name, data_dir=TFDS_PATH, split="train")
+        try:
+            dataset = tfds.load(dataset_name, data_dir=TFDS_PATH, split=TRAIN_SPLIT)
+        except ValueError as e:
+            print(f"Failed to load dataset {dataset_name}: \n{e}")
+            continue
         n_samples = 10 if DEBUG else 1000000000000000000
         valid_samples_per_dataset = 0
         img_key_to_name = OXE_DATASET_CONFIGS[dataset_name][
@@ -77,7 +88,13 @@ with h5py.File(SAVE_H5_NAME, "w") as f:
                     # skip data loading if no lang
                     for key in POSSIBLE_LANG_INSTRUCTION_KEYS:
                         if key in step["observation"]:
-                            task = step["observation"][key].numpy().decode()
+                            if dataset_name == "language_table":
+                                task = step["observation"][key].numpy()
+                                task = bytes(task[np.where(task != 0)].tolist()).decode(
+                                    "utf-8"
+                                )
+                            else:
+                                task = step["observation"][key].numpy().decode()
                             break
                         elif key in step:
                             task = step[key].numpy().decode()
@@ -92,7 +109,7 @@ with h5py.File(SAVE_H5_NAME, "w") as f:
                     print(
                         f"Keys in step: {step.keys()} and keys in observation: {step['observation'].keys()}"
                     )
-                    continue 
+                    continue
 
                 # process task name to capitalize the first letter
                 task = task.capitalize()
@@ -109,11 +126,18 @@ with h5py.File(SAVE_H5_NAME, "w") as f:
                     )
                     # create a dataset with the embeddings
                     f[task].create_dataset("lang_embedding", data=task_embedding)
+                    individual_task_embedding = (
+                        get_full_liv_embedding(model, tokenizer, [task])
+                        .detach()
+                        .cpu()
+                        .numpy()
+                    )
+                    # create a dataset with the embeddings
+                    f[task].create_dataset(
+                        "lang_embedding_individual", data=individual_task_embedding
+                    )
                 else:
                     tasks_seen[task] += 1
-                
-
-
 
                 # get the task group
                 task_group = f[task]
@@ -132,28 +156,37 @@ with h5py.File(SAVE_H5_NAME, "w") as f:
 
                 episode_images = [episode_images[i] for i in indices]
 
-
                 # center crop 224x224
                 for ep_img in episode_images:
-                    image_embeddings = embedding_image(
-                        model, processor, Image.fromarray(ep_img.astype(np.uint8))
-                    ).squeeze().detach().cpu().numpy()
+                    image_embeddings = (
+                        embedding_image(
+                            model, processor, Image.fromarray(ep_img.astype(np.uint8))
+                        )
+                        .squeeze()
+                        .detach()
+                        .cpu()
+                        .numpy()
+                    )
                     embedding_list.append(image_embeddings)
                 episode_image_embeddings = np.array(embedding_list)
                 # create a dataset with the embeddings
                 task_group.create_dataset(
                     task_group_len_str,
                     data=episode_image_embeddings,
-                    #compression="gzip",
-                    #compression_opts=9,
+                    # compression="gzip",
+                    # compression_opts=9,
                 )
 
                 valid_samples_per_dataset += 1
                 i += 1
                 total_samples += 1
-                print(
-                    f"Valid total samples: {total_samples} "
-                )
+                print(f"Valid total samples: {total_samples} ")
+                if (
+                    valid_samples_per_dataset > MAX_EPISODES_FOR_LANG_TABLE
+                    and dataset_name == "language_table"
+                ):
+                    # control cause language table has 444k trajs
+                    break
             except StopIteration:
                 break
             except Exception as e:
