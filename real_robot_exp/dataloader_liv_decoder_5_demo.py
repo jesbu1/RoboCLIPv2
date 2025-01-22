@@ -12,7 +12,7 @@ import torch.nn.functional as F
 
 def normalize_embeddings(embeddings, return_tensor=True):
     if isinstance(embeddings, np.ndarray):
-        embeddings = th.tensor(embeddings)
+        embeddings = th.tensor(embeddings).float()
     normalized_embeddings = F.normalize(embeddings, p=2, dim=1)
     if return_tensor:
         return normalized_embeddings
@@ -31,8 +31,8 @@ class LivVideoDecoderDataset5Frames(Dataset):
                 self.keys.remove(key)
 
     def __len__(self):
-        # return len(self.keys) * 500
-        return len(self.keys) * 5
+        return self.args.batch_size * 100
+        # return len(self.keys) * 5
     
     def __getitem__(self, idx):
         real_idx = idx % len(self.keys) # env name

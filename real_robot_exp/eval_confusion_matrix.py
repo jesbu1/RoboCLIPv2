@@ -125,10 +125,15 @@ def plot_confusion_matrix(h5_file, set, self_attention_model, args):
         video_embedding = torch.tensor(video_embedding).to(device).float()
         if args.subsample_video:
             video_embedding = padding_video(video_embedding, args.max_length)
-
-        traj_data = normalize_embeddings(video_embedding)
+        if args.normalize_embedding:
+            traj_data = normalize_embeddings(video_embedding)
+        else:
+            traj_data = video_embedding
         traj_data = traj_data.view(-1, 1024).unsqueeze(0).repeat(text_embeddings.shape[0], 1, 1)
-        triangle_mask = torch.tril(torch.ones(traj_data.shape[1], traj_data.shape[1])).to(device).unsqueeze(0).unsqueeze(0).repeat(traj_data.shape[0], 1, 1, 1)
+        if args.cat_text_front:
+            triangle_mask = torch.tril(torch.ones(traj_data.shape[1] + 1, traj_data.shape[1] + 1)).to(device).unsqueeze(0).unsqueeze(0).repeat(traj_data.shape[0], 1, 1, 1)
+        else:
+            triangle_mask = torch.tril(torch.ones(traj_data.shape[1], traj_data.shape[1])).to(device).unsqueeze(0).unsqueeze(0).repeat(traj_data.shape[0], 1, 1, 1)
         mask = None
         
         pred_class, two_step_class = self_attention_model(traj_data, triangle_mask, text_embeddings, mask)

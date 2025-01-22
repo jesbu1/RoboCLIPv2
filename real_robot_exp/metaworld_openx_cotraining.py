@@ -35,7 +35,7 @@ def main(args):
 
     WANDB_ENTITY_NAME = "clvr"
     WANDB_PROJECT_NAME = "roboclip-v2"
-    experiment_name = "OpenXLIV"
+    experiment_name = "MetaworldOpenXLIV"
 
 
     experiment_name += "_heads_" + str(args.attention_heads)
@@ -67,7 +67,7 @@ def main(args):
     run = wandb.init(
         entity=WANDB_ENTITY_NAME,
         project=WANDB_PROJECT_NAME,
-        group="OpenXVideoMetaworldDebug",
+        group="Jan22ndOpenXVideo",
         config=args,
         name=experiment_name,
     )
@@ -92,6 +92,7 @@ def main(args):
 
 
     elif args.extra_data:
+        h5_file = h5py.File("metaworld_embedding_5_demo_dataset_v2.h5", "r")
         dataset = LivVideoDecoderDataset5Frames(args, h5_file)
         extra_dataloader = DataLoader(dataset, batch_size=args.batch_size, shuffle=True, num_workers=args.worker, drop_last=True)
         batch_size = args.batch_size
@@ -199,8 +200,8 @@ def main(args):
         #     torch.save(save_dict, os.path.join(save_path, f"model_{epoch}.pth"))
 
 
-            # plot_progress_class(h5_eval_file, "train", self_attention_model, args)
-            # plot_progress_class(h5_eval_file, "eval", self_attention_model, args)
+            plot_progress_class(h5_eval_file, "train", self_attention_model, args)
+            plot_progress_class(h5_eval_file, "eval", self_attention_model, args)
 
             plot_confusion_matrix_pca_class(h5_file = h5_eval_file, 
                                     set = "train", 
@@ -234,7 +235,7 @@ def main(args):
 
 if __name__ == "__main__":
     argparser = argparse.ArgumentParser()
-    argparser.add_argument('--h5_embedding_path', type=str, default='/scr/jzhang96/openx_embeddings_full_uncompressed_processed.h5')
+    argparser.add_argument('--h5_embedding_path', type=str, default='/data/shared/roboclip/data/h5_buffers/openx_embeddings/openx_embeddings_full_uncompressed_processed.h5')
     argparser.add_argument('--batch_size', type=int, default=32)
     argparser.add_argument('--epochs', type=int, default=200)
     argparser.add_argument('--seed', type=int, default=42)

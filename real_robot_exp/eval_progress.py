@@ -80,7 +80,10 @@ def plot_progress(h5_file, set, self_attention_model, args):
         if args.subsample_video:
             traj_data = sample_embedding_frames(video_embeddings, args.max_length)
         traj_data = traj_data.view(-1, 1024).unsqueeze(0).repeat(text_embedding.shape[0], 1, 1)
-        triangle_mask = torch.tril(torch.ones(traj_data.shape[1], traj_data.shape[1])).to(device).unsqueeze(0).unsqueeze(0).repeat(traj_data.shape[0], 1, 1, 1)
+        if args.cat_text_front:
+            triangle_mask = torch.tril(torch.ones(traj_data.shape[1] + 1, traj_data.shape[1] + 1)).to(device).unsqueeze(0).unsqueeze(0).repeat(traj_data.shape[0], 1, 1, 1)
+        else:
+            triangle_mask = torch.tril(torch.ones(traj_data.shape[1], traj_data.shape[1])).to(device).unsqueeze(0).unsqueeze(0).repeat(traj_data.shape[0], 1, 1, 1)
         mask = None
 
         pred_class, two_step_class = self_attention_model(traj_data, triangle_mask, text_embedding, mask)
