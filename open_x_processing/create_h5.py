@@ -6,7 +6,7 @@ from oxe_configs import OXE_DATASET_CONFIGS
 import json
 import numpy as np
 import h5py
-from clip_utils import load_model, embedding_text, embedding_image
+from clip_utils import load_model, embedding_text, embedding_image, get_full_liv_embedding
 from PIL import Image
 
 TFDS_PATH = "/data/shared/openx_rlds_data"
@@ -14,7 +14,7 @@ SAVE_H5_NAME = "openx_embeddings_lang_table.h5"  # name of the h5 file it'll be 
 DEBUG = False # will only make 10 per dataset
 SPECIFIC_TASKS = "language_table" #austin_sirius_dataset_converted_externally_to_rlds,austin_buds_dataset_converted_externally_to_rlds,ucsd_kitchen_dataset_converted_externally_to_rlds,stanford_hydra_dataset_converted_externally_to_rlds,iamlab_cmu_pickup_insert_converted_externally_to_rlds,cmu_stretch,berkeley_fanuc_manipulation,berkeley_autolab_ur5,bridge,bc_z,fractal20220817_data,jaco_play"#"bridge"
 MAX_NUM_FRAMES_PER_EPISODE = 128
-MAX_EPISODES_PER_DATASET = 100000
+MAX_EPISODES_FOR_LANG_TABLE=25000 
 
 # prevent TFDS from taking up all GPU memory
 os.environ["TF_FORCE_GPU_ALLOW_GROWTH"] = "true"
@@ -114,6 +114,11 @@ with h5py.File(SAVE_H5_NAME, "w") as f:
                     )
                     # create a dataset with the embeddings
                     f[task].create_dataset("lang_embedding", data=task_embedding)
+                    individual_task_embedding = (
+                        get_full_liv_embedding(model, tokenizer, [task]).detach().cpu().numpy()
+                    )
+                    # create a dataset with the embeddings
+                    f[task].create_dataset("lang_embedding_individual", data=individual_task_embedding)
                 else:
                     tasks_seen[task] += 1
                 
@@ -159,7 +164,7 @@ with h5py.File(SAVE_H5_NAME, "w") as f:
                 print(
                     f"Valid total samples: {total_samples} "
                 )
-                if valid_samples_per_dataset > MAX_EPISODES_PER_DATASET:
+                if valid_samples_per_dataset > MAX_EPISODES_FOR_LANG_TABLE and dataset_name == "language_table":
                     # control cause language table has 444k trajs
                     break
             except StopIteration:
