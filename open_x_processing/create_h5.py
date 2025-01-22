@@ -14,6 +14,7 @@ SAVE_H5_NAME = "openx_embeddings_lang_table.h5"  # name of the h5 file it'll be 
 DEBUG = False # will only make 10 per dataset
 SPECIFIC_TASKS = "language_table" #austin_sirius_dataset_converted_externally_to_rlds,austin_buds_dataset_converted_externally_to_rlds,ucsd_kitchen_dataset_converted_externally_to_rlds,stanford_hydra_dataset_converted_externally_to_rlds,iamlab_cmu_pickup_insert_converted_externally_to_rlds,cmu_stretch,berkeley_fanuc_manipulation,berkeley_autolab_ur5,bridge,bc_z,fractal20220817_data,jaco_play"#"bridge"
 MAX_NUM_FRAMES_PER_EPISODE = 128
+MAX_EPISODES_PER_DATASET = 100000
 
 # prevent TFDS from taking up all GPU memory
 os.environ["TF_FORCE_GPU_ALLOW_GROWTH"] = "true"
@@ -158,6 +159,9 @@ with h5py.File(SAVE_H5_NAME, "w") as f:
                 print(
                     f"Valid total samples: {total_samples} "
                 )
+                if valid_samples_per_dataset > MAX_EPISODES_PER_DATASET:
+                    # control cause language table has 444k trajs
+                    break
             except StopIteration:
                 break
             except Exception as e:
