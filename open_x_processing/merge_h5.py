@@ -26,7 +26,9 @@ model = model.cuda()
 total_samples = 0
 with h5py.File(MAIN_H5, "a") as f:
     num_keys_before = len(f.keys())
-    num_trajs_before = sum([len(f[task].keys()) for task in f.keys()])
+    num_trajs_before = sum(
+        [len([key for key in f[task].keys() if key.isnumeric()]) for task in f.keys()]
+    )
     with h5py.File(H5_MERGING_FROM, "r") as f2:
         for task in tqdm(f2.keys()):
             if task in f.keys():
@@ -51,7 +53,9 @@ with h5py.File(MAIN_H5, "a") as f:
                         data=f2[task][key],
                     )
     num_keys_after = len(f.keys())
-    num_trajs_after = sum([len(f[task].keys()) for task in f.keys()])
+    num_trajs_after = sum(
+        [len([key for key in f[task].keys() if key.isnumeric()]) for task in f.keys()]
+    )
     print(f"Added {num_keys_after - num_keys_before} extra tasks")
     print(
         f"Added {num_trajs_after - num_trajs_before} extra trajectories (includes datasets not corresponding to trajs)"
