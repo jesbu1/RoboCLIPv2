@@ -10,9 +10,9 @@ from clip_utils import load_model, embedding_text, embedding_image
 from PIL import Image
 
 TFDS_PATH = "/data/shared/openx_rlds_data"
-SAVE_H5_NAME = "openx_embeddings_full_uncompressed.h5"  # name of the h5 file it'll be saved to
+SAVE_H5_NAME = "openx_embeddings_lang_table.h5"  # name of the h5 file it'll be saved to
 DEBUG = False # will only make 10 per dataset
-SPECIFIC_TASKS = "austin_sirius_dataset_converted_externally_to_rlds,austin_buds_dataset_converted_externally_to_rlds,ucsd_kitchen_dataset_converted_externally_to_rlds,stanford_hydra_dataset_converted_externally_to_rlds,iamlab_cmu_pickup_insert_converted_externally_to_rlds,cmu_stretch,berkeley_fanuc_manipulation,berkeley_autolab_ur5,bridge,bc_z,fractal20220817_data,jaco_play"#"bridge"
+SPECIFIC_TASKS = "language_table" #austin_sirius_dataset_converted_externally_to_rlds,austin_buds_dataset_converted_externally_to_rlds,ucsd_kitchen_dataset_converted_externally_to_rlds,stanford_hydra_dataset_converted_externally_to_rlds,iamlab_cmu_pickup_insert_converted_externally_to_rlds,cmu_stretch,berkeley_fanuc_manipulation,berkeley_autolab_ur5,bridge,bc_z,fractal20220817_data,jaco_play"#"bridge"
 MAX_NUM_FRAMES_PER_EPISODE = 128
 
 # prevent TFDS from taking up all GPU memory
@@ -77,7 +77,11 @@ with h5py.File(SAVE_H5_NAME, "w") as f:
                     # skip data loading if no lang
                     for key in POSSIBLE_LANG_INSTRUCTION_KEYS:
                         if key in step["observation"]:
-                            task = step["observation"][key].numpy().decode()
+                            if dataset_name == "language_table":
+                                task = step["observation"][key].numpy()
+                                task = bytes(task[np.where(task != 0)].tolist()).decode("utf-8")
+                            else: 
+                                task = step["observation"][key].numpy().decode()
                             break
                         elif key in step:
                             task = step[key].numpy().decode()
