@@ -66,8 +66,10 @@ def main(args):
         experiment_name += "_CatTextFront"
     if args.learner_parameter:
         experiment_name += "_LearnerPara"
+    
     experiment_name += "_DecoderNum_" + str(args.decoder_num)
     experiment_name += "_epochs_" + str(args.epochs)
+    experiment_name += "_lr_" + str(args.lr)
     # experiment_name += "_1_demo"
     
     
@@ -91,8 +93,8 @@ def main(args):
     if args.openx_data and args.extra_data:
         openx_dataset = LivRealVideoDataset(args, args.h5_embedding_path, split = False)
         extra_dataset = LivRealVideoDataset(args, "jesse_collect_dataset_new.h5", split = True)
-        openx_dataloader = DataLoader(openx_dataset, batch_size=args.batch_size * 5, shuffle=True, num_workers=args.worker * 2, drop_last=True)
-        extra_dataloader = DataLoader(extra_dataset, batch_size=args.batch_size, shuffle=True, num_workers=args.worker, drop_last=True)
+        openx_dataloader = DataLoader(openx_dataset, batch_size=args.batch_size * 5, shuffle=True, num_workers=args.worker * 2, drop_last=True, pin_memory=True)
+        extra_dataloader = DataLoader(extra_dataset, batch_size=args.batch_size, shuffle=True, num_workers=args.worker, drop_last=True, pin_memory=True)
         batch_size = args.batch_size + args.batch_size * 5
 
         positive_eval_dataset = LivRealVideoEvalDataset(args, 
@@ -102,8 +104,8 @@ def main(args):
                                                         "/data/shared/roboclip/data/h5_buffers/openx_embeddings/openx_embeddings_test_dataset_progrssed.h5",
                                                         label = "negative")
         
-        positive_eval_dataloader = DataLoader(positive_eval_dataset, batch_size=args.batch_size, shuffle=True, num_workers=0, drop_last=False)
-        negative_eval_dataloader = DataLoader(negative_eval_dataset, batch_size=args.batch_size, shuffle=True, num_workers=0, drop_last=False)
+        positive_eval_dataloader = DataLoader(positive_eval_dataset, batch_size=args.batch_size, shuffle=True, num_workers=0, drop_last=False, pin_memory=True)
+        negative_eval_dataloader = DataLoader(negative_eval_dataset, batch_size=args.batch_size, shuffle=True, num_workers=0, drop_last=False, pin_memory=True)
         
 
 
@@ -339,7 +341,7 @@ def main(args):
 
 if __name__ == "__main__":
     argparser = argparse.ArgumentParser()
-    argparser.add_argument('--h5_embedding_path', type=str, default='/data/shared/roboclip/data/h5_buffers/openx_embeddings/openx_embeddings_full_uncompressed_with_langtable_processed.h5')
+    argparser.add_argument('--h5_embedding_path', type=str, default='/data/shared/roboclip/data/h5_buffers/openx_embeddings/openx_embeddings_full_uncompressed_with_langtable35k_processed.h5')
     argparser.add_argument('--batch_size', type=int, default=32)
     argparser.add_argument('--epochs', type=int, default=200)
     argparser.add_argument('--seed', type=int, default=42)

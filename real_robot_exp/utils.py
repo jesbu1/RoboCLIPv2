@@ -58,6 +58,20 @@ def update_model(args, video_array, text_array, batch_triangular_mask, self_atte
                 openx_class_accuracy = torch.sum(openx_class_predict_label == openx_class_label).item() / len(openx_class_predict_label)
                 extra_class_accuracy = torch.sum(extra_class_predict_label == extra_class_label).item() / len(extra_class_predict_label)
 
+                openx_class_none_zero = openx_class_label != 0
+                openx_class_zero = openx_class_label == 0
+
+                extra_class_none_zero = extra_class_label != 0
+                extra_class_zero = extra_class_label == 0
+
+                openx_class_none_zero_accuracy = torch.sum(openx_class_predict_label[openx_class_none_zero] == openx_class_label[openx_class_none_zero]).item() / len(openx_class_predict_label[openx_class_none_zero])
+                openx_class_zero_accuracy = torch.sum(openx_class_predict_label[openx_class_zero] == openx_class_label[openx_class_zero]).item() / len(openx_class_predict_label[openx_class_zero])
+
+                extra_class_none_zero_accuracy = torch.sum(extra_class_predict_label[extra_class_none_zero] == extra_class_label[extra_class_none_zero]).item() / len(extra_class_predict_label[extra_class_none_zero])
+                extra_class_zero_accuracy = torch.sum(extra_class_predict_label[extra_class_zero] == extra_class_label[extra_class_zero]).item() / len(extra_class_predict_label[extra_class_zero])
+
+
+
                 wandb_log = {
                     "total_loss": loss.item(),
                     "class_loss": class_loss.item(),
@@ -67,7 +81,11 @@ def update_model(args, video_array, text_array, batch_triangular_mask, self_atte
                     "openx_class_accuracy": openx_class_accuracy,
                     "extra_class_accuracy": extra_class_accuracy,
                     "openx_progress_loss": openx_progress_loss.item(),
-                    "extra_progress_loss": extra_progress_loss.item()
+                    "extra_progress_loss": extra_progress_loss.item(),
+                    "train_accuracy/openx_true_data_accuracy": openx_class_none_zero_accuracy,
+                    "train_accuracy/openx_wrong_data_accuracy": openx_class_zero_accuracy,
+                    "train_accuracy/extra_true_data_accuracy": extra_class_none_zero_accuracy,
+                    "train_accuracy/extra_wrong_data_accuracy": extra_class_zero_accuracy
                 }
 
                 if args.catagorical_progress:

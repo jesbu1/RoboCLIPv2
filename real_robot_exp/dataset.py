@@ -62,18 +62,19 @@ class LivRealVideoDataset(Dataset):
         if self.args.sample_neg:
             if self.args.reverse_video:
                 random_num = random.random()
-                if random_num < 0.3:
+                if random_num < 0.5:
                     video_array, progress, class_label = self.sample_negative_video_feature(key)
-                elif random_num > 0.65:
+                elif random_num > 0.75:
                     video_array, progress, class_label = self.sample_reverse_video_feature(data_group)
                 else:
                     video_array, progress, class_label = self.sample_video_feature(data_group)
             else:
-                random_num = random.random()
-                if random_num < 0.35:
-                    video_array, progress, class_label = self.sample_negative_video_feature(key)
-                else:
-                    video_array, progress, class_label = self.sample_video_feature(data_group)
+                assert "not support now"
+                # random_num = random.random()
+                # if random_num < 0.35:
+                #     video_array, progress, class_label = self.sample_negative_video_feature(key)
+                # else:
+                #     video_array, progress, class_label = self.sample_video_feature(data_group)
         else:
             video_array, progress, class_label = self.sample_video_feature(data_group)
 

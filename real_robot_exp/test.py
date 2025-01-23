@@ -2,7 +2,7 @@ import h5py
 from tqdm import tqdm
 dataset_info = dict()
 key_list = ["lang_embedding", "lang_embedding_individual"]
-file_path = "/data/shared/roboclip/data/h5_buffers/openx_embeddings/openx_embeddings_full_uncompressed_with_langtable_processed.h5"
+file_path = "/data/shared/roboclip/data/h5_buffers/openx_embeddings/openx_embeddings_full_uncompressed_with_langtable35k_processed.h5"
 h5_file = h5py.File(file_path, 'a')
 key_num = len(h5_file.keys())
 dataset_info["key_num"] = key_num
