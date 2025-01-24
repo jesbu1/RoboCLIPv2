@@ -159,6 +159,8 @@ def update_model(args, video_array, text_array, batch_triangular_mask, self_atte
 
         optimizer.zero_grad()
         loss.backward()
+        if args.clip_grad:
+            torch.nn.utils.clip_grad_norm_(self_attention_model.parameters(), max_norm=1.0)
         optimizer.step()
         if scheduler is not None:
             scheduler.step()

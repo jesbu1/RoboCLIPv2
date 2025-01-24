@@ -72,6 +72,8 @@ def main(args):
         experiment_name += "_LearnerPara"
     if args.cosine_scheduler:
         experiment_name += "_CosScheduler"
+    if args.clip_grad:
+        experiment_name += "_ClipGrad"
     
     experiment_name += "_DecoderNum_" + str(args.decoder_num)
     experiment_name += "_epochs_" + str(args.epochs)
@@ -385,6 +387,7 @@ if __name__ == "__main__":
     argparser.add_argument('--cat_text_front', action='store_true')
     argparser.add_argument('--learner_parameter', action='store_true')
     argparser.add_argument('--cosine_scheduler', action='store_true')
+    argparser.add_argument('--clip_grad', action='store_true')
     args = argparser.parse_args()
     main(args)
 
