@@ -4,55 +4,55 @@ import math
 import torch.nn.functional as F
 
 
-class TwoLayerMLP(torch.nn.Module):
-    def __init__(self, input_dim):
-        super(TwoLayerMLP, self).__init__()
-        self.linear1 = torch.nn.Linear(input_dim, input_dim // 2)
-        self.linear2 = torch.nn.Linear(input_dim // 2, 1)
-
-    def forward(self, x):
-        x = F.relu(self.linear1(x))
-        x = self.linear2(x)
-        # x = F.tanh(x)
-        x = torch.sigmoid(x)
-        return x
-
-class TwoLayerMLPClass(torch.nn.Module):
-    def __init__(self, input_dim, num_classes):
-        super(TwoLayerMLPClass, self).__init__()
-        self.linear1 = torch.nn.Linear(input_dim, input_dim // 2)
-        self.linear2 = torch.nn.Linear(input_dim // 2, num_classes)
-
-    def forward(self, x):
-        x = F.relu(self.linear1(x))
-        x = self.linear2(x)
-        return x
-
 # class TwoLayerMLP(torch.nn.Module):
 #     def __init__(self, input_dim):
 #         super(TwoLayerMLP, self).__init__()
-#         self.linear1 = torch.nn.Linear(input_dim, 1)
-#         # self.linear2 = torch.nn.Linear(input_dim // 2, 1)
+#         self.linear1 = torch.nn.Linear(input_dim, input_dim // 2)
+#         self.linear2 = torch.nn.Linear(input_dim // 2, 1)
 
 #     def forward(self, x):
-#         # x = F.relu(self.linear1(x))
-#         # x = self.linear2(x)
+#         x = F.relu(self.linear1(x))
+#         x = self.linear2(x)
 #         # x = F.tanh(x)
-#         x = self.linear1(x)
-#         x = F.sigmoid(x)
-#         x = torch.clamp(x, 0, 1)
+#         x = torch.sigmoid(x)
 #         return x
 
 # class TwoLayerMLPClass(torch.nn.Module):
 #     def __init__(self, input_dim, num_classes):
 #         super(TwoLayerMLPClass, self).__init__()
-#         self.linear1 = torch.nn.Linear(input_dim, num_classes)
-#         # self.linear2 = torch.nn.Linear(input_dim // 2, num_classes)
+#         self.linear1 = torch.nn.Linear(input_dim, input_dim // 2)
+#         self.linear2 = torch.nn.Linear(input_dim // 2, num_classes)
 
 #     def forward(self, x):
-#         # x = F.relu(self.linear1(x))
-#         x = self.linear1(x)
+#         x = F.relu(self.linear1(x))
+#         x = self.linear2(x)
 #         return x
+
+class TwoLayerMLP(torch.nn.Module):
+    def __init__(self, input_dim):
+        super(TwoLayerMLP, self).__init__()
+        self.linear1 = torch.nn.Linear(input_dim, 1)
+        # self.linear2 = torch.nn.Linear(input_dim // 2, 1)
+
+    def forward(self, x):
+        # x = F.relu(self.linear1(x))
+        # x = self.linear2(x)
+        # x = F.tanh(x)
+        x = self.linear1(x)
+        x = F.sigmoid(x)
+        x = torch.clamp(x, 0, 1)
+        return x
+
+class TwoLayerMLPClass(torch.nn.Module):
+    def __init__(self, input_dim, num_classes):
+        super(TwoLayerMLPClass, self).__init__()
+        self.linear1 = torch.nn.Linear(input_dim, num_classes)
+        # self.linear2 = torch.nn.Linear(input_dim // 2, num_classes)
+
+    def forward(self, x):
+        # x = F.relu(self.linear1(x))
+        x = self.linear1(x)
+        return x
 
 
 class DecoderOnlyBlock(nn.Module):
