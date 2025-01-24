@@ -16,10 +16,14 @@ from models import RewardPredictor, RewardTwoStepPredictor, RewardTwoStepNewPosi
 from eval_confusion_matrix import plot_confusion_matrix
 from eval_progress import plot_progress
 from eval_raw_video_progress import real_video_plot
-from utils import update_model
+from utils import update_model, CosineWithMinLRScheduler
+from torch.optim import Optimizer
 
 
 os.environ["TOKENIZERS_PARALLELISM"] = "False"
+
+
+
 
 
 
@@ -34,7 +38,7 @@ def main(args):
 
     WANDB_ENTITY_NAME = "clvr"
     WANDB_PROJECT_NAME = "roboclip-v2"
-    experiment_name = "OpenXLIVLangTableOneLinear"
+    experiment_name = "OpenXLIVLangTableOneLinearCosine"
 
 
     experiment_name += "_heads_" + str(args.attention_heads)
@@ -66,6 +70,10 @@ def main(args):
         experiment_name += "_CatTextFront"
     if args.learner_parameter:
         experiment_name += "_LearnerPara"
+    if args.cosine_scheduler:
+        experiment_name += "_CosScheduler"
+    if args.clip_grad:
+        experiment_name += "_ClipGrad"
     
     experiment_name += "_DecoderNum_" + str(args.decoder_num)
     experiment_name += "_epochs_" + str(args.epochs)
@@ -93,19 +101,26 @@ def main(args):
     if args.openx_data and args.extra_data:
         openx_dataset = LivRealVideoDataset(args, args.h5_embedding_path, split = False)
         extra_dataset = LivRealVideoDataset(args, "jesse_collect_dataset_new.h5", split = True)
-        openx_dataloader = DataLoader(openx_dataset, batch_size=args.batch_size * 5, shuffle=True, num_workers=args.worker * 2, drop_last=True, pin_memory=True)
+        openx_dataloader = DataLoader(openx_dataset, batch_size=args.batch_size * 5, shuffle=True, num_workers=int(args.worker * 1.9), drop_last=True, pin_memory=True)
         extra_dataloader = DataLoader(extra_dataset, batch_size=args.batch_size, shuffle=True, num_workers=args.worker, drop_last=True, pin_memory=True)
         batch_size = args.batch_size + args.batch_size * 5
 
+        # positive_eval_dataset = LivRealVideoEvalDataset(args, 
+        #                                                 "/data/shared/roboclip/data/h5_buffers/openx_embeddings/openx_embeddings_test_dataset_progrssed.h5",
+        #                                                 label = "positive")
+        # negative_eval_dataset = LivRealVideoEvalDataset(args,
+        #                                                 "/data/shared/roboclip/data/h5_buffers/openx_embeddings/openx_embeddings_test_dataset_progrssed.h5",
+        #                                                 label = "negative")
+        
         positive_eval_dataset = LivRealVideoEvalDataset(args, 
-                                                        "/data/shared/roboclip/data/h5_buffers/openx_embeddings/openx_embeddings_test_dataset_progrssed.h5",
+                                                        "/mnt/ssd_a_4tb/jzhang96/openx_embeddings_test_dataset_progrssed.h5",
                                                         label = "positive")
         negative_eval_dataset = LivRealVideoEvalDataset(args,
-                                                        "/data/shared/roboclip/data/h5_buffers/openx_embeddings/openx_embeddings_test_dataset_progrssed.h5",
+                                                        "/mnt/ssd_a_4tb/jzhang96/openx_embeddings_test_dataset_progrssed.h5",
                                                         label = "negative")
         
-        positive_eval_dataloader = DataLoader(positive_eval_dataset, batch_size=args.batch_size, shuffle=True, num_workers=0, drop_last=False, pin_memory=True)
-        negative_eval_dataloader = DataLoader(negative_eval_dataset, batch_size=args.batch_size, shuffle=True, num_workers=0, drop_last=False, pin_memory=True)
+        positive_eval_dataloader = DataLoader(positive_eval_dataset, batch_size=args.batch_size, shuffle=True, num_workers=2, drop_last=False, pin_memory=True)
+        negative_eval_dataloader = DataLoader(negative_eval_dataset, batch_size=args.batch_size, shuffle=True, num_workers=2, drop_last=False, pin_memory=True)
         
 
 
@@ -152,7 +167,13 @@ def main(args):
         self_attention_model = RewardPredictor(embedding_dim, args = args, class_num=num_bins).to(device)
 
     print(self_attention_model)
-    optimizer = torch.optim.Adam(self_attention_model.parameters(), lr=args.lr)
+    if args.cosine_scheduler:
+        optimizer = torch.optim.Adam([torch.tensor(1.0, requires_grad=True)], lr=args.lr)
+        scheduler = CosineWithMinLRScheduler(optimizer, max_steps=120000, max_lr=args.lr, min_lr=1e-6)
+    else:
+        optimizer = torch.optim.Adam(self_attention_model.parameters(), lr=args.lr)
+        scheduler = None
+
     if args.cat_text_front:
         triangular_mask = torch.tril(torch.ones(args.max_length + 1, args.max_length + 1)).to(device).unsqueeze(0).unsqueeze(0)
     else:
@@ -179,7 +200,7 @@ def main(args):
                 class_label = torch.cat([openx_data["class_label"], extra_data["class_label"]], dim = 0).to(device)
 
                 wandb_log, self_attention_model = update_model(args, video_array, text_array, batch_triangular_mask, self_attention_model, progress, class_label,
-                classification_loss_function, progress_loss_function, optimizer, openx_len = openx_len, extra_len = extra_len)
+                classification_loss_function, progress_loss_function, optimizer, openx_len = openx_len, extra_len = extra_len, scheduler = scheduler)
                 wandb.log(wandb_log)
             
         elif args.openx_data:
@@ -365,6 +386,8 @@ if __name__ == "__main__":
     argparser.add_argument('--first_frame_embedding', action='store_true')
     argparser.add_argument('--cat_text_front', action='store_true')
     argparser.add_argument('--learner_parameter', action='store_true')
+    argparser.add_argument('--cosine_scheduler', action='store_true')
+    argparser.add_argument('--clip_grad', action='store_true')
     args = argparser.parse_args()
     main(args)
 

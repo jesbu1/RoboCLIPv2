@@ -2,10 +2,29 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import numpy as np
+from torch.optim import Optimizer
+import math
+class CosineWithMinLRScheduler(torch.optim.lr_scheduler._LRScheduler):
+    def __init__(self, optimizer: Optimizer, max_steps: int, max_lr: float, min_lr: float, last_epoch: int = -1):
+        self.max_steps = max_steps
+        self.max_lr = max_lr
+        self.min_lr = min_lr
+        super().__init__(optimizer, last_epoch)
+
+    def get_lr(self):
+        if self.last_epoch <= self.max_steps:
+            # Cosine decay for the first max_steps
+            cos_decay = 0.5 * (1 + math.cos(math.pi * self.last_epoch / self.max_steps))
+            return [self.min_lr + (self.max_lr - self.min_lr) * cos_decay for _ in self.base_lrs]
+        else:
+            # Keep the minimum learning rate
+            return [self.min_lr for _ in self.base_lrs]
+
+
 
 
 def update_model(args, video_array, text_array, batch_triangular_mask, self_attention_model, progress, class_label, 
-                classification_loss_function, progress_loss_function, optimizer, openx_len = None, extra_len = None):
+                classification_loss_function, progress_loss_function, optimizer, openx_len = None, extra_len = None, scheduler = None):
     # import pdb; pdb.set_trace()
     progress_output, class_output = self_attention_model(video_array, batch_triangular_mask, text_array, mask = None)
 
@@ -141,7 +160,11 @@ def update_model(args, video_array, text_array, batch_triangular_mask, self_atte
 
         optimizer.zero_grad()
         loss.backward()
+        if args.clip_grad:
+            torch.nn.utils.clip_grad_norm_(self_attention_model.parameters(), max_norm=1.0)
         optimizer.step()
-
+        if scheduler is not None:
+            scheduler.step()
+        wandb_log["lr"] = optimizer.param_groups[0]["lr"]
         return wandb_log, self_attention_model
 
