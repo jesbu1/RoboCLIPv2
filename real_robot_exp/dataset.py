@@ -79,11 +79,6 @@ class LivRealVideoDataset(Dataset):
             video_array, progress, class_label = self.sample_video_feature(data_group)
 
 
-
-
-
-
-
         output_dict = {
             "text_array": text_array,
             "video_array": video_array,
@@ -358,3 +353,59 @@ class LivRealVideoEvalDataset(Dataset):
 
         return video_frames
 
+
+class LivRealVideoTextTokenDataset(LivRealVideoDataset):
+
+    def __getitem__(self, idx):
+        # select a random key
+        key_id = random.randint(0, len(self.keys)-1)
+        key = self.keys[key_id]
+        data_group = self.h5_file[key]
+
+        # sample text sample
+        text_array, seq_len = self.sample_text_feature(data_group) # 1,n, 1024
+
+        if self.args.sample_neg:
+            if self.args.reverse_video:
+                random_num = random.random()
+                if random_num < 0.5:
+                    video_array, progress, class_label = self.sample_negative_video_feature(key)
+                elif random_num > 0.75:
+                    video_array, progress, class_label = self.sample_reverse_video_feature(data_group)
+                else:
+                    video_array, progress, class_label = self.sample_video_feature(data_group)
+            else:
+                assert "not support now"
+                # random_num = random.random()
+                # if random_num < 0.35:
+                #     video_array, progress, class_label = self.sample_negative_video_feature(key)
+                # else:
+                #     video_array, progress, class_label = self.sample_video_feature(data_group)
+        else:
+            video_array, progress, class_label = self.sample_video_feature(data_group)
+
+        lang_video_feature = np.concatenate([text_array, video_array], axis=1)
+
+
+        output_dict = {
+            "lang_video_feature": lang_video_feature,
+            "lang_seq_len": seq_len,
+            "progress": progress,
+            "class_label": class_label
+        }
+        return  output_dict
+
+    def sample_text_feature(self, data_group):
+        lang_embedding = np.array(data_group["lang_embedding_individual"]) # 1,n, 1024
+        # if lang_embedding.shape[0] == 1024:
+        #     lang_embedding = np.expand_dims(lang_embedding, axis=0)
+        batch_size, seq_len, _ = lang_embedding.shape
+        if self.args.normalize_embedding:
+            
+            lang_embedding = lang_embedding.view(1, -1, 1024)
+            lang_embedding = normalize_embeddings(lang_embedding, return_tensor=True)
+            lang_embedding = lang_embedding.view(batch_size, seq_len, -1)
+
+        return lang_embedding, seq_len
+
+    

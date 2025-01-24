@@ -34,7 +34,7 @@ def main(args):
 
     WANDB_ENTITY_NAME = "clvr"
     WANDB_PROJECT_NAME = "roboclip-v2"
-    experiment_name = "OpenXLIVLangTable"
+    experiment_name = "OpenXLIVLangTableOneLinear"
 
 
     experiment_name += "_heads_" + str(args.attention_heads)
@@ -76,7 +76,7 @@ def main(args):
     run = wandb.init(
         entity=WANDB_ENTITY_NAME,
         project=WANDB_PROJECT_NAME,
-        group="Jan23ndOpenXVideo",
+        group="Jan24ndOpenXVideo",
         config=args,
         name=experiment_name,
     )
