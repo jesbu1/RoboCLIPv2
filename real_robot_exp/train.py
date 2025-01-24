@@ -338,10 +338,10 @@ def main(args):
 
 
 
-
 if __name__ == "__main__":
     argparser = argparse.ArgumentParser()
-    argparser.add_argument('--h5_embedding_path', type=str, default='/data/shared/roboclip/data/h5_buffers/openx_embeddings/openx_embeddings_full_uncompressed_with_langtable35k_processed.h5')
+    # argparser.add_argument('--h5_embedding_path', type=str, default='/data/shared/roboclip/data/h5_buffers/openx_embeddings/openx_embeddings_full_uncompressed_with_langtable35k_processed.h5')
+    argparser.add_argument('--h5_embedding_path', type=str, default='/mnt/ssd_a_4tb/jzhang96/openx_embeddings_full_uncompressed_with_langtable35k_processed.h5')
     argparser.add_argument('--batch_size', type=int, default=32)
     argparser.add_argument('--epochs', type=int, default=200)
     argparser.add_argument('--seed', type=int, default=42)
