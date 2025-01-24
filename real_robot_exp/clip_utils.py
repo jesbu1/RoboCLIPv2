@@ -7,7 +7,7 @@ from liv import load_liv
 import matplotlib.pyplot as plt
 import torch.nn.functional as F
 import torchvision.transforms as T
-from transformers import CLIPProcessor, CLIPModel, AutoTokenizer, AutoProcessor
+# from transformers import CLIPProcessor, CLIPModel, AutoTokenizer, AutoProcessor
 from tqdm import tqdm
 from sklearn.decomposition import PCA
 import json
@@ -37,6 +37,40 @@ def load_model(model_name = "liv"):
     else:
         raise ValueError(f"Model {model_name} not supported")
     return model, processor, tokenizer
+
+
+
+def get_full_liv_embedding(model, tokenizer, text):
+    if type(text) != list:
+        text = [text]
+    text_tokens = clip.tokenize(text).to(model.module.device)
+
+    def encode_text(model, text):
+        x = model.token_embedding(text).type(
+            model.dtype
+        )  # [batch_size, n_ctx, d_model]
+        x = x + model.positional_embedding.type(model.dtype)
+        x = x.permute(1, 0, 2)  # NLD -> LND
+        x = model.transformer(x)
+        x = x.permute(1, 0, 2)  # LND -> NLD
+        x = model.ln_final(x).type(model.dtype)
+
+        # x.shape = [batch_size, n_ctx, transformer.width]
+        # take features from the eot embedding (eot_token is the highest number in each sequence)
+        x = x @ model.text_projection
+        return x
+
+    text_embeddings = encode_text(model.module.model, text_tokens)
+    # truncate it
+    zero_indices = torch.nonzero(text_tokens == 0)
+    text_embeddings = text_embeddings[:, :zero_indices[0][1]]
+
+    return text_embeddings
+
+
+
+
+
 
 def embedding_text(model, tokenizer, text):
     if type(text) != list:

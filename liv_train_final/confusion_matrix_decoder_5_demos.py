@@ -140,6 +140,8 @@ def plot_confusion_matrix_pca_class(h5_file, set, self_attention_model, args):
 
     img = plot_matrix_as_image(predicted_progress_row, eval_envs, set, text)
     
+
+    
 def plot_confusion_matrix_pca_class_pdf(h5_file, model_name, set, self_attention_model, args):
     device = next(self_attention_model.parameters()).device
     model, processor, tokenizer = load_model(model_name)

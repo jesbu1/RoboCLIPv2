@@ -86,6 +86,7 @@ def update_model(args, video_array, text_array, batch_triangular_mask, self_atte
                     "train_accuracy/openx_wrong_data_accuracy": openx_class_zero_accuracy,
                     "train_accuracy/extra_true_data_accuracy": extra_class_none_zero_accuracy,
                     "train_accuracy/extra_wrong_data_accuracy": extra_class_zero_accuracy
+                    
                 }
 
                 if args.catagorical_progress:

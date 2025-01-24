@@ -162,5 +162,78 @@ def plot_confusion_matrix(h5_file, set, self_attention_model, args):
     img = plot_matrix_as_image(predicted_progress_row, eval_envs, set, text_list)
     
 
+def plot_confusion_matrix_token(h5_file, set, self_attention_model, args):
+    device = next(self_attention_model.parameters()).device
+
+    keys = list(h5_file.keys())
+    if set == "train":
+        eval_envs = keys[:int(len(keys)*0.5)]
+    elif set == "eval":
+        eval_envs = keys[int(len(keys)*0.5):]
+    else:
+        eval_envs = keys
+
+    text_embeddings = []
+    text_list = []
+    text_seq_list = []
+    for key in eval_envs:
+        
+        text_embedding = np.asarray(h5_file[key]["lang_embedding_individual"])
+        text_embedding = torch.tensor(text_embedding).to(device).float()
+        bs, seq_len, _ = text_embedding.size()
+        if args.normalize_embedding:
+            text_embedding = text_embedding.view(-1, 1024)
+            text_embedding = normalize_embeddings(text_embedding)
+            text_embedding = text_embedding.view(bs, seq_len, 1024)
+        text_embeddings.append(text_embedding)
+        text_list.append(key)
+        text_seq_list.append(seq_len)
+    # text_embeddings = torch.tensor(text_embeddings).to(device).float()
     
+
+    predicted_progress_row = []
+    for i  in tqdm(range(len(eval_envs))):
+        env = eval_envs[i]
+        video_embedding = np.asarray(h5_file[env]["1"])
+        
+        video_embedding = torch.tensor(video_embedding).to(device).float()
+        if args.subsample_video:
+            video_embedding = padding_video(video_embedding, args.max_length)
+        if args.normalize_embedding:
+            traj_data = normalize_embeddings(video_embedding)
+        else:
+            traj_data = video_embedding
+        traj_data = traj_data.unsqueeze(0)
+        
+        text_progress_row = []
+        for j in range(len(text_embeddings)):
+            input_feature = torch.cat([text_embeddings[j], traj_data], dim=1)
+            text_len = text_seq_list[j]
+            feature_len = input_feature.size(1)
+
+            triangle_mask = torch.tril(torch.ones(feature_len, feature_len)).to(device).unsqueeze(0).unsqueeze(0).repeat(1, 1, 1, 1)
+            video_mask = torch.ones(1, feature_len).to(device)
+            video_mask[:, :text_len] = 0
+            progress_output, two_step_class = self_attention_model(input_feature, triangle_mask, text_len, mask = video_mask)
+            pred_class = progress_output.view(-1)
+            if args.two_step_training:
+                two_step_class = two_step_class.view(-1, 2)
+                two_class_label = torch.argmax(two_step_class, dim=1).squeeze()
+                pred_class = pred_class * two_class_label
+            
+            batch_size, seq_len, _ = traj_data.size()
+            if args.catagorical_progress:
+                pred_class = torch.argmax(pred_class, dim = 1)
+            else:
+                pred_class = pred_class.squeeze()
+            text_progress_row.append(pred_class[-1])
+        text_progress_row = torch.stack(text_progress_row).detach().cpu().numpy()
+
+        predicted_progress_row.append(text_progress_row)
+
+    predicted_progress_row = np.array(predicted_progress_row)
+
+    img = plot_matrix_as_image(predicted_progress_row, eval_envs, set, text_list)
+    
+
     
