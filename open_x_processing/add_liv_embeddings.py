@@ -14,7 +14,7 @@ from clip_utils import (
 )
 from PIL import Image
 
-LOAD_H5_NAME = "/data/shared/roboclip/data/h5_buffers/openx_embeddings/openx_embeddings_full_uncompressed_processed.h5" #"/data/shared/roboclip/openx_embeddings_full_uncompressed.h5"  # TODO: grab the right one
+LOAD_H5_NAME = "/data/shared/roboclip/data/h5_buffers/openx_embeddings/openx_embeddings_full_uncompressed_with_langtable35k.h5" #"/data/shared/roboclip/openx_embeddings_full_uncompressed.h5"  # TODO: grab the right one
 print(f"Adding to {LOAD_H5_NAME}")
 DEBUG = False  # will only make 10 per dataset
 
