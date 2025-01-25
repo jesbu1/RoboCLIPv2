@@ -118,15 +118,14 @@ def plot_confusion_matrix_pca_class(h5_file, set, self_attention_model, args):
         mask = torch.ones(traj_data.shape[1]).to(device).unsqueeze(0).repeat(traj_data.shape[0], 1)
 
         pred_class, two_step_class = self_attention_model(traj_data, triangle_mask, text_embeddings, mask)
-        
         batch_size, seq_len, _ = traj_data.size()
         if args.catagorical_progress:
             pred_class = torch.argmax(pred_class, dim = 1)
         else:
             pred_class = pred_class.squeeze(1)
-
-        pred_class = pred_class[:,-1].squeeze(1)
+        
         if args.two_step_training:
+            pred_class = pred_class[:,-1].squeeze(1)
             two_step_class = two_step_class[:, -1, :]
             pred_two_class = torch.argmax(two_step_class, dim = 1)
             pred_class = pred_two_class * pred_class
