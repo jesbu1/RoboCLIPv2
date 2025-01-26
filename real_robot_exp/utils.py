@@ -157,7 +157,6 @@ def update_model(args, video_array, text_array, batch_triangular_mask, self_atte
                 accuracy = torch.sum(predict_label == progress) / len(predict_label)
                 wandb_log["progress_accuracy"] = accuracy
 
-
         optimizer.zero_grad()
         loss.backward()
         if args.clip_grad:
@@ -165,6 +164,8 @@ def update_model(args, video_array, text_array, batch_triangular_mask, self_atte
         optimizer.step()
         if scheduler is not None:
             scheduler.step()
+
+            
         wandb_log["lr"] = optimizer.param_groups[0]["lr"]
         return wandb_log, self_attention_model
 

@@ -18,9 +18,11 @@ from eval_progress import plot_progress
 from eval_raw_video_progress import real_video_plot
 from utils import update_model, CosineWithMinLRScheduler
 from torch.optim import Optimizer
+import math
 
 
 os.environ["TOKENIZERS_PARALLELISM"] = "False"
+
 
 
 
@@ -168,8 +170,8 @@ def main(args):
 
     print(self_attention_model)
     if args.cosine_scheduler:
-        optimizer = torch.optim.Adam([torch.tensor(1.0, requires_grad=True)], lr=args.lr)
-        scheduler = CosineWithMinLRScheduler(optimizer, max_steps=120000, max_lr=args.lr, min_lr=1e-6)
+        optimizer = torch.optim.Adam(self_attention_model.parameters(), lr=args.lr)
+        scheduler = CosineWithMinLRScheduler(optimizer, max_steps=120000, max_lr=args.lr, min_lr=1e-5)
     else:
         optimizer = torch.optim.Adam(self_attention_model.parameters(), lr=args.lr)
         scheduler = None
