@@ -15,8 +15,6 @@ import os
 from models import  RewardTwoStepLangTokenPositionEmbeddingPredictor
 from eval_confusion_matrix import plot_confusion_matrix_token
 from eval_progress import plot_progress_token
-from eval_raw_video_progress import real_video_plot
-from utils import update_model
 from torch.optim import Optimizer
 import math
 
@@ -38,6 +36,23 @@ class CosineWithMinLRScheduler(torch.optim.lr_scheduler._LRScheduler):
             # Keep the minimum learning rate
             return [self.min_lr for _ in self.base_lrs]
 
+
+
+
+def TokenPositionEmbedding(max_seq_len, embed_dim):
+    position = torch.arange(max_seq_len).unsqueeze(1)  # Shape: [max_seq_len, 1]
+    div_term = torch.exp(torch.arange(0, embed_dim, 2) * -(math.log(10000.0) / embed_dim))
+    pe = torch.zeros(max_seq_len, embed_dim)
+    pe[:, 0::2] = torch.sin(position * div_term)  # Even indices
+    pe[:, 1::2] = torch.cos(position * div_term)  # Odd indices
+    pe /= 10 # reduce the scale of positional encoding otherwise it will dominate the input embeddings
+    return pe.unsqueeze(0)
+
+
+
+
+
+
 def main(args):
     
     torch.manual_seed(args.seed)
@@ -49,7 +64,7 @@ def main(args):
 
     WANDB_ENTITY_NAME = "clvr"
     WANDB_PROJECT_NAME = "roboclip-v2"
-    experiment_name = "OpenXLIVCatLangToken"
+    experiment_name = "OpenXLIVCatLangTokenAddPosEmb"
 
 
     experiment_name += "_heads_" + str(args.attention_heads)
@@ -89,13 +104,15 @@ def main(args):
     experiment_name += "_DecoderNum_" + str(args.decoder_num)
     experiment_name += "_epochs_" + str(args.epochs)
     experiment_name += "_lr_" + str(args.lr)
+
+    
     # experiment_name += "_1_demo"
     
     
     run = wandb.init(
         entity=WANDB_ENTITY_NAME,
         project=WANDB_PROJECT_NAME,
-        group="Jan24ndOpenXVideoToken",
+        group="Jan25ndOpenXVideoTokenLog",
         config=args,
         name=experiment_name,
     )
@@ -103,15 +120,16 @@ def main(args):
 
 
     # h5_file = h5py.File(args.h5_embedding_path, "r")
-    h5_eval_file = h5py.File("jesse_collect_dataset_new.h5", "r")
+    h5_eval_file = h5py.File("jesse_collect_dataset_new_token.h5", "r")
     embedding_dim = 1024
+    max_seq_len = 45
 
 
     eval_dataset = None
     eval_dataloader = None
     if args.openx_data and args.extra_data:
         openx_dataset = LivRealVideoTextTokenDataset(args, args.h5_embedding_path, split = False)
-        extra_dataset = LivRealVideoTextTokenDataset(args, "jesse_collect_dataset_new.h5", split = True)
+        extra_dataset = LivRealVideoTextTokenDataset(args, "jesse_collect_dataset_new_token.h5", split = True)
         openx_dataloader = DataLoader(openx_dataset, 
                                       batch_size=args.batch_size * 5, 
                                       shuffle=True, 
@@ -190,6 +208,7 @@ def main(args):
     # batch_triangular_mask = triangular_mask.repeat(batch_size, 1, 1, 1).bool()
 
 
+    text_position_embedding = TokenPositionEmbedding(max_seq_len, 1024).to(device)
 
 
     for epoch in range(args.epochs):
@@ -201,10 +220,14 @@ def main(args):
                 openx_len = openx_data["text_output"].shape[1]
                 extra_len = extra_data["text_output"].shape[1]
 
+                # add text position embedding to text_output
+                openx_data["text_output"] = openx_data["text_output"].to(device) + text_position_embedding[:, :openx_len]
+                extra_data["text_output"] = extra_data["text_output"].to(device) + text_position_embedding[:, :extra_len]
 
                 openx_batch_size, openx_text_seq_len, _ = openx_data["text_output"].size()
                 extra_batch_size, extra_text_seq_len, _ = extra_data["text_output"].size()
                 
+                # add learnerable parameters to text and video output
                 openx_text_output = openx_data["text_output"].to(device).float().view(-1, 1024)
                 extra_text_output = extra_data["text_output"].to(device).float().view(-1, 1024)
                 openx_video_output = openx_data["video_output"].to(device).float().view(-1, 1024)
@@ -212,6 +235,7 @@ def main(args):
 
                 openx_text_output += text_learner_parameter
                 extra_text_output += text_learner_parameter
+
                 openx_video_output += video_learner_parameter
                 extra_video_output += video_learner_parameter
 
@@ -318,7 +342,7 @@ def main(args):
                 wandb.log(wandb_log)
 
 
-        if epoch % 20 == 0:
+        if epoch % 3 == 0:
             self_attention_model.eval()
             with torch.no_grad():
         # #     save_path = os.path.join("/scr/jzhang96/roboclip_v2_decoder_models_fix_3rd", experiment_name)
