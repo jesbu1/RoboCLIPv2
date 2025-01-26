@@ -228,6 +228,27 @@ class LivRealVideoDataset(Dataset):
         return video_frames
 
 
+class LivRealVideoNegativeDataset(LivRealVideoDataset):
+
+    def __getitem__(self, idx):
+        # select a random key
+        key_id = random.randint(0, len(self.keys)-1)
+        key = self.keys[key_id]
+        data_group = self.h5_file[key]
+
+        # sample text sample
+        text_array = self.sample_text_feature(data_group)
+
+        video_array, progress, class_label = self.sample_negative_video_feature(key)
+
+        output_dict = {
+            "text_array": text_array,
+            "video_array": video_array,
+            "progress": progress,
+            "class_label": class_label
+        }
+        return  output_dict
+
 class LivRealVideoEvalDataset(Dataset):
 
     def __init__(self, args, h5_file, label="positive"):
@@ -352,6 +373,7 @@ class LivRealVideoEvalDataset(Dataset):
             video_frames = video_frames[frame_idx]
 
         return video_frames
+
 
 
 class LivRealVideoTextTokenDataset(LivRealVideoDataset):

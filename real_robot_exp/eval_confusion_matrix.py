@@ -48,7 +48,7 @@ def normalize_embeddings(embeddings, return_tensor=True):
     else:
         return normalized_embeddings.detach().cpu().numpy()
 
-def plot_matrix_as_image(matrix, names, set, text):
+def plot_matrix_as_image(matrix, names, set, text, prob = False):
     # Create a figure and axis
     # only keep 2 decimal points
     matrix = np.round(matrix, 2)
@@ -87,7 +87,10 @@ def plot_matrix_as_image(matrix, names, set, text):
     # plt.savefig(buf, format='png')
     # buf.seek(0)
     # image = Image.open(buf)
-    wandb.log({f"confusion_matrix/{set}_confusion_matrix": wandb.Image(fig)})
+    if prob:
+        wandb.log({f"confusion_matrix_prob/{set}_prob_confusion_matrix": wandb.Image(fig)})
+    else:
+        wandb.log({f"confusion_matrix/{set}_confusion_matrix": wandb.Image(fig)})
     # plt.savefig(f"confusion_matrix_{set}.pdf", bbox_inches="tight")
     plt.close(fig)  # Close the figure to free memory
 
@@ -96,7 +99,7 @@ def plot_matrix_as_image(matrix, names, set, text):
 
 
 
-def plot_confusion_matrix(h5_file, set, self_attention_model, args):
+def plot_confusion_matrix(h5_file, set, self_attention_model, args, prob = False):
     device = next(self_attention_model.parameters()).device
 
     keys = list(h5_file.keys())
@@ -118,6 +121,8 @@ def plot_confusion_matrix(h5_file, set, self_attention_model, args):
         text_embeddings = normalize_embeddings(text_embeddings)
 
     predicted_progress_row = []
+    if args.two_step_training:
+        pred_two_step_prob_list = []
     for i  in tqdm(range(len(eval_envs))):
         env = eval_envs[i]
         video_embedding = np.asarray(h5_file[env]["1"])
@@ -139,9 +144,17 @@ def plot_confusion_matrix(h5_file, set, self_attention_model, args):
         pred_class, two_step_class = self_attention_model(traj_data, triangle_mask, text_embeddings, mask)
         pred_class = pred_class.view(-1, 1)
         if args.two_step_training:
+            batch_size = two_step_class.shape[0]
             two_step_class = two_step_class.view(-1, 2)
             two_class_label = torch.argmax(two_step_class, dim=1)
+            two_step_prob = F.softmax(two_step_class, dim=1)
+            two_step_class_prob = two_step_prob[:,1]
+            two_step_class_prob = two_step_class_prob.view(batch_size, -1)
             pred_class = pred_class * two_class_label.unsqueeze(1)
+            pred_two_step_prob_list.append(two_step_class_prob[:,-1].detach().cpu().numpy())
+
+
+
         
         batch_size, seq_len, _ = traj_data.size()
         if args.catagorical_progress:
@@ -157,10 +170,15 @@ def plot_confusion_matrix(h5_file, set, self_attention_model, args):
         predicted_progress = np.array(pred_class.squeeze().detach().cpu().numpy())
         predicted_progress_row.append(predicted_progress[:,-1])
 
+
     predicted_progress_row = np.array(predicted_progress_row)
 
-    img = plot_matrix_as_image(predicted_progress_row, eval_envs, set, text_list)
-    
+    if args.two_step_training:
+        pred_two_step_prob_list = np.array(pred_two_step_prob_list)
+        img = plot_matrix_as_image(predicted_progress_row, eval_envs, set, text_list, prob = False)
+        img1 = plot_matrix_as_image(pred_two_step_prob_list, eval_envs, set, text_list, prob = True)
+    else:
+        img = plot_matrix_as_image(predicted_progress_row, eval_envs, set, text_list, prob = False)    
 
 def plot_confusion_matrix_token(h5_file, set, self_attention_model, args):
     device = next(self_attention_model.parameters()).device
@@ -192,6 +210,8 @@ def plot_confusion_matrix_token(h5_file, set, self_attention_model, args):
     
 
     predicted_progress_row = []
+    if args.two_step_training:
+        pred_two_step_prob_list = []
     for i  in tqdm(range(len(eval_envs))):
         env = eval_envs[i]
         video_embedding = np.asarray(h5_file[env]["1"])
@@ -206,6 +226,7 @@ def plot_confusion_matrix_token(h5_file, set, self_attention_model, args):
         traj_data = traj_data.unsqueeze(0)
         
         text_progress_row = []
+        text_prob_row = []
         for j in range(len(text_embeddings)):
             input_feature = torch.cat([text_embeddings[j], traj_data], dim=1)
             text_len = text_seq_list[j]
@@ -218,8 +239,11 @@ def plot_confusion_matrix_token(h5_file, set, self_attention_model, args):
             pred_class = progress_output.view(-1)
             if args.two_step_training:
                 two_step_class = two_step_class.view(-1, 2)
+                two_step_prob = F.softmax(two_step_class, dim=1)
                 two_class_label = torch.argmax(two_step_class, dim=1).squeeze()
+                two_step_class_prob = two_step_prob.max(dim=1).values
                 pred_class = pred_class * two_class_label
+                text_prob_row.append(two_step_class_prob)
             
             batch_size, seq_len, _ = traj_data.size()
             if args.catagorical_progress:
@@ -228,12 +252,19 @@ def plot_confusion_matrix_token(h5_file, set, self_attention_model, args):
                 pred_class = pred_class.squeeze()
             text_progress_row.append(pred_class[-1])
         text_progress_row = torch.stack(text_progress_row).detach().cpu().numpy()
+        if args.two_step_training:
+            pred_two_step_prob_list.append(torch.stack(text_prob_row).detach().cpu().numpy())
+
 
         predicted_progress_row.append(text_progress_row)
 
     predicted_progress_row = np.array(predicted_progress_row)
-
-    img = plot_matrix_as_image(predicted_progress_row, eval_envs, set, text_list)
+    if args.two_step_training:
+        pred_two_step_prob_list = np.array(pred_two_step_prob_list)
+        img = plot_matrix_as_image(predicted_progress_row, eval_envs, set, text_list, prob = False)
+        img1 = plot_matrix_as_image(pred_two_step_prob_list, eval_envs, set, text_list, prob = True)
+    else:
+        img = plot_matrix_as_image(predicted_progress_row, eval_envs, set, text_list, prob = False)
     
 
     
