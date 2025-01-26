@@ -15,12 +15,12 @@ from clip_utils import (
 from PIL import Image
 
 TFDS_PATH = "/data/shared/openx_rlds_data"
-SAVE_H5_NAME = "openx_embeddings_lang_table.h5"  # name of the h5 file it'll be saved to
+SAVE_H5_NAME = "openx_embeddings.h5"  # name of the h5 file it'll be saved to
 DEBUG = False  # will only make 10 per dataset
 SPECIFIC_TASKS = "language_table,austin_sirius_dataset_converted_externally_to_rlds,austin_buds_dataset_converted_externally_to_rlds,ucsd_kitchen_dataset_converted_externally_to_rlds,stanford_hydra_dataset_converted_externally_to_rlds,iamlab_cmu_pickup_insert_converted_externally_to_rlds,cmu_stretch,berkeley_fanuc_manipulation,berkeley_autolab_ur5,bridge,bc_z,fractal20220817_data,jaco_play"
 MAX_NUM_FRAMES_PER_EPISODE = 128
 TRAIN_SPLIT = "train"  # "test"
-MAX_EPISODES_FOR_LANG_TABLE = 25000
+MAX_EPISODES_FOR_LANG_TABLE = 35000
 
 # prevent TFDS from taking up all GPU memory
 os.environ["TF_FORCE_GPU_ALLOW_GROWTH"] = "true"

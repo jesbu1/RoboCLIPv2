@@ -384,11 +384,9 @@ class LivRealVideoTextTokenDataset(LivRealVideoDataset):
         else:
             video_array, progress, class_label = self.sample_video_feature(data_group)
 
-        lang_video_feature = np.concatenate([text_array, video_array], axis=1)
-
-
         output_dict = {
-            "lang_video_feature": lang_video_feature,
+            "text_feature": text_array,
+            "video_feature": video_array,
             "lang_seq_len": seq_len,
             "progress": progress,
             "class_label": class_label
@@ -399,13 +397,75 @@ class LivRealVideoTextTokenDataset(LivRealVideoDataset):
         lang_embedding = np.array(data_group["lang_embedding_individual"]) # 1,n, 1024
         # if lang_embedding.shape[0] == 1024:
         #     lang_embedding = np.expand_dims(lang_embedding, axis=0)
-        batch_size, seq_len, _ = lang_embedding.shape
+        _, seq_len, _ = lang_embedding.shape
+        lang_embedding = np.squeeze(lang_embedding, axis=0)
         if self.args.normalize_embedding:
             
-            lang_embedding = lang_embedding.view(1, -1, 1024)
             lang_embedding = normalize_embeddings(lang_embedding, return_tensor=True)
-            lang_embedding = lang_embedding.view(batch_size, seq_len, -1)
+            lang_embedding = lang_embedding.view(seq_len, -1)
 
         return lang_embedding, seq_len
 
+def VideoTokenCollateTriangularFn(batch):
+    # Find the maximum video length (number of frames) in the batch
+
+    length = [data["text_feature"].shape[0] for data in batch]
+    max_length = max(length)
+    embedding_size = batch[0]["text_feature"].shape[1]
+    batch_size = len(batch)
+
+
+    text_output = list()
+    video_output = list()
+    mask_output = list()
+    progress_output = list()
+    class_label_output = list()
     
+    
+    for i in range(batch_size):
+
+        text_feature = batch[i]["text_feature"]
+        video_feature = batch[i]["video_feature"]
+        progress = batch[i]["progress"]
+        class_label = batch[i]["class_label"]
+        feature_length = text_feature.shape[0]
+        padding_length = max_length - feature_length
+        
+        if padding_length > 0:
+            padding = np.zeros((padding_length, embedding_size))
+            text_feature = np.concatenate([text_feature, padding], axis=0)
+            video_feature = np.expand_dims(video_feature, axis=0)
+            text_feature = np.expand_dims(text_feature, axis=0)
+            progress = np.expand_dims(progress, axis=0)
+            class_label = np.expand_dims(class_label, axis=0)
+        else:
+            text_feature = np.expand_dims(text_feature, axis=0)
+            progress = np.expand_dims(progress, axis=0)
+            video_feature = np.expand_dims(video_feature, axis=0)
+            class_label = np.expand_dims(class_label, axis=0)
+
+        text_mask = np.zeros((max_length))
+        text_mask[:feature_length] = 1
+            
+        mask_output.append(text_mask)
+        text_output.append(text_feature)
+        video_output.append(video_feature)
+        progress_output.append(progress)
+        class_label_output.append(class_label)
+
+    text_output = np.concatenate(text_output, axis=0)
+    progress_output = np.concatenate(progress_output, axis=0)
+    class_label_output = np.concatenate(class_label_output, axis=0)
+    video_output = np.concatenate(video_output, axis=0)
+    mask_output = np.stack(mask_output, axis=0)
+
+
+    output_dict = {
+        "text_output": th.tensor(text_output).float(),
+        "video_output": th.tensor(video_output).float(),
+        "progress_output": th.tensor(progress_output).float(),
+        "class_label_output": th.tensor(class_label_output),
+        "mask_output": th.tensor(mask_output)
+    }
+
+    return output_dict

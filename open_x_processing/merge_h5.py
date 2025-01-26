@@ -14,8 +14,8 @@ from clip_utils import (
 )
 from PIL import Image
 
-MAIN_H5 = "/data/shared/roboclip/data/h5_buffers/openx_embeddings/openx_embeddings_full_uncompressed_with_langtable.h5"
-H5_MERGING_FROM = "openx_embeddings_lang_table.h5"
+MAIN_H5 = "/data/shared/roboclip/data/h5_buffers/openx_embeddings/openx_embeddings_full_uncompressed_with_langtable35k.h5"
+H5_MERGING_FROM = "openx_embeddings_lang_table_35k.h5"
 print(f"Adding to {MAIN_H5} from {H5_MERGING_FROM}")
 
 model, processor, tokenizer = load_model("liv")
