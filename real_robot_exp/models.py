@@ -89,9 +89,22 @@ class DecoderOnlyBlock(nn.Module):
         batch_size = x.size(0)
 
         # Multi-Head Attention
-        Q = self.query(x).view(batch_size, -1, self.num_heads, self.depth).transpose(1, 2)
-        K = self.key(x).view(batch_size, -1, self.num_heads, self.depth).transpose(1, 2)
-        V = self.value(x).view(batch_size, -1, self.num_heads, self.depth).transpose(1, 2)
+        normed_x = self.layernorm1(x) if self.layer_norm else x
+        Q = (
+            self.query(normed_x)
+            .view(batch_size, -1, self.num_heads, self.depth)
+            .transpose(1, 2)
+        )
+        K = (
+            self.key(normed_x)
+            .view(batch_size, -1, self.num_heads, self.depth)
+            .transpose(1, 2)
+        )
+        V = (
+            self.value(normed_x)
+            .view(batch_size, -1, self.num_heads, self.depth)
+            .transpose(1, 2)
+        )
 
         scores = torch.matmul(Q, K.transpose(-2, -1)) / math.sqrt(self.depth)
 
@@ -108,17 +121,14 @@ class DecoderOnlyBlock(nn.Module):
 
         # Residual connection and layer normalization
         if self.layer_norm:
-            x = self.layernorm1(x + attn_output)
+            x = self.layernorm2(x + attn_output)
         else:
             x = x + attn_output
         # Feedforward Network
         ffn_output = self.fc2(F.gelu(self.fc1(x)))
 
-        # Residual connection and layer normalization
-        if self.layer_norm:
-            x = self.layernorm2(x + ffn_output)
-        else:
-            x = x + ffn_output
+        # Residual connection again
+        x = x + ffn_output
 
         return x
 
