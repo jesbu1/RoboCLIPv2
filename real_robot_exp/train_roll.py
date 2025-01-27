@@ -170,13 +170,14 @@ def main(args):
 
 
 
-    if args.catagorical_progress:
-        if args.sample_neg:
+    if args.catagorical_progress :
+        if args.sample_neg and not args.two_step_training:
             num_bins = args.catagorical_progress_bins + 1
         else:
             num_bins = args.catagorical_progress_bins
     else:
         num_bins = 1
+
     if args.two_step_training:
         if args.cat_text_front:
             self_attention_model = RewardTwoStepNewPositionEmbeddingPredictor(embedding_dim, args = args, class_num=num_bins).to(device)
