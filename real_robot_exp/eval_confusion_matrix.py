@@ -145,7 +145,7 @@ def plot_confusion_matrix(h5_file, set, self_attention_model, args, prob = False
         if not args.catagorical_progress:
             pred_class = pred_class.view(-1, 1)
         else:
-            pred_class = torch.argmax(pred_class, dim = 2).view(-1, 1)
+            pred_class = torch.argmax(pred_class, dim = 2).view(-1, 1) + 1
 
         if args.two_step_training:
             batch_size = two_step_class.shape[0]
