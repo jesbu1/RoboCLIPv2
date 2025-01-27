@@ -161,10 +161,10 @@ def plot_confusion_matrix(h5_file, set, self_attention_model, args, prob = False
 
         
         batch_size, seq_len, _ = traj_data.size()
-        if args.catagorical_progress:
-            pred_class = torch.argmax(pred_class, dim = 1)
-        else:
-            pred_class = pred_class.squeeze(1)
+        # if args.catagorical_progress:
+        #     pred_class = torch.argmax(pred_class, dim = 1)
+        # else:
+        pred_class = pred_class.squeeze(1)
 
 
 
