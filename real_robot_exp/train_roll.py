@@ -226,27 +226,27 @@ def main(args):
                 negative_class_label_1 = torch.zeros_like(positive_class_label)
 
 
-                negative_video_array_2 = torch.roll(positive_video_array, args.batch_size * 2, 0)
-                negative_text_array_2 = positive_text_array.clone()
+                # negative_video_array_2 = torch.roll(positive_video_array, args.batch_size * 2, 0)
+                # negative_text_array_2 = positive_text_array.clone()
 
-                negative_progress_2 = torch.zeros_like(positive_progress)
-                negative_class_label_2 = torch.zeros_like(positive_class_label)
+                # negative_progress_2 = torch.zeros_like(positive_progress)
+                # negative_class_label_2 = torch.zeros_like(positive_class_label)
 
-                negative_video_array_3 = torch.roll(positive_video_array, args.batch_size * 3, 0)
-                negative_text_array_3 = positive_text_array.clone()
+                # negative_video_array_3 = torch.roll(positive_video_array, args.batch_size * 3, 0)
+                # negative_text_array_3 = positive_text_array.clone()
 
-                negative_progress_3 = torch.zeros_like(positive_progress)
-                negative_class_label_3 = torch.zeros_like(positive_class_label)
+                # negative_progress_3 = torch.zeros_like(positive_progress)
+                # negative_class_label_3 = torch.zeros_like(positive_class_label)
 
-                openx_pos_video_array = torch.cat([positive_video_array[:openx_len], negative_video_array_1[:openx_len], negative_video_array_2[:openx_len], negative_video_array_3[:openx_len]], dim = 0)
-                openx_pos_text_array = torch.cat([positive_text_array[:openx_len], negative_text_array_1[:openx_len], negative_text_array_2[:openx_len], negative_text_array_3[:openx_len]], dim = 0)
-                openx_pos_progress = torch.cat([positive_progress[:openx_len], negative_progress_1[:openx_len], negative_progress_2[:openx_len], negative_progress_3[:openx_len]], dim = 0)
-                openx_pos_class_label = torch.cat([positive_class_label[:openx_len], negative_class_label_1[:openx_len], negative_class_label_2[:openx_len], negative_class_label_3[:openx_len]], dim = 0)
+                openx_pos_video_array = torch.cat([positive_video_array[:openx_len], negative_video_array_1[:openx_len]], dim = 0)
+                openx_pos_text_array = torch.cat([positive_text_array[:openx_len], negative_text_array_1[:openx_len]], dim = 0)
+                openx_pos_progress = torch.cat([positive_progress[:openx_len], negative_progress_1[:openx_len]], dim = 0)
+                openx_pos_class_label = torch.cat([positive_class_label[:openx_len], negative_class_label_1[:openx_len]], dim = 0)
 
-                extra_pos_video_array = torch.cat([positive_video_array[openx_len:], negative_video_array_1[openx_len:], negative_video_array_2[openx_len:], negative_video_array_3[openx_len:]], dim = 0)
-                extra_pos_text_array = torch.cat([positive_text_array[openx_len:], negative_text_array_1[openx_len:], negative_text_array_2[openx_len:], negative_text_array_3[openx_len:]], dim = 0)
-                extra_pos_progress = torch.cat([positive_progress[openx_len:], negative_progress_1[openx_len:], negative_progress_2[openx_len:], negative_progress_3[openx_len:]], dim = 0)
-                extra_pos_class_label = torch.cat([positive_class_label[openx_len:], negative_class_label_1[openx_len:], negative_class_label_2[openx_len:], negative_class_label_3[openx_len:]], dim = 0)
+                extra_pos_video_array = torch.cat([positive_video_array[openx_len:], negative_video_array_1[openx_len:]], dim = 0)
+                extra_pos_text_array = torch.cat([positive_text_array[openx_len:], negative_text_array_1[openx_len:]], dim = 0)
+                extra_pos_progress = torch.cat([positive_progress[openx_len:], negative_progress_1[openx_len:]], dim = 0)
+                extra_pos_class_label = torch.cat([positive_class_label[openx_len:], negative_class_label_1[openx_len:]], dim = 0)
 
                 video_array = torch.cat([openx_pos_video_array, extra_pos_video_array], dim = 0)
                 text_array = torch.cat([openx_pos_text_array, extra_pos_text_array], dim = 0)
