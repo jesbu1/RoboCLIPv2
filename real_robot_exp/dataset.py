@@ -361,6 +361,12 @@ class LivRealVideoEvalDataset(Dataset):
         full_length = len(video_frames)
         video_progress = np.arange(0, video_frames.shape[0]) + 1
         video_progress = video_progress / full_length
+        if self.args.catagorical_progress:
+            video_progress = np.floor(video_progress * self.args.catagorical_progress_bins) 
+            if video_progress[-1] == self.args.catagorical_progress_bins:
+                video_progress[-1] = self.args.catagorical_progress_bins - 1
+            if self.args.sample_neg:
+                video_progress += 1
 
         if self.args.subsample_video:
             video_frames = self.padding_video(video_frames, self.args.max_length)

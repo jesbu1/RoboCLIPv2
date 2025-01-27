@@ -325,31 +325,31 @@ def main(args):
                 
                 wandb_eval_log = {}
                 if positive_eval_openx_dataset is not None:
-                    class_accuracy, progress_loss = eval_model(positive_eval_dataloader, self_attention_model, progress_loss_function, triangular_mask)
+                    class_accuracy, progress_loss = eval_model(positive_eval_dataloader, self_attention_model, progress_loss_function, triangular_mask, args)
                     wandb_eval_log["openx_eval/progress_loss"] = progress_loss
                     wandb_eval_log["openx_eval/correct_class_accuracy"] = class_accuracy
 
                 if negative_eval_openx_dataset is not None:
-                    class_accuracy, progress_loss = eval_model(negative_eval_dataloader, self_attention_model, progress_loss_function, triangular_mask)
+                    class_accuracy, progress_loss = eval_model(negative_eval_dataloader, self_attention_model, progress_loss_function, triangular_mask, args)
                     wandb_eval_log["openx_eval/wrong_class_accuracy"] = class_accuracy
 
 
                 if extra_eval_train_pos_dataset is not None:
-                    class_accuracy, progress_loss = eval_model(extra_eval_train_pos_dataloader, self_attention_model, progress_loss_function, triangular_mask)
+                    class_accuracy, progress_loss = eval_model(extra_eval_train_pos_dataloader, self_attention_model, progress_loss_function, triangular_mask, args)
                     wandb_eval_log["extra_train_pos_eval/progress_loss"] = progress_loss
                     wandb_eval_log["extra_train_pos_eval/correct_class_accuracy"] = class_accuracy
 
                 if extra_eval_train_neg_dataset is not None:
-                    class_accuracy, progress_loss = eval_model(extra_eval_train_neg_dataloader, self_attention_model, progress_loss_function, triangular_mask)
+                    class_accuracy, progress_loss = eval_model(extra_eval_train_neg_dataloader, self_attention_model, progress_loss_function, triangular_mask, args)
                     wandb_eval_log["extra_train_neg_eval/wrong_class_accuracy"] = class_accuracy
 
                 if extra_eval_eval_pos_dataset is not None:
-                    class_accuracy, progress_loss = eval_model(extra_eval_eval_pos_dataloader, self_attention_model, progress_loss_function, triangular_mask)
+                    class_accuracy, progress_loss = eval_model(extra_eval_eval_pos_dataloader, self_attention_model, progress_loss_function, triangular_mask, args)
                     wandb_eval_log["extra_eval_pos_eval/progress_loss"] = progress_loss
                     wandb_eval_log["extra_eval_pos_eval/correct_class_accuracy"] = class_accuracy
 
                 if extra_eval_eval_neg_dataset is not None:
-                    class_accuracy, progress_loss = eval_model(extra_eval_eval_neg_dataloader, self_attention_model, progress_loss_function, triangular_mask)
+                    class_accuracy, progress_loss = eval_model(extra_eval_eval_neg_dataloader, self_attention_model, progress_loss_function, triangular_mask, args)
                     wandb_eval_log["extra_eval_neg_eval/wrong_class_accuracy"] = class_accuracy
 
                     wandb.log(wandb_eval_log)
