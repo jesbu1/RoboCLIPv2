@@ -21,6 +21,8 @@ def normalize_embeddings(embeddings, return_tensor=True):
         return normalized_embeddings.detach().cpu().numpy()
 
 
+
+
 class LivRealVideoDataset(Dataset):
 
     def __init__(self, args, h5_file, split=False):
@@ -228,6 +230,51 @@ class LivRealVideoDataset(Dataset):
         return video_frames
 
 
+
+class LivRealVideoTrainDataset(LivRealVideoDataset):
+
+    def __init__(self, args, h5_file, split=False, eval=False):
+        h5_file = h5py.File(h5_file, "r")
+        self.h5_file = h5_file
+        self.args = args
+        self.split = split
+        self.keys = list(self.h5_file.keys())
+        if self.split:
+            if eval:
+                self.keys = self.keys[int(len(self.keys)*0.5):]
+            else:
+                self.keys = self.keys[:int(len(self.keys)*0.5)]
+            eval_keys = self.keys[int(len(self.keys)*0.5):]
+            json.dump(eval_keys, open("eval_keys.json", "w"), indent=4)
+
+    def __getitem__(self, idx):
+        # select a random key
+        key_id = random.randint(0, len(self.keys)-1)
+        key = self.keys[key_id]
+        data_group = self.h5_file[key]
+
+        # sample text sample
+        text_array = self.sample_text_feature(data_group)
+
+        if self.args.reverse_video:
+            random_num = random.random()
+            if random_num < 0.5:
+                video_array, progress, class_label = self.sample_reverse_video_feature(data_group)
+            else:
+                video_array, progress, class_label = self.sample_video_feature(data_group)
+        else:
+            video_array, progress, class_label = self.sample_video_feature(data_group)
+
+
+        output_dict = {
+            "text_array": text_array,
+            "video_array": video_array,
+            "progress": progress,
+            "class_label": class_label
+        }
+        return  output_dict
+
+
 class LivRealVideoNegativeDataset(LivRealVideoDataset):
 
     def __getitem__(self, idx):
@@ -248,6 +295,7 @@ class LivRealVideoNegativeDataset(LivRealVideoDataset):
             "class_label": class_label
         }
         return  output_dict
+
 
 class LivRealVideoEvalDataset(Dataset):
 
@@ -320,12 +368,6 @@ class LivRealVideoEvalDataset(Dataset):
             video_progress = self.padding_video(video_progress, self.args.max_length).detach().cpu().numpy()
             video_progress = np.squeeze(video_progress, axis=1)
 
-        # if self.args.catagorical_progress:
-        #     video_progress = np.floor(video_progress * self.args.catagorical_progress_bins) 
-        #     if video_progress[-1] == self.args.catagorical_progress_bins:
-        #         video_progress[-1] = self.args.catagorical_progress_bins - 1
-        #     if self.args.sample_neg:
-        #         video_progress += 1
 
         return video_frames, video_progress, np.ones(video_progress.shape[0])
 
@@ -355,8 +397,6 @@ class LivRealVideoEvalDataset(Dataset):
         return negative_video_frames, video_progress, np.zeros(video_progress.shape[0])
 
 
-
-
     def padding_video(self, video_frames, max_length):
         video_length = len(video_frames)
         if type(video_frames) == np.ndarray:
@@ -375,6 +415,46 @@ class LivRealVideoEvalDataset(Dataset):
         return video_frames
 
 
+class LivDemoVideoEvalDataset(LivRealVideoEvalDataset):
+    def __init__(self, args, h5_file, label="positive", set_name="train"):
+        h5_file = h5py.File(h5_file, "r")
+        self.h5_file = h5_file
+        self.args = args
+        self.label = label
+        self.keys = list(self.h5_file.keys())
+        if set_name == "train":
+            self.keys = self.keys[:int(len(self.keys)*0.5)]
+        else:
+            self.keys = self.keys[int(len(self.keys)*0.5):]
+
+
+    def __len__(self):
+
+        return len(self.keys)
+    
+    def __getitem__(self, idx):
+        # select a random key
+        # key_id = random.randint(0, len(self.keys)-1)
+        key_id = idx % len(self.keys)
+        key = self.keys[key_id]
+        data_group = self.h5_file[key]
+
+        # sample text sample
+        text_array = self.sample_text_feature(data_group)
+
+
+        if self.label == "positive":
+            video_array, progress, class_label = self.sample_video_feature(data_group)
+        else:
+            video_array, progress, class_label = self.sample_negative_video_feature(key)
+
+        output_dict = {
+            "text_array": text_array,
+            "video_array": video_array,
+            "progress": progress,
+            "class_label": class_label
+        }
+        return  output_dict
 
 class LivRealVideoTextTokenDataset(LivRealVideoDataset):
 

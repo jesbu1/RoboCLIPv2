@@ -1,10 +1,10 @@
 import torch
 # from dataloader_liv_decoder_5_demo import video_collate_triangular_fn, LivVideoDecoderDataset5Frames
-from dataset import LivRealVideoDataset, LivRealVideoEvalDataset, LivRealVideoNegativeDataset
+from dataset import LivRealVideoTrainDataset, LivRealVideoEvalDataset, LivDemoVideoEvalDataset, LivRealVideoDataset
 import torch.nn.functional as F
 import numpy as np
 import random
-from torch.utils.data import DataLoader, ConcatDataset, WeightedRandomSampler
+# from torch.utils.data import DataLoader, ConcatDataset, WeightedRandomSampler
 import argparse
 import wandb
 from tqdm import tqdm
@@ -12,16 +12,19 @@ import h5py
 from torch.nn.functional import mse_loss
 from torch.nn import CrossEntropyLoss 
 import os
-from models import  RewardTwoStepNewPositionEmbeddingPredictor
+from models import RewardTwoStepNewPositionEmbeddingPredictor
 from eval_confusion_matrix import plot_confusion_matrix
 from eval_progress import plot_progress
 from eval_raw_video_progress import real_video_plot
-from utils import update_model, CosineWithMinLRScheduler
+from utils import update_model, CosineWithMinLRScheduler, eval_model
 from torch.optim import Optimizer
+from torch.utils.data import DataLoader
 import math
 
 
 os.environ["TOKENIZERS_PARALLELISM"] = "False"
+
+
 
 
 
@@ -38,7 +41,7 @@ def main(args):
 
     WANDB_ENTITY_NAME = "clvr"
     WANDB_PROJECT_NAME = "roboclip-v2"
-    experiment_name = "OpenXLIVMixDatasetAddNegSimple"
+    experiment_name = "OpenXLIVLangTableOneLinearCosine"
 
 
     experiment_name += "_heads_" + str(args.attention_heads)
@@ -74,10 +77,6 @@ def main(args):
         experiment_name += "_CosScheduler"
     if args.clip_grad:
         experiment_name += "_ClipGrad"
-    if args.progress_loss:
-        experiment_name += "_ProgressLoss"
-    else:
-        experiment_name += "_NoProgressLoss"
     
     experiment_name += "_DecoderNum_" + str(args.decoder_num)
     experiment_name += "_epochs_" + str(args.epochs)
@@ -96,25 +95,22 @@ def main(args):
 
 
     # h5_file = h5py.File(args.h5_embedding_path, "r")
-    h5_eval_file = h5py.File("jesse_collect_dataset_new_token.h5", "r")
+    h5_eval_file = h5py.File("jesse_collect_dataset_new.h5", "r")
     embedding_dim = 1024
 
 
     eval_dataset = None
     eval_dataloader = None
     if args.openx_data and args.extra_data:
-        openx_dataset = LivRealVideoDataset(args, args.h5_embedding_path, split = False)
-        extra_dataset = LivRealVideoDataset(args, "jesse_collect_dataset_new_token.h5", split = True)
-        negative_dataset = LivRealVideoNegativeDataset(args, "jesse_collect_dataset_new_token.h5")
-        openx_dataloader = DataLoader(openx_dataset, batch_size=args.batch_size * 5, shuffle=True, num_workers=int(args.worker * 2), drop_last=True, pin_memory=True)
+        openx_dataset = LivRealVideoTrainDataset(args, args.h5_embedding_path, split = False)
+        extra_dataset = LivRealVideoTrainDataset(args, "jesse_collect_dataset_new.h5", split = True)
+        openx_dataloader = DataLoader(openx_dataset, batch_size=args.batch_size * 5, shuffle=True, num_workers=int(args.worker * 1.9), drop_last=True, pin_memory=True)
         extra_dataloader = DataLoader(extra_dataset, batch_size=args.batch_size, shuffle=True, num_workers=args.worker, drop_last=True, pin_memory=True)
-        negative_dataloader = DataLoader(negative_dataset, batch_size=args.batch_size, shuffle=True, num_workers=args.worker, drop_last=True, pin_memory=True)
-        batch_size = args.batch_size + args.batch_size * 5
 
-        positive_eval_dataset = LivRealVideoEvalDataset(args, 
+        positive_eval_openx_dataset = LivRealVideoEvalDataset(args, 
                                                         "/data/shared/roboclip/data/h5_buffers/openx_embeddings/openx_embeddings_test_dataset_progrssed.h5",
                                                         label = "positive")
-        negative_eval_dataset = LivRealVideoEvalDataset(args,
+        negative_eval_openx_dataset = LivRealVideoEvalDataset(args,
                                                         "/data/shared/roboclip/data/h5_buffers/openx_embeddings/openx_embeddings_test_dataset_progrssed.h5",
                                                         label = "negative")
         
@@ -125,21 +121,38 @@ def main(args):
         #                                                 "/mnt/ssd_a_4tb/jzhang96/openx_embeddings_test_dataset_progrssed.h5",
         #                                                 label = "negative")
         
-        positive_eval_dataloader = DataLoader(positive_eval_dataset, batch_size=args.batch_size, shuffle=True, num_workers=2, drop_last=False, pin_memory=True)
-        negative_eval_dataloader = DataLoader(negative_eval_dataset, batch_size=args.batch_size, shuffle=True, num_workers=2, drop_last=False, pin_memory=True)
+        positive_eval_dataloader = DataLoader(positive_eval_openx_dataset, batch_size=args.batch_size, shuffle=True, num_workers=2, drop_last=False, pin_memory=True)
+        negative_eval_dataloader = DataLoader(negative_eval_openx_dataset, batch_size=args.batch_size, shuffle=True, num_workers=2, drop_last=False, pin_memory=True)
         
 
 
     elif args.extra_data:
         dataset = LivRealVideoDataset(args, "jesse_collect_dataset_new_token.h5", split = True)
         extra_dataloader = DataLoader(dataset, batch_size=args.batch_size, shuffle=True, num_workers=args.worker, drop_last=True)
-        batch_size = args.batch_size
+        positive_eval_openx_dataset = None
+        negative_eval_openx_dataset = None
     elif args.openx_data:
         dataset = LivRealVideoDataset(args, args.h5_embedding_path, split = False)
         openx_dataloader = DataLoader(dataset, batch_size=args.batch_size, shuffle=True, num_workers=args.worker, drop_last=True)
-        batch_size = args.batch_size
+        positive_eval_openx_dataset = None
+        negative_eval_openx_dataset = None
+        
     else:
         assert False, "No dataset specified"
+
+    extra_eval_train_pos_dataset = LivDemoVideoEvalDataset(args, "jesse_collect_dataset_new_token.h5", label = "positive", set_name="train")
+    extra_eval_train_neg_dataset = LivDemoVideoEvalDataset(args, "jesse_collect_dataset_new_token.h5", label = "negative", set_name="train")
+
+    extra_eval_eval_pos_dataset = LivDemoVideoEvalDataset(args, "jesse_collect_dataset_new_token.h5", label = "positive", set_name="eval")
+    extra_eval_eval_neg_dataset = LivDemoVideoEvalDataset(args, "jesse_collect_dataset_new_token.h5", label = "negative", set_name="eval")
+
+    extra_eval_train_pos_dataloader = DataLoader(extra_eval_train_pos_dataset, batch_size=4, shuffle=True, num_workers=1, drop_last=False)
+    extra_eval_train_neg_dataloader = DataLoader(extra_eval_train_neg_dataset, batch_size=4, shuffle=True, num_workers=1, drop_last=False)
+
+    extra_eval_eval_pos_dataloader = DataLoader(extra_eval_eval_pos_dataset, batch_size=4, shuffle=True, num_workers=1, drop_last=False)
+    extra_eval_eval_neg_dataloader = DataLoader(extra_eval_eval_neg_dataset, batch_size=4, shuffle=True, num_workers=1, drop_last=False)
+
+
 
 
     if args.two_step_training:
@@ -185,7 +198,7 @@ def main(args):
     else:
         triangular_mask = torch.tril(torch.ones(args.max_length, args.max_length)).to(device).unsqueeze(0).unsqueeze(0)
 
-    batch_triangular_mask = triangular_mask.repeat(batch_size * 2, 1, 1, 1).bool()
+    # batch_triangular_mask = triangular_mask.repeat(batch_size, 1, 1, 1).bool()
 
 
     # for epoch in range(args.epochs):
@@ -205,56 +218,81 @@ def main(args):
                 positive_progress = torch.cat([openx_data["progress"], extra_data["progress"]], dim = 0).to(device)
                 positive_class_label = torch.cat([openx_data["class_label"], extra_data["class_label"]], dim = 0).to(device)
 
-                negative_video_array = torch.roll(positive_video_array, args.batch_size, 0)
-                negative_text_array = positive_text_array.clone()
+                negative_video_array_1 = torch.roll(positive_video_array, args.batch_size, 0)
+                negative_text_array_1 = positive_text_array.clone()
 
-                negative_progress = torch.zeros_like(positive_progress)
-                negative_class_label = torch.zeros_like(positive_class_label)
-
-                video_array = torch.cat([positive_video_array[:openx_len], negative_video_array[:openx_len], positive_video_array[openx_len:], negative_video_array[openx_len:]], dim = 0)
-                text_array = torch.cat([positive_text_array[:openx_len], negative_text_array[:openx_len], positive_text_array[openx_len:], negative_text_array[openx_len:]], dim = 0)
-                progress = torch.cat([positive_progress[:openx_len], negative_progress[:openx_len], positive_progress[openx_len:], negative_progress[openx_len:]], dim = 0)
-                class_label = torch.cat([positive_class_label[:openx_len], negative_class_label[:openx_len], positive_class_label[openx_len:], negative_class_label[openx_len:]], dim = 0)
-
-                # negative_video_extra_array = negative_extra_data['video_array'].to(device).float()
-                # negative_text_extra_array = negative_extra_data['text_array'].to(device).float().squeeze(1)
-                # negative_progress_extra = torch.zeros_like(negative_extra_data['progress']).to(device)
-                # negative_class_label_extra = torch.zeros_like(negative_extra_data['class_label']).to(device)
+                negative_progress_1 = torch.zeros_like(positive_progress)
+                negative_class_label_1 = torch.zeros_like(positive_class_label)
 
 
-                # video_array = torch.cat([video_array, negative_video_extra_array], dim = 0)
-                # text_array = torch.cat([text_array, negative_text_extra_array], dim = 0)
-                # progress = torch.cat([progress, negative_progress_extra], dim = 0)
-                # class_label = torch.cat([class_label, negative_class_label_extra], dim = 0)
+                negative_video_array_2 = torch.roll(positive_video_array, args.batch_size * 2, 0)
+                negative_text_array_2 = positive_text_array.clone()
 
-                # negative_class_label = torch.cat([torch.ones(openx_len), torch.zeros(extra_len)], dim = 0).to(device).long()
-                # new_class_label = torch.roll(negative_class_label, args.batch_size, 0)
-                
+                negative_progress_2 = torch.zeros_like(positive_progress)
+                negative_class_label_2 = torch.zeros_like(positive_class_label)
+
+                negative_video_array_3 = torch.roll(positive_video_array, args.batch_size * 3, 0)
+                negative_text_array_3 = positive_text_array.clone()
+
+                negative_progress_3 = torch.zeros_like(positive_progress)
+                negative_class_label_3 = torch.zeros_like(positive_class_label)
+
+                openx_pos_video_array = torch.cat([positive_video_array[:openx_len], negative_video_array_1[:openx_len], negative_video_array_2[:openx_len], negative_video_array_3[:openx_len]], dim = 0)
+                openx_pos_text_array = torch.cat([positive_text_array[:openx_len], negative_text_array_1[:openx_len], negative_text_array_2[:openx_len], negative_text_array_3[:openx_len]], dim = 0)
+                openx_pos_progress = torch.cat([positive_progress[:openx_len], negative_progress_1[:openx_len], negative_progress_2[:openx_len], negative_progress_3[:openx_len]], dim = 0)
+                openx_pos_class_label = torch.cat([positive_class_label[:openx_len], negative_class_label_1[:openx_len], negative_class_label_2[:openx_len], negative_class_label_3[:openx_len]], dim = 0)
+
+                extra_pos_video_array = torch.cat([positive_video_array[openx_len:], negative_video_array_1[openx_len:], negative_video_array_2[openx_len:], negative_video_array_3[openx_len:]], dim = 0)
+                extra_pos_text_array = torch.cat([positive_text_array[openx_len:], negative_text_array_1[openx_len:], negative_text_array_2[openx_len:], negative_text_array_3[openx_len:]], dim = 0)
+                extra_pos_progress = torch.cat([positive_progress[openx_len:], negative_progress_1[openx_len:], negative_progress_2[openx_len:], negative_progress_3[openx_len:]], dim = 0)
+                extra_pos_class_label = torch.cat([positive_class_label[openx_len:], negative_class_label_1[openx_len:], negative_class_label_2[openx_len:], negative_class_label_3[openx_len:]], dim = 0)
+
+                video_array = torch.cat([openx_pos_video_array, extra_pos_video_array], dim = 0)
+                text_array = torch.cat([openx_pos_text_array, extra_pos_text_array], dim = 0)
+                progress = torch.cat([openx_pos_progress, extra_pos_progress], dim = 0)
+                class_label = torch.cat([openx_pos_class_label, extra_pos_class_label], dim = 0)
+
+                openx_len = len(openx_pos_video_array)
+                extra_len = len(extra_pos_video_array)
+                batch_triangular_mask = triangular_mask.repeat(openx_len + extra_len, 1, 1, 1).bool()
+
 
                 wandb_log, self_attention_model = update_model(args, video_array, text_array, batch_triangular_mask, self_attention_model, progress, class_label,
-                classification_loss_function, progress_loss_function, optimizer, openx_len = openx_len * 2, extra_len = extra_len * 2, scheduler = scheduler)
+                classification_loss_function, progress_loss_function, optimizer, openx_len = openx_len, extra_len = extra_len, scheduler = scheduler)
                 wandb.log(wandb_log)
             
+        elif args.openx_data:
+            for openx_data in tqdm(openx_dataloader):
+                video_array = openx_data["video_array"].to(device).float()
+                text_array = openx_data["text_array"].to(device).float().squeeze(1)
+                progress = openx_data["progress"].to(device)
+                class_label = openx_data["class_label"].to(device)
 
+                wandb_log, self_attention_model = update_model(args, video_array, text_array, batch_triangular_mask, self_attention_model, progress, class_label,
+                classification_loss_function, progress_loss_function, optimizer)
+                wandb.log(wandb_log)
+
+        elif args.extra_data:
+            for extra_data in tqdm(extra_dataloader):
+                video_array = extra_data["video_array"].to(device).float()
+                text_array = extra_data["text_array"].to(device).float().squeeze(1)
+                progress = extra_data["progress"].to(device)
+                class_label = extra_data["class_label"].to(device)
+                batch_triangular_mask = triangular_mask.repeat(video_array.size(0), 1, 1, 1).bool()
+                wandb_log, self_attention_model = update_model(args, video_array, text_array, batch_triangular_mask, self_attention_model, progress, class_label,
+                classification_loss_function, progress_loss_function, optimizer)
+                wandb.log(wandb_log)
 
         
 
 
 
-
-
-
-
-
-
-
-
-
-            
-
-        if epoch % 5 == 0:
+        if epoch % 10 == 0:
             self_attention_model.eval()
             with torch.no_grad():
+
+
+                    
         #     save_path = os.path.join("/scr/jzhang96/roboclip_v2_decoder_models_fix_3rd", experiment_name)
         #     if not os.path.exists(save_path):
         #         os.makedirs(save_path)
@@ -284,71 +322,34 @@ def main(args):
                                         self_attention_model = self_attention_model, 
                                         args = args)
                 
-                if positive_eval_dataloader is not None:
-                    correct_num = 0
-                    total_num = 0
-                    total_loss = 0
-                    wrong_num = 0
-                    for eval_data in tqdm(positive_eval_dataloader):
-                        
-                        video_array = eval_data["video_array"].to(device).float()
-                        text_array = eval_data["text_array"].to(device).float().squeeze(1)
-                        progress = eval_data["progress"].to(device)
-                        class_label = eval_data["class_label"].to(device)
-                        eval_batch_size, seq_len, _ = video_array.size()
-                        eval_triangular_mask = triangular_mask.repeat(eval_batch_size, 1, 1, 1).bool()
-                        progress_output, class_output = self_attention_model(video_array, eval_triangular_mask, text_array, mask = None)
-                        
-                        
-                    
-                        class_label = class_label.view(eval_batch_size * seq_len)
-                        progress = progress.view(eval_batch_size * seq_len, -1)
-                        
-                        class_output = class_output.view(eval_batch_size * seq_len, -1)
-                        progress_output = progress_output.view(eval_batch_size * seq_len, -1)
+                wandb_eval_log = {}
+                if positive_eval_openx_dataset is not None:
+                    class_accuracy, progress_loss = eval_model(positive_eval_dataloader, self_attention_model, progress_loss_function, triangular_mask)
+                    wandb_eval_log["openx_eval/progress_loss"] = progress_loss
+                    wandb_eval_log["openx_eval/correct_class_accuracy"] = class_accuracy
 
-                        none_zero_class = class_label != 0
-                        progress_loss = progress_loss_function(progress_output[none_zero_class], progress[none_zero_class])
-                        class_predict_label = torch.argmax(class_output, dim=1)
-                        # class_accuracy = torch.sum(class_predict_label == class_label).item() / len(class_predict_label)
-                        correct_num += torch.sum(class_predict_label == class_label).item()
-                        total_num += len(class_predict_label)
-                        total_loss += progress_loss.item()
-                    class_accuracy = correct_num / total_num
-                    progress = total_loss / total_num
-
-                    wandb_eval_log = {
-                        "openx_eval/progress_loss": progress_loss,
-                        "openx_eval/correct_class_accuracy": class_accuracy
-                    }
+                if negative_eval_openx_dataset is not None:
+                    class_accuracy, progress_loss = eval_model(negative_eval_dataloader, self_attention_model, progress_loss_function, triangular_mask)
+                    wandb_eval_log["openx_eval/wrong_class_accuracy"] = class_accuracy
 
 
-                    for eval_data in tqdm(negative_eval_dataloader):
-                        
-                        video_array = eval_data["video_array"].to(device).float()
-                        text_array = eval_data["text_array"].to(device).float().squeeze(1)
-                        progress = eval_data["progress"].to(device)
-                        class_label = eval_data["class_label"].to(device)
-                        eval_batch_size, seq_len, _ = video_array.size()
-                        eval_triangular_mask = triangular_mask.repeat(eval_batch_size, 1, 1, 1).bool()
-                        _, class_output = self_attention_model(video_array, eval_triangular_mask, text_array, mask = None)
-                        
-                        class_label = class_label.view(eval_batch_size * seq_len)
-                        progress = progress.view(eval_batch_size * seq_len, -1)
-                        
-                        class_output = class_output.view(eval_batch_size * seq_len, -1)
+                if extra_eval_train_pos_dataset is not None:
+                    class_accuracy, progress_loss = eval_model(extra_eval_train_pos_dataloader, self_attention_model, progress_loss_function, triangular_mask)
+                    wandb_eval_log["extra_train_pos_eval/progress_loss"] = progress_loss
+                    wandb_eval_log["extra_train_pos_eval/correct_class_accuracy"] = class_accuracy
 
-                        none_zero_class = class_label != 0
-                        class_predict_label = torch.argmax(class_output, dim=1)
-                        wrong_num += torch.sum(class_predict_label == class_label).item()
-                        # # correct_num += torch.sum(class_predict_label == class_label).item()
-                        # wrong_num += torch.sum(class_predict_label != class_label).item()
-                        # total_num += len(class_predict_label)
-                        # total_loss += progress_loss.item()
-                    wrong_class_accuracy = wrong_num / total_num
+                if extra_eval_train_neg_dataset is not None:
+                    class_accuracy, progress_loss = eval_model(extra_eval_train_neg_dataloader, self_attention_model, progress_loss_function, triangular_mask)
+                    wandb_eval_log["extra_train_neg_eval/wrong_class_accuracy"] = class_accuracy
 
-                    wandb_eval_log["openx_eval/wrong_class_accuracy"] = wrong_class_accuracy
+                if extra_eval_eval_pos_dataset is not None:
+                    class_accuracy, progress_loss = eval_model(extra_eval_eval_pos_dataloader, self_attention_model, progress_loss_function, triangular_mask)
+                    wandb_eval_log["extra_eval_pos_eval/progress_loss"] = progress_loss
+                    wandb_eval_log["extra_eval_pos_eval/correct_class_accuracy"] = class_accuracy
 
+                if extra_eval_eval_neg_dataset is not None:
+                    class_accuracy, progress_loss = eval_model(extra_eval_eval_neg_dataloader, self_attention_model, progress_loss_function, triangular_mask)
+                    wandb_eval_log["extra_eval_neg_eval/wrong_class_accuracy"] = class_accuracy
 
                     wandb.log(wandb_eval_log)
 
@@ -380,8 +381,8 @@ if __name__ == "__main__":
     argparser.add_argument('--seed', type=int, default=42)
     argparser.add_argument('--lr', type=float, default=1e-4)
     argparser.add_argument('--worker', type=int, default=4)
-    argparser.add_argument('--sample_neg', action='store_true')
     argparser.add_argument('--attention_heads', type=int, default=4)
+    argparser.add_argument('--sample_neg', action='store_true')
     argparser.add_argument('--reverse_video', action='store_true')
     argparser.add_argument('--normalize_embedding', action='store_true')    
     argparser.add_argument('--catagorical_progress', action='store_true')

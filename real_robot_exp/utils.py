@@ -4,6 +4,7 @@ import torch.nn.functional as F
 import numpy as np
 from torch.optim import Optimizer
 import math
+from tqdm import tqdm
 class CosineWithMinLRScheduler(torch.optim.lr_scheduler._LRScheduler):
     def __init__(self, optimizer: Optimizer, max_steps: int, max_lr: float, min_lr: float, last_epoch: int = -1):
         self.max_steps = max_steps
@@ -131,17 +132,21 @@ def update_model(args, video_array, text_array, batch_triangular_mask, self_atte
                 class_loss = classification_loss_function(class_output, class_label)
 
                 none_zero_class = class_label != 0
-                progress_loss = progress_loss_function(progress_output[none_zero_class], progress[none_zero_class])
-                loss = class_loss + progress_loss
+                if args.progress_loss:
+                    progress_loss = progress_loss_function(progress_output[none_zero_class], progress[none_zero_class])
+                    loss = class_loss + progress_loss
+                else:
+                    loss = class_loss
                 class_predict_label = torch.argmax(class_output, dim=1)
                 class_accuracy = torch.sum(class_predict_label == class_label).item() / len(class_predict_label)
 
                 wandb_log = {
                     "total_loss": loss.item(),
                     "class_loss": class_loss.item(),
-                    "progress_loss": progress_loss.item(),
                     "class_accuracy": class_accuracy
                 }
+                if args.progress_loss:
+                    wandb_log["progress_loss"] = progress_loss.item()
                 
             if args.catagorical_progress:
                 predict_label = torch.argmax(progress_output, dim=1)
@@ -173,4 +178,39 @@ def update_model(args, video_array, text_array, batch_triangular_mask, self_atte
             
         wandb_log["lr"] = optimizer.param_groups[0]["lr"]
         return wandb_log, self_attention_model
+
+
+def eval_model(positive_eval_openx_dataset, self_attention_model, progress_loss_function, triangular_mask):
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    correct_num = 0
+    total_num = 0
+    total_loss = 0
+    # wrong_num = 0
+    for eval_data in tqdm(positive_eval_openx_dataset):
+
+        video_array = eval_data["video_array"].to(device).float()
+        text_array = eval_data["text_array"].to(device).float().squeeze(1)
+        progress = eval_data["progress"].to(device)
+        class_label = eval_data["class_label"].to(device)
+        eval_batch_size, seq_len, _ = video_array.size()
+        eval_triangular_mask = triangular_mask.repeat(eval_batch_size, 1, 1, 1).bool()
+        progress_output, class_output = self_attention_model(video_array, eval_triangular_mask, text_array, mask = None)
+                        
+        class_label = class_label.view(eval_batch_size * seq_len)
+        progress = progress.view(eval_batch_size * seq_len, -1)
+                        
+        class_output = class_output.view(eval_batch_size * seq_len, -1)
+        progress_output = progress_output.view(eval_batch_size * seq_len, -1)
+
+        none_zero_class = class_label != 0
+        progress_loss = progress_loss_function(progress_output[none_zero_class], progress[none_zero_class])
+        class_predict_label = torch.argmax(class_output, dim=1)
+        # class_accuracy = torch.sum(class_predict_label == class_label).item() / len(class_predict_label)
+        correct_num += torch.sum(class_predict_label == class_label).item()
+        total_num += len(class_predict_label)
+        total_loss += progress_loss.item()
+    class_accuracy = correct_num / total_num
+    progress = total_loss / total_num
+
+    return class_accuracy, progress
 
