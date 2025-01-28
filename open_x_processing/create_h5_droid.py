@@ -15,7 +15,7 @@ from clip_utils import (
 from PIL import Image
 
 SAVE_H5_NAME = "droid_embeddings.h5"  # name of the h5 file it'll be saved to
-DEBUG = True  # willuse DROID_100
+DEBUG = False # will use DROID_100
 MAX_NUM_FRAMES_PER_EPISODE = 128
 TRAIN_SPLIT = "train"  # "test"
 
@@ -23,9 +23,9 @@ TRAIN_SPLIT = "train"  # "test"
 os.environ["TF_FORCE_GPU_ALLOW_GROWTH"] = "true"
 
 POSSIBLE_LANG_INSTRUCTION_KEYS = [
-    "natural_language_instruction",
-    "instruction",
     "language_instruction",
+    "language_instruction_2",
+    "language_instruction_3",
 ]
 
 
@@ -41,67 +41,63 @@ tasks_seen = dict()
 total_samples = 0
 with h5py.File(SAVE_H5_NAME, "w") as f:
     dataset = tfds.load(dataset_name, data_dir="gs://gresearch/robotics", split="train")
-    n_samples = 10 if DEBUG else 1000000000000000000
+    n_samples = 1000000000000000000
     valid_samples_per_dataset = 0
-    img_key_to_name = OXE_DATASET_CONFIGS[dataset_name][
+    img_key_to_name = OXE_DATASET_CONFIGS[dataset_name.split("_")[0]][
         "image_obs_keys"
     ]  # dict mapping img_keys to the names of the images in OXE
 
-    # get the image key that matches "primary" to get the main camera view
-    for img_key in [img_key_to_name["primary"], img_key_to_name["secondary"]]:
-        i = 0
-        len_of_dataset = min(dataset.cardinality().numpy(), n_samples)
-        # convert to iterator to be able to catch exception when failed to load an episode for any reason
-        dataset = iter(dataset)
-        num_failures_in_a_row = 0
-        while True:
-            try:
-                episode = next(dataset)
-                # print progress
-                print(
-                    f"------------------- Processing episode {i+1} out of {len_of_dataset} of dataset {dataset_name} -------------------"
-                )
-                # skip if we have already saved the video
-                this_episode_name = f"{dataset_name}_ep{i}"
+    # get both ext camera left and ext camera right
+    len_of_dataset = min(dataset.cardinality().numpy(), n_samples)
+    views = [img_key_to_name["primary"], img_key_to_name["secondary"]]
+    i = 0
+    num_failures_in_a_row = 0
+    # convert to iterator to be able to catch exception when failed to load an episode for any reason
+    iter_dataset = iter(dataset)
+    while True:
+        try:
+            episode = next(iter_dataset)
+            # print progress
+            print(
+                f"------------------- Processing episode {i+1} out of {len_of_dataset} of dataset {dataset_name} -------------------"
+            )
+            i += 1
+            # skip if we have already saved the video
+            this_episode_name = f"{dataset_name}_ep{i}"
 
-                episode_images = []
+            episode_images_list = [[] for _ in range(len(views))]
 
-                if valid_samples_per_dataset >= n_samples:
-                    break
-                # task is the language instruction
-                task = None
-                for _, step in enumerate(episode["steps"]):
-                    # skip data loading if no lang
+            if valid_samples_per_dataset >= n_samples:
+                break
+            # task is the language instruction
+            task = None
+            for _, step in enumerate(episode["steps"]):
+                # skip data loading if no lang
+                if task is None or task == "":
                     for key in POSSIBLE_LANG_INSTRUCTION_KEYS:
-                        if key in step["observation"]:
-                            if dataset_name == "language_table":
-                                task = step["observation"][key].numpy()
-                                task = bytes(task[np.where(task != 0)].tolist()).decode(
-                                    "utf-8"
-                                )
-                            else:
-                                task = step["observation"][key].numpy().decode()
-                            break
-                        elif key in step:
+                        if key in step:
                             task = step[key].numpy().decode()
                             break
-                    # extract video
-                    episode_images.append(step["observation"][img_key].numpy())
+                # extract video
+                for j, img_key in enumerate(views):
+                    episode_images_list[j].append(step["observation"][img_key].numpy())
+                    
 
-                if task is None:
-                    print(
-                        f"Skipping episode {i + 1} of dataset {dataset_name} as the task is None or empty."
-                    )
-                    print(
-                        f"Keys in step: {step.keys()} and keys in observation: {step['observation'].keys()}"
-                    )
-                    continue
+            if task is None or task == '':
+                print(
+                    f"Skipping episode {i + 1} of dataset {dataset_name} as the task is None or empty."
+                )
+                print(
+                    f"Keys in step: {step.keys()} and keys in observation: {step['observation'].keys()}"
+                )
+                continue
 
-                # process task name to capitalize the first letter
-                task = task.capitalize()
-                # process task name to not have a period at the end and strip other punctuation
-                task = task.strip(" .,!?-_")
+            # process task name to capitalize the first letter
+            task = task.capitalize()
+            # process task name to not have a period at the end and strip other punctuation
+            task = task.strip(" .,!?-_")
 
+            for _, episode_images in enumerate(episode_images_list):
                 if task not in tasks_seen:
                     tasks_seen[task] = 1
                     if random.random() < 0.1:
@@ -131,6 +127,7 @@ with h5py.File(SAVE_H5_NAME, "w") as f:
                 task_group_len = len(task_group.keys())
                 # convert length to string
                 task_group_len_str = str(task_group_len)
+
 
                 embedding_list = []
                 # linspace to get the indices of the frames to sample
@@ -163,14 +160,14 @@ with h5py.File(SAVE_H5_NAME, "w") as f:
                     # compression_opts=9,
                 )
 
+
                 valid_samples_per_dataset += 1
-                i += 1
                 total_samples += 1
                 print(f"Valid total samples: {total_samples} ")
-            except StopIteration:
-                break
-            except Exception as e:
-                print(f"Failed to load dataset {dataset_name} with error: {e}")
-                num_failures_in_a_row += 1
-                if num_failures_in_a_row > 10:
-                    break
+        except StopIteration:
+            break
+        except Exception as e:
+            print(f"Failed to load example with error: {e}")
+
+print(f"Total samples: {total_samples}")
+print(f"Tasks seen: {tasks_seen.keys()}")
