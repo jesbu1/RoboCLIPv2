@@ -107,19 +107,19 @@ def main(args):
         openx_dataloader = DataLoader(openx_dataset, batch_size=args.batch_size * 5, shuffle=True, num_workers=int(args.worker * 1.9), drop_last=True, pin_memory=True)
         extra_dataloader = DataLoader(extra_dataset, batch_size=args.batch_size, shuffle=True, num_workers=args.worker, drop_last=True, pin_memory=True)
 
-        # positive_eval_openx_dataset = LivRealVideoEvalDataset(args, 
-        #                                                 "/data/shared/roboclip/data/h5_buffers/openx_embeddings/openx_embeddings_test_dataset_progrssed.h5",
-        #                                                 label = "positive")
-        # negative_eval_openx_dataset = LivRealVideoEvalDataset(args,
-        #                                                 "/data/shared/roboclip/data/h5_buffers/openx_embeddings/openx_embeddings_test_dataset_progrssed.h5",
-        #                                                 label = "negative")
-        
         positive_eval_openx_dataset = LivRealVideoEvalDataset(args, 
-                                                        "/mnt/ssd_a_4tb/jzhang96/openx_embeddings_test_dataset_progrssed.h5",
+                                                        "/data/shared/roboclip/data/h5_buffers/openx_embeddings/openx_embeddings_test_dataset_progrssed.h5",
                                                         label = "positive")
         negative_eval_openx_dataset = LivRealVideoEvalDataset(args,
-                                                        "/mnt/ssd_a_4tb/jzhang96/openx_embeddings_test_dataset_progrssed.h5",
+                                                        "/data/shared/roboclip/data/h5_buffers/openx_embeddings/openx_embeddings_test_dataset_progrssed.h5",
                                                         label = "negative")
+        
+        # positive_eval_openx_dataset = LivRealVideoEvalDataset(args, 
+        #                                                 "/mnt/ssd_a_4tb/jzhang96/openx_embeddings_test_dataset_progrssed.h5",
+        #                                                 label = "positive")
+        # negative_eval_openx_dataset = LivRealVideoEvalDataset(args,
+        #                                                 "/mnt/ssd_a_4tb/jzhang96/openx_embeddings_test_dataset_progrssed.h5",
+        #                                                 label = "negative")
         
         positive_eval_dataloader = DataLoader(positive_eval_openx_dataset, batch_size=args.batch_size, shuffle=True, num_workers=2, drop_last=False, pin_memory=True)
         negative_eval_dataloader = DataLoader(negative_eval_openx_dataset, batch_size=args.batch_size, shuffle=True, num_workers=2, drop_last=False, pin_memory=True)
