@@ -103,8 +103,8 @@ def main(args):
     eval_dataloader = None
     if args.openx_data and args.extra_data:
         openx_dataset = LivRealVideoTrainDataset(args, args.h5_embedding_path, split = False)
-        extra_dataset = LivRealVideoTrainDataset(args, "jesse_collect_dataset_new.h5", split = True)
-        openx_dataloader = DataLoader(openx_dataset, batch_size=args.batch_size * 5, shuffle=True, num_workers=int(args.worker * 1.9), drop_last=True, pin_memory=True)
+        extra_dataset = LivRealVideoTrainDataset(args, "jesse_collect_dataset_new.h5", split = True, sample_neg=args.demo_sample_neg)
+        openx_dataloader = DataLoader(openx_dataset, batch_size=args.batch_size * 3, shuffle=True, num_workers=int(args.worker * 1.9), drop_last=True, pin_memory=True)
         extra_dataloader = DataLoader(extra_dataset, batch_size=args.batch_size, shuffle=True, num_workers=args.worker, drop_last=True, pin_memory=True)
 
         positive_eval_openx_dataset = LivRealVideoEvalDataset(args, 
@@ -225,19 +225,6 @@ def main(args):
                 negative_progress_1 = torch.zeros_like(positive_progress)
                 negative_class_label_1 = torch.zeros_like(positive_class_label)
 
-
-                # negative_video_array_2 = torch.roll(positive_video_array, args.batch_size * 2, 0)
-                # negative_text_array_2 = positive_text_array.clone()
-
-                # negative_progress_2 = torch.zeros_like(positive_progress)
-                # negative_class_label_2 = torch.zeros_like(positive_class_label)
-
-                # negative_video_array_3 = torch.roll(positive_video_array, args.batch_size * 3, 0)
-                # negative_text_array_3 = positive_text_array.clone()
-
-                # negative_progress_3 = torch.zeros_like(positive_progress)
-                # negative_class_label_3 = torch.zeros_like(positive_class_label)
-
                 openx_pos_video_array = torch.cat([positive_video_array[:openx_len], negative_video_array_1[:openx_len]], dim = 0)
                 openx_pos_text_array = torch.cat([positive_text_array[:openx_len], negative_text_array_1[:openx_len]], dim = 0)
                 openx_pos_progress = torch.cat([positive_progress[:openx_len], negative_progress_1[:openx_len]], dim = 0)
@@ -256,6 +243,11 @@ def main(args):
                 openx_len = len(openx_pos_video_array)
                 extra_len = len(extra_pos_video_array)
                 batch_triangular_mask = triangular_mask.repeat(openx_len + extra_len, 1, 1, 1).bool()
+
+
+
+
+
 
 
                 wandb_log, self_attention_model = update_model(args, video_array, text_array, batch_triangular_mask, self_attention_model, progress, class_label,
@@ -403,6 +395,7 @@ if __name__ == "__main__":
     argparser.add_argument('--cosine_scheduler', action='store_true')
     argparser.add_argument('--clip_grad', action='store_true')
     argparser.add_argument('--progress_loss', action='store_true')
+    argparser.add_argument('--demo_sample_neg', action='store_true')
     args = argparser.parse_args()
     main(args)
 

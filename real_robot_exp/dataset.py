@@ -233,7 +233,7 @@ class LivRealVideoDataset(Dataset):
 
 class LivRealVideoTrainDataset(LivRealVideoDataset):
 
-    def __init__(self, args, h5_file, split=False, eval=False):
+    def __init__(self, args, h5_file, split=False, eval=False, sample_neg=False):
         h5_file = h5py.File(h5_file, "r")
         self.h5_file = h5_file
         self.args = args
@@ -246,6 +246,7 @@ class LivRealVideoTrainDataset(LivRealVideoDataset):
                 self.keys = self.keys[:int(len(self.keys)*0.5)]
             eval_keys = self.keys[int(len(self.keys)*0.5):]
             json.dump(eval_keys, open("eval_keys.json", "w"), indent=4)
+        self.sample_neg = sample_neg
 
     def __getitem__(self, idx):
         # select a random key
@@ -256,14 +257,31 @@ class LivRealVideoTrainDataset(LivRealVideoDataset):
         # sample text sample
         text_array = self.sample_text_feature(data_group)
 
-        if self.args.reverse_video:
-            random_num = random.random()
-            if random_num < 0.5:
-                video_array, progress, class_label = self.sample_reverse_video_feature(data_group)
+
+        if not self.sample_neg:
+
+            if self.args.reverse_video:
+                random_num = random.random()
+                if random_num < 0.5:
+                    video_array, progress, class_label = self.sample_reverse_video_feature(data_group)
+                else:
+                    video_array, progress, class_label = self.sample_video_feature(data_group)
             else:
                 video_array, progress, class_label = self.sample_video_feature(data_group)
+
         else:
-            video_array, progress, class_label = self.sample_video_feature(data_group)
+            neg_random_num = random.random()
+            if neg_random_num < 0.5:
+                video_array, progress, class_label = self.sample_negative_video_feature(key)
+            else:
+                if self.args.reverse_video:
+                    random_num = random.random()
+                    if random_num < 0.5:
+                        video_array, progress, class_label = self.sample_reverse_video_feature(data_group)
+                    else:
+                        video_array, progress, class_label = self.sample_video_feature(data_group)
+                else:
+                    video_array, progress, class_label = self.sample_video_feature(data_group)
 
 
         output_dict = {
