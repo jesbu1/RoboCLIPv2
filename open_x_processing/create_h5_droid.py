@@ -16,7 +16,7 @@ from PIL import Image
 
 SAVE_H5_NAME = "droid_embeddings.h5"  # name of the h5 file it'll be saved to
 DEBUG = False # will use DROID_100
-MAX_NUM_FRAMES_PER_EPISODE = 128
+MAX_NUM_FRAMES_PER_EPISODE = 32
 TRAIN_SPLIT = "train"  # "test"
 
 # prevent TFDS from taking up all GPU memory
