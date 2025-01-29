@@ -5,6 +5,7 @@ import requests
 import base64
 import cv2
 import json
+import os
 import random
 import re
 from typing import Dict, List, Optional
@@ -13,7 +14,7 @@ from typing import Dict, List, Optional
 class GVLRewardModel(BaseRewardModel):
     def __init__(
         self,
-        api_key: str = "AIzaSyCaDj-o-VuadUwA94U9VdirB81VsY_t3TM",
+        api_key: str = os.getenv("GVL_KEY"),
         device: str = "cuda",
         max_frames: int = 15,
         offset: float = 0.5,
@@ -51,7 +52,7 @@ class GVLRewardModel(BaseRewardModel):
         """
         total_frames = frames_array.shape[0]
         if total_frames == 0:
-            print("[!] frames_array 为空，无法提取帧。")
+            print("[!] frames_array is empty, couldn't sample frames。")
             return []
 
         if total_frames <= self.max_frames:
@@ -62,7 +63,7 @@ class GVLRewardModel(BaseRewardModel):
             temp_indices += [int(1 + self.offset + i * frame_interval) for i in range(self.max_frames - 2)]
             temp_indices = sorted(set(temp_indices))  # 去重+排序
         
-        print(f"[INFO] 提取 {temp_indices} 帧。")
+        print(f"[INFO] Extracted {temp_indices} frame。")
 
         frames_info = []
         for idx in temp_indices:
@@ -72,7 +73,7 @@ class GVLRewardModel(BaseRewardModel):
                 continue
             frame_b64 = base64.b64encode(buffer).decode("utf-8")
             frames_info.append({
-                "gt_index": len(frames_info) + 1,  # 按顺序赋值 `gt_index`
+                "gt_index": len(frames_info) + 1, 
                 "base64": frame_b64
             })
 
@@ -91,7 +92,7 @@ class GVLRewardModel(BaseRewardModel):
         """
         构建 Gemini API `prompt`，用于推理 `task_completion_percentage`。
         """
-        initial_frame = frames_info[0]  # 选第一个作为初始场景
+        initial_frame = frames_info[0]
         prompt1 = (
             f"You are an expert roboticist tasked to predict task completion percentages "
             f"for frames of a robot for the task of {task_description}. "
