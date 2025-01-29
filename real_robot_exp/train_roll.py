@@ -189,7 +189,7 @@ def main(args):
     print(self_attention_model)
     if args.cosine_scheduler:
         optimizer = torch.optim.Adam(self_attention_model.parameters(), lr=args.lr)
-        scheduler = CosineWithMinLRScheduler(optimizer, max_steps=120000, max_lr=args.lr, min_lr=1e-5)
+        scheduler = CosineWithMinLRScheduler(optimizer, max_steps=300000, max_lr=args.lr, min_lr=1e-5)
     else:
         optimizer = torch.optim.Adam(self_attention_model.parameters(), lr=args.lr)
         scheduler = None
@@ -328,21 +328,21 @@ def main(args):
 
                 if extra_eval_train_pos_dataset is not None:
                     class_accuracy, progress_loss = eval_model(extra_eval_train_pos_dataloader, self_attention_model, progress_loss_function, triangular_mask, args)
-                    wandb_eval_log["extra_train_pos_eval/progress_loss"] = progress_loss
-                    wandb_eval_log["extra_train_pos_eval/correct_class_accuracy"] = class_accuracy
+                    wandb_eval_log["demo_dataset_train_set_correct_label/progress_loss"] = progress_loss
+                    wandb_eval_log["demo_dataset_train_set_correct_label/correct_class_accuracy"] = class_accuracy
 
                 if extra_eval_train_neg_dataset is not None:
                     class_accuracy, progress_loss = eval_model(extra_eval_train_neg_dataloader, self_attention_model, progress_loss_function, triangular_mask, args)
-                    wandb_eval_log["extra_train_neg_eval/wrong_class_accuracy"] = class_accuracy
+                    wandb_eval_log["demo_dataset_train_set_wrong_label/wrong_class_accuracy"] = class_accuracy
 
                 if extra_eval_eval_pos_dataset is not None:
                     class_accuracy, progress_loss = eval_model(extra_eval_eval_pos_dataloader, self_attention_model, progress_loss_function, triangular_mask, args)
-                    wandb_eval_log["extra_eval_pos_eval/progress_loss"] = progress_loss
-                    wandb_eval_log["extra_eval_pos_eval/correct_class_accuracy"] = class_accuracy
+                    wandb_eval_log["demo_dataset_eval_set_correct_label/progress_loss"] = progress_loss
+                    wandb_eval_log["demo_dataset_eval_set_correct_label/correct_class_accuracy"] = class_accuracy
 
                 if extra_eval_eval_neg_dataset is not None:
                     class_accuracy, progress_loss = eval_model(extra_eval_eval_neg_dataloader, self_attention_model, progress_loss_function, triangular_mask, args)
-                    wandb_eval_log["extra_eval_neg_eval/wrong_class_accuracy"] = class_accuracy
+                    wandb_eval_log["demo_dataset_eval_set_wrong_label/wrong_class_accuracy"] = class_accuracy
 
                     wandb.log(wandb_eval_log)
 
@@ -367,8 +367,8 @@ def main(args):
 
 if __name__ == "__main__":
     argparser = argparse.ArgumentParser()
-    # argparser.add_argument('--h5_embedding_path', type=str, default='/data/shared/roboclip/data/h5_buffers/openx_embeddings/openx_embeddings_full_uncompressed_with_langtable_processed.h5')
-    argparser.add_argument('--h5_embedding_path', type=str, default='/mnt/ssd_a_4tb/jzhang96/openx_embeddings_full_uncompressed_with_langtable_processed.h5')
+    argparser.add_argument('--h5_embedding_path', type=str, default='/data/shared/roboclip/data/h5_buffers/openx_embeddings/openx_embeddings_full_uncompressed_with_langtable_processed.h5')
+    # argparser.add_argument('--h5_embedding_path', type=str, default='/mnt/ssd_a_4tb/jzhang96/openx_embeddings_full_uncompressed_with_langtable_processed.h5')
     argparser.add_argument('--batch_size', type=int, default=32)
     argparser.add_argument('--epochs', type=int, default=200)
     argparser.add_argument('--seed', type=int, default=42)
