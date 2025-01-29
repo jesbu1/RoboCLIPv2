@@ -12,7 +12,7 @@ import h5py
 from torch.nn.functional import mse_loss
 from torch.nn import CrossEntropyLoss 
 import os
-from models import RewardTwoStepNewPositionEmbeddingPredictor, RewardOneStepLangTokenPositionEmbeddingPredictor
+from models import RewardTwoStepNewPositionEmbeddingPredictor, RewardOneStepNewPositionEmbeddingPredictor
 from eval_confusion_matrix import plot_confusion_matrix
 from eval_progress import plot_progress
 from eval_raw_video_progress import real_video_plot
@@ -63,6 +63,8 @@ def main(args):
         experiment_name += "_OpenXData"
     if args.two_step_training:
         experiment_name += "_TwoStep"
+    else:
+        experiment_name += "_OneStep"
     if args.cat_text:
         experiment_name += "_CatText"
     if args.layer_norm:
@@ -171,7 +173,7 @@ def main(args):
 
 
     if args.catagorical_progress :
-        if args.sample_neg and not args.two_step_training:
+        if not args.two_step_training:
             num_bins = args.catagorical_progress_bins + 1
         else:
             num_bins = args.catagorical_progress_bins
@@ -185,7 +187,7 @@ def main(args):
             assert False, "Not implemented"
     else:
         if args.cat_text_front:
-            self_attention_model = RewardOneStepLangTokenPositionEmbeddingPredictor(embedding_dim, args = args, class_num=num_bins).to(device)
+            self_attention_model = RewardOneStepNewPositionEmbeddingPredictor(embedding_dim, args = args, class_num=num_bins).to(device)
         else:
             assert False, "Not implemented"
 
@@ -220,7 +222,6 @@ def main(args):
                 positive_video_array = torch.cat([openx_data["video_array"], extra_data["video_array"]], dim = 0).to(device).float()
                 positive_text_array = torch.cat([openx_data["text_array"], extra_data["text_array"]], dim = 0).to(device).float().squeeze(1)                
                 positive_progress = torch.cat([openx_data["progress"], extra_data["progress"]], dim = 0).to(device)
-                    
 
                 negative_video_array_1 = torch.roll(positive_video_array, args.batch_size, 0)
                 negative_text_array_1 = positive_text_array.clone()
@@ -253,7 +254,6 @@ def main(args):
                 openx_len = len(openx_pos_video_array)
                 extra_len = len(extra_pos_video_array)
                 batch_triangular_mask = triangular_mask.repeat(openx_len + extra_len, 1, 1, 1).bool()
-
 
                 wandb_log, self_attention_model = update_model(args, video_array, text_array, batch_triangular_mask, self_attention_model, progress, class_label,
                 classification_loss_function, progress_loss_function, optimizer, openx_len = openx_len, extra_len = extra_len, scheduler = scheduler)
@@ -321,10 +321,12 @@ def main(args):
                                         args = args)
                 
                 wandb_eval_log = {}
+
                 if positive_eval_openx_dataset is not None:
                     class_accuracy, progress_loss = eval_model(positive_eval_dataloader, self_attention_model, progress_loss_function, triangular_mask, args)
                     wandb_eval_log["openx_eval/progress_loss"] = progress_loss
-                    wandb_eval_log["openx_eval/correct_class_accuracy"] = class_accuracy
+                    if args.two_step_training:
+                        wandb_eval_log["openx_eval/correct_class_accuracy"] = class_accuracy
 
                 if negative_eval_openx_dataset is not None:
                     class_accuracy, progress_loss = eval_model(negative_eval_dataloader, self_attention_model, progress_loss_function, triangular_mask, args)
@@ -349,7 +351,7 @@ def main(args):
                     class_accuracy, progress_loss = eval_model(extra_eval_eval_neg_dataloader, self_attention_model, progress_loss_function, triangular_mask, args)
                     wandb_eval_log["demo_dataset_eval_set_wrong_label/wrong_class_accuracy"] = class_accuracy
 
-                    wandb.log(wandb_eval_log)
+                wandb.log(wandb_eval_log)
 
 
 
@@ -401,6 +403,7 @@ if __name__ == "__main__":
     argparser.add_argument('--clip_grad', action='store_true')
     argparser.add_argument('--progress_loss', action='store_true')
     argparser.add_argument('--demo_sample_neg', action='store_true')
+
     args = argparser.parse_args()
     main(args)
 

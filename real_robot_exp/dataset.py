@@ -132,7 +132,7 @@ class LivRealVideoDataset(Dataset):
             video_progress = np.floor(video_progress * self.args.catagorical_progress_bins) 
             if video_progress[-1] == self.args.catagorical_progress_bins:
                 video_progress[-1] = self.args.catagorical_progress_bins - 1
-            if self.args.sample_neg:
+            if not self.args.two_step_training:
                 video_progress += 1
 
         return video_frames, video_progress, np.ones(video_progress.shape[0])
@@ -186,7 +186,9 @@ class LivRealVideoDataset(Dataset):
             progress = np.floor(progress * self.args.catagorical_progress_bins) 
             if progress[-1] == self.args.catagorical_progress_bins:
                 progress[-1] = self.args.catagorical_progress_bins - 1
-            if self.args.sample_neg:
+            # if self.args.sample_neg:
+            #     progress += 1
+            if not self.args.two_step_training:
                 progress += 1
 
         reverse_frame = video_frames[::-1][1:]
@@ -383,7 +385,7 @@ class LivRealVideoEvalDataset(Dataset):
             video_progress = np.floor(video_progress * self.args.catagorical_progress_bins) 
             if video_progress[-1] == self.args.catagorical_progress_bins:
                 video_progress[-1] = self.args.catagorical_progress_bins - 1
-            if self.args.sample_neg:
+            if self.args.two_step_training:
                 video_progress += 1
 
         if self.args.subsample_video:
