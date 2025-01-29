@@ -172,8 +172,6 @@ def update_model(args, video_array, text_array, batch_triangular_mask, self_atte
 
     else:
         batch_size, seq_len, _ = video_array.size()
-        
-        class_label = class_label.long()
 
         if openx_len is not None:
             openx_progress_label = progress[:openx_len]
@@ -184,19 +182,19 @@ def update_model(args, video_array, text_array, batch_triangular_mask, self_atte
 
             if args.progress_loss:
                 if not args.catagorical_progress:
-                    openx_progress_label = openx_progress_label.view(openx_len * seq_len)[openx_none_zero_class]
-                    extra_progress_label = extra_progress_label.view(extra_len * seq_len)[extra_none_zero_class]
-                    openx_pred_progress = progress_output[:openx_len].view(openx_len * seq_len, -1).squeeze(1)[openx_none_zero_class]
-                    extra_pred_progress = progress_output[openx_len:].view(extra_len * seq_len, -1).squeeze(1)[extra_none_zero_class]
+                    openx_progress_label = openx_progress_label.view(openx_len * seq_len)
+                    extra_progress_label = extra_progress_label.view(extra_len * seq_len)
+                    openx_pred_progress = progress_output[:openx_len].view(openx_len * seq_len, -1).squeeze(1)
+                    extra_pred_progress = progress_output[openx_len:].view(extra_len * seq_len, -1).squeeze(1)
 
                     openx_progress_loss = progress_loss_function(openx_pred_progress, openx_progress_label)
                     extra_progress_loss = progress_loss_function(extra_pred_progress, extra_progress_label)
                 else:
 
-                    openx_progress_label = openx_progress_label.view(openx_len * seq_len)[openx_none_zero_class]
-                    extra_progress_label = extra_progress_label.view(extra_len * seq_len)[extra_none_zero_class]
-                    openx_pred_progress = progress_output[:openx_len].view(openx_len * seq_len, -1).squeeze(1)[openx_none_zero_class]
-                    extra_pred_progress = progress_output[openx_len:].view(extra_len * seq_len, -1).squeeze(1)[extra_none_zero_class]
+                    openx_progress_label = openx_progress_label.view(openx_len * seq_len)
+                    extra_progress_label = extra_progress_label.view(extra_len * seq_len)
+                    openx_pred_progress = progress_output[:openx_len].view(openx_len * seq_len, -1).squeeze(1)
+                    extra_pred_progress = progress_output[openx_len:].view(extra_len * seq_len, -1).squeeze(1)
 
                     openx_progress_loss = progress_loss_function(openx_pred_progress, openx_progress_label)
                     extra_progress_loss = progress_loss_function(extra_pred_progress, extra_progress_label)
@@ -206,10 +204,14 @@ def update_model(args, video_array, text_array, batch_triangular_mask, self_atte
                 loss = progress_loss
 
 
-            if args.progress_loss:
-                wandb_log["progress_loss"] = progress_loss.item()
-                wandb_log["openx_progress_loss"] = openx_progress_loss.item()
-                wandb_log["extra_progress_loss"] = extra_progress_loss.item()
+            # wandb_log["total_loss"] = progress_loss.item()
+            # wandb_log["openx_progress_loss"] = openx_progress_loss.item()
+            # wandb_log["extra_progress_loss"] = extra_progress_loss.item()
+            wandb_log = {
+                "total_loss": loss.item(),
+                "openx_progress_loss": openx_progress_loss.item(),
+                "extra_progress_loss": extra_progress_loss.item(),
+            }
 
             if args.catagorical_progress:
 
@@ -239,30 +241,44 @@ def eval_model(positive_eval_openx_dataset, self_attention_model, progress_loss_
         progress = eval_data["progress"].to(device)
         if args.catagorical_progress:
             progress = progress.long()
-        class_label = eval_data["class_label"].to(device)
+
         eval_batch_size, seq_len, _ = video_array.size()
         eval_triangular_mask = triangular_mask.repeat(eval_batch_size, 1, 1, 1).bool()
         progress_output, class_output = self_attention_model(video_array, eval_triangular_mask, text_array, mask = None)
-                        
-        class_label = class_label.view(eval_batch_size * seq_len)
+        
         progress = progress.view(eval_batch_size * seq_len, -1)
-                        
-        class_output = class_output.view(eval_batch_size * seq_len, -1)
         progress_output = progress_output.view(eval_batch_size * seq_len, -1)
 
-        none_zero_class = class_label != 0
+        if args.two_step_training:
+            class_label = eval_data["class_label"].to(device)               
+            class_label = class_label.view(eval_batch_size * seq_len)
+            class_output = class_output.view(eval_batch_size * seq_len, -1)
+            none_zero_class = class_label != 0
+            if not args.catagorical_progress:
+                progress_loss = progress_loss_function(progress_output[none_zero_class], progress[none_zero_class])
+            else:
+                progress_loss = progress_loss_function(progress_output[none_zero_class], progress[none_zero_class].long().squeeze(1))
+            class_predict_label = torch.argmax(class_output, dim=1)
+            # class_accuracy = torch.sum(class_predict_label == class_label).item() / len(class_predict_label)
+            correct_num += torch.sum(class_predict_label == class_label).item()
+            
 
-        if not args.catagorical_progress:
-            progress_loss = progress_loss_function(progress_output[none_zero_class], progress[none_zero_class])
         else:
-            progress_loss = progress_loss_function(progress_output[none_zero_class], progress[none_zero_class].long().squeeze(1))
-        class_predict_label = torch.argmax(class_output, dim=1)
-        # class_accuracy = torch.sum(class_predict_label == class_label).item() / len(class_predict_label)
-        correct_num += torch.sum(class_predict_label == class_label).item()
-        total_num += len(class_predict_label)
+            if not args.catagorical_progress:
+                progress_loss = progress_loss_function(progress_output, progress)
+            else:
+                progress_loss = progress_loss_function(progress_output, progress.long().squeeze(1))
+
+            
+        total_num += len(progress)
         total_loss += progress_loss.item()
-    class_accuracy = correct_num / total_num
+    
     progress = total_loss / total_num
+
+    if args.two_step_training:
+        class_accuracy = correct_num / total_num
+    else:
+        class_accuracy = None
 
     return class_accuracy, progress
 
