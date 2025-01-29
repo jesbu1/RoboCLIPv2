@@ -84,7 +84,6 @@ def update_model(args, video_array, text_array, batch_triangular_mask, self_atte
             else:
                 loss = class_loss
 
-
             openx_class_predict_label = torch.argmax(pred_openx_class, dim=1)
             extra_class_predict_label = torch.argmax(pred_extra_class, dim=1)
 
@@ -124,14 +123,16 @@ def update_model(args, video_array, text_array, batch_triangular_mask, self_atte
                 wandb_log["openx_progress_loss"] = openx_progress_loss.item()
                 wandb_log["extra_progress_loss"] = extra_progress_loss.item()
 
-            if args.catagorical_progress:
+            
+                if args.catagorical_progress:
 
-                openx_predict_label = torch.argmax(openx_pred_progress, dim=1)
-                extra_predict_label = torch.argmax(extra_pred_progress, dim=1)
-                openx_progress_accuracy = torch.sum(openx_predict_label == openx_progress_label).item() / len(openx_predict_label)
-                extra_progress_accuracy = torch.sum(extra_predict_label == extra_progress_label).item() / len(extra_predict_label)
-                wandb_log["openx_progress_accuracy"] = openx_progress_accuracy
-                wandb_log["extra_progress_accuracy"] = extra_progress_accuracy
+                    openx_predict_label = torch.argmax(openx_pred_progress, dim=1)
+                    extra_predict_label = torch.argmax(extra_pred_progress, dim=1)
+
+                    openx_progress_accuracy = torch.sum(openx_predict_label == openx_progress_label).item() / len(openx_predict_label)
+                    extra_progress_accuracy = torch.sum(extra_predict_label == extra_progress_label).item() / len(extra_predict_label)
+                    wandb_log["openx_progress_accuracy"] = openx_progress_accuracy
+                    wandb_log["extra_progress_accuracy"] = extra_progress_accuracy
 
         else:
         
@@ -171,6 +172,7 @@ def update_model(args, video_array, text_array, batch_triangular_mask, self_atte
 
     else:
         batch_size, seq_len, _ = video_array.size()
+        
         class_label = class_label.long()
 
         if openx_len is not None:
@@ -218,23 +220,9 @@ def update_model(args, video_array, text_array, batch_triangular_mask, self_atte
                 wandb_log["openx_progress_accuracy"] = openx_progress_accuracy
                 wandb_log["extra_progress_accuracy"] = extra_progress_accuracy
 
-
-
-
-
-
-
-
-    optimizer.zero_grad()
+    
     loss.backward()
-    if args.clip_grad:
-        torch.nn.utils.clip_grad_norm_(self_attention_model.parameters(), max_norm=1.0)
-    optimizer.step()
-    if scheduler is not None:
-        scheduler.step()
 
-        
-    wandb_log["lr"] = optimizer.param_groups[0]["lr"]
     return wandb_log, self_attention_model
 
 

@@ -218,6 +218,8 @@ def main(args):
 
         if args.openx_data and args.extra_data:
             for openx_data, extra_data in tqdm(zip(openx_dataloader, extra_dataloader), total = 100):
+                optimizer.zero_grad()
+                
                 openx_len = len(openx_data["video_array"])
                 extra_len = len(extra_data["video_array"])
                 
@@ -262,6 +264,7 @@ def main(args):
                 classification_loss_function, progress_loss_function, optimizer, openx_len = openx_len, extra_len = extra_len, scheduler = scheduler)
                 wandb.log(wandb_log)
 
+
             
         elif args.extra_data:
             for extra_data in tqdm(extra_dataloader):
@@ -270,11 +273,15 @@ def main(args):
                 progress = extra_data["progress"].to(device)
                 class_label = extra_data["class_label"].to(device)
                 batch_triangular_mask = triangular_mask.repeat(video_array.size(0), 1, 1, 1).bool()
-                import pdb; pdb.set_trace()
                 wandb_log, self_attention_model = update_model(args, video_array, text_array, batch_triangular_mask, self_attention_model, progress, class_label,
                 classification_loss_function, progress_loss_function, optimizer)
                 wandb.log(wandb_log)
-
+                if args.clip_grad:
+                    torch.nn.utils.clip_grad_norm_(self_attention_model.parameters(), max_norm=1.0)
+                optimizer.step()
+                if scheduler is not None:
+                    scheduler.step()
+                wandb_log["lr"] = optimizer.param_groups[0]["lr"]
         
 
 
