@@ -227,7 +227,8 @@ def create_wrapped_env(
     env_id,
     reward_model,
     pca_model=None,
-    language_features=None,
+    language_features_policy=None,
+    language_features_reward=None,
     use_time=False,
     monitor=False,
     goal_observable=False,
@@ -280,11 +281,12 @@ def create_wrapped_env(
 
         dense_eval = True if (mode == "eval" or mode == "demo") else False
 
-        if reward_model.name == "VLCRewardModel" or "GVLRewardModel":
+
+        if reward_model.name == "VLCRewardModel" or reward_model.name == "GVLRewardModel":
             base_env = VLC_GVL_RewardWrapper(
                 base_env,
                 reward_model,
-                language_features=language_features,
+                language_features_reward=language_features_reward,
                 use_proprio=use_proprio,
             )
         else:
@@ -292,14 +294,14 @@ def create_wrapped_env(
                 base_env,
                 reward_model,
                 is_state_based=is_state_based,
-                language_features=language_features,
+                language_features_reward=language_features_reward,
                 dense_eval=dense_eval,
                 use_proprio=use_proprio,
             )
 
         # This adds the language features to the observation
-        if language_features is not None:
-            base_env = LanguageWrapper(base_env, language_features)
+        if language_features_policy is not None:
+            base_env = LanguageWrapper(base_env, language_features_policy)
 
         # Environment keeps an aggregate reward at each step and outputs it only when the episode ends
         if dense_rewards_at_end:

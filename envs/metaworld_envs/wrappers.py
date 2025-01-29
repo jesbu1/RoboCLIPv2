@@ -156,7 +156,7 @@ class LearnedRewardWrapper(gym.Wrapper):
         self,
         env: gym.Env,
         reward_model: BaseRewardModel,
-        language_features: th.Tensor,
+        language_features_reward: th.Tensor,
         is_state_based: bool = False,
         dense_eval: bool = False,
         use_proprio: bool = False,
@@ -184,9 +184,9 @@ class LearnedRewardWrapper(gym.Wrapper):
         self.reward_at_every_step = self.reward_model.reward_at_every_step
         self.reward_divisor = self.reward_model.reward_divisor
 
-        if language_features is not None:
+        if language_features_reward is not None:
             self.reward_language_features = (
-                th.Tensor(language_features)
+                th.Tensor(language_features_reward)
                 .float()
                 .to(self.reward_model.device)
                 .unsqueeze(0)
@@ -315,14 +315,14 @@ class VLC_GVL_RewardWrapper(gym.Wrapper):
         self,
         env: gym.Env,
         reward_model: BaseRewardModel,
-        language_features: str,  # raw text
+        language_features_reward: str,  # raw text
         use_proprio: bool = False,
         is_state_based: bool = False,
     ):
         super(VLC_GVL_RewardWrapper, self).__init__(env)
         self.reward_model = reward_model
         self.use_proprio = use_proprio
-        self.language_features = language_features  # raw text
+        self.language_features = language_features_reward  # raw text
 
         # VLC needs raw image and text，不需要 state-based 处理
         self.past_observations: List[np.ndarray] = []

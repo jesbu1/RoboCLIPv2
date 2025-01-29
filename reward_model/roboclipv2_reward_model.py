@@ -101,7 +101,8 @@ class RoboclipV2RewardModel(BaseRewardModel):
         :param encoded_videos: Encoded video representations. Shape: (batch_size, num_images, embedding_dim).
         :return: Reward values for each text-video pair.
         """
-        encoded_texts = encoded_texts.squeeze(0) # remove batch dimension for video_encoding_model not supported and then only 
+        encoded_texts = encoded_texts.squeeze(0) # remove batch dimension for video_encoding_model not supported and then only
+        print(encoded_texts.shape, encoded_videos.shape) 
         # TODO: add the processing for downsampling if needed @Yusen @Jiahui
         reward = self.video_encoding_model(encoded_videos.float(), None, encoded_texts.float()).item()
         return reward

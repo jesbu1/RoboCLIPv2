@@ -1,13 +1,15 @@
 from reward_model.base_reward_model import BaseRewardModel
 import torch
 import numpy as np
-from s3dg import S3D
+from reward_model.s3dg import S3D
 from typing import Union
 
 class RoboclipRewardModel(BaseRewardModel):
-    def __init__(self, device: str = "cuda", batch_size: int = 64, success_bonus: int = 10) -> None:
+    def __init__(self, device: str = "cuda", batch_size: int = 64, success_bonus: int = 10, model_load_path: str = "", reward_at_every_step: bool = False) -> None:
+        super().__init__(device, batch_size, success_bonus=success_bonus)
         self.model = self.load_model()
         self.device = device
+        self.reward_at_every_step = reward_at_every_step
     
     def padding_video(video_frames, max_length):
         video_length = len(video_frames)
@@ -26,10 +28,10 @@ class RoboclipRewardModel(BaseRewardModel):
 
         return video_frames
     
-    def load_model(self, model_load_path = '../s3d_howto100m.pth'):
+    def load_model(self, model_load_path = 's3d_howto100m.pth'):
         device = "cuda" if torch.cuda.is_available() else "cpu"
-        net = S3D('../s3d_dict.npy', 512)
-        net.load_state_dict(torch.load('../s3d_howto100m.pth'))
+        net = S3D('/home/yusenluo/RoboCLIP_offline/RoboCLIPv2/s3d_dict.npy', 512)
+        net.load_state_dict(torch.load('/home/yusenluo/RoboCLIP_offline/RoboCLIPv2/s3d_howto100m.pth'))
         net = net.to(device)
         net.eval()
         return net
@@ -42,8 +44,14 @@ class RoboclipRewardModel(BaseRewardModel):
         return video_embeddings
 
     def encode_text(self, text):
-        text_embeddings = self.net.text_module(text)["text_embedding"].to(self.device).float()
+        text_embeddings = self.net.text_module([text])["text_embedding"].to(self.device).float()
         return text_embeddings
     
     def calculate_rewards(self, text_embeddings: Union[np.ndarray, torch.Tensor], video_embeddings: Union[np.ndarray, torch.Tensor]):
         return torch.matmul(video_embeddings, text_embeddings.t())[0].detach().cpu().numpy()
+    
+    def _calculate_reward_batch(self, text_embeddings, video_embeddings):
+        return torch.matmul(video_embeddings, text_embeddings.t())[0].detach().cpu().numpy()
+    
+    def _encode_image_batch(self, images: torch.Tensor) -> np.ndarray:
+        return self.encode_images(images)

@@ -134,7 +134,7 @@ def parse_reward_model(reward_cfg: DictConfig) -> BaseRewardModel:
         return None
     if reward_string == "roboclip":
         reward_model = RoboclipRewardModel(
-            reward_cfg.model_path,
+            model_load_path=reward_cfg.model_path,
             batch_size=reward_cfg.batch_size,
             success_bonus=reward_cfg.success_bonus,
         )
@@ -151,7 +151,7 @@ def parse_reward_model(reward_cfg: DictConfig) -> BaseRewardModel:
         )
     elif reward_string == "roboclipv2":
         reward_model = RoboclipV2RewardModel(
-            reward_cfg.model_path,
+            model_load_path=reward_cfg.model_path,
             use_pca=reward_cfg.use_pca,
             attention_heads=4,
             pca_model_dir=None,
@@ -406,9 +406,15 @@ def create_envs(cfg: DictConfig, reward_model: BaseRewardModel):
     text_instruction = environment_to_instruction[env_id]
 
     with th.no_grad():
-        lang_feat = reward_model.encode_text_for_policy(text_instruction).squeeze()
+        lang_feat_policy = reward_model.encode_text_for_policy(text_instruction).squeeze()
         # lang_feat = th.from_numpy(lang_feat).squeeze()
+        if reward_model != "GVLRewardModel" and reward_model != "VLCRewardModel":
+            lang_feat_reward = reward_model.encode_text(text_instruction).squeeze()
+        else:
+            lang_feat_reward = text_instruction
 
+    print("Lang feat policy shape", lang_feat_policy.shape)
+    print("Lang feat reward shape", lang_feat_reward.shape)
     ignore_language = env_config.ignore_language
 
     # Define envs (dummy example for illustration)
@@ -417,7 +423,8 @@ def create_envs(cfg: DictConfig, reward_model: BaseRewardModel):
             [
                 create_wrapped_env(
                     env_id,
-                    language_features=lang_feat if not ignore_language else None,
+                    language_features_policy=lang_feat_policy if not ignore_language else None,
+                    language_features_reward=lang_feat_reward,
                     reward_model=reward_model,
                     goal_observable=True,
                     success_bonus=cfg.reward_model.success_bonus,
@@ -435,7 +442,8 @@ def create_envs(cfg: DictConfig, reward_model: BaseRewardModel):
                 create_wrapped_env(
                     env_id,
                     success_bonus=cfg.reward_model.success_bonus,
-                    language_features=lang_feat if not ignore_language else None,
+                    language_features_policy=lang_feat_policy if not ignore_language else None,
+                    language_features_reward=lang_feat_reward,
                     reward_model=reward_model,
                     goal_observable=True,
                     is_state_based=env_config.is_state_based,
@@ -452,8 +460,8 @@ def create_envs(cfg: DictConfig, reward_model: BaseRewardModel):
                 create_wrapped_env(
                     env_id,
                     reward_model=reward_model,
-                    language_features=lang_feat if not ignore_language else None,
-                    success_bonus=cfg.reward_model.success_bonus,
+                    language_features_policy=lang_feat_policy if not ignore_language else None,
+                    language_features_reward=lang_feat_reward,
                     monitor=True,
                     goal_observable=True,
                     is_state_based=env_config.is_state_based,
@@ -469,8 +477,8 @@ def create_envs(cfg: DictConfig, reward_model: BaseRewardModel):
                 create_wrapped_env(
                     env_id,
                     reward_model=reward_model,
-                    language_features=lang_feat if not ignore_language else None,
-                    success_bonus=cfg.reward_model.success_bonus,
+                    language_features_policy=lang_feat_policy if not ignore_language else None,
+                    language_features_reward=lang_feat_reward,
                     monitor=True,
                     goal_observable=True,
                     is_state_based=env_config.is_state_based,

@@ -137,6 +137,7 @@ class BaseRewardModel(abc.ABC):
         :param encoded_videos: Encoded video representations.
         :return: Reward values for each text-video pair.
         """
+        print(encoded_texts.shape, encoded_videos.shape)
         assert len(encoded_texts) == len(
             encoded_videos
         ), "The number of text and video representations should be the same."
