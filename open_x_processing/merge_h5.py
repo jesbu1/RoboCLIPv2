@@ -17,6 +17,7 @@ from PIL import Image
 MAIN_H5 = "/data/shared/roboclip/data/h5_buffers/openx_embeddings/openx_embeddings_full_uncompressed_with_langtable35k.h5"
 H5_MERGING_FROM = "openx_embeddings_lang_table_35k.h5"
 print(f"Adding to {MAIN_H5} from {H5_MERGING_FROM}")
+MAX_TO_MERGE = 30_000
 
 model, processor, tokenizer = load_model("liv")
 model = model.cuda()
@@ -31,6 +32,8 @@ with h5py.File(MAIN_H5, "a") as f:
     )
     with h5py.File(H5_MERGING_FROM, "r") as f2:
         for task in tqdm(f2.keys()):
+            if total_samples >= MAX_TO_MERGE:
+                break
             if task in f.keys():
                 # get all keys that are numeric
                 all_f_keys_for_task = list(f[task].keys())
@@ -45,6 +48,7 @@ with h5py.File(MAIN_H5, "a") as f:
                             data=f2[task][key],
                         )
                         next_key += 1
+                        total_samples += 1
             else:
                 f.create_group(task)
                 for key in f2[task].keys():
@@ -52,6 +56,7 @@ with h5py.File(MAIN_H5, "a") as f:
                         key,
                         data=f2[task][key],
                     )
+                    total_samples += 1
     num_keys_after = len(f.keys())
     num_trajs_after = sum(
         [len([key for key in f[task].keys() if key.isnumeric()]) for task in f.keys()]
