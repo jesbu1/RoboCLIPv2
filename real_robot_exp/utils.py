@@ -171,17 +171,59 @@ def update_model(args, video_array, text_array, batch_triangular_mask, self_atte
 
     else:
         batch_size, seq_len, _ = video_array.size()
-        progress = progress.view(batch_size * seq_len, -1) 
-        if args.catagorical_progress:
-            progress = progress.squeeze(1)
-        loss = progress_loss_function(progress_output, progress)
-        wandb_log = {
-            "progress_loss": loss.item(),
-        }
-        if args.catagorical_progress:
-            predict_label = torch.argmax(progress_output, dim=1)
-            accuracy = torch.sum(predict_label == progress) / len(predict_label)
-            wandb_log["progress_accuracy"] = accuracy
+        class_label = class_label.long()
+
+        if openx_len is not None:
+            openx_progress_label = progress[:openx_len]
+            extra_progress_label = progress[openx_len:]
+
+            openx_pred_progress = progress_output[:openx_len]
+            extra_pred_progress = progress_output[openx_len:]
+
+            if args.progress_loss:
+                if not args.catagorical_progress:
+                    openx_progress_label = openx_progress_label.view(openx_len * seq_len)[openx_none_zero_class]
+                    extra_progress_label = extra_progress_label.view(extra_len * seq_len)[extra_none_zero_class]
+                    openx_pred_progress = progress_output[:openx_len].view(openx_len * seq_len, -1).squeeze(1)[openx_none_zero_class]
+                    extra_pred_progress = progress_output[openx_len:].view(extra_len * seq_len, -1).squeeze(1)[extra_none_zero_class]
+
+                    openx_progress_loss = progress_loss_function(openx_pred_progress, openx_progress_label)
+                    extra_progress_loss = progress_loss_function(extra_pred_progress, extra_progress_label)
+                else:
+
+                    openx_progress_label = openx_progress_label.view(openx_len * seq_len)[openx_none_zero_class]
+                    extra_progress_label = extra_progress_label.view(extra_len * seq_len)[extra_none_zero_class]
+                    openx_pred_progress = progress_output[:openx_len].view(openx_len * seq_len, -1).squeeze(1)[openx_none_zero_class]
+                    extra_pred_progress = progress_output[openx_len:].view(extra_len * seq_len, -1).squeeze(1)[extra_none_zero_class]
+
+                    openx_progress_loss = progress_loss_function(openx_pred_progress, openx_progress_label)
+                    extra_progress_loss = progress_loss_function(extra_pred_progress, extra_progress_label)
+
+                progress_loss = openx_progress_loss + extra_progress_loss
+
+                loss = progress_loss
+
+
+            if args.progress_loss:
+                wandb_log["progress_loss"] = progress_loss.item()
+                wandb_log["openx_progress_loss"] = openx_progress_loss.item()
+                wandb_log["extra_progress_loss"] = extra_progress_loss.item()
+
+            if args.catagorical_progress:
+
+                openx_predict_label = torch.argmax(openx_pred_progress, dim=1)
+                extra_predict_label = torch.argmax(extra_pred_progress, dim=1)
+                openx_progress_accuracy = torch.sum(openx_predict_label == openx_progress_label).item() / len(openx_predict_label)
+                extra_progress_accuracy = torch.sum(extra_predict_label == extra_progress_label).item() / len(extra_predict_label)
+                wandb_log["openx_progress_accuracy"] = openx_progress_accuracy
+                wandb_log["extra_progress_accuracy"] = extra_progress_accuracy
+
+
+
+
+
+
+
 
     optimizer.zero_grad()
     loss.backward()

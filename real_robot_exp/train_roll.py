@@ -12,7 +12,7 @@ import h5py
 from torch.nn.functional import mse_loss
 from torch.nn import CrossEntropyLoss 
 import os
-from models import RewardTwoStepNewPositionEmbeddingPredictor
+from models import RewardTwoStepNewPositionEmbeddingPredictor, RewardOneStepLangTokenPositionEmbeddingPredictor
 from eval_confusion_matrix import plot_confusion_matrix
 from eval_progress import plot_progress
 from eval_raw_video_progress import real_video_plot
@@ -87,7 +87,7 @@ def main(args):
     run = wandb.init(
         entity=WANDB_ENTITY_NAME,
         project=WANDB_PROJECT_NAME,
-        group="Jan28thOpenXVidedo",
+        group="Jan29thOpenXVidedoDebug",
         config=args,
         name=experiment_name,
     )
@@ -182,9 +182,12 @@ def main(args):
         if args.cat_text_front:
             self_attention_model = RewardTwoStepNewPositionEmbeddingPredictor(embedding_dim, args = args, class_num=num_bins).to(device)
         else:
-            self_attention_model = RewardTwoStepPredictor(embedding_dim, args = args, class_num=num_bins).to(device)
+            assert False, "Not implemented"
     else:
-        self_attention_model = RewardPredictor(embedding_dim, args = args, class_num=num_bins).to(device)
+        if args.cat_text_front:
+            self_attention_model = RewardOneStepLangTokenPositionEmbeddingPredictor(embedding_dim, args = args, class_num=num_bins).to(device)
+        else:
+            assert False, "Not implemented"
 
     print(self_attention_model)
     if args.cosine_scheduler:
@@ -213,41 +216,43 @@ def main(args):
                 openx_len = len(openx_data["video_array"])
                 extra_len = len(extra_data["video_array"])
 
-                positive_video_array = torch.cat([openx_data["video_array"], extra_data["video_array"]], dim = 0).to(device).float()
-                positive_text_array = torch.cat([openx_data["text_array"], extra_data["text_array"]], dim = 0).to(device).float().squeeze(1)
                 
+                positive_video_array = torch.cat([openx_data["video_array"], extra_data["video_array"]], dim = 0).to(device).float()
+                positive_text_array = torch.cat([openx_data["text_array"], extra_data["text_array"]], dim = 0).to(device).float().squeeze(1)                
                 positive_progress = torch.cat([openx_data["progress"], extra_data["progress"]], dim = 0).to(device)
-                positive_class_label = torch.cat([openx_data["class_label"], extra_data["class_label"]], dim = 0).to(device)
+                    
 
                 negative_video_array_1 = torch.roll(positive_video_array, args.batch_size, 0)
                 negative_text_array_1 = positive_text_array.clone()
-
                 negative_progress_1 = torch.zeros_like(positive_progress)
-                negative_class_label_1 = torch.zeros_like(positive_class_label)
+                    
 
                 openx_pos_video_array = torch.cat([positive_video_array[:openx_len], negative_video_array_1[:openx_len]], dim = 0)
                 openx_pos_text_array = torch.cat([positive_text_array[:openx_len], negative_text_array_1[:openx_len]], dim = 0)
                 openx_pos_progress = torch.cat([positive_progress[:openx_len], negative_progress_1[:openx_len]], dim = 0)
-                openx_pos_class_label = torch.cat([positive_class_label[:openx_len], negative_class_label_1[:openx_len]], dim = 0)
+                    
 
                 extra_pos_video_array = torch.cat([positive_video_array[openx_len:], negative_video_array_1[openx_len:]], dim = 0)
                 extra_pos_text_array = torch.cat([positive_text_array[openx_len:], negative_text_array_1[openx_len:]], dim = 0)
                 extra_pos_progress = torch.cat([positive_progress[openx_len:], negative_progress_1[openx_len:]], dim = 0)
-                extra_pos_class_label = torch.cat([positive_class_label[openx_len:], negative_class_label_1[openx_len:]], dim = 0)
+
+                if args.two_step_training:
+                    positive_class_label = torch.cat([openx_data["class_label"], extra_data["class_label"]], dim = 0).to(device)
+                    negative_class_label_1 = torch.zeros_like(positive_class_label)
+                    openx_pos_class_label = torch.cat([positive_class_label[:openx_len], negative_class_label_1[:openx_len]], dim = 0)
+                    extra_pos_class_label = torch.cat([positive_class_label[openx_len:], negative_class_label_1[openx_len:]], dim = 0)
+                    class_label = torch.cat([openx_pos_class_label, extra_pos_class_label], dim = 0)
+                else:
+                    class_label = None
 
                 video_array = torch.cat([openx_pos_video_array, extra_pos_video_array], dim = 0)
                 text_array = torch.cat([openx_pos_text_array, extra_pos_text_array], dim = 0)
                 progress = torch.cat([openx_pos_progress, extra_pos_progress], dim = 0)
-                class_label = torch.cat([openx_pos_class_label, extra_pos_class_label], dim = 0)
+                
 
                 openx_len = len(openx_pos_video_array)
                 extra_len = len(extra_pos_video_array)
                 batch_triangular_mask = triangular_mask.repeat(openx_len + extra_len, 1, 1, 1).bool()
-
-
-
-
-
 
 
                 wandb_log, self_attention_model = update_model(args, video_array, text_array, batch_triangular_mask, self_attention_model, progress, class_label,
