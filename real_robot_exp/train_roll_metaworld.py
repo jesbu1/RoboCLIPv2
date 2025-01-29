@@ -88,7 +88,7 @@ def main(args):
     run = wandb.init(
         entity=WANDB_ENTITY_NAME,
         project=WANDB_PROJECT_NAME,
-        group="Jan29thOpenXVidedoMetaworldDebug",
+        group="Jan29thOpenXVidedoMetaworld",
         config=args,
         name=experiment_name,
     )
