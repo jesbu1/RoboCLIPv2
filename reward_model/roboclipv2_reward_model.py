@@ -21,7 +21,7 @@ def normalize_embeddings(embeddings, return_tensor=True):
         return normalized_embeddings.detach().cpu().numpy()
 
 class RoboclipV2RewardModel(BaseRewardModel):
-    def __init__(self, model_load_path: str, use_pca: bool, attention_heads: int, pca_model_dir: str = None, device: str = 'cuda', batch_size=64, reward_at_every_step: bool = False):
+    def __init__(self, model_load_path: str, use_pca: bool, attention_heads: int, pca_model_dir: str = None, device: str = 'cuda', batch_size=64, reward_at_every_step: bool = False, success_bonus: int = 10) -> None:
         """
         Initializes the RoboclipV2 reward model.
         :param model_load_path: Path to the model checkpoint.
@@ -31,7 +31,7 @@ class RoboclipV2RewardModel(BaseRewardModel):
         :param device: Device to run the model on (default: 'cuda').
         :param batch_size: Batch size to use for encoding data (default: 64).
         """
-        super().__init__(device, batch_size)
+        super().__init__(device, batch_size, success_bonus=success_bonus)
         self.use_pca = use_pca
         self.attention_heads = attention_heads
         self.pretrained_liv_model, self.pca_video_model, self.pca_text_model, self.video_encoding_model = self._load_model(model_load_path, pca_model_dir)

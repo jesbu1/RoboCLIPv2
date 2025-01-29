@@ -1,4 +1,7 @@
 from gym import Env, spaces
+import sys
+import os
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 from offline_rl_algorithms.offline_replay_buffers import H5ReplayBuffer
 import torch.nn as nn
 import numpy as np
@@ -17,7 +20,6 @@ from typing import Any, Dict
 
 import torch as th
 
-import os
 import argparse
 from stable_baselines3.common.callbacks import EvalCallback, CallbackList
 
@@ -51,6 +53,7 @@ from reward_model.base_reward_model import BaseRewardModel
 from reward_model.roboclip_reward_model import RoboclipRewardModel
 from reward_model.vlc_reward_model import VLCRewardModel
 from reward_model.roboclipv2_reward_model import RoboclipV2RewardModel
+from reward_model.gvl_reward_model import GVLRewardModel
 
 from reward_model.env_reward_model import EnvRewardModel
 
@@ -137,7 +140,12 @@ def parse_reward_model(reward_cfg: DictConfig) -> BaseRewardModel:
         )
     elif reward_string == "vlc":
         reward_model = VLCRewardModel(
-            reward_cfg.model_path,
+            server_url = reward_cfg.server_url,
+            batch_size=reward_cfg.batch_size,
+            success_bonus=reward_cfg.success_bonus,
+        )
+    elif reward_string == "gvl":
+        reward_model = GVLRewardModel(
             batch_size=reward_cfg.batch_size,
             success_bonus=reward_cfg.success_bonus,
         )
@@ -256,37 +264,38 @@ def main(cfg: DictConfig):
 
     # Map the tasks to their strings
     # offline_task_strings =
-
-    try:
-        h5_path = offline_config.offline_h5_path.format(cfg.reward_model.name)
-        h5_path = to_absolute_path(h5_path)
-        print(h5_path)
-        # check if file exists
-        with open(h5_path, "r") as f:
-            pass
-    except FileNotFoundError:
-        print(
-            "File {} not found. This file likely does not have the correct reward preprocessed.".format(
-                h5_path
+    if offline_config.offline_training_steps > 0 or cfg.online_training.mix_buffers_ratio > 0.0:
+        try:
+            h5_path = offline_config.offline_h5_path.format(cfg.reward_model.name)
+            h5_path = to_absolute_path(h5_path)
+            print(h5_path)
+            # check if file exists
+            with open(h5_path, "r") as f:
+                pass
+        except FileNotFoundError:
+            print(
+                "File {} not found. This file likely does not have the correct reward preprocessed.".format(
+                    h5_path
+                )
             )
-        )
-        raise FileNotFoundError
+            raise FileNotFoundError
 
-    sparse_only = True if reward_model.name == "sparse" else False
-    buffer = H5ReplayBuffer(
-        h5_path,
-        use_language_embeddings=use_language,
-        success_bonus=cfg.reward_model.success_bonus,
-        sparsify_rewards=sparse_only,
-        filter_instructions=offline_tasks,
-        image_encoder=reward_model,
-        is_state_based=env_config.is_state_based,
-        use_proprio=env_config.use_proprio,
-        calculate_mc_returns=training_config.use_calibrated_q,  # only used for cal-ql
-        mc_return_gamma=training_config.gamma,
-        dense_rewards_at_end=training_config.dense_rewards_at_end,
-        reward_divisor=cfg.reward_model.reward_divisor,
-    )
+    if offline_config.offline_training_steps > 0 or cfg.online_training.mix_buffers_ratio > 0.0:
+        sparse_only = True if reward_model.name == "sparse" else False
+        buffer = H5ReplayBuffer(
+            h5_path,
+            use_language_embeddings=use_language,
+            success_bonus=cfg.reward_model.success_bonus,
+            sparsify_rewards=sparse_only,
+            filter_instructions=offline_tasks,
+            image_encoder=reward_model,
+            is_state_based=env_config.is_state_based,
+            use_proprio=env_config.use_proprio,
+            calculate_mc_returns=training_config.use_calibrated_q,  # only used for cal-ql
+            mc_return_gamma=training_config.gamma,
+            dense_rewards_at_end=training_config.dense_rewards_at_end,
+            reward_divisor=cfg.reward_model.reward_divisor,
+        )
 
     ### Learn offline
     if offline_config.offline_training_steps > 0 and isinstance(

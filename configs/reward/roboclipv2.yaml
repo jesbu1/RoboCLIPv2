@@ -3,7 +3,7 @@
 reward_model: 
   name: 'roboclipv2'
   batch_size: 64
-  model_path: '/data/shared/roboclip/clip_liv_models/RegressionRandom_liv_subtract_before_heads_4/model_74.pt'
+  model_path: '/scr/yusenluo/RoboCLIP/visualization/for_offline/clip_liv_models/RegressionRandom_liv_subtract_before_heads_4/model_74.pt' #'/data/shared/roboclip/clip_liv_models/RegressionRandom_liv_subtract_before_heads_4/model_74.pt'
   use_pca: false
   success_bonus: 10.0
 

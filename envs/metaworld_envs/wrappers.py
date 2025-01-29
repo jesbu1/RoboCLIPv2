@@ -3,6 +3,7 @@ import numpy as np
 import torch as th
 import torch.nn.functional as F
 from gym import spaces
+from typing import List
 
 from reward_model.base_reward_model import BaseRewardModel
 
@@ -308,6 +309,58 @@ class LearnedRewardWrapper(gym.Wrapper):
 
         return obs
 
+
+class VLC_GVL_RewardWrapper(gym.Wrapper):
+    def __init__(
+        self,
+        env: gym.Env,
+        reward_model: BaseRewardModel,
+        language_features: str,  # raw text
+        use_proprio: bool = False,
+        is_state_based: bool = False,
+    ):
+        super(VLC_GVL_RewardWrapper, self).__init__(env)
+        self.reward_model = reward_model
+        self.use_proprio = use_proprio
+        self.language_features = language_features  # raw text
+
+        # VLC needs raw image and text，不需要 state-based 处理
+        self.past_observations: List[np.ndarray] = []
+        self.counter = 0
+
+        self.reward_divisor = self.reward_model.reward_divisor
+        self.reward_at_every_step = self.reward_model.reward_at_every_step
+
+    def step(self, action):
+        self.counter += 1
+        obs, original_reward, done, info = self.env.step(action)
+
+        frame = self.env.render()
+        self.past_observations.append(frame)
+
+        reward = 0.0
+        if done or self.reward_at_every_step:
+            video_frames = np.stack(self.past_observations, axis=0)
+            reward = self.reward_model.calculate_rewards(video_frames, self.language_features)
+            self.past_observations = []
+
+        reward /= self.reward_divisor
+        if info.get("success", False):
+            reward += self.reward_model.success_bonus
+        print(f"reward: {reward}")
+
+        return obs, reward, done, info
+
+    def reset(self):
+        self.past_observations = []
+        self.counter = 0
+
+        obs = self.env.reset()
+        
+        frame = self.env.render()
+        self.past_observations.append(frame)
+
+        return obs
 
 # Environment keeps an aggregate reward at each step and outputs it only when the episode ends
 class RewardAtEndWrapper(gym.Wrapper):
