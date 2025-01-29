@@ -75,21 +75,22 @@ def plot_progress_class(h5_file, set, self_attention_model, args):
             traj_data = normalize_embeddings(traj_data)
 
         traj_data = traj_data.view(-1, 1024).unsqueeze(0).repeat(env_text_embedding.shape[0], 1, 1)
-        triangle_mask = torch.tril(torch.ones(traj_data.shape[1], traj_data.shape[1])).to(device).unsqueeze(0).unsqueeze(0).repeat(traj_data.shape[0], 1, 1, 1)
-        mask = torch.ones(traj_data.shape[1]).to(device).unsqueeze(0).repeat(traj_data.shape[0], 1)
+        triangle_mask = torch.tril(torch.ones(traj_data.shape[1] + 1, traj_data.shape[1] + 1)).to(device).unsqueeze(0).unsqueeze(0).repeat(traj_data.shape[0], 1, 1, 1)
+        # mask = torch.ones(traj_data.shape[1]).to(device).unsqueeze(0).repeat(traj_data.shape[0], 1)
+        mask = None
+
         pred_class, two_step_class = self_attention_model(traj_data, triangle_mask, env_text_embedding, mask)
 
         batch_size, seq_len, _ = traj_data.size()
-
         if args.catagorical_progress:
-            pred_class = torch.argmax(pred_class, dim = 1)
+            pred_class = torch.argmax(pred_class.squeeze(0), dim = 1)
         else:
             pred_class = pred_class.squeeze(1)
 
         if args.two_step_training:
             two_step_class = two_step_class.squeeze(0)
             pred_two_class = torch.argmax(two_step_class, dim = 1)
-            pred_class = pred_two_class * pred_class.squeeze(0).squeeze(1)
+            pred_class = pred_two_class * pred_class
         # pred_class = pred_class.view(batch_size, seq_len)
 
         wrong_pred_two_class, wrong_two_step_class = self_attention_model(traj_data, triangle_mask, wrong_text_embedding, mask)
@@ -118,7 +119,7 @@ def plot_progress_class(h5_file, set, self_attention_model, args):
         plt.ylabel("Class")
         plt.title(f"{env}")
         if args.catagorical_progress:
-            plt.ylim(-1, 6)
+            plt.ylim(-1, args.catagorical_progress_bins + 1)
         else:
             plt.ylim(-1, 1)
         # plt.savefig(f"progress_img/{env}.png")
