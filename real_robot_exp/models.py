@@ -381,11 +381,11 @@ class RewardTwoStepLangTokenPositionEmbeddingPredictor(nn.Module):
         self.transformer_decoder = nn.ModuleList([DecoderOnlyBlock(input_dim, args.attention_heads, input_dim, args.layer_norm) for _ in range(decoder_num)])
 
         if class_num == 1:
-            self.classifier = TwoLayerMLP(input_dim)
+            self.classifier = nn.Linear(input_dim, 1)
         else:
-            self.classifier = TwoLayerMLPClass(input_dim, class_num)
+            self.classifier = nn.Linear(input_dim, class_num)
 
-        self.twostep_classifier = TwoLayerMLPClass(input_dim, 2)
+        self.twostep_classifier = nn.Linear(input_dim, 2)
 
         self.class_num = class_num
         self.positional_encoding = args.positional_encoding
@@ -430,8 +430,7 @@ class RewardTwoStepLangTokenPositionEmbeddingPredictor(nn.Module):
 
         two_step_label = self.twostep_classifier(x)
         x = self.classifier(x)
-        if self.class_num == 1:
-            x = torch.clamp(x, 0, 1)
+
         x = x.view(batch_size, self.args.max_length, -1)
         two_step_label = two_step_label.view(batch_size, self.args.max_length, -1)
         return x, two_step_label

@@ -47,8 +47,6 @@ def main(args):
 
     experiment_name += "_heads_" + str(args.attention_heads)
 
-    if args.sample_neg:
-        experiment_name += "_SampleNeg"
     if args.reverse_video:
         experiment_name += "_ReverseVideo"
     if args.catagorical_progress:
@@ -64,8 +62,6 @@ def main(args):
         experiment_name += "_OpenXData"
     if args.two_step_training:
         experiment_name += "_TwoStep"
-    if args.cat_text:
-        experiment_name += "_CatText"
     if args.layer_norm:
         experiment_name += "_LayerNorm"
     if args.first_frame_embedding:
@@ -82,7 +78,6 @@ def main(args):
     experiment_name += "_DecoderNum_" + str(args.decoder_num)
     experiment_name += "_epochs_" + str(args.epochs)
     experiment_name += "_lr_" + str(args.lr)
-    # experiment_name += "_1_demo"
     
     
     run = wandb.init(
@@ -263,7 +258,12 @@ def main(args):
                 wandb_log, self_attention_model = update_model(args, video_array, text_array, batch_triangular_mask, self_attention_model, progress, class_label,
                 classification_loss_function, progress_loss_function, optimizer, openx_len = openx_len, extra_len = extra_len, scheduler = scheduler)
                 wandb.log(wandb_log)
-
+                if args.clip_grad:
+                    torch.nn.utils.clip_grad_norm_(self_attention_model.parameters(), max_norm=1.0)
+                optimizer.step()
+                if scheduler is not None:
+                    scheduler.step()
+                wandb_log["lr"] = optimizer.param_groups[0]["lr"]
 
             
         elif args.extra_data:
