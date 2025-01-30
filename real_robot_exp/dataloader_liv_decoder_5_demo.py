@@ -41,35 +41,35 @@ class LivVideoDecoderDataset5Frames(Dataset):
         # sample text sample
         text_array = self.sample_text_feature(key)
 
-        if self.args.sample_neg:
-            if not self.args.reverse_video:
-                if random.random() > 0.75:
-                    video_array, progress, class_label = self.sample_negative_video_feature(key)
-                else:
-                    video_array, progress, class_label = self.sample_video_feature(key)
-            elif not self.args.fully_reverse_data:
-                random_num = random.random()
-                if random_num < 0.25:
-                    video_array, progress, class_label = self.sample_reverse_video_feature(key)
-                elif random_num > 0.75:
-                    video_array, progress, class_label = self.sample_negative_video_feature(key)
-                else:
-                    video_array, progress, class_label = self.sample_video_feature(key)
-            else:
-                random_num = random.random()
-                if random_num < 0.20:
-                    video_array, progress, class_label = self.sample_reverse_video_feature(key)
-                elif random_num < 0.30:
-                    video_array, progress, class_label = self.sample_fully_reverse_video_feature(key)
-                elif random_num < 0.50:
-                    video_array, progress, class_label = self.sample_negative_video_feature(key)
-                else:
-                    video_array, progress, class_label = self.sample_video_feature(key)
-
-
-
+        # if self.args.sample_neg:
+        #     if not self.args.reverse_video:
+        #         if random.random() > 0.75:
+        #             video_array, progress, class_label = self.sample_negative_video_feature(key)
+        #         else:
+        #             video_array, progress, class_label = self.sample_video_feature(key)
+        #     elif not self.args.fully_reverse_data:
+        random_num = random.random()
+        if random_num < 0.25:
+            video_array, progress, class_label = self.sample_reverse_video_feature(key)
+        elif random_num > 0.50:
+            video_array, progress, class_label = self.sample_negative_video_feature(key)
         else:
             video_array, progress, class_label = self.sample_video_feature(key)
+        #     else:
+        #         random_num = random.random()
+        #         if random_num < 0.20:
+        #             video_array, progress, class_label = self.sample_reverse_video_feature(key)
+        #         elif random_num < 0.30:
+        #             video_array, progress, class_label = self.sample_fully_reverse_video_feature(key)
+        #         elif random_num < 0.50:
+        #             video_array, progress, class_label = self.sample_negative_video_feature(key)
+        #         else:
+        #             video_array, progress, class_label = self.sample_video_feature(key)
+
+
+
+        # else:
+        #     video_array, progress, class_label = self.sample_video_feature(key)
 
         output_dict = {
             "text_array": text_array,
