@@ -408,13 +408,14 @@ def create_envs(cfg: DictConfig, reward_model: BaseRewardModel):
     with th.no_grad():
         lang_feat_policy = reward_model.encode_text_for_policy(text_instruction).squeeze()
         # lang_feat = th.from_numpy(lang_feat).squeeze()
-        if reward_model != "GVLRewardModel" and reward_model != "VLCRewardModel":
+        if reward_model.name != "GVLRewardModel" and reward_model.name != "VLCRewardModel":
             lang_feat_reward = reward_model.encode_text(text_instruction).squeeze()
+            print("Lang feat reward shape", lang_feat_reward.shape)
         else:
             lang_feat_reward = text_instruction
 
-    print("Lang feat policy shape", lang_feat_policy.shape)
-    print("Lang feat reward shape", lang_feat_reward.shape)
+    # print("Lang feat policy shape", lang_feat_policy.shape)
+    # 
     ignore_language = env_config.ignore_language
 
     # Define envs (dummy example for illustration)

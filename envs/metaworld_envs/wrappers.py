@@ -305,7 +305,7 @@ class LearnedRewardWrapper(gym.Wrapper):
             else:
                 obs = encoded_image
 
-        self.past_observations.append(encoded_image)
+        # self.past_observations.append(encoded_image)
 
         return obs
 
@@ -357,8 +357,8 @@ class VLC_GVL_RewardWrapper(gym.Wrapper):
 
         obs = self.env.reset()
         
-        frame = self.env.render()
-        self.past_observations.append(frame)
+        # frame = self.env.render()
+        # self.past_observations.append(frame)
 
         return obs
 

@@ -7,7 +7,7 @@ from typing import Union
 class RoboclipRewardModel(BaseRewardModel):
     def __init__(self, device: str = "cuda", batch_size: int = 64, success_bonus: int = 10, model_load_path: str = "", reward_at_every_step: bool = False) -> None:
         super().__init__(device, batch_size, success_bonus=success_bonus)
-        self.model = self.load_model()
+        self.net = self.load_model()
         self.device = device
         self.reward_at_every_step = reward_at_every_step
     
@@ -36,22 +36,39 @@ class RoboclipRewardModel(BaseRewardModel):
         net.eval()
         return net
 
-    def encode_images(self, images):
-        images = images[:, 240-112:240+112, 320-112:320+112, :]
+    def _encode_image_batch(self, images):
+        images = images[:, :, :, 240-112:240+112, 320-112:320+112]
+        print("images shape", images.shape)
         images = self.padding_video(images, 32)
-        images = images.permute(3, 0, 1, 2).unsqueeze(0).to(self.device).float()
+        # images = images.permute(3, 0, 1, 2).unsqueeze(0).to(self.device).float()
         video_embeddings = self.net(images)["video_embedding"].to(self.device).float()
         return video_embeddings
 
-    def encode_text(self, text):
-        text_embeddings = self.net.text_module([text])["text_embedding"].to(self.device).float()
+    def _encode_text_batch(self, text):
+        text_embeddings = self.net.text_module(text)["text_embedding"].to(self.device).float()
         return text_embeddings
-    
-    def calculate_rewards(self, text_embeddings: Union[np.ndarray, torch.Tensor], video_embeddings: Union[np.ndarray, torch.Tensor]):
-        return torch.matmul(video_embeddings, text_embeddings.t())[0].detach().cpu().numpy()
     
     def _calculate_reward_batch(self, text_embeddings, video_embeddings):
         return torch.matmul(video_embeddings, text_embeddings.t())[0].detach().cpu().numpy()
+
+    @property
+    def img_output_dim(self) -> int:
+        """
+        Returns the output dimension of the image encoder. Used to determine the observation space of a policy.
+        """
+        return 512 # for S3D
     
-    def _encode_image_batch(self, images: torch.Tensor) -> np.ndarray:
-        return self.encode_images(images)
+    @property
+    def text_output_dim(self) -> int:
+        """
+        Returns the output dimension of the text encoder. Used to determine the observation space of a policy.
+        """
+        return 512 # for S3D
+    
+    @property
+    def name(self) -> str:
+        """
+        Returns the name of the encoder class.
+        """
+        return 'S3DRewardModel'
+    
