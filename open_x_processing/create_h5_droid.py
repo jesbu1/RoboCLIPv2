@@ -17,7 +17,7 @@ from PIL import Image
 SAVE_H5_NAME = "droid_embeddings.h5"  # name of the h5 file it'll be saved to
 DEBUG = False # will use DROID_100
 MAX_NUM_FRAMES_PER_EPISODE = 32
-TRAIN_SPLIT = "train"  # "test"
+TRAIN_SPLIT = "train"  # "test", droid training set doesn't exist
 
 # prevent TFDS from taking up all GPU memory
 os.environ["TF_FORCE_GPU_ALLOW_GROWTH"] = "true"
@@ -40,7 +40,7 @@ if DEBUG:
 tasks_seen = dict()
 total_samples = 0
 with h5py.File(SAVE_H5_NAME, "w") as f:
-    dataset = tfds.load(dataset_name, data_dir="gs://gresearch/robotics", split="train")
+    dataset = tfds.load(dataset_name, data_dir="gs://gresearch/robotics", split=TRAIN_SPLIT)
     n_samples = 1000000000000000000
     valid_samples_per_dataset = 0
     img_key_to_name = OXE_DATASET_CONFIGS[dataset_name.split("_")[0]][
