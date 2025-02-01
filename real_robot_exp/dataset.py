@@ -62,7 +62,7 @@ class LivRealVideoDataset(Dataset):
         #         video_array, progress, class_label = self.sample_video_feature(data_group)
         # else:
         if self.args.sample_neg:
-            if self.args.reverse_video:
+            if self.args.rewind:
                 random_num = random.random()
                 if random_num < 0.5:
                     video_array, progress, class_label = self.sample_negative_video_feature(key)
@@ -262,7 +262,7 @@ class LivRealVideoTrainDataset(LivRealVideoDataset):
 
         if not self.sample_neg:
 
-            if self.args.reverse_video:
+            if self.args.rewind:
                 random_num = random.random()
                 if random_num < 0.5:
                     video_array, progress, class_label = self.sample_reverse_video_feature(data_group)
@@ -276,7 +276,7 @@ class LivRealVideoTrainDataset(LivRealVideoDataset):
             if neg_random_num < 0.5:
                 video_array, progress, class_label = self.sample_negative_video_feature(key)
             else:
-                if self.args.reverse_video:
+                if self.args.rewind:
                     random_num = random.random()
                     if random_num < 0.5:
                         video_array, progress, class_label = self.sample_reverse_video_feature(data_group)
@@ -494,7 +494,7 @@ class LivRealVideoTextTokenDataset(LivRealVideoDataset):
         text_array, seq_len = self.sample_text_feature(data_group) # 1,n, 1024
 
         if self.args.sample_neg:
-            if self.args.reverse_video:
+            if self.args.rewind:
                 random_num = random.random()
                 if random_num < 0.5:
                     video_array, progress, class_label = self.sample_negative_video_feature(key)

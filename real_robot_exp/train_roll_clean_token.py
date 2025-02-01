@@ -364,7 +364,7 @@ def main(args):
                 wandb_log["lr/lr"] = optimizer.param_groups[0]["lr"]
                 wandb.log(wandb_log)
         if epoch % 10 == 9:
-            save_path = "/home/jzhang/roboclip_v2_models"
+            save_path = "/home/jzhang96/roboclip_v2_models"
             if not os.path.exists(save_path):
                 os.makedirs(save_path)
             run_path = os.path.join(save_path, experiment_name)

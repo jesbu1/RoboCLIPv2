@@ -303,14 +303,14 @@ class RewardTwoStepNewPositionEmbeddingPredictor(nn.Module):
         self.transformer_decoder = nn.ModuleList([DecoderOnlyBlock(input_dim, args.attention_heads, input_dim, args.layer_norm) for _ in range(decoder_num)])
         # self.transformer_decoder = DecoderOnlyBlock(input_dim, args.attention_heads, input_dim, args.layer_norm)
         if class_num == 1:
-            self.classifier = TwoLayerMLP(input_dim)
+            self.classifier = nn.Linear(input_dim, 1)
         else:
-            self.classifier = TwoLayerMLPClass(input_dim, class_num)
+            self.classifier = nn.Linear(input_dim, class_num)
 
         # if args.cat_text:
         #     self.twostep_classifier = TwoLayerMLPClass(input_dim * 2, 2)
         # else:
-        self.twostep_classifier = TwoLayerMLPClass(input_dim, 2)
+        self.twostep_classifier = nn.Linear(input_dim, 1)
 
         self.class_num = class_num
         self.positional_encoding = args.positional_encoding
@@ -369,6 +369,7 @@ class RewardTwoStepNewPositionEmbeddingPredictor(nn.Module):
             x = torch.clamp(x, 0, 1)
         x = x.view(batch_size, seq_len, -1)
         two_step_label = two_step_label.view(batch_size, seq_len, -1)
+        two_step_label = torch.sigmoid(two_step_label)
         return x, two_step_label
 
 
