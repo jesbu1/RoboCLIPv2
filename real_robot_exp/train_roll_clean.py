@@ -90,7 +90,7 @@ def main(args):
     run = wandb.init(
         entity=WANDB_ENTITY_NAME,
         project=WANDB_PROJECT_NAME,
-        group="Jan29thOpenXVidedoDebug",
+        group="NoTokenModelV1",
         config=args,
         name=experiment_name,
     )
