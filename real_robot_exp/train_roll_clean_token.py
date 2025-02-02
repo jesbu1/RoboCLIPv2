@@ -180,12 +180,12 @@ def main(args):
     #     eval_file_name = "metaworld_embedding_5_demo_dataset_v3_eval.h5"
     # else:
     #     eval_file_name = "jesse_collect_dataset_new_token.h5"
-    positive_eval_extra_dataset = LivRealVideoTokenEvalDataset(args, 
-                                                   extra_data_path,
-                                                    positive = True)
-    negative_eval_extra_dataset = LivRealVideoTokenEvalDataset(args,
-                                                    extra_data_path,
-                                                    positive = False)
+    # positive_eval_extra_dataset = LivRealVideoTokenEvalDataset(args, 
+    #                                                extra_data_path,
+    #                                                 positive = True)
+    # negative_eval_extra_dataset = LivRealVideoTokenEvalDataset(args,
+    #                                                 extra_data_path,
+    #                                                 positive = False)
 
 
 
