@@ -185,8 +185,8 @@ class LivRealVideoTrainTokenDataset(Dataset):
     def __len__(self):
         if self.split:
             
-            return self.args.batch_size * 3
-        return self.args.batch_size * 3 * 3
+            return self.args.batch_size * 100
+        return self.args.batch_size * 100 * 3
 
 
     def __getitem__(self, idx):
