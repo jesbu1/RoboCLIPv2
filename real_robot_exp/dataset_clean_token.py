@@ -185,8 +185,8 @@ class LivRealVideoTrainTokenDataset(Dataset):
     def __len__(self):
         if self.split:
             
-            return self.args.batch_size * 100
-        return self.args.batch_size * 100 * 5
+            return self.args.batch_size * 3
+        return self.args.batch_size * 3 * 3
 
 
     def __getitem__(self, idx):
@@ -288,3 +288,83 @@ def VideoTextTokenCollateFn(batch):
     }
 
     return output_dict
+
+
+
+
+class LivRealVideoTokenEvalDataset(LivRealVideoTrainTokenDataset):
+
+    def __init__(self, args, h5_file, split=False, eval=True, positive=True):
+        h5_file = h5py.File(h5_file, "r")
+        self.h5_file = h5_file
+        self.args = args
+        self.split = split
+        self.keys = list(self.h5_file.keys())
+        if self.split:
+            if eval:
+                self.keys = self.keys[int(len(self.keys)*0.5):]
+            else:
+                self.keys = self.keys[:int(len(self.keys)*0.5)]
+            eval_keys = self.keys[int(len(self.keys)*0.5):]
+        self.keys = eval_keys
+        self.positive = positive
+
+    def __len__(self):
+        return len(self.keys)
+
+    def sample_full_video_feature(self, data_group):
+        traj_lists = list(data_group.keys())
+        traj_lists.remove("lang_embedding")
+        traj_lists.remove("lang_embedding_individual")  
+        
+        random_name = random.choice(traj_lists)
+
+        progress_dataset = np.asarray(data_group[random_name])
+        full_frames = np.array(progress_dataset)
+        if self.args.normalize_embedding:
+            full_frames = normalize_embeddings(full_frames, return_tensor=True)
+        else:
+            full_frames = th.tensor(full_frames)
+
+        full_length = len(full_frames)
+        progress = np.arange(0, full_length) + 1
+        progress = progress / full_length
+
+        if self.args.subsample_video:
+            full_frames = self.padding_video(full_frames, self.args.max_length)
+            progress = np.expand_dims(progress, axis=1)
+            progress = self.padding_video(progress, self.args.max_length).detach().cpu().numpy()
+            progress = np.squeeze(progress, axis=1)
+
+        if self.args.catagorical_progress:
+            progress = np.floor(progress * self.args.catagorical_progress_bins) 
+            if progress[-1] == self.args.catagorical_progress_bins:
+                progress[-1] = self.args.catagorical_progress_bins - 1
+            if not self.args.two_step_training:
+                progress += 1
+
+        return full_frames, progress, np.ones(progress.shape[0])
+
+
+
+    def __getitem__(self, idx):
+        key = self.keys[idx]
+        data_group = self.h5_file[key]
+
+        video_array, progress, class_label = self.sample_full_video_feature(data_group)
+        if self.positive:
+            text_array = self.sample_text_feature(data_group)
+        else:
+            text_array = self.sample_negative_text_feature(key)
+
+        if not self.positive:
+            progress = np.zeros(progress.shape)
+            class_label = np.zeros(class_label.shape)
+
+        output_dict = {
+            "text_array": text_array,
+            "video_array": video_array,
+            "progress": progress,
+            "class_label": class_label
+        }
+        return  output_dict

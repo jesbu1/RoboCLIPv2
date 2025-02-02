@@ -1,6 +1,6 @@
 import torch
 # from dataloader_liv_decoder_5_demo import video_collate_triangular_fn, LivVideoDecoderDataset5Frames
-from dataset_clean_token import LivRealVideoTrainTokenDataset, VideoTextTokenCollateFn
+from dataset_clean_token import LivRealVideoTrainTokenDataset, VideoTextTokenCollateFn, LivRealVideoTokenEvalDataset
 import torch.nn.functional as F
 import numpy as np
 import random
@@ -13,10 +13,10 @@ from torch.nn.functional import mse_loss
 from torch.nn import CrossEntropyLoss, BCEWithLogitsLoss
 import os
 from model_token import RewardTwoStepLangTokenPositionEmbeddingPredictor
-from eval_confusion_matrix import plot_confusion_matrix
-from eval_progress import plot_progress
+from eval_confusion_matrix_token import plot_confusion_matrix_token
+from eval_progress_token import plot_progress_token
 from eval_raw_video_progress import real_video_plot
-from utils_token import update_model, get_cosine_positional_encoding, CosineWithMinLRScheduler
+from utils_token import update_model, get_cosine_positional_encoding, CosineWithMinLRScheduler, eval_model
 from torch.optim import Optimizer
 from torch.utils.data import DataLoader
 import math
@@ -36,6 +36,8 @@ def main(args):
     np.random.seed(args.seed)
     random.seed(args.seed)
     torch.backends.cudnn.deterministic = True
+    torch.backends.cudnn.benchmark = True
+
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
@@ -94,7 +96,7 @@ def main(args):
     run = wandb.init(
         entity=WANDB_ENTITY_NAME,
         project=WANDB_PROJECT_NAME,
-        group="OpenXTokenTrainingv1",
+        group="OpenXTokenTrainingv1Debug",
         config=args,
         name=experiment_name,
     )
@@ -112,13 +114,20 @@ def main(args):
 
     if args.text_positional_encoding:
         text_position_embedding = get_cosine_positional_encoding(70, 1024).to(device)
+    else:
+        text_position_embedding = None
     
     if args.video_positional_encoding:
         video_position_embedding = get_cosine_positional_encoding(args.max_length, 1024).to(device)
+    else:
+        video_position_embedding = None
 
     if args.learner_parameter:
         text_learner_parameter = torch.nn.Parameter(torch.randn(1, embedding_dim, device = device))
-        video_learner_parameter = torch.nn.Parameter(torch.randn(1, embedding_dim, device = device))    
+        video_learner_parameter = torch.nn.Parameter(torch.randn(1, embedding_dim, device = device))  
+    else:
+        text_learner_parameter = None
+        video_learner_parameter = None
 
 
     if args.openx_data:
@@ -130,12 +139,12 @@ def main(args):
         openx_dataloader = DataLoader(openx_dataset, batch_size=args.batch_size * 3, shuffle=True, num_workers=int(args.worker * 2), drop_last=True, pin_memory=True, collate_fn=VideoTextTokenCollateFn)
         extra_dataloader = DataLoader(extra_dataset, batch_size=args.batch_size, shuffle=True, num_workers=args.worker, drop_last=True, pin_memory=True, collate_fn=VideoTextTokenCollateFn)
 
-        # positive_eval_openx_dataset = LivRealVideoEvalDataset(args, 
-        #                                                 "/data/shared/roboclip/data/h5_buffers/openx_embeddings/openx_embeddings_test_dataset_progrssed.h5",
-        #                                                 label = "positive")
-        # negative_eval_openx_dataset = LivRealVideoEvalDataset(args,
-        #                                                 "/data/shared/roboclip/data/h5_buffers/openx_embeddings/openx_embeddings_test_dataset_progrssed.h5",
-        #                                                 label = "negative")
+        positive_eval_openx_dataset = LivRealVideoTokenEvalDataset(args, 
+                                                        "/data/shared/roboclip/data/h5_buffers/openx_embeddings/openx_embeddings_test_dataset_progrssed.h5",
+                                                        positive = True)
+        negative_eval_openx_dataset = LivRealVideoTokenEvalDataset(args,
+                                                        "/data/shared/roboclip/data/h5_buffers/openx_embeddings/openx_embeddings_test_dataset_progrssed.h5",
+                                                        positive = False)
         
         # positive_eval_openx_dataset = LivRealVideoEvalDataset(args, 
         #                                                 "/mnt/ssd_a_4tb/jzhang96/openx_embeddings_test_dataset_progrssed.h5",
@@ -144,8 +153,8 @@ def main(args):
         #                                                 "/mnt/ssd_a_4tb/jzhang96/openx_embeddings_test_dataset_progrssed.h5",
         #                                                 label = "negative")
         
-        # positive_eval_dataloader = DataLoader(positive_eval_openx_dataset, batch_size=args.batch_size, shuffle=True, num_workers=2, drop_last=False, pin_memory=True)
-        # negative_eval_dataloader = DataLoader(negative_eval_openx_dataset, batch_size=args.batch_size, shuffle=True, num_workers=2, drop_last=False, pin_memory=True)
+        openx_positive_eval_dataloader = DataLoader(positive_eval_openx_dataset, batch_size=args.batch_size, shuffle=True, num_workers=2, drop_last=False, pin_memory=True, collate_fn=VideoTextTokenCollateFn)
+        openx_negative_eval_dataloader = DataLoader(negative_eval_openx_dataset, batch_size=args.batch_size, shuffle=True, num_workers=2, drop_last=False, pin_memory=True, collate_fn=VideoTextTokenCollateFn)
         
 
 
@@ -171,8 +180,14 @@ def main(args):
     #     eval_file_name = "metaworld_embedding_5_demo_dataset_v3_eval.h5"
     # else:
     #     eval_file_name = "jesse_collect_dataset_new_token.h5"
-    # extra_eval_train_pos_dataset = LivDemoVideoEvalDataset(args, extra_data_path, label = "positive", set_name="train")
-    # extra_eval_train_neg_dataset = LivDemoVideoEvalDataset(args, extra_data_path, label = "negative", set_name="train")
+    positive_eval_extra_dataset = LivRealVideoTokenEvalDataset(args, 
+                                                   extra_data_path,
+                                                    positive = True)
+    negative_eval_extra_dataset = LivRealVideoTokenEvalDataset(args,
+                                                    extra_data_path,
+                                                    positive = False)
+
+
 
     # extra_eval_eval_pos_dataset = LivDemoVideoEvalDataset(args, eval_file_name, label = "positive", set_name="eval")
     # extra_eval_eval_neg_dataset = LivDemoVideoEvalDataset(args, eval_file_name, label = "negative", set_name="eval")
@@ -214,10 +229,12 @@ def main(args):
 
 
     print(self_attention_model)
+    parameter_list = list(self_attention_model.parameters())
     if args.learner_parameter:
-        optimizer = torch.optim.Adam(list(self_attention_model.parameters()) + [text_learner_parameter, video_learner_parameter], lr=args.lr)
+        parameter_list += [text_learner_parameter, video_learner_parameter]
+        optimizer = torch.optim.Adam(parameter_list, lr=args.lr)
     else:
-        optimizer = torch.optim.Adam(self_attention_model.parameters(), lr=args.lr)
+        optimizer = torch.optim.Adam(parameter_list, lr=args.lr)
     if args.cosine_scheduler:
         scheduler = CosineWithMinLRScheduler(optimizer, max_steps=300000, max_lr=args.lr, min_lr=1e-5)
 
@@ -251,16 +268,22 @@ def main(args):
                     openx_text_mask = openx_data["text_mask"].to(device).bool()
                     extra_text_mask = extra_data["text_mask"].to(device).bool()
 
+                    openx_video_array = openx_data["video_array"].to(device).float()
+                    extra_video_array = extra_data["video_array"].to(device).float()
+
+
+                    
                     openx_text_array = F.pad(openx_text_array, (0, 0, 0, text_max_length - openx_text_array.size(1)))
                     extra_text_array = F.pad(extra_text_array, (0, 0, 0, text_max_length - extra_text_array.size(1)))
 
                     openx_text_mask = F.pad(openx_text_mask, (0, text_max_length - openx_text_mask.size(1)))
                     extra_text_mask = F.pad(extra_text_mask, (0, text_max_length - extra_text_mask.size(1)))
+
                     total_text_mask = torch.cat([openx_text_mask, extra_text_mask], dim = 0)
-
                     total_text_array = torch.cat([openx_text_array, extra_text_array], dim = 0)
-                    total_video_array = torch.cat([openx_data["video_array"], extra_data["video_array"]], dim = 0).to(device).float()
+                    total_video_array = torch.cat([openx_video_array, extra_video_array], dim = 0)
 
+                    
 
                     if args.text_positional_encoding:
                         total_text_array = total_text_array + text_position_embedding[:,:text_max_length]
@@ -275,7 +298,7 @@ def main(args):
                         total_video_array += video_learner_parameter
                         total_text_array = total_text_array.view(batch_size, seq_len, -1)
                         total_video_array = total_video_array.view(batch_size, args.max_length, -1)
-
+                    
                     total_text_array = total_text_array.repeat(2, 1, 1)
                     total_text_mask = total_text_mask.repeat(2, 1)
                     roll_video_array = total_video_array.roll(args.batch_size, 0)
@@ -283,6 +306,8 @@ def main(args):
 
                     total_input = []
                     total_mask = []
+
+                    # make the padding to the end of the sequence
                     for i in range(total_video_array.size(0)):
                         valid_text_array = total_text_array[i][total_text_mask[i] == 1]
                         valid_video_array = total_video_array[i]
@@ -299,15 +324,20 @@ def main(args):
                     total_mask = torch.stack(total_mask, dim = 0).bool()
 
 
-
                     # roll data targets
-                    progress_targets = torch.cat((openx_data["progress"], extra_data["progress"]), dim = 0).to(device)
-                    roll_progress_targets = torch.zeros_like(progress_targets).to(device)
-                    progress_targets = torch.cat((progress_targets, roll_progress_targets), dim = 0)
+                    progress_targets = torch.cat((openx_data["progress"], 
+                                                  torch.zeros_like(openx_data["progress"]),
+                                                  extra_data["progress"],
+                                                  torch.zeros_like(extra_data["progress"])
+                                                  ), dim = 0).to(device)
+                    
                     if args.two_step_training:
-                        class_targets = torch.cat((openx_data["class_label"].bool(), extra_data["class_label"].bool()), dim = 0).to(device)
-                        roll_class_targets = torch.zeros_like(class_targets).to(device).bool()
-                        class_targets = torch.cat((class_targets, roll_class_targets), dim = 0).to(device)
+                        class_targets = torch.cat((openx_data["class_label"].bool(), 
+                                                   torch.zeros_like(openx_data["class_label"].bool()),
+                                                   extra_data["class_label"].bool(),
+                                                   torch.zeros_like(extra_data["class_label"].bool())
+                                                   ), dim = 0).to(device)
+
 
                     triangular_mask = torch.tril(torch.ones(total_input.shape[1], total_input.shape[1])).to(device)
                     batch_triangular_mask = triangular_mask.repeat(progress_targets.shape[0], 1, 1, 1).bool()
@@ -325,17 +355,7 @@ def main(args):
                                             total_mask[openx_len:openx_len + extra_len],
                                             total_mask[2 * openx_len + extra_len:]),
                                             dim = 0)
-                    progress_targets = torch.cat((progress_targets[:openx_len],
-                                                progress_targets[openx_len + extra_len: 2 * openx_len + extra_len],
-                                                progress_targets[openx_len:openx_len + extra_len],
-                                                progress_targets[2 * openx_len + extra_len:]),
-                                                dim = 0)
-                    if args.two_step_training:
-                        class_targets = torch.cat((class_targets[:openx_len],
-                                                class_targets[openx_len + extra_len: 2 * openx_len + extra_len],
-                                                class_targets[openx_len:openx_len + extra_len],
-                                                class_targets[2 * openx_len + extra_len:]),
-                                                dim = 0)
+
                     
                     wandb_log, self_attention_model = update_model( args, 
                                                                     total_input, 
@@ -355,7 +375,7 @@ def main(args):
                 
                 if args.clip_grad:
                     scaler.unscale_(optimizer)
-                    torch.nn.utils.clip_grad_norm_(self_attention_model.parameters(), 1)
+                    torch.nn.utils.clip_grad_norm_(parameter_list, 1)
                 scaler.step(optimizer)
                 scaler.update()
 
@@ -402,73 +422,77 @@ def main(args):
 
         
 
+        if epoch % 10 == 0:
+            self_attention_model.eval()
+            with torch.no_grad():
+
+                plot_confusion_matrix_token(h5_file = h5_eval_file, 
+                                        set = "train", 
+                                        self_attention_model = self_attention_model, 
+                                        args = args,
+                                        text_position_embedding = text_position_embedding,
+                                        video_position_embedding = video_position_embedding,
+                                        text_learner_parameters = text_learner_parameter,
+                                        video_learner_parameters = video_learner_parameter)
+                plot_confusion_matrix_token(h5_file = h5_eval_file, 
+                                        set = "eval", 
+                                        self_attention_model = self_attention_model, 
+                                        args = args,
+                                        text_position_embedding = text_position_embedding,
+                                        video_position_embedding = video_position_embedding,
+                                        text_learner_parameters = text_learner_parameter,
+                                        video_learner_parameters = video_learner_parameter)
+                plot_confusion_matrix_token(h5_file = h5_eval_file, 
+                                        set = "all", 
+                                        self_attention_model = self_attention_model, 
+                                        args = args,
+                                        text_position_embedding = text_position_embedding,
+                                        video_position_embedding = video_position_embedding,
+                                        text_learner_parameters = text_learner_parameter,
+                                        video_learner_parameters = video_learner_parameter)
 
 
-        # if epoch % 10 == 0:
-        #     self_attention_model.eval()
-        #     with torch.no_grad():
+                plot_progress_token(h5_eval_file, "train", self_attention_model, args,
+                                    text_position_embedding = text_position_embedding,
+                                    video_position_embedding = video_position_embedding,
+                                    text_learner_parameters = text_learner_parameter,
+                                    video_learner_parameters = video_learner_parameter)
+                plot_progress_token(h5_eval_file, "eval", self_attention_model, args,
+                                    text_position_embedding = text_position_embedding,
+                                    video_position_embedding = video_position_embedding,
+                                    text_learner_parameters = text_learner_parameter,
+                                    video_learner_parameters = video_learner_parameter)
 
-
-                    
-        # #     save_path = os.path.join("/scr/jzhang96/roboclip_v2_decoder_models_fix_3rd", experiment_name)
-        # #     if not os.path.exists(save_path):
-        # #         os.makedirs(save_path)
-        # #     save_dict = {
-        # #         "model": self_attention_model.state_dict(),
-        # #         "optimizer": optimizer.state_dict(),
-        # #         "epoch": epoch,
-        # #         "args": args
-        # #     }
-        # #     torch.save(save_dict, os.path.join(save_path, f"model_{epoch}.pth"))
-
-
-        #     # real_video_plot(self_attention_model)
-        #         plot_progress(h5_eval_file, "train", self_attention_model, args)
-        #         plot_progress(h5_eval_file, "eval", self_attention_model, args)
-        #         plot_confusion_matrix(h5_file = h5_eval_file, 
-        #                                 set = "train", 
-        #                                 self_attention_model = self_attention_model, 
-        #                                 args = args)
-        #         plot_confusion_matrix(h5_file = h5_eval_file, 
-        #                                 set = "eval", 
-        #                                 self_attention_model = self_attention_model, 
-        #                                 args = args)
-
-        #         plot_confusion_matrix(h5_file = h5_eval_file, 
-        #                                 set = "all", 
-        #                                 self_attention_model = self_attention_model, 
-        #                                 args = args)
                 
-        #         wandb_eval_log = {}
+                wandb_eval_log = {}
 
-        #         if positive_eval_openx_dataset is not None:
-        #             class_accuracy, progress_loss = eval_model(positive_eval_dataloader, self_attention_model, progress_loss_function, triangular_mask, args)
-        #             wandb_eval_log["openx_eval/progress_loss"] = progress_loss
-        #             if args.two_step_training:
-        #                 wandb_eval_log["openx_eval/correct_class_accuracy"] = class_accuracy
-
-        #         if negative_eval_openx_dataset is not None:
-        #             class_accuracy, progress_loss = eval_model(negative_eval_dataloader, self_attention_model, progress_loss_function, triangular_mask, args)
-        #             wandb_eval_log["openx_eval/wrong_class_accuracy"] = class_accuracy
+#                 if positive_eval_openx_dataset is not None:
+#                     positive_class_accuracy, progress_loss = eval_model( 
+#                         openx_positive_eval_dataloader, self_attention_model, progress_loss_function, triangular_mask, args)
 
 
-        #         if extra_eval_train_pos_dataset is not None:
-        #             class_accuracy, progress_loss = eval_model(extra_eval_train_pos_dataloader, self_attention_model, progress_loss_function, triangular_mask, args)
-        #             wandb_eval_log["demo_dataset_train_set_correct_label/progress_loss"] = progress_loss
-        #             wandb_eval_log["demo_dataset_train_set_correct_label/correct_class_accuracy"] = class_accuracy
+# args, total_input, mask, batch_triangular_mask, self_attention_model, progress, class_label, 
+#                 classification_loss_function, progress_loss_function):
 
-        #         if extra_eval_train_neg_dataset is not None:
-        #             class_accuracy, progress_loss = eval_model(extra_eval_train_neg_dataloader, self_attention_model, progress_loss_function, triangular_mask, args)
-        #             wandb_eval_log["demo_dataset_train_set_wrong_label/wrong_class_accuracy"] = class_accuracy
+#                     wandb_eval_log["openx_eval/progress_loss"] = progress_loss
+#                     if args.two_step_training:
+#                         wandb_eval_log["openx_eval/correct_class_accuracy"] = class_accuracy
 
-        #         if extra_eval_eval_pos_dataset is not None:
-        #             class_accuracy, progress_loss = eval_model(extra_eval_eval_pos_dataloader, self_attention_model, progress_loss_function, triangular_mask, args)
-        #             wandb_eval_log["demo_dataset_eval_set_correct_label/progress_loss"] = progress_loss
-        #             wandb_eval_log["demo_dataset_eval_set_correct_label/correct_class_accuracy"] = class_accuracy
+#                 if negative_eval_openx_dataset is not None:
+#                     class_accuracy, progress_loss = eval_model(negative_eval_dataloader, self_attention_model, progress_loss_function, triangular_mask, args)
+#                     wandb_eval_log["openx_eval/wrong_class_accuracy"] = class_accuracy
 
-        #         if extra_eval_eval_neg_dataset is not None:
-        #             class_accuracy, progress_loss = eval_model(extra_eval_eval_neg_dataloader, self_attention_model, progress_loss_function, triangular_mask, args)
-        #             wandb_eval_log["demo_dataset_eval_set_wrong_label/wrong_class_accuracy"] = class_accuracy
+
+
+
+#                 if extra_eval_eval_pos_dataset is not None:
+#                     class_accuracy, progress_loss = eval_model(extra_eval_eval_pos_dataloader, self_attention_model, progress_loss_function, triangular_mask, args)
+#                     wandb_eval_log["demo_dataset_eval_set_correct_label/progress_loss"] = progress_loss
+#                     wandb_eval_log["demo_dataset_eval_set_correct_label/correct_class_accuracy"] = class_accuracy
+
+#                 if extra_eval_eval_neg_dataset is not None:
+#                     class_accuracy, progress_loss = eval_model(extra_eval_eval_neg_dataloader, self_attention_model, progress_loss_function, triangular_mask, args)
+#                     wandb_eval_log["demo_dataset_eval_set_wrong_label/wrong_class_accuracy"] = class_accuracy
 
         #         wandb.log(wandb_eval_log)
 

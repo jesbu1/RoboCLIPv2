@@ -62,7 +62,7 @@ class DecoderOnlyBlock(nn.Module):
         if mask is not None:
             # scores = scores.masked_fill(mask == 0, float('-inf'))
             # scores = scores.masked_fill(mask == 0, -1e9)
-            scores = scores.float().masked_fill(mask == 0, -1e9).to(dtype=torch.float16)
+            scores = scores.masked_fill(mask == 0, -1e4)
         attention = F.softmax(scores, dim=-1)
 
         attn_output = torch.matmul(attention, V)
@@ -104,29 +104,23 @@ class RewardTwoStepLangTokenPositionEmbeddingPredictor(nn.Module):
         self.class_num = class_num
 
 
-
-
-
     def forward(self, x, triangular_mask, mask):
         # text array with be different length token embeddings
         batch_size, seq_len, embedding_shape = x.size()
 
-
         for decoder in self.transformer_decoder:
             x = decoder(x, triangular_mask)
-        # x = self.transformer_decoder(x, triangular_mask)
 
-        # only take video embeddings
-        # if self.args.catagorical_progress:
 
         x = x.contiguous().view(batch_size * seq_len, -1)
         mask = mask.view(batch_size * seq_len).bool()
         x = x[mask]
+        # x = x[mask]
         # x = x.contiguous().view(batch_size, self.args.max_length, -1)
         if self.args.two_step_training:
             two_step_label = self.twostep_classifier(x)
-            two_step_label = two_step_label.view(batch_size, self.args.max_length)
-            # two_step_label = torch.sigmoid(two_step_label)
+            two_step_label = two_step_label.view(batch_size, self.args.max_length, -1)
+
         progress = self.classifier(x)
         progress = progress.view(batch_size, self.args.max_length, -1)
 
