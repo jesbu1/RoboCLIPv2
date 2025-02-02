@@ -177,7 +177,8 @@ def plot_confusion_matrix_token(h5_file, set, self_attention_model, args,
             progress_output, two_step_class = self_attention_model(input_feature, triangle_mask, text_mask)
             
             if args.catagorical_progress:
-                pred_class = torch.argmax(progress_output.squeeze(0), dim = 1)
+                pred_class = torch.argmax(progress_output.squeeze(0), dim = 1) 
+                pred_class += 1
             if args.two_step_training:
                 two_step_class = torch.sigmoid(two_step_class)
                 two_class_label = (two_step_class >= 0.5).float().squeeze()
