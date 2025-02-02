@@ -135,47 +135,34 @@ def plot_confusion_matrix(h5_file, set, self_attention_model, args, prob = False
         else:
             traj_data = video_embedding
         traj_data = traj_data.view(-1, 1024).unsqueeze(0).repeat(text_embeddings.shape[0], 1, 1)
-        if args.cat_text_front:
-            triangle_mask = torch.tril(torch.ones(traj_data.shape[1] + 1, traj_data.shape[1] + 1)).to(device).unsqueeze(0).unsqueeze(0).repeat(traj_data.shape[0], 1, 1, 1)
-        else:
-            triangle_mask = torch.tril(torch.ones(traj_data.shape[1], traj_data.shape[1])).to(device).unsqueeze(0).unsqueeze(0).repeat(traj_data.shape[0], 1, 1, 1)
+
+        triangle_mask = torch.tril(torch.ones(traj_data.shape[1] + 1, traj_data.shape[1] + 1)).to(device).unsqueeze(0).unsqueeze(0).repeat(traj_data.shape[0], 1, 1, 1)
+
         mask = None
         
         pred_class, two_step_class = self_attention_model(traj_data, triangle_mask, text_embeddings, mask)
+
         if not args.catagorical_progress:
             pred_class = pred_class.view(-1, 1)
         else:
             if args.two_step_training:
-                pred_class = torch.argmax(pred_class, dim = 2).view(-1, 1) + 1
+                pred_class = torch.argmax(pred_class, dim = 2) + 1
             else:
                 pred_class = torch.argmax(pred_class, dim = 2).view(-1, 1)
 
+        pred_class = pred_class[:, -1].squeeze()
         if args.two_step_training:
             batch_size = two_step_class.shape[0]
-            two_step_class = two_step_class.view(-1, 2)
-            two_class_label = torch.argmax(two_step_class, dim=1)
-            two_step_prob = F.softmax(two_step_class, dim=1)
-            two_step_class_prob = two_step_prob[:,1]
-            two_step_class_prob = two_step_class_prob.view(batch_size, -1)
-            pred_class = pred_class * two_class_label.unsqueeze(1)
-            pred_two_step_prob_list.append(two_step_class_prob[:,-1].detach().cpu().numpy())
+            two_step_prob = two_step_class.clone().float()
+            two_step_prob = two_step_prob[:, -1].squeeze()
+            two_step_class = two_step_class < 0.5
+
+            pred_class = pred_class * two_step_class[:, -1].squeeze()
+            pred_two_step_prob_list.append(two_step_prob.cpu().detach().numpy())
 
 
-
-        
-        batch_size, seq_len, _ = traj_data.size()
-        # if args.catagorical_progress:
-        #     pred_class = torch.argmax(pred_class, dim = 1)
-        # else:
-        pred_class = pred_class.squeeze(1)
-
-
-
-        pred_class = pred_class.view(batch_size, seq_len)
-
-
-        predicted_progress = np.array(pred_class.squeeze().detach().cpu().numpy())
-        predicted_progress_row.append(predicted_progress[:,-1])
+        predicted_progress = pred_class.cpu().detach().numpy()
+        predicted_progress_row.append(predicted_progress)
 
 
     predicted_progress_row = np.array(predicted_progress_row)

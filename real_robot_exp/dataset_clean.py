@@ -218,3 +218,129 @@ class LivRealVideoTrainDataset(Dataset):
             "class_label": class_label
         }
         return  output_dict
+    
+
+class LivRealVideoEvalDataset(Dataset):
+
+    def __init__(self, args, h5_file, label="positive", dataset="openx"):
+        h5_file = h5py.File(h5_file, "r")
+        self.h5_file = h5_file
+        self.args = args
+        self.label = label
+        self.keys = list(self.h5_file.keys())
+        if dataset != "openx":
+            self.keys = self.keys[int(len(self.keys)*0.5):]
+
+
+    def __len__(self):
+
+        return len(self.keys)
+    
+    def __getitem__(self, idx):
+        # select a random key
+        # key_id = random.randint(0, len(self.keys)-1)
+        key_id = idx % len(self.keys)
+        key = self.keys[key_id]
+        data_group = self.h5_file[key]
+
+        # sample text sample
+        text_array = self.sample_text_feature(data_group)
+
+
+        if self.label == "positive":
+            video_array, progress, class_label = self.sample_video_feature(data_group)
+        else:
+            video_array, progress, class_label = self.sample_negative_video_feature(key)
+
+        output_dict = {
+            "text_array": text_array,
+            "video_array": video_array,
+            "progress": progress,
+            "class_label": class_label
+        }
+        return  output_dict
+
+    def sample_text_feature(self, data_group):
+
+        lang_embedding = np.array(data_group["lang_embedding"])
+        if lang_embedding.shape[0] == 1024:
+            lang_embedding = np.expand_dims(lang_embedding, axis=0)
+        if self.args.normalize_embedding:
+            lang_embedding = normalize_embeddings(lang_embedding, return_tensor=True)
+
+        return lang_embedding
+    
+    def sample_video_feature(self, data_group):
+        traj_lists = list(data_group.keys())
+        traj_lists.remove("lang_embedding")
+        if "lang_embedding_individual" in traj_lists:
+            traj_lists.remove("lang_embedding_individual")
+        random_name = random.choice(traj_lists)
+
+        video_frames = np.asarray(data_group[random_name]) # all video data
+
+        if self.args.normalize_embedding:
+            video_frames = normalize_embeddings(video_frames, return_tensor=True)
+        else:
+            video_frames = th.tensor(video_frames)
+        full_length = len(video_frames)
+        video_progress = np.arange(0, video_frames.shape[0]) + 1
+        video_progress = video_progress / full_length
+        if self.args.catagorical_progress:
+            video_progress = np.floor(video_progress * self.args.catagorical_progress_bins) 
+            if video_progress[-1] == self.args.catagorical_progress_bins:
+                video_progress[-1] = self.args.catagorical_progress_bins - 1
+            if not self.args.two_step_training:
+                video_progress += 1
+
+        if self.args.subsample_video:
+            video_frames = self.padding_video(video_frames, self.args.max_length)
+            video_progress = np.expand_dims(video_progress, axis=1)
+            video_progress = self.padding_video(video_progress, self.args.max_length).detach().cpu().numpy()
+            video_progress = np.squeeze(video_progress, axis=1)
+
+
+        return video_frames, video_progress, np.ones(video_progress.shape[0])
+
+    def sample_negative_video_feature(self, env_name):
+
+        negative_env_name = random.choice(self.keys)
+        while negative_env_name == env_name:
+            negative_env_name = random.choice(self.keys)
+
+        negative_video_group = self.h5_file[negative_env_name]
+        negative_datasets = list(negative_video_group.keys())
+        negative_datasets.remove("lang_embedding")
+        if "lang_embedding_individual" in negative_datasets:
+            negative_datasets.remove("lang_embedding_individual")
+
+        negative_random_name = random.choice(negative_datasets)
+        negative_video_frames = np.asarray(negative_video_group[negative_random_name])
+
+        if self.args.normalize_embedding:
+            negative_video_frames = normalize_embeddings(negative_video_frames, return_tensor=True)
+
+        
+        if self.args.subsample_video:
+            negative_video_frames = self.padding_video(negative_video_frames, self.args.max_length)
+        video_progress = np.zeros(negative_video_frames.shape[0])
+
+        return negative_video_frames, video_progress, np.zeros(video_progress.shape[0])
+
+
+    def padding_video(self, video_frames, max_length):
+        video_length = len(video_frames)
+        if type(video_frames) == np.ndarray:
+            video_frames = th.tensor(video_frames)
+        if video_length < max_length:
+            # padding first frame
+            padding_length = max_length - video_length
+            first_frame = video_frames[0].unsqueeze(0)
+            padding_frames = first_frame.repeat(padding_length, 1)
+            video_frames = th.cat([padding_frames, video_frames], dim=0)
+        
+        elif video_length > max_length:
+            frame_idx = np.linspace(0, video_length-1, max_length).astype(int)
+            video_frames = video_frames[frame_idx]
+
+        return video_frames

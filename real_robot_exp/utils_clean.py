@@ -259,7 +259,9 @@ def eval_model(positive_eval_openx_dataset, self_attention_model, progress_loss_
                 progress_loss = progress_loss_function(progress_output[none_zero_class], progress[none_zero_class])
             else:
                 progress_loss = progress_loss_function(progress_output[none_zero_class], progress[none_zero_class].long().squeeze(1))
-            class_predict_label = torch.argmax(class_output, dim=1)
+
+            class_predict_label = class_output > 0.5
+            class_predict_label = class_predict_label.float().squeeze()
             # class_accuracy = torch.sum(class_predict_label == class_label).item() / len(class_predict_label)
             correct_num += torch.sum(class_predict_label == class_label).item()
             

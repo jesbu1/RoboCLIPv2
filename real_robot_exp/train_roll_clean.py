@@ -1,6 +1,6 @@
 import torch
 # from dataloader_liv_decoder_5_demo import video_collate_triangular_fn, LivVideoDecoderDataset5Frames
-from dataset_clean import LivRealVideoTrainDataset
+from dataset_clean import LivRealVideoTrainDataset, LivRealVideoEvalDataset
 import torch.nn.functional as F
 import numpy as np
 import random
@@ -12,7 +12,8 @@ import h5py
 from torch.nn.functional import mse_loss
 from torch.nn import CrossEntropyLoss, BCELoss
 import os
-from models import RewardTwoStepNewPositionEmbeddingPredictor, RewardOneStepNewPositionEmbeddingPredictor
+from models import RewardTwoStepNewPositionEmbeddingPredictor
+# , RewardOneStepNewPositionEmbeddingPredictor
 from eval_confusion_matrix import plot_confusion_matrix
 from eval_progress import plot_progress
 from eval_raw_video_progress import real_video_plot
@@ -72,8 +73,7 @@ def main(args):
         experiment_name += "_LayerNorm"
     if args.first_frame_embedding:
         experiment_name += "_FirstFrameEmb"
-    if args.cat_text_front:
-        experiment_name += "_CatTextFront"
+
     if args.learner_parameter:
         experiment_name += "_LearnerPara"
     if args.cosine_scheduler:
@@ -118,12 +118,12 @@ def main(args):
         openx_dataloader = DataLoader(openx_dataset, batch_size=args.batch_size * 3, shuffle=True, num_workers=int(args.worker * 2), drop_last=True, pin_memory=True)
         extra_dataloader = DataLoader(extra_dataset, batch_size=args.batch_size, shuffle=True, num_workers=args.worker, drop_last=True, pin_memory=True)
 
-        # positive_eval_openx_dataset = LivRealVideoEvalDataset(args, 
-        #                                                 "/data/shared/roboclip/data/h5_buffers/openx_embeddings/openx_embeddings_test_dataset_progrssed.h5",
-        #                                                 label = "positive")
-        # negative_eval_openx_dataset = LivRealVideoEvalDataset(args,
-        #                                                 "/data/shared/roboclip/data/h5_buffers/openx_embeddings/openx_embeddings_test_dataset_progrssed.h5",
-        #                                                 label = "negative")
+        positive_eval_openx_dataset = LivRealVideoEvalDataset(args, 
+                                                        "/data/shared/roboclip/data/h5_buffers/openx_embeddings/openx_embeddings_test_dataset_progrssed.h5",
+                                                        label = "positive")
+        negative_eval_openx_dataset = LivRealVideoEvalDataset(args,
+                                                        "/data/shared/roboclip/data/h5_buffers/openx_embeddings/openx_embeddings_test_dataset_progrssed.h5",
+                                                        label = "negative")
         
         # positive_eval_openx_dataset = LivRealVideoEvalDataset(args, 
         #                                                 "/mnt/ssd_a_4tb/jzhang96/openx_embeddings_test_dataset_progrssed.h5",
@@ -132,8 +132,8 @@ def main(args):
         #                                                 "/mnt/ssd_a_4tb/jzhang96/openx_embeddings_test_dataset_progrssed.h5",
         #                                                 label = "negative")
         
-        # positive_eval_dataloader = DataLoader(positive_eval_openx_dataset, batch_size=args.batch_size, shuffle=True, num_workers=2, drop_last=False, pin_memory=True)
-        # negative_eval_dataloader = DataLoader(negative_eval_openx_dataset, batch_size=args.batch_size, shuffle=True, num_workers=2, drop_last=False, pin_memory=True)
+        openx_positive_eval_dataloader = DataLoader(positive_eval_openx_dataset, batch_size=args.batch_size, shuffle=True, num_workers=2, drop_last=False, pin_memory=True)
+        openx_negative_eval_dataloader = DataLoader(negative_eval_openx_dataset, batch_size=args.batch_size, shuffle=True, num_workers=2, drop_last=False, pin_memory=True)
         
 
 
@@ -155,21 +155,19 @@ def main(args):
     # else:
     #     assert False, "No dataset specified"
 
-    # if args.extra_data_type == "metaworld":
-    #     eval_file_name = "metaworld_embedding_5_demo_dataset_v3_eval.h5"
-    # else:
-    #     eval_file_name = "jesse_collect_dataset_new_token.h5"
+    if args.extra_data_type == "metaworld":
+        eval_file_name = "metaworld_embedding_5_demo_dataset_v3_eval.h5"
+    else:
+        eval_file_name = "jesse_collect_dataset_new_token.h5"
     # extra_eval_train_pos_dataset = LivDemoVideoEvalDataset(args, extra_data_path, label = "positive", set_name="train")
     # extra_eval_train_neg_dataset = LivDemoVideoEvalDataset(args, extra_data_path, label = "negative", set_name="train")
 
-    # extra_eval_eval_pos_dataset = LivDemoVideoEvalDataset(args, eval_file_name, label = "positive", set_name="eval")
-    # extra_eval_eval_neg_dataset = LivDemoVideoEvalDataset(args, eval_file_name, label = "negative", set_name="eval")
+    extra_eval_eval_pos_dataset = LivRealVideoEvalDataset(args, eval_file_name, label = "positive", dataset = "extra")
+    extra_eval_eval_neg_dataset = LivRealVideoEvalDataset(args, eval_file_name, label = "negative", dataset = "extra")
 
-    # extra_eval_train_pos_dataloader = DataLoader(extra_eval_train_pos_dataset, batch_size=4, shuffle=True, num_workers=1, drop_last=False)
-    # extra_eval_train_neg_dataloader = DataLoader(extra_eval_train_neg_dataset, batch_size=4, shuffle=True, num_workers=1, drop_last=False)
 
-    # extra_eval_eval_pos_dataloader = DataLoader(extra_eval_eval_pos_dataset, batch_size=4, shuffle=True, num_workers=1, drop_last=False)
-    # extra_eval_eval_neg_dataloader = DataLoader(extra_eval_eval_neg_dataset, batch_size=4, shuffle=True, num_workers=1, drop_last=False)
+    extra_eval_eval_pos_dataloader = DataLoader(extra_eval_eval_pos_dataset, batch_size=4, shuffle=True, num_workers=1, drop_last=False)
+    extra_eval_eval_neg_dataloader = DataLoader(extra_eval_eval_neg_dataset, batch_size=4, shuffle=True, num_workers=1, drop_last=False)
 
 
     if args.two_step_training:
@@ -209,14 +207,12 @@ def main(args):
         optimizer = torch.optim.Adam(self_attention_model.parameters(), lr=args.lr)
         scheduler = None
 
-    # if args.cat_text_front:
     triangular_mask = torch.tril(torch.ones(args.max_length + 1, args.max_length + 1)).to(device).unsqueeze(0).unsqueeze(0)
     # else:
     #     triangular_mask = torch.tril(torch.ones(args.max_length, args.max_length)).to(device).unsqueeze(0).unsqueeze(0)
 
 
     for epoch in range(args.epochs):
-        a = 0
 
         self_attention_model.train()
 
@@ -296,77 +292,61 @@ def main(args):
         else:
             assert False, "No dataset specified"
 
-        
+        if epoch % 10 == 0:
+            self_attention_model.eval()
+            with torch.no_grad():
+                plot_progress(h5_eval_file, "train", self_attention_model, args)
+                plot_progress(h5_eval_file, "eval", self_attention_model, args)
+
+                plot_confusion_matrix(h5_file = h5_eval_file, 
+                                        set = "train", 
+                                        self_attention_model = self_attention_model, 
+                                        args = args)
+
+                plot_confusion_matrix(h5_file = h5_eval_file, 
+                                        set = "eval", 
+                                        self_attention_model = self_attention_model, 
+                                        args = args)
+
+                plot_confusion_matrix(h5_file = h5_eval_file, 
+                                        set = "all", 
+                                        self_attention_model = self_attention_model, 
+                                        args = args)
 
 
-
-        # if epoch % 10 == 0:
-        #     self_attention_model.eval()
-        #     with torch.no_grad():
-
-
-                    
-        # #     save_path = os.path.join("/scr/jzhang96/roboclip_v2_decoder_models_fix_3rd", experiment_name)
-        # #     if not os.path.exists(save_path):
-        # #         os.makedirs(save_path)
-        # #     save_dict = {
-        # #         "model": self_attention_model.state_dict(),
-        # #         "optimizer": optimizer.state_dict(),
-        # #         "epoch": epoch,
-        # #         "args": args
-        # #     }
-        # #     torch.save(save_dict, os.path.join(save_path, f"model_{epoch}.pth"))
-
-
-        #     # real_video_plot(self_attention_model)
-        #         plot_progress(h5_eval_file, "train", self_attention_model, args)
-        #         plot_progress(h5_eval_file, "eval", self_attention_model, args)
-        #         plot_confusion_matrix(h5_file = h5_eval_file, 
-        #                                 set = "train", 
-        #                                 self_attention_model = self_attention_model, 
-        #                                 args = args)
-        #         plot_confusion_matrix(h5_file = h5_eval_file, 
-        #                                 set = "eval", 
-        #                                 self_attention_model = self_attention_model, 
-        #                                 args = args)
-
-        #         plot_confusion_matrix(h5_file = h5_eval_file, 
-        #                                 set = "all", 
-        #                                 self_attention_model = self_attention_model, 
-        #                                 args = args)
                 
-        #         wandb_eval_log = {}
+                wandb_eval_log = {}
 
-        #         if positive_eval_openx_dataset is not None:
-        #             class_accuracy, progress_loss = eval_model(positive_eval_dataloader, self_attention_model, progress_loss_function, triangular_mask, args)
-        #             wandb_eval_log["openx_eval/progress_loss"] = progress_loss
-        #             if args.two_step_training:
-        #                 wandb_eval_log["openx_eval/correct_class_accuracy"] = class_accuracy
+                if positive_eval_openx_dataset is not None:
+                    class_accuracy, progress_loss = eval_model(openx_positive_eval_dataloader, self_attention_model, progress_loss_function, triangular_mask, args)
+                    wandb_eval_log["openx_eval/progress_loss"] = progress_loss
+                    if args.two_step_training:
+                        wandb_eval_log["openx_eval/correct_class_accuracy"] = class_accuracy
 
-        #         if negative_eval_openx_dataset is not None:
-        #             class_accuracy, progress_loss = eval_model(negative_eval_dataloader, self_attention_model, progress_loss_function, triangular_mask, args)
-        #             wandb_eval_log["openx_eval/wrong_class_accuracy"] = class_accuracy
+                if negative_eval_openx_dataset is not None:
+                    class_accuracy, progress_loss = eval_model(openx_negative_eval_dataloader, self_attention_model, progress_loss_function, triangular_mask, args)
+                    wandb_eval_log["openx_eval/wrong_class_accuracy"] = class_accuracy
 
 
-        #         if extra_eval_train_pos_dataset is not None:
-        #             class_accuracy, progress_loss = eval_model(extra_eval_train_pos_dataloader, self_attention_model, progress_loss_function, triangular_mask, args)
-        #             wandb_eval_log["demo_dataset_train_set_correct_label/progress_loss"] = progress_loss
-        #             wandb_eval_log["demo_dataset_train_set_correct_label/correct_class_accuracy"] = class_accuracy
+                # if extra_eval_train_pos_dataset is not None:
+                #     class_accuracy, progress_loss = eval_model(extra_eval_train_pos_dataloader, self_attention_model, progress_loss_function, triangular_mask, args)
+                #     wandb_eval_log["demo_dataset_train_set_correct_label/progress_loss"] = progress_loss
+                #     wandb_eval_log["demo_dataset_train_set_correct_label/correct_class_accuracy"] = class_accuracy
 
         #         if extra_eval_train_neg_dataset is not None:
         #             class_accuracy, progress_loss = eval_model(extra_eval_train_neg_dataloader, self_attention_model, progress_loss_function, triangular_mask, args)
         #             wandb_eval_log["demo_dataset_train_set_wrong_label/wrong_class_accuracy"] = class_accuracy
 
-        #         if extra_eval_eval_pos_dataset is not None:
-        #             class_accuracy, progress_loss = eval_model(extra_eval_eval_pos_dataloader, self_attention_model, progress_loss_function, triangular_mask, args)
-        #             wandb_eval_log["demo_dataset_eval_set_correct_label/progress_loss"] = progress_loss
-        #             wandb_eval_log["demo_dataset_eval_set_correct_label/correct_class_accuracy"] = class_accuracy
+                if extra_eval_eval_pos_dataset is not None:
+                    class_accuracy, progress_loss = eval_model(extra_eval_eval_pos_dataloader, self_attention_model, progress_loss_function, triangular_mask, args)
+                    wandb_eval_log["extra_eval/progress_loss"] = progress_loss
+                    wandb_eval_log["extra_eval/correct_class_accuracy"] = class_accuracy
 
-        #         if extra_eval_eval_neg_dataset is not None:
-        #             class_accuracy, progress_loss = eval_model(extra_eval_eval_neg_dataloader, self_attention_model, progress_loss_function, triangular_mask, args)
-        #             wandb_eval_log["demo_dataset_eval_set_wrong_label/wrong_class_accuracy"] = class_accuracy
+                if extra_eval_eval_neg_dataset is not None:
+                    class_accuracy, progress_loss = eval_model(extra_eval_eval_neg_dataloader, self_attention_model, progress_loss_function, triangular_mask, args)
+                    wandb_eval_log["extra_eval/wrong_class_accuracy"] = class_accuracy
 
-        #         wandb.log(wandb_eval_log)
+                wandb.log(wandb_eval_log)
 
 
 
@@ -401,8 +381,8 @@ if __name__ == "__main__":
     argparser.add_argument('--rewind', action='store_true')
     argparser.add_argument('--normalize_embedding', action='store_true')    
     argparser.add_argument('--catagorical_progress', action='store_true')
-    argparser.add_argument('--subsample_video', action='store_true')
     argparser.add_argument('--catagorical_progress_bins', type=int, default=5)
+    argparser.add_argument('--subsample_video', action='store_true')
     argparser.add_argument('--max_length', type=int, default=32)
     argparser.add_argument('--positional_encoding', action='store_true')
     argparser.add_argument('--openx_data', action='store_true')
@@ -410,7 +390,6 @@ if __name__ == "__main__":
     argparser.add_argument('--two_step_training', action='store_true')
     argparser.add_argument('--decoder_num', type=int, default=1)
     argparser.add_argument('--first_frame_embedding', action='store_true')
-    argparser.add_argument('--cat_text_front', action='store_true')
     argparser.add_argument('--learner_parameter', action='store_true')
     argparser.add_argument('--cosine_scheduler', action='store_true')
     argparser.add_argument('--clip_grad', action='store_true')
