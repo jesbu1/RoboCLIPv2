@@ -96,7 +96,7 @@ def main(args):
     run = wandb.init(
         entity=WANDB_ENTITY_NAME,
         project=WANDB_PROJECT_NAME,
-        group="OpenXTokenTrainingv1",
+        group="OpenXTokenTrainingv2",
         config=args,
         name=experiment_name,
     )
