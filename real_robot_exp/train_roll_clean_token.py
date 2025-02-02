@@ -139,22 +139,22 @@ def main(args):
         openx_dataloader = DataLoader(openx_dataset, batch_size=args.batch_size * 3, shuffle=True, num_workers=int(args.worker * 2), drop_last=True, pin_memory=True, collate_fn=VideoTextTokenCollateFn)
         extra_dataloader = DataLoader(extra_dataset, batch_size=args.batch_size, shuffle=True, num_workers=args.worker, drop_last=True, pin_memory=True, collate_fn=VideoTextTokenCollateFn)
 
-        positive_eval_openx_dataset = LivRealVideoTokenEvalDataset(args, 
-                                                        "/data/shared/roboclip/data/h5_buffers/openx_embeddings/openx_embeddings_test_dataset_progrssed.h5",
-                                                        positive = True)
-        negative_eval_openx_dataset = LivRealVideoTokenEvalDataset(args,
-                                                        "/data/shared/roboclip/data/h5_buffers/openx_embeddings/openx_embeddings_test_dataset_progrssed.h5",
-                                                        positive = False)
+        # positive_eval_openx_dataset = LivRealVideoTokenEvalDataset(args, 
+        #                                                 "/data/shared/roboclip/data/h5_buffers/openx_embeddings/openx_embeddings_test_dataset_progrssed.h5",
+        #                                                 positive = True)
+        # negative_eval_openx_dataset = LivRealVideoTokenEvalDataset(args,
+        #                                                 "/data/shared/roboclip/data/h5_buffers/openx_embeddings/openx_embeddings_test_dataset_progrssed.h5",
+        #                                                 positive = False)
         
-        # positive_eval_openx_dataset = LivRealVideoEvalDataset(args, 
-        #                                                 "/mnt/ssd_a_4tb/jzhang96/openx_embeddings_test_dataset_progrssed.h5",
-        #                                                 label = "positive")
-        # negative_eval_openx_dataset = LivRealVideoEvalDataset(args,
-        #                                                 "/mnt/ssd_a_4tb/jzhang96/openx_embeddings_test_dataset_progrssed.h5",
-        #                                                 label = "negative")
+        # # positive_eval_openx_dataset = LivRealVideoEvalDataset(args, 
+        # #                                                 "/mnt/ssd_a_4tb/jzhang96/openx_embeddings_test_dataset_progrssed.h5",
+        # #                                                 label = "positive")
+        # # negative_eval_openx_dataset = LivRealVideoEvalDataset(args,
+        # #                                                 "/mnt/ssd_a_4tb/jzhang96/openx_embeddings_test_dataset_progrssed.h5",
+        # #                                                 label = "negative")
         
-        openx_positive_eval_dataloader = DataLoader(positive_eval_openx_dataset, batch_size=args.batch_size, shuffle=True, num_workers=2, drop_last=False, pin_memory=True, collate_fn=VideoTextTokenCollateFn)
-        openx_negative_eval_dataloader = DataLoader(negative_eval_openx_dataset, batch_size=args.batch_size, shuffle=True, num_workers=2, drop_last=False, pin_memory=True, collate_fn=VideoTextTokenCollateFn)
+        # openx_positive_eval_dataloader = DataLoader(positive_eval_openx_dataset, batch_size=args.batch_size, shuffle=True, num_workers=2, drop_last=False, pin_memory=True, collate_fn=VideoTextTokenCollateFn)
+        # openx_negative_eval_dataloader = DataLoader(negative_eval_openx_dataset, batch_size=args.batch_size, shuffle=True, num_workers=2, drop_last=False, pin_memory=True, collate_fn=VideoTextTokenCollateFn)
         
 
 
@@ -464,7 +464,7 @@ def main(args):
                                     video_learner_parameters = video_learner_parameter)
 
                 
-                wandb_eval_log = {}
+                # wandb_eval_log = {}
 
 #                 if positive_eval_openx_dataset is not None:
 #                     positive_class_accuracy, progress_loss = eval_model( 
