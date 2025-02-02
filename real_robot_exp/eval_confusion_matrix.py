@@ -155,7 +155,7 @@ def plot_confusion_matrix(h5_file, set, self_attention_model, args, prob = False
             batch_size = two_step_class.shape[0]
             two_step_prob = two_step_class.clone().float()
             two_step_prob = two_step_prob[:, -1].squeeze()
-            two_step_class = two_step_class < 0.5
+            two_step_class = two_step_class > 0.5
 
             pred_class = pred_class * two_step_class[:, -1].squeeze()
             pred_two_step_prob_list.append(two_step_prob.cpu().detach().numpy())
