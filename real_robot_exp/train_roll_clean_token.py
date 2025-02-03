@@ -112,15 +112,15 @@ def main(args):
         extra_data_path = "jesse_collect_dataset_new_token.h5"
     embedding_dim = 1024
 
-    if args.text_positional_encoding:
-        text_position_embedding = get_cosine_positional_encoding(70, 1024).to(device)
-    else:
-        text_position_embedding = None
+    # if args.text_positional_encoding:
+    #     text_position_embedding = get_cosine_positional_encoding(70, 1024).to(device)
+    # else:
+    #     text_position_embedding = None
     
-    if args.video_positional_encoding:
-        video_position_embedding = get_cosine_positional_encoding(args.max_length, 1024).to(device)
-    else:
-        video_position_embedding = None
+    # if args.video_positional_encoding:
+    #     video_position_embedding = get_cosine_positional_encoding(args.max_length, 1024).to(device)
+    # else:
+    #     video_position_embedding = None
 
     if args.learner_parameter:
         text_learner_parameter = torch.nn.Parameter(torch.randn(1, embedding_dim, device = device))
@@ -517,8 +517,8 @@ def main(args):
 
 if __name__ == "__main__":
     argparser = argparse.ArgumentParser()
-    argparser.add_argument('--h5_embedding_path', type=str, default='/data/shared/roboclip/data/h5_buffers/openx_embeddings/openx_embeddings_full_uncompressed_with_langtable_processed.h5')
-    # argparser.add_argument('--h5_embedding_path', type=str, default='/mnt/ssd_a_4tb/jzhang96/openx_embeddings_full_uncompressed_with_langtable_processed.h5')
+    # argparser.add_argument('--h5_embedding_path', type=str, default='/data/shared/roboclip/data/h5_buffers/openx_embeddings/openx_embeddings_full_uncompressed_with_langtable_processed.h5')
+    argparser.add_argument('--h5_embedding_path', type=str, default='/mnt/ssd_a_4tb/jzhang96/openx_embeddings_full_uncompressed_with_langtable_processed.h5')
     argparser.add_argument('--extra_data_type', type=str, choices=["metaworld", "real_world"], default="real_world")
     argparser.add_argument('--batch_size', type=int, default=512)
     argparser.add_argument('--epochs', type=int, default=10000)

@@ -10,6 +10,7 @@ import json
 import pickle
 import torch.nn.functional as F
 import json
+import math
 
 def normalize_embeddings(embeddings, return_tensor=True):
     if isinstance(embeddings, np.ndarray):
@@ -39,6 +40,27 @@ class LivRealVideoTrainTokenDataset(Dataset):
             json.dump(eval_keys, open("eval_keys.json", "w"), indent=4)
         self.sample_neg = sample_neg
 
+        if self.args.text_positional_encoding:
+            self.text_positional_encoding = self.get_cosine_positional_encoding(70, 1024)
+        if self.args.video_positional_encoding:
+            self.video_positional_encoding = self.get_cosine_positional_encoding(self.args.max_length, 1024)
+
+
+
+
+
+    def get_cosine_positional_encoding(self, max_seq_len, embed_dim):
+        """
+        Generate a static positional encoding matrix using sine and cosine functions.
+        """
+        position = th.arange(max_seq_len).unsqueeze(1)  # Shape: [max_seq_len, 1]
+        div_term = th.exp(th.arange(0, embed_dim, 2) * -(math.log(10000.0) / embed_dim))
+        pe = th.zeros(max_seq_len, embed_dim)
+        pe[:, 0::2] = th.sin(position * div_term)  # Even indices
+        pe[:, 1::2] = th.cos(position * div_term)  # Odd indices
+        pe /= 10 # reduce the scale of positional encoding otherwise it will dominate the input embeddings
+        return pe
+
 
     def sample_text_feature(self, data_group):
         lang_embedding = np.array(data_group["lang_embedding_individual"])
@@ -54,6 +76,8 @@ class LivRealVideoTrainTokenDataset(Dataset):
 
         if self.args.normalize_embedding:
             lang_embedding = normalize_embeddings(lang_embedding, return_tensor=True).squeeze(0)
+        if self.args.text_positional_encoding:
+            language_embedding = language_embedding + self.text_positional_encoding[:language_embedding.shape[0]]        
 
         return lang_embedding
     
@@ -76,6 +100,9 @@ class LivRealVideoTrainTokenDataset(Dataset):
 
         if self.args.normalize_embedding:
             lang_embedding = normalize_embeddings(lang_embedding, return_tensor=True).squeeze(0)
+
+        if self.args.text_positional_encoding:
+            language_embedding = language_embedding + self.text_positional_encoding[:language_embedding.shape[0]]
 
         return lang_embedding
 
@@ -116,6 +143,9 @@ class LivRealVideoTrainTokenDataset(Dataset):
                 video_progress[-1] = self.args.catagorical_progress_bins - 1
             if not self.args.two_step_training:
                 video_progress += 1
+
+        if self.args.video_positional_encoding:
+            video_frames = video_frames + self.video_positional_encoding
 
         return video_frames, video_progress, np.ones(video_progress.shape[0])
 
@@ -161,6 +191,9 @@ class LivRealVideoTrainTokenDataset(Dataset):
             progress = np.expand_dims(progress, axis=1)
             progress = self.padding_video(progress, self.args.max_length).detach().cpu().numpy()
             progress = np.squeeze(progress, axis=1)
+
+            if self.args.video_positional_encoding:
+                video_frames = video_frames + self.video_positional_encoding
             return video_frames, progress, np.ones(progress.shape[0])
         else:
             return video_frames, progress, np.ones(progress.shape[0])
@@ -233,12 +266,16 @@ def VideoTextTokenCollateFn(batch):
     embedding_size = batch[0]["text_array"].shape[1]
     batch_size = len(batch)
 
+    total_max_length = max_length + batch[0]["video_array"].shape[0]
 
-    text_output = list()
-    video_output = list()
-    mask_output = list()
+
+    feature_output = list()
+    text_mask_output = list()
+    video_mask_output = list()
     progress_output = list()
     class_label_output = list()
+
+
     
     
     for i in range(batch_size):
@@ -251,12 +288,22 @@ def VideoTextTokenCollateFn(batch):
         padding_length = max_length - feature_length
         if padding_length != 0:
             padding = np.zeros((padding_length, embedding_size))
+            import pdb; pdb.set_trace()
+            feature = np.concatenate([text_feature, video_feature, padding], axis=0)
+            text_mask = np.zeros((total_max_length))
+            text_mask[:feature_length] = 1
+            video_mask = np.zeros((total_max_length))
+            video_mask[feature_length:feature_length+video_feature.shape[0]] = 1
 
-            text_feature = np.concatenate([text_feature, padding], axis=0)
-            video_feature = np.expand_dims(video_feature, axis=0)
-            text_feature = np.expand_dims(text_feature, axis=0)
-            progress = np.expand_dims(progress, axis=0)
-            class_label = np.expand_dims(class_label, axis=0)
+
+            
+
+
+            # text_feature = np.concatenate([text_feature, padding], axis=0)
+            # video_feature = np.expand_dims(video_feature, axis=0)
+            # text_feature = np.expand_dims(text_feature, axis=0)
+            # progress = np.expand_dims(progress, axis=0)
+            # class_label = np.expand_dims(class_label, axis=0)
         else:
             text_feature = np.expand_dims(text_feature, axis=0)
             progress = np.expand_dims(progress, axis=0)
