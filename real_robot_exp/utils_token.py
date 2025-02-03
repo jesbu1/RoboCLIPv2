@@ -74,12 +74,9 @@ def update_model(args, total_input, mask, batch_triangular_mask, self_attention_
 
             class_loss = openx_class_loss + extra_class_loss
 
-            openx_progress_loss = progress_loss_function(openx_pred_progress, openx_progress_label)
-            extra_progress_loss = progress_loss_function(extra_pred_progress, extra_progress_label)
 
-            progress_loss = openx_progress_loss + extra_progress_loss
 
-            loss = class_loss + progress_loss
+
 
             openx_none_zero_class = openx_class_label != 0
             extra_none_zero_class = extra_class_label != 0
@@ -89,22 +86,21 @@ def update_model(args, total_input, mask, batch_triangular_mask, self_attention_
             openx_pred_progress_true = openx_pred_progress[openx_none_zero_class]
             extra_pred_progress_true = extra_pred_progress[extra_none_zero_class]
 
-            openx_zero_class = openx_class_label == 0
-            extra_zero_class = extra_class_label == 0
-            openx_progress_label_false = openx_progress_label[openx_zero_class]
-            extra_progress_label_false = extra_progress_label[extra_zero_class]
-            openx_pred_progress_false = openx_pred_progress[openx_zero_class]
-            extra_pred_progress_false = extra_pred_progress[extra_zero_class]
+            openx_progress_loss = progress_loss_function(openx_pred_progress_true, openx_progress_label_true)
+            extra_progress_loss = progress_loss_function(extra_pred_progress_true, extra_progress_label_true)
+
+            progress_loss = openx_progress_loss + extra_progress_loss
+            loss = class_loss + progress_loss
+
+
 
             if args.catagorical_progress:
                 openx_predict_label_true = torch.argmax(openx_pred_progress_true, dim=1)
                 extra_predict_label_true = torch.argmax(extra_pred_progress_true, dim=1)
-                openx_predict_label_false = torch.argmax(openx_pred_progress_false, dim=1)
-                extra_predict_label_false = torch.argmax(extra_pred_progress_false, dim=1)
+
                 openx_progress_accuracy_true = torch.sum(openx_predict_label_true == openx_progress_label_true).item() / len(openx_predict_label_true)
                 extra_progress_accuracy_true = torch.sum(extra_predict_label_true == extra_progress_label_true).item() / len(extra_predict_label_true)
-                openx_progress_accuracy_false = torch.sum(openx_predict_label_false == openx_progress_label_false).item() / len(openx_predict_label_false)
-                extra_progress_accuracy_false = torch.sum(extra_predict_label_false == extra_progress_label_false).item() / len(extra_predict_label_false)
+
                 openx_progress_accuracy = torch.sum(openx_predict_label_true == openx_progress_label_true).item() / len(openx_predict_label_true)
                 extra_progress_accuracy = torch.sum(extra_predict_label_true == extra_progress_label_true).item() / len(extra_predict_label_true)
 
@@ -136,13 +132,8 @@ def update_model(args, total_input, mask, batch_triangular_mask, self_attention_
 
                 "train_accuracy/openx_true_data_progress_accuracy": openx_progress_accuracy_true,
                 "train_accuracy/extra_true_data_progress_accuracy": extra_progress_accuracy_true,
-                "train_accuracy/openx_wrong_data_progress_accuracy": openx_progress_accuracy_false,
-                "train_accuracy/extra_wrong_data_progress_accuracy": extra_progress_accuracy_false,
-
                 "openx/openx_true_data_progress_accuracy": openx_progress_accuracy_true,
                 "extra/extra_true_data_progress_accuracy": extra_progress_accuracy_true,
-                "openx/openx_wrong_data_progress_accuracy": openx_progress_accuracy_false,
-                "extra/extra_wrong_data_progress_accuracy": extra_progress_accuracy_false,
 
                 "train_accuracy/openx_progress_accuracy": openx_progress_accuracy,
                 "train_accuracy/extra_progress_accuracy": extra_progress_accuracy,
