@@ -41,9 +41,9 @@ class LivRealVideoTrainTokenDataset(Dataset):
         self.sample_neg = sample_neg
 
         if self.args.text_positional_encoding:
-            self.text_positional_encoding = self.get_cosine_positional_encoding(70, 1024)
+            self.text_positional_encoding = self.get_cosine_positional_encoding(70, 1024).detach().cpu().numpy()
         if self.args.video_positional_encoding:
-            self.video_positional_encoding = self.get_cosine_positional_encoding(self.args.max_length, 1024)
+            self.video_positional_encoding = self.get_cosine_positional_encoding(self.args.max_length, 1024).detach().cpu().numpy()
 
 
 
@@ -77,7 +77,7 @@ class LivRealVideoTrainTokenDataset(Dataset):
         if self.args.normalize_embedding:
             lang_embedding = normalize_embeddings(lang_embedding, return_tensor=True).squeeze(0)
         if self.args.text_positional_encoding:
-            language_embedding = language_embedding + self.text_positional_encoding[:language_embedding.shape[0]]        
+            lang_embedding = lang_embedding + self.text_positional_encoding[:lang_embedding.shape[0]]     
 
         return lang_embedding
     
@@ -102,8 +102,7 @@ class LivRealVideoTrainTokenDataset(Dataset):
             lang_embedding = normalize_embeddings(lang_embedding, return_tensor=True).squeeze(0)
 
         if self.args.text_positional_encoding:
-            language_embedding = language_embedding + self.text_positional_encoding[:language_embedding.shape[0]]
-
+            lang_embedding = lang_embedding + self.text_positional_encoding[:lang_embedding.shape[0]] 
         return lang_embedding
 
 
@@ -287,55 +286,48 @@ def VideoTextTokenCollateFn(batch):
         feature_length = text_feature.shape[0]
         padding_length = max_length - feature_length
         if padding_length != 0:
-            padding = np.zeros((padding_length, embedding_size))
-            import pdb; pdb.set_trace()
-            feature = np.concatenate([text_feature, video_feature, padding], axis=0)
+            feature_padding = np.zeros((padding_length, embedding_size))
+            feature = np.concatenate([text_feature, video_feature, feature_padding], axis=0)
+
             text_mask = np.zeros((total_max_length))
             text_mask[:feature_length] = 1
             video_mask = np.zeros((total_max_length))
             video_mask[feature_length:feature_length+video_feature.shape[0]] = 1
 
+            feature_output.append(feature)
+            text_mask_output.append(text_mask)
+            video_mask_output.append(video_mask)
+            progress_output.append(progress)
+            class_label_output.append(class_label)
 
-            
-
-
-            # text_feature = np.concatenate([text_feature, padding], axis=0)
-            # video_feature = np.expand_dims(video_feature, axis=0)
-            # text_feature = np.expand_dims(text_feature, axis=0)
-            # progress = np.expand_dims(progress, axis=0)
-            # class_label = np.expand_dims(class_label, axis=0)
         else:
-            text_feature = np.expand_dims(text_feature, axis=0)
-            progress = np.expand_dims(progress, axis=0)
-            video_feature = np.expand_dims(video_feature, axis=0)
-            class_label = np.expand_dims(class_label, axis=0)
+            feature = np.concatenate([text_feature, video_feature], axis=0)
+            text_mask = np.zeros((total_max_length))
+            text_mask[:feature_length] = 1
+            video_mask = np.zeros((total_max_length))
+            video_mask[feature_length:feature_length+video_feature.shape[0]] = 1
 
-        text_mask = np.zeros((max_length))
-        text_mask[:feature_length] = 1
-            
-        mask_output.append(text_mask)
-        text_output.append(text_feature)
-        video_output.append(video_feature)
-        progress_output.append(progress)
-        class_label_output.append(class_label)
+            feature_output.append(feature)
+            text_mask_output.append(text_mask)
+            video_mask_output.append(video_mask)
+            progress_output.append(progress)
+            class_label_output.append(class_label)
 
-    text_output = np.concatenate(text_output, axis=0)
-    progress_output = np.concatenate(progress_output, axis=0)
-    class_label_output = np.concatenate(class_label_output, axis=0)
-    video_output = np.concatenate(video_output, axis=0)
-    text_mask_output = np.stack(mask_output, axis=0)
-
+    feature_output = np.stack(feature_output, axis=0)
+    text_mask_output = np.stack(text_mask_output, axis=0)
+    video_mask_output = np.stack(video_mask_output, axis=0)
+    progress_output = np.stack(progress_output, axis=0)
+    class_label_output = np.stack(class_label_output, axis=0)
 
     output_dict = {
-        "text_array": th.tensor(text_output).float(),
-        "video_array": th.tensor(video_output).float(),
+        "feature_array": th.tensor(feature_output).float(),
+        "text_mask": th.tensor(text_mask_output),
+        "video_mask": th.tensor(video_mask_output),
         "progress": th.tensor(progress_output).float(),
-        "class_label": th.tensor(class_label_output),
-        "text_mask": th.tensor(text_mask_output)
+        "class_label": th.tensor(class_label_output)
     }
 
     return output_dict
-
 
 
 

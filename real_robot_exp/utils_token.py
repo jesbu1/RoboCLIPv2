@@ -101,7 +101,6 @@ def update_model(args, total_input, mask, batch_triangular_mask, self_attention_
                 extra_predict_label_true = torch.argmax(extra_pred_progress_true, dim=1)
                 openx_predict_label_false = torch.argmax(openx_pred_progress_false, dim=1)
                 extra_predict_label_false = torch.argmax(extra_pred_progress_false, dim=1)
-
                 openx_progress_accuracy_true = torch.sum(openx_predict_label_true == openx_progress_label_true).item() / len(openx_predict_label_true)
                 extra_progress_accuracy_true = torch.sum(extra_predict_label_true == extra_progress_label_true).item() / len(extra_predict_label_true)
                 openx_progress_accuracy_false = torch.sum(openx_predict_label_false == openx_progress_label_false).item() / len(openx_predict_label_false)
@@ -135,20 +134,20 @@ def update_model(args, total_input, mask, batch_triangular_mask, self_attention_
                 "openx/openx_progress_loss": openx_progress_loss.item(),
                 "extra/extra_progress_loss": extra_progress_loss.item(),
 
-                "train_accuracy/openx_true_data_accuracy": openx_progress_accuracy_true,
-                "train_accuracy/extra_true_data_accuracy": extra_progress_accuracy_true,
-                "train_accuracy/openx_wrong_data_accuracy": openx_progress_accuracy_false,
-                "train_accuracy/extra_wrong_data_accuracy": extra_progress_accuracy_false,
+                "train_accuracy/openx_true_data_progress_accuracy": openx_progress_accuracy_true,
+                "train_accuracy/extra_true_data_progress_accuracy": extra_progress_accuracy_true,
+                "train_accuracy/openx_wrong_data_progress_accuracy": openx_progress_accuracy_false,
+                "train_accuracy/extra_wrong_data_progress_accuracy": extra_progress_accuracy_false,
 
-                "openx/openx_true_data_accuracy": openx_progress_accuracy_true,
-                "extra/extra_true_data_accuracy": extra_progress_accuracy_true,
-                "openx/openx_wrong_data_accuracy": openx_progress_accuracy_false,
-                "extra/extra_wrong_data_accuracy": extra_progress_accuracy_false,
+                "openx/openx_true_data_progress_accuracy": openx_progress_accuracy_true,
+                "extra/extra_true_data_progress_accuracy": extra_progress_accuracy_true,
+                "openx/openx_wrong_data_progress_accuracy": openx_progress_accuracy_false,
+                "extra/extra_wrong_data_progress_accuracy": extra_progress_accuracy_false,
 
-                "train_accuracy/openx_accuracy": openx_progress_accuracy,
-                "train_accuracy/extra_accuracy": extra_progress_accuracy,
-                "openx/openx_accuracy": openx_progress_accuracy,
-                "extra/extra_accuracy": extra_progress_accuracy,
+                "train_accuracy/openx_progress_accuracy": openx_progress_accuracy,
+                "train_accuracy/extra_progress_accuracy": extra_progress_accuracy,
+                "openx/openx_progress_accuracy": openx_progress_accuracy,
+                "extra/extra_progress_accuracy": extra_progress_accuracy,
             }
 
 

@@ -112,15 +112,15 @@ def main(args):
         extra_data_path = "jesse_collect_dataset_new_token.h5"
     embedding_dim = 1024
 
-    # if args.text_positional_encoding:
-    #     text_position_embedding = get_cosine_positional_encoding(70, 1024).to(device)
-    # else:
-    #     text_position_embedding = None
+    if args.text_positional_encoding:
+        text_position_embedding = get_cosine_positional_encoding(70, 1024).to(device)
+    else:
+        text_position_embedding = None
     
-    # if args.video_positional_encoding:
-    #     video_position_embedding = get_cosine_positional_encoding(args.max_length, 1024).to(device)
-    # else:
-    #     video_position_embedding = None
+    if args.video_positional_encoding:
+        video_position_embedding = get_cosine_positional_encoding(args.max_length, 1024).to(device)
+    else:
+        video_position_embedding = None
 
     if args.learner_parameter:
         text_learner_parameter = torch.nn.Parameter(torch.randn(1, embedding_dim, device = device))
@@ -257,103 +257,99 @@ def main(args):
                 '''
                 optimizer.zero_grad()
                 with torch.cuda.amp.autocast():
-                    openx_len = len(openx_data["video_array"])
-                    extra_len = len(extra_data["video_array"])
 
-                    text_max_length = max(openx_data["text_array"].size(1), extra_data["text_array"].size(1))
 
-                    openx_text_array = openx_data["text_array"].to(device).float()
-                    extra_text_array = extra_data["text_array"].to(device).float()
+                    openx_feature = openx_data["feature_array"].to(device).float()
+                    extra_feature = extra_data["feature_array"].to(device).float()
 
                     openx_text_mask = openx_data["text_mask"].to(device).bool()
                     extra_text_mask = extra_data["text_mask"].to(device).bool()
 
-                    openx_video_array = openx_data["video_array"].to(device).float()
-                    extra_video_array = extra_data["video_array"].to(device).float()
+                    openx_video_mask = openx_data["video_mask"].to(device).float()
+                    extra_video_mask = extra_data["video_mask"].to(device).float()
 
+                    openx_progress_target = openx_data["progress"].to(device)
+                    extra_progress_target = extra_data["progress"].to(device)
 
-                    
-                    openx_text_array = F.pad(openx_text_array, (0, 0, 0, text_max_length - openx_text_array.size(1)))
-                    extra_text_array = F.pad(extra_text_array, (0, 0, 0, text_max_length - extra_text_array.size(1)))
+                    openx_class_target = openx_data["class_label"].to(device)
+                    extra_class_target = extra_data["class_label"].to(device)
 
-                    openx_text_mask = F.pad(openx_text_mask, (0, text_max_length - openx_text_mask.size(1)))
-                    extra_text_mask = F.pad(extra_text_mask, (0, text_max_length - extra_text_mask.size(1)))
+                    feature_max_length = max(openx_feature.size(1), extra_feature.size(1))
 
+                    openx_feature = F.pad(openx_feature, (0, 0, 0, feature_max_length - openx_feature.size(1)))
+                    extra_feature = F.pad(extra_feature, (0, 0, 0, feature_max_length - extra_feature.size(1)))
+
+                    openx_text_mask = F.pad(openx_text_mask, (0, feature_max_length - openx_text_mask.size(1)))
+                    extra_text_mask = F.pad(extra_text_mask, (0, feature_max_length - extra_text_mask.size(1)))
+
+                    openx_video_mask = F.pad(openx_video_mask, (0, feature_max_length - openx_video_mask.size(1)))
+                    extra_video_mask = F.pad(extra_video_mask, (0, feature_max_length - extra_video_mask.size(1)))
+
+                    # openx_progress_target = F.pad(openx_progress_target, (0, feature_max_length - openx_progress_target.size(1)))
+                    # extra_progress_target = F.pad(extra_progress_target, (0, feature_max_length - extra_progress_target.size(1)))
+
+                    # openx_class_target = F.pad(openx_class_target, (0, feature_max_length - openx_class_target.size(1)))
+                    # extra_class_target = F.pad(extra_class_target, (0, feature_max_length - extra_class_target.size(1)))
+
+                    total_feature = torch.cat([openx_feature, extra_feature], dim = 0)
                     total_text_mask = torch.cat([openx_text_mask, extra_text_mask], dim = 0)
-                    total_text_array = torch.cat([openx_text_array, extra_text_array], dim = 0)
-                    total_video_array = torch.cat([openx_video_array, extra_video_array], dim = 0)
+                    total_video_mask = torch.cat([openx_video_mask, extra_video_mask], dim = 0)
+                    total_progress_target = torch.cat([openx_progress_target, extra_progress_target], dim = 0)
+                    total_class_target = torch.cat([openx_class_target, extra_class_target], dim = 0)
 
-                    
-
-                    if args.text_positional_encoding:
-                        total_text_array = total_text_array + text_position_embedding[:,:text_max_length]
-                    if args.video_positional_encoding:
-                        total_video_array = total_video_array + video_position_embedding
 
                     if args.learner_parameter:
-                        batch_size, seq_len, _ = total_text_array.size()
-                        total_text_array = total_text_array.view(batch_size * seq_len, -1)
-                        total_video_array = total_video_array.view(batch_size * args.max_length, -1)
-                        total_text_array += text_learner_parameter
-                        total_video_array += video_learner_parameter
-                        total_text_array = total_text_array.view(batch_size, seq_len, -1)
-                        total_video_array = total_video_array.view(batch_size, args.max_length, -1)
-                    
-                    total_text_array = total_text_array.repeat(2, 1, 1)
-                    total_text_mask = total_text_mask.repeat(2, 1)
-                    roll_video_array = total_video_array.roll(args.batch_size, 0)
-                    total_video_array = torch.cat([total_video_array, roll_video_array], dim = 0)
+                        add_text_learned_parameter = text_learner_parameter.unsqueeze(0).repeat(total_feature.size(0), total_feature.size(1), 1)
+                        add_text_learned_parameter = add_text_learned_parameter * total_text_mask.unsqueeze(-1).float().repeat(1, 1, 1024)
 
-                    total_input = []
-                    total_mask = []
+                        add_video_learned_parameter = video_learner_parameter.unsqueeze(0).repeat(total_feature.size(0), total_feature.size(1), 1)
+                        add_video_learned_parameter = add_video_learned_parameter * total_video_mask.unsqueeze(-1).float().repeat(1, 1, 1024)
 
-                    # make the padding to the end of the sequence
-                    for i in range(total_video_array.size(0)):
-                        valid_text_array = total_text_array[i][total_text_mask[i] == 1]
-                        valid_video_array = total_video_array[i]
-                        invalid_text_array = total_text_array[i][total_text_mask[i] == 0]
-                        mask = torch.cat((torch.zeros(valid_text_array.size(0)), 
-                                            torch.ones(valid_video_array.size(0)), 
-                                            torch.zeros(invalid_text_array.size(0))), 
-                                            dim = 0).bool()
-                        total_input.append(torch.cat([valid_text_array, valid_video_array, invalid_text_array], dim = 0))
-                        total_mask.append(mask)
+                        total_feature = total_feature + add_text_learned_parameter + add_video_learned_parameter
 
 
-                    total_input = torch.stack(total_input, dim = 0)
-                    total_mask = torch.stack(total_mask, dim = 0).bool()
+                    # roll data
+
+                    negative_feature = torch.roll(total_feature, args.batch_size, 0)
+                    negative_video_mask = torch.roll(total_video_mask, args.batch_size, 0)
+                    negative_progress_target = torch.zeros_like(total_progress_target)
+                    negative_class_target = torch.zeros_like(total_class_target)
+
+                    total_input = torch.cat([total_feature, negative_feature], dim = 0)
+                    total_video_mask = torch.cat([total_video_mask, negative_video_mask], dim = 0)
+                    progress_targets = torch.cat([total_progress_target, negative_progress_target], dim = 0)
+                    class_targets = torch.cat([total_class_target, negative_class_target], dim = 0)
 
 
-                    # roll data targets
-                    progress_targets = torch.cat((openx_data["progress"], 
-                                                  torch.zeros_like(openx_data["progress"]),
-                                                  extra_data["progress"],
-                                                  torch.zeros_like(extra_data["progress"])
-                                                  ), dim = 0).to(device)
-                    
-                    if args.two_step_training:
-                        class_targets = torch.cat((openx_data["class_label"].bool(), 
-                                                   torch.zeros_like(openx_data["class_label"].bool()),
-                                                   extra_data["class_label"].bool(),
-                                                   torch.zeros_like(extra_data["class_label"].bool())
-                                                   ), dim = 0).to(device)
 
 
                     triangular_mask = torch.tril(torch.ones(total_input.shape[1], total_input.shape[1])).to(device)
                     batch_triangular_mask = triangular_mask.repeat(progress_targets.shape[0], 1, 1, 1).bool()
 
-                    openx_len = len(openx_data["video_array"])
-                    extra_len = len(extra_data["video_array"])
+                    openx_len = len(openx_data["feature_array"])
+                    extra_len = len(extra_data["feature_array"])
+
+
 
                     total_input = torch.cat((total_input[:openx_len], 
                                             total_input[openx_len + extra_len: 2 * openx_len + extra_len],
                                             total_input[openx_len:openx_len + extra_len], 
                                             total_input[2 * openx_len + extra_len:]),
                                             dim = 0)
-                    total_mask = torch.cat((total_mask[:openx_len],
-                                            total_mask[openx_len + extra_len: 2 * openx_len + extra_len],
-                                            total_mask[openx_len:openx_len + extra_len],
-                                            total_mask[2 * openx_len + extra_len:]),
+                    total_mask = torch.cat((total_video_mask[:openx_len],
+                                            total_video_mask[openx_len + extra_len: 2 * openx_len + extra_len],
+                                            total_video_mask[openx_len:openx_len + extra_len],
+                                            total_video_mask[2 * openx_len + extra_len:]),
+                                            dim = 0)
+                    progress_targets = torch.cat((progress_targets[:openx_len],
+                                            progress_targets[openx_len + extra_len: 2 * openx_len + extra_len],
+                                            progress_targets[openx_len:openx_len + extra_len],
+                                            progress_targets[2 * openx_len + extra_len:]),
+                                            dim = 0)
+                    class_targets = torch.cat((class_targets[:openx_len],
+                                            class_targets[openx_len + extra_len: 2 * openx_len + extra_len],
+                                            class_targets[openx_len:openx_len + extra_len],
+                                            class_targets[2 * openx_len + extra_len:]),
                                             dim = 0)
 
                     
@@ -517,8 +513,8 @@ def main(args):
 
 if __name__ == "__main__":
     argparser = argparse.ArgumentParser()
-    # argparser.add_argument('--h5_embedding_path', type=str, default='/data/shared/roboclip/data/h5_buffers/openx_embeddings/openx_embeddings_full_uncompressed_with_langtable_processed.h5')
-    argparser.add_argument('--h5_embedding_path', type=str, default='/mnt/ssd_a_4tb/jzhang96/openx_embeddings_full_uncompressed_with_langtable_processed.h5')
+    argparser.add_argument('--h5_embedding_path', type=str, default='/data/shared/roboclip/data/h5_buffers/openx_embeddings/openx_embeddings_full_uncompressed_with_langtable_processed.h5')
+    # argparser.add_argument('--h5_embedding_path', type=str, default='/mnt/ssd_a_4tb/jzhang96/openx_embeddings_full_uncompressed_with_langtable_processed.h5')
     argparser.add_argument('--extra_data_type', type=str, choices=["metaworld", "real_world"], default="real_world")
     argparser.add_argument('--batch_size', type=int, default=512)
     argparser.add_argument('--epochs', type=int, default=10000)

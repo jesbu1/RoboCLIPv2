@@ -111,7 +111,6 @@ class RewardTwoStepLangTokenPositionEmbeddingPredictor(nn.Module):
         for decoder in self.transformer_decoder:
             x = decoder(x, triangular_mask)
 
-
         x = x.contiguous().view(batch_size * seq_len, -1)
         mask = mask.view(batch_size * seq_len).bool()
         x = x[mask]
