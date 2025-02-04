@@ -238,8 +238,6 @@ def main(args):
     if args.cosine_scheduler:
         scheduler = CosineWithMinLRScheduler(optimizer, max_steps=300000, max_lr=args.lr, min_lr=1e-5)
 
-    scaler = torch.cuda.amp.GradScaler()
-
     for epoch in range(args.epochs):
 
         self_attention_model.train()
@@ -256,124 +254,121 @@ def main(args):
 
                 '''
                 optimizer.zero_grad()
-                with torch.cuda.amp.autocast():
 
 
-                    openx_feature = openx_data["feature_array"].to(device).float()
-                    extra_feature = extra_data["feature_array"].to(device).float()
+                openx_feature = openx_data["feature_array"].to(device).float()
+                extra_feature = extra_data["feature_array"].to(device).float()
 
-                    openx_text_mask = openx_data["text_mask"].to(device).bool()
-                    extra_text_mask = extra_data["text_mask"].to(device).bool()
+                openx_text_mask = openx_data["text_mask"].to(device).bool()
+                extra_text_mask = extra_data["text_mask"].to(device).bool()
 
-                    openx_video_mask = openx_data["video_mask"].to(device).float()
-                    extra_video_mask = extra_data["video_mask"].to(device).float()
+                openx_video_mask = openx_data["video_mask"].to(device).float()
+                extra_video_mask = extra_data["video_mask"].to(device).float()
 
-                    openx_progress_target = openx_data["progress"].to(device)
-                    extra_progress_target = extra_data["progress"].to(device)
+                openx_progress_target = openx_data["progress"].to(device)
+                extra_progress_target = extra_data["progress"].to(device)
 
-                    openx_class_target = openx_data["class_label"].to(device)
-                    extra_class_target = extra_data["class_label"].to(device)
+                openx_class_target = openx_data["class_label"].to(device)
+                extra_class_target = extra_data["class_label"].to(device)
 
-                    feature_max_length = max(openx_feature.size(1), extra_feature.size(1))
+                feature_max_length = max(openx_feature.size(1), extra_feature.size(1))
 
-                    openx_feature = F.pad(openx_feature, (0, 0, 0, feature_max_length - openx_feature.size(1)))
-                    extra_feature = F.pad(extra_feature, (0, 0, 0, feature_max_length - extra_feature.size(1)))
+                openx_feature = F.pad(openx_feature, (0, 0, 0, feature_max_length - openx_feature.size(1)))
+                extra_feature = F.pad(extra_feature, (0, 0, 0, feature_max_length - extra_feature.size(1)))
 
-                    openx_text_mask = F.pad(openx_text_mask, (0, feature_max_length - openx_text_mask.size(1)))
-                    extra_text_mask = F.pad(extra_text_mask, (0, feature_max_length - extra_text_mask.size(1)))
+                openx_text_mask = F.pad(openx_text_mask, (0, feature_max_length - openx_text_mask.size(1)))
+                extra_text_mask = F.pad(extra_text_mask, (0, feature_max_length - extra_text_mask.size(1)))
 
-                    openx_video_mask = F.pad(openx_video_mask, (0, feature_max_length - openx_video_mask.size(1)))
-                    extra_video_mask = F.pad(extra_video_mask, (0, feature_max_length - extra_video_mask.size(1)))
+                openx_video_mask = F.pad(openx_video_mask, (0, feature_max_length - openx_video_mask.size(1)))
+                extra_video_mask = F.pad(extra_video_mask, (0, feature_max_length - extra_video_mask.size(1)))
 
-                    # openx_progress_target = F.pad(openx_progress_target, (0, feature_max_length - openx_progress_target.size(1)))
-                    # extra_progress_target = F.pad(extra_progress_target, (0, feature_max_length - extra_progress_target.size(1)))
+                # openx_progress_target = F.pad(openx_progress_target, (0, feature_max_length - openx_progress_target.size(1)))
+                # extra_progress_target = F.pad(extra_progress_target, (0, feature_max_length - extra_progress_target.size(1)))
 
-                    # openx_class_target = F.pad(openx_class_target, (0, feature_max_length - openx_class_target.size(1)))
-                    # extra_class_target = F.pad(extra_class_target, (0, feature_max_length - extra_class_target.size(1)))
+                # openx_class_target = F.pad(openx_class_target, (0, feature_max_length - openx_class_target.size(1)))
+                # extra_class_target = F.pad(extra_class_target, (0, feature_max_length - extra_class_target.size(1)))
 
-                    total_feature = torch.cat([openx_feature, extra_feature], dim = 0)
-                    total_text_mask = torch.cat([openx_text_mask, extra_text_mask], dim = 0)
-                    total_video_mask = torch.cat([openx_video_mask, extra_video_mask], dim = 0)
-                    total_progress_target = torch.cat([openx_progress_target, extra_progress_target], dim = 0)
-                    total_class_target = torch.cat([openx_class_target, extra_class_target], dim = 0)
-
-
-                    if args.learner_parameter:
-                        add_text_learned_parameter = text_learner_parameter.unsqueeze(0).repeat(total_feature.size(0), total_feature.size(1), 1)
-                        add_text_learned_parameter = add_text_learned_parameter * total_text_mask.unsqueeze(-1).float().repeat(1, 1, 1024)
-
-                        add_video_learned_parameter = video_learner_parameter.unsqueeze(0).repeat(total_feature.size(0), total_feature.size(1), 1)
-                        add_video_learned_parameter = add_video_learned_parameter * total_video_mask.unsqueeze(-1).float().repeat(1, 1, 1024)
-
-                        total_feature = total_feature + add_text_learned_parameter + add_video_learned_parameter
+                total_feature = torch.cat([openx_feature, extra_feature], dim = 0)
+                total_text_mask = torch.cat([openx_text_mask, extra_text_mask], dim = 0)
+                total_video_mask = torch.cat([openx_video_mask, extra_video_mask], dim = 0)
+                total_progress_target = torch.cat([openx_progress_target, extra_progress_target], dim = 0)
+                total_class_target = torch.cat([openx_class_target, extra_class_target], dim = 0)
 
 
-                    # roll data
+                if args.learner_parameter:
+                    add_text_learned_parameter = text_learner_parameter.unsqueeze(0).repeat(total_feature.size(0), total_feature.size(1), 1)
+                    add_text_learned_parameter = add_text_learned_parameter * total_text_mask.unsqueeze(-1).float().repeat(1, 1, 1024)
 
-                    negative_feature = torch.roll(total_feature, args.batch_size, 0)
-                    negative_video_mask = torch.roll(total_video_mask, args.batch_size, 0)
-                    negative_progress_target = torch.zeros_like(total_progress_target)
-                    negative_class_target = torch.zeros_like(total_class_target)
+                    add_video_learned_parameter = video_learner_parameter.unsqueeze(0).repeat(total_feature.size(0), total_feature.size(1), 1)
+                    add_video_learned_parameter = add_video_learned_parameter * total_video_mask.unsqueeze(-1).float().repeat(1, 1, 1024)
 
-                    total_input = torch.cat([total_feature, negative_feature], dim = 0)
-                    total_video_mask = torch.cat([total_video_mask, negative_video_mask], dim = 0)
-                    progress_targets = torch.cat([total_progress_target, negative_progress_target], dim = 0)
-                    class_targets = torch.cat([total_class_target, negative_class_target], dim = 0)
+                    total_feature = total_feature + add_text_learned_parameter + add_video_learned_parameter
 
 
+                # roll data
 
+                negative_feature = torch.roll(total_feature, args.batch_size, 0)
+                negative_video_mask = torch.roll(total_video_mask, args.batch_size, 0)
+                negative_progress_target = torch.zeros_like(total_progress_target)
+                negative_class_target = torch.zeros_like(total_class_target)
 
-                    triangular_mask = torch.tril(torch.ones(total_input.shape[1], total_input.shape[1])).to(device)
-                    batch_triangular_mask = triangular_mask.repeat(progress_targets.shape[0], 1, 1, 1).bool()
-
-                    openx_len = len(openx_data["feature_array"])
-                    extra_len = len(extra_data["feature_array"])
+                total_input = torch.cat([total_feature, negative_feature], dim = 0)
+                total_video_mask = torch.cat([total_video_mask, negative_video_mask], dim = 0)
+                progress_targets = torch.cat([total_progress_target, negative_progress_target], dim = 0)
+                class_targets = torch.cat([total_class_target, negative_class_target], dim = 0)
 
 
 
-                    total_input = torch.cat((total_input[:openx_len], 
-                                            total_input[openx_len + extra_len: 2 * openx_len + extra_len],
-                                            total_input[openx_len:openx_len + extra_len], 
-                                            total_input[2 * openx_len + extra_len:]),
-                                            dim = 0)
-                    total_mask = torch.cat((total_video_mask[:openx_len],
-                                            total_video_mask[openx_len + extra_len: 2 * openx_len + extra_len],
-                                            total_video_mask[openx_len:openx_len + extra_len],
-                                            total_video_mask[2 * openx_len + extra_len:]),
-                                            dim = 0)
-                    progress_targets = torch.cat((progress_targets[:openx_len],
-                                            progress_targets[openx_len + extra_len: 2 * openx_len + extra_len],
-                                            progress_targets[openx_len:openx_len + extra_len],
-                                            progress_targets[2 * openx_len + extra_len:]),
-                                            dim = 0)
-                    class_targets = torch.cat((class_targets[:openx_len],
-                                            class_targets[openx_len + extra_len: 2 * openx_len + extra_len],
-                                            class_targets[openx_len:openx_len + extra_len],
-                                            class_targets[2 * openx_len + extra_len:]),
-                                            dim = 0)
 
-                    
-                    wandb_log, self_attention_model = update_model( args, 
-                                                                    total_input, 
-                                                                    total_mask, 
-                                                                    batch_triangular_mask, 
-                                                                    self_attention_model, 
-                                                                    progress_targets, 
-                                                                    class_targets,
-                                                                    classification_loss_function,
-                                                                    progress_loss_function,
-                                                                    optimizer,
-                                                                    openx_len = openx_len * 2,
-                                                                    extra_len = extra_len * 2,
-                                                                    scaler = scaler
-                                                                    )
-                    
+                triangular_mask = torch.tril(torch.ones(total_input.shape[1], total_input.shape[1])).to(device)
+                batch_triangular_mask = triangular_mask.repeat(progress_targets.shape[0], 1, 1, 1).bool()
+
+                openx_len = len(openx_data["feature_array"])
+                extra_len = len(extra_data["feature_array"])
+
+
+
+                total_input = torch.cat((total_input[:openx_len], 
+                                        total_input[openx_len + extra_len: 2 * openx_len + extra_len],
+                                        total_input[openx_len:openx_len + extra_len], 
+                                        total_input[2 * openx_len + extra_len:]),
+                                        dim = 0)
+                total_mask = torch.cat((total_video_mask[:openx_len],
+                                        total_video_mask[openx_len + extra_len: 2 * openx_len + extra_len],
+                                        total_video_mask[openx_len:openx_len + extra_len],
+                                        total_video_mask[2 * openx_len + extra_len:]),
+                                        dim = 0)
+                progress_targets = torch.cat((progress_targets[:openx_len],
+                                        progress_targets[openx_len + extra_len: 2 * openx_len + extra_len],
+                                        progress_targets[openx_len:openx_len + extra_len],
+                                        progress_targets[2 * openx_len + extra_len:]),
+                                        dim = 0)
+                class_targets = torch.cat((class_targets[:openx_len],
+                                        class_targets[openx_len + extra_len: 2 * openx_len + extra_len],
+                                        class_targets[openx_len:openx_len + extra_len],
+                                        class_targets[2 * openx_len + extra_len:]),
+                                        dim = 0)
+
                 
+                wandb_log, self_attention_model = update_model( args, 
+                                                                total_input, 
+                                                                total_mask, 
+                                                                batch_triangular_mask, 
+                                                                self_attention_model, 
+                                                                progress_targets, 
+                                                                class_targets,
+                                                                classification_loss_function,
+                                                                progress_loss_function,
+                                                                optimizer,
+                                                                openx_len = openx_len * 2,
+                                                                extra_len = extra_len * 2,
+                                                                )
+                
+            
                 if args.clip_grad:
-                    scaler.unscale_(optimizer)
                     torch.nn.utils.clip_grad_norm_(parameter_list, 1)
-                scaler.step(optimizer)
-                scaler.update()
+                optimizer.step()
+
 
                 if args.cosine_scheduler:
                     scheduler.step()

@@ -43,7 +43,7 @@ def get_cosine_positional_encoding(max_seq_len, embed_dim):
 
 
 def update_model(args, total_input, mask, batch_triangular_mask, self_attention_model, progress, class_label, 
-                classification_loss_function, progress_loss_function, optimizer,  openx_len, extra_len, scaler):
+                classification_loss_function, progress_loss_function, optimizer,  openx_len, extra_len):
 
     progress_output, class_output = self_attention_model(total_input, batch_triangular_mask, mask = mask)
 
@@ -184,8 +184,7 @@ def update_model(args, total_input, mask, batch_triangular_mask, self_attention_
         #         accuracy = torch.sum(predict_label == progress) / len(predict_label)
         #         wandb_log["progress_accuracy"] = accuracy
 
-    scaler.scale(loss).backward()
-    # loss.backward()
+    loss.backward()
     
 
     return wandb_log, self_attention_model
