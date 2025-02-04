@@ -62,7 +62,7 @@ class DecoderOnlyBlock(nn.Module):
         if mask is not None:
             # scores = scores.masked_fill(mask == 0, float('-inf'))
             # scores = scores.masked_fill(mask == 0, -1e9)
-            scores = scores.masked_fill(mask == 0, -1e4)
+            scores = scores.masked_fill(mask == 0, -1e9)
         attention = F.softmax(scores, dim=-1)
 
         attn_output = torch.matmul(attention, V)
