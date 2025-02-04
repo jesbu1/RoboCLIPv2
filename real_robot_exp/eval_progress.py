@@ -60,9 +60,15 @@ def plot_progress(h5_file, set, self_attention_model, args):
     device = next(self_attention_model.parameters()).device
     keys = list(h5_file.keys())
     if set == "train":
-        eval_envs = keys[:int(len(keys)*0.75)]
+        if args.extra_data_type == "metaworld":
+            eval_envs = keys
+        else:
+            eval_envs = keys[:int(len(keys)*0.75)]
     elif set == "eval":
-        eval_envs = keys[int(len(keys)*0.75):]
+        if args.extra_data_type == "metaworld":
+            eval_envs = keys
+        else:
+            eval_envs = keys[int(len(keys)*0.75):]
     # elif set == "test":
     #     eval_envs = keys
     else:
@@ -70,8 +76,9 @@ def plot_progress(h5_file, set, self_attention_model, args):
 
     for key in tqdm(eval_envs):
         video_group = h5_file[key]
-        text_embedding = np.asarray(video_group["lang_embedding"])
+        text_embedding = np.asarray(video_group["lang_embedding"])[0].reshape(1, -1)
         text_embedding = torch.tensor(text_embedding).to(device).float().unsqueeze(0)
+
         if args.normalize_embedding:
             text_embedding = normalize_embeddings(text_embedding)
 
@@ -86,7 +93,6 @@ def plot_progress(h5_file, set, self_attention_model, args):
         triangle_mask = torch.tril(torch.ones(traj_data.shape[1] + 1, traj_data.shape[1] + 1)).to(device).unsqueeze(0).unsqueeze(0).repeat(traj_data.shape[0], 1, 1, 1)
 
         mask = None
-
         pred_class, two_step_class = self_attention_model(traj_data, triangle_mask, text_embedding.squeeze(1), mask)
         # batch_size, seq_len, _ = traj_data.size()
         if not args.catagorical_progress:

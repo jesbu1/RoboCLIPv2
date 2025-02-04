@@ -104,16 +104,20 @@ def plot_confusion_matrix(h5_file, set, self_attention_model, args, prob = False
 
     keys = list(h5_file.keys())
     if set == "train":
-        eval_envs = keys[:int(len(keys)*0.75)]
+        if args.extra_data_type == "metaworld":
+            eval_envs = keys
+        else:
+            eval_envs = keys[:int(len(keys)*0.75)]
     elif set == "eval":
-        eval_envs = keys[int(len(keys)*0.75):]
-    else:
-        eval_envs = keys
+        if args.extra_data_type == "metaworld":
+            eval_envs = keys
+        else:
+            eval_envs = keys[int(len(keys)*0.75):]
 
     text_embeddings = []
     text_list = []
     for key in eval_envs:
-        embedding = np.asarray(h5_file[key]["lang_embedding"])
+        embedding = np.asarray(h5_file[key]["lang_embedding"])[0].reshape(1, -1)
         text_embeddings.append(embedding)
         text_list.append(key)
     text_embeddings = torch.tensor(text_embeddings).to(device).float()

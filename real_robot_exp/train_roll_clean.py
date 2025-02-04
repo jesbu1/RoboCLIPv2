@@ -224,7 +224,7 @@ def main(args):
     # else:
     #     triangular_mask = torch.tril(torch.ones(args.max_length, args.max_length)).to(device).unsqueeze(0).unsqueeze(0)
 
-
+    
     for epoch in range(args.epochs):
 
         self_attention_model.train()
@@ -246,7 +246,7 @@ def main(args):
                 extra_len = len(extra_data["video_array"])
                 
                 positive_video_array = torch.cat([openx_data["video_array"], extra_data["video_array"]], dim = 0).to(device).float()
-                positive_text_array = torch.cat([openx_data["text_array"], extra_data["text_array"]], dim = 0).to(device).float().squeeze(1)                
+                positive_text_array = torch.cat([openx_data["text_array"].squeeze(1), extra_data["text_array"]], dim = 0).to(device).float()              
                 positive_progress = torch.cat([openx_data["progress"], extra_data["progress"]], dim = 0).to(device)
 
                 negative_video_array_1 = torch.roll(positive_video_array, args.batch_size, 0)
@@ -313,7 +313,7 @@ def main(args):
         # else:
         #     assert False, "No dataset specified"
 
-        if epoch % 5 == 0:
+        if epoch % 15 == 0:
             self_attention_model.eval()
             with torch.no_grad():
                 if args.extra_data_type == "metaworld":
