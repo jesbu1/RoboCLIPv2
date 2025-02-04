@@ -113,6 +113,8 @@ def plot_confusion_matrix(h5_file, set, self_attention_model, args, prob = False
             eval_envs = keys
         else:
             eval_envs = keys[int(len(keys)*0.75):]
+    else:
+        eval_envs = keys
 
     text_embeddings = []
     text_list = []
