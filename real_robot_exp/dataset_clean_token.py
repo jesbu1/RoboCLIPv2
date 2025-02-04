@@ -33,15 +33,15 @@ class LivRealVideoTrainTokenDataset(Dataset):
         self.keys = list(self.h5_file.keys())
         if self.split:
             if eval:
-                self.keys = self.keys[int(len(self.keys)*0.5):]
+                self.keys = self.keys[int(len(self.keys)*0.75):]
             else:
-                self.keys = self.keys[:int(len(self.keys)*0.5)]
+                self.keys = self.keys[:int(len(self.keys)*0.25)]
             eval_keys = self.keys[int(len(self.keys)*0.5):]
             json.dump(eval_keys, open("eval_keys.json", "w"), indent=4)
         self.sample_neg = sample_neg
 
         if self.args.text_positional_encoding:
-            self.text_positional_encoding = self.get_cosine_positional_encoding(70, 1024).detach().cpu().numpy()
+            self.text_positional_encoding = self.get_cosine_positional_encoding(100, 1024).detach().cpu().numpy()
         if self.args.video_positional_encoding:
             self.video_positional_encoding = self.get_cosine_positional_encoding(self.args.max_length, 1024).detach().cpu().numpy()
 
