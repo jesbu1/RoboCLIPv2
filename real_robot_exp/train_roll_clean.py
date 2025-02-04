@@ -90,7 +90,7 @@ def main(args):
     run = wandb.init(
         entity=WANDB_ENTITY_NAME,
         project=WANDB_PROJECT_NAME,
-        group="KochNoTokenModelV1",
+        group="MetaworldNoTokenModelV1",
         config=args,
         name=experiment_name,
     )
@@ -312,7 +312,7 @@ def main(args):
         # else:
         #     assert False, "No dataset specified"
 
-        if epoch % 10 == 0:
+        if epoch % 5 == 0:
             self_attention_model.eval()
             with torch.no_grad():
                 plot_progress(h5_eval_file, "train", self_attention_model, args)
