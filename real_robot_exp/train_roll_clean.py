@@ -99,6 +99,7 @@ def main(args):
 
     # h5_file = h5py.File(args.h5_embedding_path, "r")
     if args.extra_data_type == "metaworld":
+        h5_train_eval_file = h5py.File("metaworld_embedding_5_demo_dataset_v3_train.h5", "r")
         h5_eval_file = h5py.File("metaworld_embedding_5_demo_dataset_v3_eval.h5", "r")
         extra_data_path = "metaworld_embedding_5_demo_dataset_v3_train.h5"
     else:
@@ -315,23 +316,36 @@ def main(args):
         if epoch % 5 == 0:
             self_attention_model.eval()
             with torch.no_grad():
-                plot_progress(h5_eval_file, "train", self_attention_model, args)
-                plot_progress(h5_eval_file, "eval", self_attention_model, args)
-
-                plot_confusion_matrix(h5_file = h5_eval_file, 
-                                        set = "train", 
-                                        self_attention_model = self_attention_model, 
+                if args.extra_data_type == "metaworld":
+                    plot_progress(h5_train_eval_file, "train", self_attention_model, args)
+                    plot_confusion_matrix(h5_file = h5_train_eval_file,
+                                        set = "train",
+                                        self_attention_model = self_attention_model,
                                         args = args)
 
-                plot_confusion_matrix(h5_file = h5_eval_file, 
-                                        set = "eval", 
-                                        self_attention_model = self_attention_model, 
-                                        args = args)
+                    plot_progress(h5_eval_file, "eval", self_attention_model, args)
+                    plot_confusion_matrix(h5_file = h5_eval_file,
+                                        set = "eval",
+                                        self_attention_model = self_attention_model,
+                                        args = args)                    
 
-                plot_confusion_matrix(h5_file = h5_eval_file, 
-                                        set = "all", 
-                                        self_attention_model = self_attention_model, 
+                else:
+                    plot_progress(h5_eval_file, "train", self_attention_model, args)
+                    plot_progress(h5_eval_file, "eval", self_attention_model, args)
+                    plot_confusion_matrix(h5_file = h5_eval_file,
+                                        set = "train",
+                                        self_attention_model = self_attention_model,
                                         args = args)
+                    plot_confusion_matrix(h5_file = h5_eval_file,
+                                        set = "eval",
+                                        self_attention_model = self_attention_model,
+                                        args = args)
+                    plot_confusion_matrix(h5_file = h5_eval_file, 
+                                            set = "all", 
+                                            self_attention_model = self_attention_model, 
+                                            args = args)
+
+
 
 
                 
