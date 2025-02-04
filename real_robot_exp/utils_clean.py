@@ -136,11 +136,11 @@ def update_model(args, video_array, text_array, batch_triangular_mask, self_atte
                     wandb_log["extra_progress_accuracy"] = extra_progress_accuracy
 
         else:
-        
             class_label = class_label.view(batch_size * seq_len)
             progress = progress.view(batch_size * seq_len, -1)
 
-            class_output = class_output.view(batch_size * seq_len, -1)
+            class_output = class_output.view(batch_size * seq_len).squeeze(-1)
+
             progress_output = progress_output.view(batch_size * seq_len, -1)
             class_loss = classification_loss_function(class_output, class_label)
 
@@ -151,11 +151,12 @@ def update_model(args, video_array, text_array, batch_triangular_mask, self_atte
                 else:
                     progress = progress[none_zero_class].squeeze(1)
                     progress_output = progress_output[none_zero_class]
-                    progress_loss = progress_loss_function(progress_output, progress - 1)
+                    progress_loss = progress_loss_function(progress_output, progress.long())
                 loss = class_loss + progress_loss
             else:
                 loss = class_loss
-            class_predict_label = torch.argmax(class_output, dim=1)
+            class_predict_label = class_output > 0.5
+            class_predict_label = class_predict_label.long().squeeze()
             class_accuracy = torch.sum(class_predict_label == class_label).item() / len(class_predict_label)
 
             wandb_log = {
@@ -166,10 +167,11 @@ def update_model(args, video_array, text_array, batch_triangular_mask, self_atte
             if args.progress_loss:
                 wandb_log["progress_loss"] = progress_loss.item()
             
-            if args.catagorical_progress:
-                predict_label = torch.argmax(progress_output, dim=1)
-                progress_accuracy = torch.sum(predict_label == progress).item() / len(predict_label)
-                wandb_log["progress_accuracy"] = progress_accuracy
+                if args.catagorical_progress:
+                    predict_label = torch.argmax(progress_output, dim=1)
+
+                    progress_accuracy = torch.sum(predict_label == progress).item() / len(predict_label)
+                    wandb_log["progress_accuracy"] = progress_accuracy
 
     else:
         batch_size, seq_len, _ = video_array.size()

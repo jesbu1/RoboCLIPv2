@@ -32,10 +32,10 @@ class LivRealVideoTrainDataset(Dataset):
         self.keys = list(self.h5_file.keys())
         if self.split:
             if eval:
-                self.keys = self.keys[int(len(self.keys)*0.5):]
+                self.keys = self.keys[int(len(self.keys)*0.75):]
             else:
-                self.keys = self.keys[:int(len(self.keys)*0.5)]
-            eval_keys = self.keys[int(len(self.keys)*0.5):]
+                self.keys = self.keys[:int(len(self.keys)*0.75)]
+            eval_keys = self.keys[int(len(self.keys)*0.75):]
             json.dump(eval_keys, open("eval_keys.json", "w"), indent=4)
         self.sample_neg = sample_neg
 
@@ -229,7 +229,7 @@ class LivRealVideoEvalDataset(Dataset):
         self.label = label
         self.keys = list(self.h5_file.keys())
         if dataset != "openx":
-            self.keys = self.keys[int(len(self.keys)*0.5):]
+            self.keys = self.keys[int(len(self.keys)*0.75):]
 
 
     def __len__(self):

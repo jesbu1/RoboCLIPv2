@@ -60,9 +60,9 @@ def plot_progress(h5_file, set, self_attention_model, args):
     device = next(self_attention_model.parameters()).device
     keys = list(h5_file.keys())
     if set == "train":
-        eval_envs = keys[:int(len(keys)*0.5)]
+        eval_envs = keys[:int(len(keys)*0.75)]
     elif set == "eval":
-        eval_envs = keys[int(len(keys)*0.5):]
+        eval_envs = keys[int(len(keys)*0.75):]
     # elif set == "test":
     #     eval_envs = keys
     else:
@@ -75,7 +75,7 @@ def plot_progress(h5_file, set, self_attention_model, args):
         if args.normalize_embedding:
             text_embedding = normalize_embeddings(text_embedding)
 
-        video_embeddings = np.asarray(video_group["1"])
+        video_embeddings = np.asarray(video_group["2"])
         video_embeddings = torch.tensor(video_embeddings).to(device).float()
         if args.normalize_embedding:
             video_embeddings = normalize_embeddings(video_embeddings)
@@ -87,7 +87,7 @@ def plot_progress(h5_file, set, self_attention_model, args):
 
         mask = None
 
-        pred_class, two_step_class = self_attention_model(traj_data, triangle_mask, text_embedding, mask)
+        pred_class, two_step_class = self_attention_model(traj_data, triangle_mask, text_embedding.squeeze(1), mask)
         # batch_size, seq_len, _ = traj_data.size()
         if not args.catagorical_progress:
             pred_class = pred_class.view(-1, 1)

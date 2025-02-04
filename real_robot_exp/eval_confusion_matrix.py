@@ -104,16 +104,17 @@ def plot_confusion_matrix(h5_file, set, self_attention_model, args, prob = False
 
     keys = list(h5_file.keys())
     if set == "train":
-        eval_envs = keys[:int(len(keys)*0.5)]
+        eval_envs = keys[:int(len(keys)*0.75)]
     elif set == "eval":
-        eval_envs = keys[int(len(keys)*0.5):]
+        eval_envs = keys[int(len(keys)*0.75):]
     else:
         eval_envs = keys
 
     text_embeddings = []
     text_list = []
     for key in eval_envs:
-        text_embeddings.append(np.asarray(h5_file[key]["lang_embedding"]))
+        embedding = np.asarray(h5_file[key]["lang_embedding"])
+        text_embeddings.append(embedding)
         text_list.append(key)
     text_embeddings = torch.tensor(text_embeddings).to(device).float()
 
@@ -125,7 +126,7 @@ def plot_confusion_matrix(h5_file, set, self_attention_model, args, prob = False
         pred_two_step_prob_list = []
     for i  in tqdm(range(len(eval_envs))):
         env = eval_envs[i]
-        video_embedding = np.asarray(h5_file[env]["1"])
+        video_embedding = np.asarray(h5_file[env]["2"])
         
         video_embedding = torch.tensor(video_embedding).to(device).float()
         if args.subsample_video:
@@ -139,8 +140,7 @@ def plot_confusion_matrix(h5_file, set, self_attention_model, args, prob = False
         triangle_mask = torch.tril(torch.ones(traj_data.shape[1] + 1, traj_data.shape[1] + 1)).to(device).unsqueeze(0).unsqueeze(0).repeat(traj_data.shape[0], 1, 1, 1)
 
         mask = None
-        
-        pred_class, two_step_class = self_attention_model(traj_data, triangle_mask, text_embeddings, mask)
+        pred_class, two_step_class = self_attention_model(traj_data, triangle_mask, text_embeddings.squeeze(1), mask)
 
         if not args.catagorical_progress:
             pred_class = pred_class.view(-1, 1)

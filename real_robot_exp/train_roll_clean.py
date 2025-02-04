@@ -46,7 +46,7 @@ def main(args):
     if args.extra_data_type == "metaworld":
         experiment_name = "MetaWorld" 
     else: 
-        experiment_name = "RealWorld"
+        experiment_name = "RealWorld_Koch"
 
     if args.openx_data:
         experiment_name += "_AddOpenXData"
@@ -90,7 +90,7 @@ def main(args):
     run = wandb.init(
         entity=WANDB_ENTITY_NAME,
         project=WANDB_PROJECT_NAME,
-        group="NoTokenModelV1",
+        group="KochNoTokenModelV1",
         config=args,
         name=experiment_name,
     )
@@ -102,8 +102,10 @@ def main(args):
         h5_eval_file = h5py.File("metaworld_embedding_5_demo_dataset_v3_eval.h5", "r")
         extra_data_path = "metaworld_embedding_5_demo_dataset_v3_train.h5"
     else:
-        h5_eval_file = h5py.File("jesse_collect_dataset_new_token.h5", "r")
-        extra_data_path = "jesse_collect_dataset_new_token.h5"
+        # h5_eval_file = h5py.File("jesse_collect_dataset_new_token.h5", "r")
+        # extra_data_path = "jesse_collect_dataset_new_token.h5"
+        h5_eval_file = h5py.File("usc_koch_rewind_reward.h5", "r")
+        extra_data_path = "usc_koch_rewind_reward.h5"
     embedding_dim = 1024
 
 
@@ -134,6 +136,15 @@ def main(args):
         
         openx_positive_eval_dataloader = DataLoader(positive_eval_openx_dataset, batch_size=args.batch_size, shuffle=True, num_workers=2, drop_last=False, pin_memory=True)
         openx_negative_eval_dataloader = DataLoader(negative_eval_openx_dataset, batch_size=args.batch_size, shuffle=True, num_workers=2, drop_last=False, pin_memory=True)
+    else:
+        if args.extra_data_type == "metaworld":
+            extra_dataset = LivRealVideoTrainDataset(args, extra_data_path, split = False, sample_neg=True)
+        else:
+            extra_dataset = LivRealVideoTrainDataset(args, extra_data_path, split = True, sample_neg=True)
+        extra_dataloader = DataLoader(extra_dataset, batch_size=args.batch_size, shuffle=True, num_workers=args.worker, drop_last=True, pin_memory=True)
+        positive_eval_openx_dataset = None
+        negative_eval_openx_dataset = None
+
         
 
 
@@ -158,7 +169,8 @@ def main(args):
     if args.extra_data_type == "metaworld":
         eval_file_name = "metaworld_embedding_5_demo_dataset_v3_eval.h5"
     else:
-        eval_file_name = "jesse_collect_dataset_new_token.h5"
+        # eval_file_name = "jesse_collect_dataset_new_token.h5"
+        eval_file_name = "usc_koch_rewind_reward.h5"
     # extra_eval_train_pos_dataset = LivDemoVideoEvalDataset(args, extra_data_path, label = "positive", set_name="train")
     # extra_eval_train_neg_dataset = LivDemoVideoEvalDataset(args, extra_data_path, label = "negative", set_name="train")
 
@@ -278,8 +290,9 @@ def main(args):
                     scheduler.step()
                 wandb_log["lr"] = optimizer.param_groups[0]["lr"]
 
-        elif args.extra_data:
+        else:
             for extra_data in tqdm(extra_dataloader):
+                optimizer.zero_grad()
                 video_array = extra_data["video_array"].to(device).float()
                 text_array = extra_data["text_array"].to(device).float().squeeze(1)
                 progress = extra_data["progress"].to(device)
@@ -289,8 +302,15 @@ def main(args):
                 classification_loss_function, progress_loss_function, optimizer)
                 wandb.log(wandb_log)
 
-        else:
-            assert False, "No dataset specified"
+                if args.clip_grad:
+                    torch.nn.utils.clip_grad_norm_(self_attention_model.parameters(), max_norm=1.0)
+                optimizer.step()
+                if scheduler is not None:
+                    scheduler.step()
+                wandb_log["lr"] = optimizer.param_groups[0]["lr"]
+
+        # else:
+        #     assert False, "No dataset specified"
 
         if epoch % 10 == 0:
             self_attention_model.eval()
