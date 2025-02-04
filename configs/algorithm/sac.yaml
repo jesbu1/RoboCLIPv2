@@ -22,6 +22,8 @@ model:
   
 offline_training:
   offline_training_steps: 0 # SAC is online-only
+  
 
 online_training:
   total_time_steps: 500000
+  mix_buffers_ratio: 0.0

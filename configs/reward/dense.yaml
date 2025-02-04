@@ -3,4 +3,4 @@
 reward_model: 
   name: 'dense'
   encoder: 'liv' # default and only option is vlc
-  success_bonus: 100.0
+  success_bonus: 0.0

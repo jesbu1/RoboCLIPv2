@@ -14,7 +14,7 @@ from typing import Dict, List, Optional
 class GVLRewardModel(BaseRewardModel):
     def __init__(
         self,
-        api_key: str = os.getenv("GVL_KEY"),
+        api_key: str = "AIzaSyABJwHRSLjyjEHkt-gSIFtI_OeCXdduP0c",
         device: str = "cuda",
         max_frames: int = 15,
         offset: float = 0.5,

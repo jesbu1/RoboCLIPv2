@@ -374,7 +374,7 @@ def main(cfg: DictConfig):
     online_video_freq = logging_config.video_freq // env_config.n_envs
     eval_callback.eval_freq = online_eval_freq
     eval_callback.video_freq = online_video_freq
-
+    assert cfg.online_training.total_time_steps == 500000, "Total time steps should be 500k."
     if cfg.online_training.total_time_steps > 0:
         # logger only exists for offline algorithms
         if isinstance(model, OfflineRLAlgorithm):
@@ -419,6 +419,7 @@ def create_envs(cfg: DictConfig, reward_model: BaseRewardModel):
     ignore_language = env_config.ignore_language
 
     # Define envs (dummy example for illustration)
+    # assert env_config.n_envs == 4, "Number of environments should be 4."
     if env_config.n_envs > 1:
         envs = SubprocVecEnv(
             [
