@@ -205,7 +205,7 @@ class LearnedRewardWrapper(gym.Wrapper):
         proprio = obs[0:4]
 
         encoded_image = None
-        # IF the model is state-based and is dense/sparse reward, we can skip this
+        # IF the model is state-based or is dense/sparse reward, we can skip this
         if not (
             (self.is_state_based)
             and (
@@ -225,7 +225,7 @@ class LearnedRewardWrapper(gym.Wrapper):
                     image_for_model
                 ).squeeze()
 
-        if self.is_state_based is False:
+        if self.is_state_based is False and encoded_image is not None:
             # obs = np.concatenate([obs, self.reward_model(obs)])
             obs = encoded_image
 
