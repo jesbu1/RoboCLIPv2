@@ -12,7 +12,7 @@ import h5py
 from torch.nn.functional import mse_loss
 from torch.nn import CrossEntropyLoss, BCELoss
 import os
-from models import RewardTwoStepNewPositionEmbeddingPredictor
+from models import RewardTwoStepNewPositionEmbeddingPredictor, RewardOneStepNewPositionEmbeddingPredictor
 # , RewardOneStepNewPositionEmbeddingPredictor
 from eval_confusion_matrix import plot_confusion_matrix
 from eval_progress import plot_progress
@@ -294,6 +294,7 @@ def main(args):
         else:
             for extra_data in tqdm(extra_dataloader):
                 optimizer.zero_grad()
+                import pdb; pdb.set_trace()
                 video_array = extra_data["video_array"].to(device).float()
                 text_array = extra_data["text_array"].to(device).float().squeeze(1)
                 progress = extra_data["progress"].to(device)
@@ -309,6 +310,13 @@ def main(args):
                 if scheduler is not None:
                     scheduler.step()
                 wandb_log["lr"] = optimizer.param_groups[0]["lr"]
+
+
+
+
+
+
+
 
         # else:
         #     assert False, "No dataset specified"
