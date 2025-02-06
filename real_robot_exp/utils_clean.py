@@ -183,28 +183,27 @@ def update_model(args, video_array, text_array, batch_triangular_mask, self_atte
             openx_pred_progress = progress_output[:openx_len]
             extra_pred_progress = progress_output[openx_len:]
 
-            if args.progress_loss:
-                if not args.catagorical_progress:
-                    openx_progress_label = openx_progress_label.view(openx_len * seq_len)
-                    extra_progress_label = extra_progress_label.view(extra_len * seq_len)
-                    openx_pred_progress = progress_output[:openx_len].view(openx_len * seq_len, -1).squeeze(1)
-                    extra_pred_progress = progress_output[openx_len:].view(extra_len * seq_len, -1).squeeze(1)
+            if not args.catagorical_progress:
+                openx_progress_label = openx_progress_label.view(openx_len * seq_len)
+                extra_progress_label = extra_progress_label.view(extra_len * seq_len)
+                openx_pred_progress = progress_output[:openx_len].view(openx_len * seq_len, -1).squeeze(1)
+                extra_pred_progress = progress_output[openx_len:].view(extra_len * seq_len, -1).squeeze(1)
 
-                    openx_progress_loss = progress_loss_function(openx_pred_progress, openx_progress_label)
-                    extra_progress_loss = progress_loss_function(extra_pred_progress, extra_progress_label)
-                else:
+                openx_progress_loss = progress_loss_function(openx_pred_progress, openx_progress_label)
+                extra_progress_loss = progress_loss_function(extra_pred_progress, extra_progress_label)
+            else:
 
-                    openx_progress_label = openx_progress_label.view(openx_len * seq_len)
-                    extra_progress_label = extra_progress_label.view(extra_len * seq_len)
-                    openx_pred_progress = progress_output[:openx_len].view(openx_len * seq_len, -1).squeeze(1)
-                    extra_pred_progress = progress_output[openx_len:].view(extra_len * seq_len, -1).squeeze(1)
+                openx_progress_label = openx_progress_label.view(openx_len * seq_len)
+                extra_progress_label = extra_progress_label.view(extra_len * seq_len)
+                openx_pred_progress = progress_output[:openx_len].view(openx_len * seq_len, -1).squeeze(1)
+                extra_pred_progress = progress_output[openx_len:].view(extra_len * seq_len, -1).squeeze(1)
 
-                    openx_progress_loss = progress_loss_function(openx_pred_progress, openx_progress_label)
-                    extra_progress_loss = progress_loss_function(extra_pred_progress, extra_progress_label)
+                openx_progress_loss = progress_loss_function(openx_pred_progress, openx_progress_label)
+                extra_progress_loss = progress_loss_function(extra_pred_progress, extra_progress_label)
 
-                progress_loss = openx_progress_loss + extra_progress_loss
+            progress_loss = openx_progress_loss + extra_progress_loss
 
-                loss = progress_loss
+            loss = progress_loss
 
 
             # wandb_log["total_loss"] = progress_loss.item()
@@ -295,7 +294,7 @@ def eval_model(positive_eval_openx_dataset, self_attention_model, progress_loss_
                 progress_loss = progress_loss_function(progress_output, progress.long().squeeze(1))
 
             
-        total_num += len(progress)
+        total_num += 1
         total_loss += progress_loss.item()
     
     progress = total_loss / total_num
