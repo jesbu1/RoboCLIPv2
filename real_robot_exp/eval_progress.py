@@ -59,20 +59,21 @@ def sample_video_frames(frames, num_frames = 32):
 def plot_progress(h5_file, set, self_attention_model, args):
     device = next(self_attention_model.parameters()).device
     keys = list(h5_file.keys())
-    if set == "train":
-        if args.extra_data_type == "metaworld":
-            eval_envs = keys
-        else:
-            eval_envs = keys[:int(len(keys)*0.75)]
-    elif set == "eval":
-        if args.extra_data_type == "metaworld":
-            eval_envs = keys
-        else:
-            eval_envs = keys[int(len(keys)*0.75):]
-    # elif set == "test":
-    #     eval_envs = keys
-    else:
-        assert False, "Invalid set"
+    eval_envs = keys
+    # if set == "train":
+    #     if args.extra_data_type == "metaworld":
+    #         eval_envs = keys
+    #     else:
+    #         eval_envs = keys[:int(len(keys)*0.75)]
+    # elif set == "eval":
+    #     if args.extra_data_type == "metaworld":
+    #         eval_envs = keys
+    #     else:
+    #         eval_envs = keys[int(len(keys)*0.75):]
+    # # elif set == "test":
+    # #     eval_envs = keys
+    # else:
+    #     assert False, "Invalid set"
 
     for key in tqdm(eval_envs):
         video_group = h5_file[key]

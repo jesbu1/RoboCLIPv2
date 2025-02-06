@@ -87,10 +87,15 @@ def main(args):
     # experiment_name += "_1_demo"
     
     
+    if args.extra_data_type == "metaworld":
+        group_name = "MetaWorld"
+    else:
+        group_name = "RealWorld_Koch"
+
     run = wandb.init(
         entity=WANDB_ENTITY_NAME,
         project=WANDB_PROJECT_NAME,
-        group="MetaworldReward",
+        group=group_name,
         config=args,
         name=experiment_name,
     )
@@ -105,8 +110,9 @@ def main(args):
     else:
         # h5_eval_file = h5py.File("jesse_collect_dataset_new_token.h5", "r")
         # extra_data_path = "jesse_collect_dataset_new_token.h5"
-        h5_eval_file = h5py.File("usc_koch_rewind_reward.h5", "r")
-        extra_data_path = "usc_koch_rewind_reward.h5"
+        h5_train_eval_file = h5py.File("usc_koch_rewind_reward_train.h5", "r")
+        h5_eval_file = h5py.File("usc_koch_rewind_reward_eval.h5", "r")
+        extra_data_path = "usc_koch_rewind_reward_train.h5"
     embedding_dim = 1024
 
 
@@ -117,7 +123,7 @@ def main(args):
         if args.extra_data_type == "metaworld":
             extra_dataset = LivRealVideoTrainDataset(args, extra_data_path, split = False, sample_neg=True)
         else:
-            extra_dataset = LivRealVideoTrainDataset(args, extra_data_path, split = True, sample_neg=True)
+            extra_dataset = LivRealVideoTrainDataset(args, extra_data_path, split = False, sample_neg=True)
         openx_dataloader = DataLoader(openx_dataset, batch_size=args.batch_size * 3, shuffle=True, num_workers=int(args.worker * 2), drop_last=True, pin_memory=True)
         extra_dataloader = DataLoader(extra_dataset, batch_size=args.batch_size, shuffle=True, num_workers=args.worker, drop_last=True, pin_memory=True)
 
@@ -141,7 +147,7 @@ def main(args):
         if args.extra_data_type == "metaworld":
             extra_dataset = LivRealVideoTrainDataset(args, extra_data_path, split = False, sample_neg=True)
         else:
-            extra_dataset = LivRealVideoTrainDataset(args, extra_data_path, split = True, sample_neg=True)
+            extra_dataset = LivRealVideoTrainDataset(args, extra_data_path, split = False, sample_neg=True)
 
         extra_dataloader = DataLoader(extra_dataset, batch_size=args.batch_size, shuffle=True, num_workers=args.worker, drop_last=True, pin_memory=True)
         positive_eval_openx_dataset = None
@@ -172,7 +178,7 @@ def main(args):
         eval_file_name = "metaworld_embedding_5_demo_dataset_v3_eval.h5"
     else:
         # eval_file_name = "jesse_collect_dataset_new_token.h5"
-        eval_file_name = "usc_koch_rewind_reward.h5"
+        eval_file_name = "usc_koch_rewind_reward_eval.h5"
     # extra_eval_train_pos_dataset = LivDemoVideoEvalDataset(args, extra_data_path, label = "positive", set_name="train")
     # extra_eval_train_neg_dataset = LivDemoVideoEvalDataset(args, extra_data_path, label = "negative", set_name="train")
 
@@ -338,9 +344,9 @@ def main(args):
                                         args = args)                    
 
                 else:
-                    plot_progress(h5_eval_file, "train", self_attention_model, args)
+                    plot_progress(h5_train_eval_file, "train", self_attention_model, args)
                     plot_progress(h5_eval_file, "eval", self_attention_model, args)
-                    plot_confusion_matrix(h5_file = h5_eval_file,
+                    plot_confusion_matrix(h5_file = h5_train_eval_file,
                                         set = "train",
                                         self_attention_model = self_attention_model,
                                         args = args)
@@ -348,10 +354,10 @@ def main(args):
                                         set = "eval",
                                         self_attention_model = self_attention_model,
                                         args = args)
-                    plot_confusion_matrix(h5_file = h5_eval_file, 
-                                            set = "all", 
-                                            self_attention_model = self_attention_model, 
-                                            args = args)
+                    # plot_confusion_matrix(h5_file = h5_eval_file, 
+                    #                         set = "all", 
+                    #                         self_attention_model = self_attention_model, 
+                    #                         args = args)
 
 
 
