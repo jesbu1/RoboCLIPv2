@@ -124,7 +124,7 @@ def main(args):
             extra_dataset = LivRealVideoTrainDataset(args, extra_data_path, split = False, sample_neg=True)
         else:
             extra_dataset = LivRealVideoTrainDataset(args, extra_data_path, split = False, sample_neg=True)
-        openx_dataloader = DataLoader(openx_dataset, batch_size=args.batch_size * 3, shuffle=True, num_workers=int(args.worker * 2), drop_last=True, pin_memory=True)
+        openx_dataloader = DataLoader(openx_dataset, batch_size=args.batch_size * 33, shuffle=True, num_workers=int(args.worker * 12), drop_last=True, pin_memory=True)
         extra_dataloader = DataLoader(extra_dataset, batch_size=args.batch_size, shuffle=True, num_workers=args.worker, drop_last=True, pin_memory=True)
 
         positive_eval_openx_dataset = LivRealVideoEvalDataset(args, 
@@ -288,14 +288,21 @@ def main(args):
 
                 wandb_log, self_attention_model = update_model(args, video_array, text_array, batch_triangular_mask, self_attention_model, progress, class_label,
                 classification_loss_function, progress_loss_function, optimizer, openx_len = openx_len, extra_len = extra_len, scheduler = scheduler)
-                wandb.log(wandb_log)
+                
                 
                 if args.clip_grad:
                     torch.nn.utils.clip_grad_norm_(self_attention_model.parameters(), max_norm=1.0)
+                    
                 optimizer.step()
                 if scheduler is not None:
                     scheduler.step()
                 wandb_log["lr"] = optimizer.param_groups[0]["lr"]
+
+
+
+
+                wandb.log(wandb_log)
+
 
         else:
             for extra_data in tqdm(extra_dataloader):
@@ -317,7 +324,16 @@ def main(args):
                     scheduler.step()
                 wandb_log["lr"] = optimizer.param_groups[0]["lr"]
 
+        wandb_eval_log = {}
+        if extra_eval_eval_pos_dataset is not None:
+            class_accuracy, progress_loss = eval_model(extra_eval_eval_pos_dataloader, self_attention_model, progress_loss_function, triangular_mask, args)
+            wandb_eval_log["extra_eval/progress_loss"] = progress_loss
+            wandb_eval_log["extra_eval/correct_class_accuracy"] = class_accuracy
 
+        if extra_eval_eval_neg_dataset is not None:
+            class_accuracy, progress_loss = eval_model(extra_eval_eval_neg_dataloader, self_attention_model, progress_loss_function, triangular_mask, args)
+            wandb_eval_log["extra_eval/wrong_class_accuracy"] = class_accuracy
+        wandb.log(wandb_eval_log)
 
 
 
@@ -385,14 +401,7 @@ def main(args):
         #             class_accuracy, progress_loss = eval_model(extra_eval_train_neg_dataloader, self_attention_model, progress_loss_function, triangular_mask, args)
         #             wandb_eval_log["demo_dataset_train_set_wrong_label/wrong_class_accuracy"] = class_accuracy
 
-                if extra_eval_eval_pos_dataset is not None:
-                    class_accuracy, progress_loss = eval_model(extra_eval_eval_pos_dataloader, self_attention_model, progress_loss_function, triangular_mask, args)
-                    wandb_eval_log["extra_eval/progress_loss"] = progress_loss
-                    wandb_eval_log["extra_eval/correct_class_accuracy"] = class_accuracy
 
-                if extra_eval_eval_neg_dataset is not None:
-                    class_accuracy, progress_loss = eval_model(extra_eval_eval_neg_dataloader, self_attention_model, progress_loss_function, triangular_mask, args)
-                    wandb_eval_log["extra_eval/wrong_class_accuracy"] = class_accuracy
 
                 wandb.log(wandb_eval_log)
 

@@ -181,7 +181,7 @@ class LivRealVideoTrainDataset(Dataset):
         if self.split:
             return self.args.batch_size * 100
 
-        return self.args.batch_size * 300 
+        return self.args.batch_size * 3300 
 
 
     def __getitem__(self, idx):
@@ -201,7 +201,7 @@ class LivRealVideoTrainDataset(Dataset):
 
         # sample text sample
         if self.sample_neg:
-            if random.random() < 0.4:
+            if random.random() < 0.2:
                 text_array = self.sample_negative_text_feature(key)
                 progress = np.zeros(progress.shape)
                 class_label = np.zeros(class_label.shape)
