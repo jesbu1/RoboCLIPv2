@@ -223,12 +223,11 @@ class RewardOneStepNewPositionEmbeddingPredictor(nn.Module):
             text_array = text_array[mask]
 
 
-        two_step_label = self.twostep_classifier(x)
         x = self.classifier(x)
         if self.class_num == 1:
             x = torch.sigmoid(x)
             x = torch.clamp(x, 0, 1)
         x = x.view(batch_size, seq_len, -1)
-
+        two_step_label = None
         return x, two_step_label
 

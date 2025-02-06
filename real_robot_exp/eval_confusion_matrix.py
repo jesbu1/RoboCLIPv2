@@ -154,7 +154,10 @@ def plot_confusion_matrix(h5_file, set, self_attention_model, args, prob = False
             if args.two_step_training:
                 pred_class = torch.argmax(pred_class, dim = 2) + 1
             else:
-                pred_class = torch.argmax(pred_class, dim = 2).view(-1, 1)
+                if args.catagorical_progress:
+                    pred_class = torch.argmax(pred_class, dim = 2)
+                else:
+                    pred_class = torch.argmax(pred_class, dim = 2).view(-1, 1)
 
         pred_class = pred_class[:, -1].squeeze()
         if args.two_step_training:
@@ -165,9 +168,10 @@ def plot_confusion_matrix(h5_file, set, self_attention_model, args, prob = False
 
             pred_class = pred_class * two_step_class[:, -1].squeeze()
             pred_two_step_prob_list.append(two_step_prob.cpu().detach().numpy())
+        else:
+            predicted_progress = pred_class.cpu().detach().numpy()
 
-
-        predicted_progress = pred_class.cpu().detach().numpy()
+        
         predicted_progress_row.append(predicted_progress)
 
 

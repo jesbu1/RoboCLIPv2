@@ -225,6 +225,26 @@ def update_model(args, video_array, text_array, batch_triangular_mask, self_atte
                 wandb_log["openx_progress_accuracy"] = openx_progress_accuracy
                 wandb_log["extra_progress_accuracy"] = extra_progress_accuracy
 
+        else:
+            progress = progress.view(batch_size * seq_len, -1)
+            progress_output = progress_output.view(batch_size * seq_len, -1)
+
+            if not args.catagorical_progress:
+                progress_loss = progress_loss_function(progress_output, progress)
+            else:
+                progress_loss = progress_loss_function(progress_output, progress.long().squeeze(1))
+
+            loss = progress_loss
+            wandb_log = {
+                "total_loss": loss.item()
+            }
+
+
+            if args.catagorical_progress:
+                progress_predict_label = torch.argmax(progress_output, dim=1)
+                progress_accuracy = torch.sum(progress_predict_label == progress.squeeze()).item() / len(progress_predict_label)
+
+                wandb_log["extra_progress_class_pred_accuracy"] = progress_accuracy
     
     loss.backward()
 

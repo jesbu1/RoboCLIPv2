@@ -201,7 +201,7 @@ class LivRealVideoTrainDataset(Dataset):
 
         # sample text sample
         if self.sample_neg:
-            if random.random() < 0.5:
+            if random.random() < 0.4:
                 text_array = self.sample_negative_text_feature(key)
                 progress = np.zeros(progress.shape)
                 class_label = np.zeros(class_label.shape)

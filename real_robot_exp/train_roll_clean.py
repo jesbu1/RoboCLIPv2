@@ -90,7 +90,7 @@ def main(args):
     run = wandb.init(
         entity=WANDB_ENTITY_NAME,
         project=WANDB_PROJECT_NAME,
-        group="KochNoTokenModelV1",
+        group="MetaworldReward",
         config=args,
         name=experiment_name,
     )
@@ -142,6 +142,7 @@ def main(args):
             extra_dataset = LivRealVideoTrainDataset(args, extra_data_path, split = False, sample_neg=True)
         else:
             extra_dataset = LivRealVideoTrainDataset(args, extra_data_path, split = True, sample_neg=True)
+
         extra_dataloader = DataLoader(extra_dataset, batch_size=args.batch_size, shuffle=True, num_workers=args.worker, drop_last=True, pin_memory=True)
         positive_eval_openx_dataset = None
         negative_eval_openx_dataset = None
@@ -224,7 +225,6 @@ def main(args):
     # else:
     #     triangular_mask = torch.tril(torch.ones(args.max_length, args.max_length)).to(device).unsqueeze(0).unsqueeze(0)
 
-    
     for epoch in range(args.epochs):
 
         self_attention_model.train()
@@ -294,7 +294,7 @@ def main(args):
         else:
             for extra_data in tqdm(extra_dataloader):
                 optimizer.zero_grad()
-                import pdb; pdb.set_trace()
+                
                 video_array = extra_data["video_array"].to(device).float()
                 text_array = extra_data["text_array"].to(device).float().squeeze(1)
                 progress = extra_data["progress"].to(device)
