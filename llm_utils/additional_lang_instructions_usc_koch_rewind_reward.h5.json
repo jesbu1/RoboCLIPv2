@@ -1,0 +1,155 @@
+{
+    "Fold the blue towel": [
+        "Fold the blue towel",
+        "Fold the towel into a neat square",
+        "Please fold the towel in half",
+        "Make the blue towel compact by folding it",
+        "Fold the towel neatly"
+    ],
+    "Move the orange cup from the left to the right": [
+        "Move the orange cup from the left to the right",
+        "Change the position of the orange cup so it is on the right",
+        "Transport the orange cup to the right side",
+        "Relocate the orange cup to the right",
+        "Shift the orange cup to the right"
+    ],
+    "Move the orange cup from the right to the left": [
+        "Move the orange cup from the right to the left",
+        "Change the position of the orange cup so it is on the left side",
+        "Relocate the orange cup to the left side",
+        "Shift the orange cup to the left",
+        "Put the orange cup in the left side"
+    ],
+    "Open the blue trash bin": [
+        "Open the blue trash bin",
+        "Retrieve the blue trash bin",
+        "Locate the blue trash bin and open it",
+        "Find the blue trash bin and lift the lid",
+        "Go to the blue trash bin and open it",
+        "Access the blue trash bin and open its lid"
+    ],
+    "Open the green trash bin": [
+        "Open the green trash bin",
+        "Retrieve the green trash bin",
+        "Locate the green trash bin and open it",
+        "Find the green trash bin and lift the lid",
+        "Access the green trash bin and open it"
+    ],
+    "Open the red trash bin": [
+        "Open the red trash bin",
+        "Retrieve the red trash bin and open it",
+        "Take the red trash bin and lift the lid",
+        "Proceed to the red trash bin and open its lid",
+        "Find the red trash bin and open its lid"
+    ],
+    "Put the banana in the box": [
+        "Put the banana in the box",
+        "Place the banana into the box",
+        "Deposit the banana into the box",
+        "Insert the banana into the box",
+        "Put the banana inside the box",
+        "Send the banana to the box"
+    ],
+    "Put the blue cup on the red plate": [
+        "Put the blue cup on the red plate",
+        "Place the blue cup on the red plate",
+        "Arrange the blue cup on the red plate",
+        "Position the blue cup atop the red plate",
+        "Set the blue cup upon the red plate",
+        "Lay the blue cup on the red plate"
+    ],
+    "Put the blue tape in the box on the left": [
+        "Put the blue tape in the box on the left",
+        "Place the blue tape in the box on the left",
+        "Put the blue tape into the box located on the left",
+        "Deposit the blue tape in the box situated on the left",
+        "Store the blue tape inside the box on the left",
+        "Arrange the blue tape within the box on the left"
+    ],
+    "Put the orange cup in the box": [
+        "Put the orange cup in the box",
+        "Place the orange cup inside the box",
+        "Deposit the orange cup into the box",
+        "Transfer the orange cup to the box",
+        "Put the orange cup into the box",
+        "Store the orange cup in the box"
+    ],
+    "Put the orange cup on the red plate": [
+        "Put the orange cup on the red plate",
+        "Place the orange cup on the red plate",
+        "Arrange the orange cup on the red plate",
+        "Position the orange cup atop the red plate",
+        "Set the orange cup upon the red plate",
+        "Lay the orange cup on the red plate"
+    ],
+    "Put the pink marker in the green trash can": [
+        "Put the pink marker in the green trash can",
+        "Place the pink marker in the green trash can",
+        "Deposit the pink marker into the green trash can",
+        "Move the pink marker to the green trash can",
+        "Store the pink marker in the green trash can",
+        "Transfer the pink marker to the green trash can"
+    ],
+    "Put the red cup on the red plate": [
+        "Put the red cup on the red plate",
+        "Place the red cup on the red plate",
+        "Position the red cup on the red plate",
+        "Arrange the red cup on the red plate",
+        "Set the red cup on the red plate",
+        "Put the red cup in the red plate"
+    ],
+    "Put the red marker in the red trash can": [
+        "Put the red marker in the red trash can",
+        "Place the red marker in the red trash can",
+        "Deposit the red marker into the red trash can",
+        "Send the red marker to the red trash can",
+        "Put the red marker in the bin labeled red",
+        "Throw the red marker in the red trash can"
+    ],
+    "Put the red tape in the box on the right": [
+        "Put the red tape in the box on the right",
+        "Place the red tape in the box on the right",
+        "Put the red tape into the box on the right",
+        "Move the red tape to the box on the right",
+        "Deposit the red tape in the box on the right",
+        "Arrange the red tape in the box on the right"
+    ],
+    "Separate the blue and red cups": [
+        "Separate the blue and red cups",
+        "Identify and separate the blue and red cups",
+        "Pick up the blue and red cups and put them in separate groups",
+        "Distinguish and separate the blue and red cups",
+        "Organize the blue and red cups into separate containers"
+    ],
+    "Separate the orange and blue cups": [
+        "Separate the orange and blue cups",
+        "Identify and separate the orange and blue cups",
+        "Pick out the orange and blue cups and put them in separate groups",
+        "Distinguish and separate the orange and blue cups",
+        "Organize the cups into two groups, one for orange and one for blue"
+    ],
+    "Throw the banana away in the blue trash bin": [
+        "Throw the banana away in the blue trash bin",
+        "Throw the banana into the blue trash bin",
+        "Please dispose of the banana by placing it in the blue trash bin",
+        "Kindly throw the banana into the designated blue trash bin",
+        "The banana should be thrown into the blue trash bin",
+        "Please discard the banana in the blue trash bin"
+    ],
+    "Throw the banana away in the green trash bin": [
+        "Throw the banana away in the green trash bin",
+        "Throw the banana into the green trash bin",
+        "Please dispose of the banana in the green trash bin",
+        "Kindly throw the banana into the designated green trash bin",
+        "The banana should be thrown into the green trash bin",
+        "You are instructed to throw the banana into the green trash bin"
+    ],
+    "Throw the banana away in the red trash bin": [
+        "Throw the banana away in the red trash bin",
+        "Throw the banana into the red trash bin",
+        "Please dispose of the banana by placing it in the red trash bin",
+        "Kindly discard the banana by throwing it into the red bin",
+        "The banana should be thrown into the red trash bin",
+        "Please put the banana in the red trash bin"
+    ]
+}
