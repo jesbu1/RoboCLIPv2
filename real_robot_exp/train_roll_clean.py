@@ -321,7 +321,7 @@ def main(args):
         # else:
         #     assert False, "No dataset specified"
 
-        if epoch % 15 == 0:
+        if epoch % 10 == 0:
             self_attention_model.eval()
             with torch.no_grad():
                 if args.extra_data_type == "metaworld":
@@ -389,6 +389,22 @@ def main(args):
                     wandb_eval_log["extra_eval/wrong_class_accuracy"] = class_accuracy
 
                 wandb.log(wandb_eval_log)
+
+                save_path = "/home/jzhang96/roboclip_v2_models"
+                if not os.path.exists(save_path):
+                    os.makedirs(save_path)
+                save_path = os.path.join(save_path, experiment_name)
+                if not os.path.exists(save_path):
+                    os.makedirs(save_path)
+                save_path = os.path.join(save_path, "model_" + str(epoch) + ".pth")
+                save_dict = {
+                    "model": self_attention_model.state_dict(),
+                    "optimizer": optimizer.state_dict(),
+                    "epoch": epoch,
+                    "args": args
+                }
+                torch.save(save_dict, save_path)
+
 
 
 
