@@ -21,6 +21,7 @@ from utils_clean import update_model, CosineWithMinLRScheduler, eval_model
 from torch.optim import Optimizer
 from torch.utils.data import DataLoader
 import math
+from datetime import date
 
 
 os.environ["TOKENIZERS_PARALLELISM"] = "False"
@@ -81,6 +82,7 @@ def main(args):
     if args.clip_grad:
         experiment_name += "_ClipGrad"
     experiment_name += "_View_" + str(args.view)
+    experiment_name += "_ExtraDataRatio_" + str(args.extra_data_ratio)
     
     experiment_name += "_DecoderNum_" + str(args.decoder_num)
     experiment_name += "_epochs_" + str(args.epochs)
@@ -92,7 +94,9 @@ def main(args):
         group_name = "MetaWorld"
     else:
         group_name = "RealWorld_Koch"
-
+    # get today date
+    
+    group_name += "Feb8th"
     run = wandb.init(
         entity=WANDB_ENTITY_NAME,
         project=WANDB_PROJECT_NAME,
@@ -134,7 +138,7 @@ def main(args):
         openx_batch_size = int(round(args.batch_size * (1 - args.extra_data_ratio)))
         extra_batch_size = int(round(args.batch_size * args.extra_data_ratio))
 
-        openx_dataloader = DataLoader(openx_dataset, batch_size=openx_batch_size, shuffle=True, num_workers=int(args.worker * 10), drop_last=True, pin_memory=True)
+        openx_dataloader = DataLoader(openx_dataset, batch_size=openx_batch_size, shuffle=True, num_workers=int(args.worker * 16), drop_last=True, pin_memory=True)
         extra_dataloader = DataLoader(extra_dataset, batch_size=extra_batch_size, shuffle=True, num_workers=args.worker, drop_last=True, pin_memory=True)
 
 
@@ -149,8 +153,8 @@ def main(args):
                                                         h5_openx_eval_file,
                                                         label = "negative")
         
-        openx_positive_eval_dataloader = DataLoader(positive_eval_openx_dataset, batch_size=args.batch_size, shuffle=True, num_workers=2, drop_last=False, pin_memory=True)
-        openx_negative_eval_dataloader = DataLoader(negative_eval_openx_dataset, batch_size=args.batch_size, shuffle=True, num_workers=2, drop_last=False, pin_memory=True)
+        openx_positive_eval_dataloader = DataLoader(positive_eval_openx_dataset, batch_size=args.batch_size // 8, shuffle=True, num_workers=2, drop_last=False, pin_memory=True)
+        openx_negative_eval_dataloader = DataLoader(negative_eval_openx_dataset, batch_size=args.batch_size // 8, shuffle=True, num_workers=2, drop_last=False, pin_memory=True)
     else:
         # if args.extra_data_type == "metaworld":
         #     extra_dataset = LivRealVideoTrainDataset(args, extra_data_path, split = False, sample_neg=True)
@@ -345,6 +349,17 @@ def main(args):
         if extra_eval_eval_neg_dataset is not None:
             class_accuracy, progress_loss = eval_model(extra_eval_eval_neg_dataloader, self_attention_model, progress_loss_function, triangular_mask, args)
             wandb_eval_log["extra_eval/wrong_class_accuracy"] = class_accuracy
+
+        if positive_eval_openx_dataset is not None:
+            class_accuracy, progress_loss = eval_model(openx_positive_eval_dataloader, self_attention_model, progress_loss_function, triangular_mask, args)
+            wandb_eval_log["openx_eval/progress_loss"] = progress_loss
+            if args.two_step_training:
+                wandb_eval_log["openx_eval/correct_class_accuracy"] = class_accuracy
+
+        if negative_eval_openx_dataset is not None:
+            class_accuracy, progress_loss = eval_model(openx_negative_eval_dataloader, self_attention_model, progress_loss_function, triangular_mask, args)
+            wandb_eval_log["openx_eval/wrong_class_accuracy"] = class_accuracy
+
         wandb.log(wandb_eval_log)
 
 
@@ -390,32 +405,6 @@ def main(args):
 
 
 
-                
-                wandb_eval_log = {}
-
-                if positive_eval_openx_dataset is not None:
-                    class_accuracy, progress_loss = eval_model(openx_positive_eval_dataloader, self_attention_model, progress_loss_function, triangular_mask, args)
-                    wandb_eval_log["openx_eval/progress_loss"] = progress_loss
-                    if args.two_step_training:
-                        wandb_eval_log["openx_eval/correct_class_accuracy"] = class_accuracy
-
-                if negative_eval_openx_dataset is not None:
-                    class_accuracy, progress_loss = eval_model(openx_negative_eval_dataloader, self_attention_model, progress_loss_function, triangular_mask, args)
-                    wandb_eval_log["openx_eval/wrong_class_accuracy"] = class_accuracy
-
-
-                # if extra_eval_train_pos_dataset is not None:
-                #     class_accuracy, progress_loss = eval_model(extra_eval_train_pos_dataloader, self_attention_model, progress_loss_function, triangular_mask, args)
-                #     wandb_eval_log["demo_dataset_train_set_correct_label/progress_loss"] = progress_loss
-                #     wandb_eval_log["demo_dataset_train_set_correct_label/correct_class_accuracy"] = class_accuracy
-
-        #         if extra_eval_train_neg_dataset is not None:
-        #             class_accuracy, progress_loss = eval_model(extra_eval_train_neg_dataloader, self_attention_model, progress_loss_function, triangular_mask, args)
-        #             wandb_eval_log["demo_dataset_train_set_wrong_label/wrong_class_accuracy"] = class_accuracy
-
-
-
-                wandb.log(wandb_eval_log)
 
                 save_path = "/home/jzhang96/roboclip_v2_models"
                 if not os.path.exists(save_path):

@@ -235,7 +235,8 @@ def update_model(args, video_array, text_array, batch_triangular_mask, self_atte
 
             loss = progress_loss
             wandb_log = {
-                "total_loss": loss.item()
+                "total_loss": loss.item(),
+                "extra_progress_loss": progress_loss.item()
             }
 
 
@@ -243,7 +244,14 @@ def update_model(args, video_array, text_array, batch_triangular_mask, self_atte
                 progress_predict_label = torch.argmax(progress_output, dim=1)
                 progress_accuracy = torch.sum(progress_predict_label == progress.squeeze()).item() / len(progress_predict_label)
 
-                wandb_log["extra_progress_class_pred_accuracy"] = progress_accuracy
+                wandb_log["extra_progress_accuracy"] = progress_accuracy
+
+                
+
+
+
+
+
     
     loss.backward()
 
