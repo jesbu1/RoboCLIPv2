@@ -203,7 +203,7 @@ def update_model(args, video_array, text_array, batch_triangular_mask, self_atte
                 openx_progress_loss = progress_loss_function(openx_pred_progress, openx_progress_label)
                 extra_progress_loss = progress_loss_function(extra_pred_progress, extra_progress_label)
 
-            progress_loss = openx_progress_loss + extra_progress_loss
+            progress_loss = (1 - args.openx_progress_loss) * openx_progress_loss + args.extra_data_ratio * extra_progress_loss
 
             loss = progress_loss
 
