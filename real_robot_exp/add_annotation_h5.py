@@ -21,7 +21,6 @@ for key in annotations.keys():
         text_embedding = embedding_text(model, tokenizer, text).detach().cpu().numpy()
         # group.create_dataset("lang_embedding", data=text_embedding)
 
-        import pdb; pdb.set_trace()
 
 
 
