@@ -266,6 +266,7 @@ def eval_model(positive_eval_openx_dataset, self_attention_model, progress_loss_
 
         eval_batch_size, seq_len, _ = video_array.size()
         eval_triangular_mask = triangular_mask.repeat(eval_batch_size, 1, 1, 1).bool()
+
         progress_output, class_output = self_attention_model(video_array, eval_triangular_mask, text_array, mask = None)
         
         progress = progress.view(eval_batch_size * seq_len, -1)
@@ -296,7 +297,6 @@ def eval_model(positive_eval_openx_dataset, self_attention_model, progress_loss_
             
         total_num += 1
         total_loss += progress_loss.item()
-    
     progress = total_loss / total_num
 
     if args.two_step_training:

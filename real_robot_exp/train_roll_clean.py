@@ -80,6 +80,7 @@ def main(args):
         experiment_name += "_CosScheduler"
     if args.clip_grad:
         experiment_name += "_ClipGrad"
+    experiment_name += "_View_" + str(args.view)
     
     experiment_name += "_DecoderNum_" + str(args.decoder_num)
     experiment_name += "_epochs_" + str(args.epochs)
@@ -110,9 +111,14 @@ def main(args):
     else:
         # h5_eval_file = h5py.File("jesse_collect_dataset_new_token.h5", "r")
         # extra_data_path = "jesse_collect_dataset_new_token.h5"
-        h5_train_eval_file = h5py.File("usc_koch_rewind_reward_train.h5", "r")
-        h5_eval_file = h5py.File("usc_koch_rewind_reward_eval.h5", "r")
-        extra_data_path = "usc_koch_rewind_reward_train.h5"
+        if args.view == "side":
+            h5_train_eval_file = h5py.File("usc_koch_rewind_reward_side_only_train.h5", "r")
+            h5_eval_file = h5py.File("usc_koch_rewind_reward_side_only_eval.h5", "r")
+            extra_data_path = "usc_koch_rewind_reward_side_only_train.h5"
+        elif args.view == "top":
+            h5_train_eval_file = h5py.File("usc_koch_rewind_reward_train.h5", "r")
+            h5_eval_file = h5py.File("usc_koch_rewind_reward_eval.h5", "r")
+            extra_data_path = "usc_koch_rewind_reward_train.h5"
     embedding_dim = 1024
 
 
@@ -124,22 +130,24 @@ def main(args):
             extra_dataset = LivRealVideoTrainDataset(args, extra_data_path, split = False, sample_neg=True)
         else:
             extra_dataset = LivRealVideoTrainDataset(args, extra_data_path, split = False, sample_neg=True)
-        openx_dataloader = DataLoader(openx_dataset, batch_size=args.batch_size * 99, shuffle=True, num_workers=int(args.worker * 12), drop_last=True, pin_memory=True)
-        extra_dataloader = DataLoader(extra_dataset, batch_size=args.batch_size, shuffle=True, num_workers=args.worker, drop_last=True, pin_memory=True)
+        
+        openx_batch_size = int(round(args.batch_size * (1 - args.extra_data_ratio)))
+        extra_batch_size = int(round(args.batch_size * args.extra_data_ratio))
+
+        openx_dataloader = DataLoader(openx_dataset, batch_size=openx_batch_size, shuffle=True, num_workers=int(args.worker * 10), drop_last=True, pin_memory=True)
+        extra_dataloader = DataLoader(extra_dataset, batch_size=extra_batch_size, shuffle=True, num_workers=args.worker, drop_last=True, pin_memory=True)
+
+
+        h5_openx_eval_file = h5py.File("/home/jzhang96/openx_embeddings_test_dataset_progrssed.h5", "r")
+        # h5_openx_eval_file = h5py.File("/mnt/ssd_a_4tb/jzhang96/openx_embeddings_test_dataset_progrssed.h5", "r")
+        # h5_openx_eval_file = h5py.File("/data/shared/roboclip/data/h5_buffers/openx_embeddings/openx_embeddings_test_dataset_progrssed.h5", "r")
 
         positive_eval_openx_dataset = LivRealVideoEvalDataset(args, 
-                                                        "/data/shared/roboclip/data/h5_buffers/openx_embeddings/openx_embeddings_test_dataset_progrssed.h5",
+                                                        h5_openx_eval_file,
                                                         label = "positive")
         negative_eval_openx_dataset = LivRealVideoEvalDataset(args,
-                                                        "/data/shared/roboclip/data/h5_buffers/openx_embeddings/openx_embeddings_test_dataset_progrssed.h5",
+                                                        h5_openx_eval_file,
                                                         label = "negative")
-        
-        # positive_eval_openx_dataset = LivRealVideoEvalDataset(args, 
-        #                                                 "/mnt/ssd_a_4tb/jzhang96/openx_embeddings_test_dataset_progrssed.h5",
-        #                                                 label = "positive")
-        # negative_eval_openx_dataset = LivRealVideoEvalDataset(args,
-        #                                                 "/mnt/ssd_a_4tb/jzhang96/openx_embeddings_test_dataset_progrssed.h5",
-        #                                                 label = "negative")
         
         openx_positive_eval_dataloader = DataLoader(positive_eval_openx_dataset, batch_size=args.batch_size, shuffle=True, num_workers=2, drop_last=False, pin_memory=True)
         openx_negative_eval_dataloader = DataLoader(negative_eval_openx_dataset, batch_size=args.batch_size, shuffle=True, num_workers=2, drop_last=False, pin_memory=True)
@@ -178,16 +186,19 @@ def main(args):
         eval_file_name = "metaworld_embedding_5_demo_dataset_v3_eval.h5"
     else:
         # eval_file_name = "jesse_collect_dataset_new_token.h5"
-        eval_file_name = "usc_koch_rewind_reward_eval.h5"
+        if args.view == "side":
+            eval_file_name = "usc_koch_rewind_reward_side_only_eval.h5"
+        elif args.view == "top":
+            eval_file_name = "usc_koch_rewind_reward_eval.h5"
     # extra_eval_train_pos_dataset = LivDemoVideoEvalDataset(args, extra_data_path, label = "positive", set_name="train")
     # extra_eval_train_neg_dataset = LivDemoVideoEvalDataset(args, extra_data_path, label = "negative", set_name="train")
 
-    extra_eval_eval_pos_dataset = LivRealVideoEvalDataset(args, eval_file_name, label = "positive", dataset = "extra")
-    extra_eval_eval_neg_dataset = LivRealVideoEvalDataset(args, eval_file_name, label = "negative", dataset = "extra")
+    extra_eval_eval_pos_dataset = LivRealVideoEvalDataset(args, h5_eval_file, label = "positive", dataset = "extra")
+    extra_eval_eval_neg_dataset = LivRealVideoEvalDataset(args, h5_eval_file, label = "negative", dataset = "extra")
 
 
-    extra_eval_eval_pos_dataloader = DataLoader(extra_eval_eval_pos_dataset, batch_size=4, shuffle=True, num_workers=1, drop_last=True)
-    extra_eval_eval_neg_dataloader = DataLoader(extra_eval_eval_neg_dataset, batch_size=4, shuffle=True, num_workers=1, drop_last=True)
+    extra_eval_eval_pos_dataloader = DataLoader(extra_eval_eval_pos_dataset, batch_size=5, shuffle=True, num_workers=1, drop_last=True)
+    extra_eval_eval_neg_dataloader = DataLoader(extra_eval_eval_neg_dataset, batch_size=5, shuffle=True, num_workers=1, drop_last=True)
 
 
     if args.two_step_training:
@@ -326,6 +337,7 @@ def main(args):
 
         wandb_eval_log = {}
         if extra_eval_eval_pos_dataset is not None:
+
             class_accuracy, progress_loss = eval_model(extra_eval_eval_pos_dataloader, self_attention_model, progress_loss_function, triangular_mask, args)
             wandb_eval_log["extra_eval/progress_loss"] = progress_loss
             wandb_eval_log["extra_eval/correct_class_accuracy"] = class_accuracy
@@ -442,7 +454,8 @@ def main(args):
 
 if __name__ == "__main__":
     argparser = argparse.ArgumentParser()
-    argparser.add_argument('--h5_embedding_path', type=str, default='/data/shared/roboclip/data/h5_buffers/openx_embeddings/openx_embeddings_full_uncompressed_with_langtable_processed.h5')
+    # argparser.add_argument('--h5_embedding_path', type=str, default='/data/shared/roboclip/data/h5_buffers/openx_embeddings/openx_embeddings_full_uncompressed_with_langtable_processed.h5')
+    argparser.add_argument('--h5_embedding_path', type=str, default='/home/jzhang96/openx_embeddings_full_uncompressed_with_langtable_processed.h5')
     # argparser.add_argument('--h5_embedding_path', type=str, default='/mnt/ssd_a_4tb/jzhang96/openx_embeddings_full_uncompressed_with_langtable_processed.h5')
     argparser.add_argument('--extra_data_type', type=str, choices=["metaworld", "real_world"], default="real_world")
     argparser.add_argument('--batch_size', type=int, default=512)
@@ -467,6 +480,8 @@ if __name__ == "__main__":
     argparser.add_argument('--cosine_scheduler', action='store_true')
     argparser.add_argument('--clip_grad', action='store_true')
     argparser.add_argument('--progress_loss', action='store_true')
+    argparser.add_argument('--view', type=str, default="side", choices=["side", "top", "both"])
+    argparser.add_argument('--extra_data_ratio', type=float, default=0.02)
 
     args = argparser.parse_args()
     main(args)

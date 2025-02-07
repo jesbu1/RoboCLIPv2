@@ -178,10 +178,10 @@ class LivRealVideoTrainDataset(Dataset):
         return video_frames
     
     def __len__(self):
-        if self.split:
-            return self.args.batch_size * 100
+        # if self.split:
+        #     return self.args.batch_size * 100
 
-        return self.args.batch_size * 3300 
+        return int(self.args.batch_size * 100 * (1 - self.args.extra_data_ratio)) + 1
 
 
     def __getitem__(self, idx):
@@ -223,13 +223,12 @@ class LivRealVideoTrainDataset(Dataset):
 class LivRealVideoEvalDataset(Dataset):
 
     def __init__(self, args, h5_file, label="positive", dataset="openx"):
-        h5_file = h5py.File(h5_file, "r")
         self.h5_file = h5_file
         self.args = args
         self.label = label
         self.keys = list(self.h5_file.keys())
-        if dataset != "openx":
-            self.keys = self.keys[int(len(self.keys)*0.75):]
+        # if dataset != "openx":
+        #     self.keys = self.keys[int(len(self.keys)*0.75):]
 
 
     def __len__(self):
@@ -265,6 +264,10 @@ class LivRealVideoEvalDataset(Dataset):
         lang_embedding = np.array(data_group["lang_embedding"])
         if lang_embedding.shape[0] == 1024:
             lang_embedding = np.expand_dims(lang_embedding, axis=0)
+
+        len_lang_embedding = lang_embedding.shape[0]
+        if len_lang_embedding > 1:
+            lang_embedding = lang_embedding[random.randint(0, len_lang_embedding-1)]
         if self.args.normalize_embedding:
             lang_embedding = normalize_embeddings(lang_embedding, return_tensor=True)
 
