@@ -96,7 +96,7 @@ def main(args):
     run = wandb.init(
         entity=WANDB_ENTITY_NAME,
         project=WANDB_PROJECT_NAME,
-        group="OpenXTokenTrainingv2",
+        group="OpenXTokenTrainingv3",
         config=args,
         name=experiment_name,
     )
@@ -105,11 +105,16 @@ def main(args):
 
     # h5_file = h5py.File(args.h5_embedding_path, "r")
     if args.extra_data_type == "metaworld":
+        h5_train_eval_file = h5py.File("metaworld_embedding_5_demo_dataset_v3_train.h5", "r")
         h5_eval_file = h5py.File("metaworld_embedding_5_demo_dataset_v3_eval.h5", "r")
         extra_data_path = "metaworld_embedding_5_demo_dataset_v3_train.h5"
     else:
-        h5_eval_file = h5py.File("jesse_collect_dataset_new_token.h5", "r")
-        extra_data_path = "jesse_collect_dataset_new_token.h5"
+        # h5_eval_file = h5py.File("jesse_collect_dataset_new_token.h5", "r")
+        # extra_data_path = "jesse_collect_dataset_new_token.h5"
+        h5_train_eval_file = h5py.File("usc_koch_rewind_reward_train.h5", "r")
+        h5_eval_file = h5py.File("usc_koch_rewind_reward_eval.h5", "r")
+        extra_data_path = "usc_koch_rewind_reward_train.h5"
+        
     embedding_dim = 1024
 
     if args.text_positional_encoding:

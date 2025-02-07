@@ -124,7 +124,7 @@ def main(args):
             extra_dataset = LivRealVideoTrainDataset(args, extra_data_path, split = False, sample_neg=True)
         else:
             extra_dataset = LivRealVideoTrainDataset(args, extra_data_path, split = False, sample_neg=True)
-        openx_dataloader = DataLoader(openx_dataset, batch_size=args.batch_size * 33, shuffle=True, num_workers=int(args.worker * 12), drop_last=True, pin_memory=True)
+        openx_dataloader = DataLoader(openx_dataset, batch_size=args.batch_size * 99, shuffle=True, num_workers=int(args.worker * 12), drop_last=True, pin_memory=True)
         extra_dataloader = DataLoader(extra_dataset, batch_size=args.batch_size, shuffle=True, num_workers=args.worker, drop_last=True, pin_memory=True)
 
         positive_eval_openx_dataset = LivRealVideoEvalDataset(args, 
@@ -144,10 +144,10 @@ def main(args):
         openx_positive_eval_dataloader = DataLoader(positive_eval_openx_dataset, batch_size=args.batch_size, shuffle=True, num_workers=2, drop_last=False, pin_memory=True)
         openx_negative_eval_dataloader = DataLoader(negative_eval_openx_dataset, batch_size=args.batch_size, shuffle=True, num_workers=2, drop_last=False, pin_memory=True)
     else:
-        if args.extra_data_type == "metaworld":
-            extra_dataset = LivRealVideoTrainDataset(args, extra_data_path, split = False, sample_neg=True)
-        else:
-            extra_dataset = LivRealVideoTrainDataset(args, extra_data_path, split = False, sample_neg=True)
+        # if args.extra_data_type == "metaworld":
+        #     extra_dataset = LivRealVideoTrainDataset(args, extra_data_path, split = False, sample_neg=True)
+        # else:
+        extra_dataset = LivRealVideoTrainDataset(args, extra_data_path, split = False, sample_neg=True)
 
         extra_dataloader = DataLoader(extra_dataset, batch_size=args.batch_size, shuffle=True, num_workers=args.worker, drop_last=True, pin_memory=True)
         positive_eval_openx_dataset = None
@@ -186,8 +186,8 @@ def main(args):
     extra_eval_eval_neg_dataset = LivRealVideoEvalDataset(args, eval_file_name, label = "negative", dataset = "extra")
 
 
-    extra_eval_eval_pos_dataloader = DataLoader(extra_eval_eval_pos_dataset, batch_size=4, shuffle=True, num_workers=1, drop_last=False)
-    extra_eval_eval_neg_dataloader = DataLoader(extra_eval_eval_neg_dataset, batch_size=4, shuffle=True, num_workers=1, drop_last=False)
+    extra_eval_eval_pos_dataloader = DataLoader(extra_eval_eval_pos_dataset, batch_size=4, shuffle=True, num_workers=1, drop_last=True)
+    extra_eval_eval_neg_dataloader = DataLoader(extra_eval_eval_neg_dataset, batch_size=4, shuffle=True, num_workers=1, drop_last=True)
 
 
     if args.two_step_training:
@@ -343,7 +343,7 @@ def main(args):
         # else:
         #     assert False, "No dataset specified"
 
-        if epoch % 10 == 0:
+        if epoch % 5 == 0:
             self_attention_model.eval()
             with torch.no_grad():
                 if args.extra_data_type == "metaworld":
