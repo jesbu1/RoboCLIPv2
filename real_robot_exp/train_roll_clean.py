@@ -88,7 +88,7 @@ def main(args):
     experiment_name += "_epochs_" + str(args.epochs)
     experiment_name += "_lr_" + str(args.lr)
     # experiment_name += "_1_demo"
-    
+    experiment_name += "_FIX"
     
     if args.extra_data_type == "metaworld":
         group_name = "MetaWorld"
@@ -142,9 +142,9 @@ def main(args):
         extra_dataloader = DataLoader(extra_dataset, batch_size=extra_batch_size, shuffle=True, num_workers=args.worker, drop_last=True, pin_memory=True)
 
 
-        h5_openx_eval_file = h5py.File("/home/jzhang96/openx_embeddings_test_dataset_progrssed.h5", "r")
+        # h5_openx_eval_file = h5py.File("/home/jzhang96/openx_embeddings_test_dataset_progrssed.h5", "r")
         # h5_openx_eval_file = h5py.File("/mnt/ssd_a_4tb/jzhang96/openx_embeddings_test_dataset_progrssed.h5", "r")
-        # h5_openx_eval_file = h5py.File("/data/shared/roboclip/data/h5_buffers/openx_embeddings/openx_embeddings_test_dataset_progrssed.h5", "r")
+        h5_openx_eval_file = h5py.File("/data/shared/roboclip/data/h5_buffers/openx_embeddings/openx_embeddings_test_dataset_progrssed.h5", "r")
 
         positive_eval_openx_dataset = LivRealVideoEvalDataset(args, 
                                                         h5_openx_eval_file,
@@ -405,21 +405,21 @@ def main(args):
 
 
 
-
-                save_path = "/home/jzhang96/roboclip_v2_models"
-                if not os.path.exists(save_path):
-                    os.makedirs(save_path)
-                save_path = os.path.join(save_path, experiment_name)
-                if not os.path.exists(save_path):
-                    os.makedirs(save_path)
-                save_path = os.path.join(save_path, "model_" + str(epoch) + ".pth")
-                save_dict = {
-                    "model": self_attention_model.state_dict(),
-                    "optimizer": optimizer.state_dict(),
-                    "epoch": epoch,
-                    "args": args
-                }
-                torch.save(save_dict, save_path)
+        if epoch % 20 == 0:
+            save_path = "/home/jzhang96/roboclip_v2_models"
+            if not os.path.exists(save_path):
+                os.makedirs(save_path)
+            save_path = os.path.join(save_path, experiment_name)
+            if not os.path.exists(save_path):
+                os.makedirs(save_path)
+            save_path = os.path.join(save_path, "model_" + str(epoch) + ".pth")
+            save_dict = {
+                "model": self_attention_model.state_dict(),
+                "optimizer": optimizer.state_dict(),
+                "epoch": epoch,
+                "args": args
+            }
+            torch.save(save_dict, save_path)
 
 
 
@@ -443,8 +443,8 @@ def main(args):
 
 if __name__ == "__main__":
     argparser = argparse.ArgumentParser()
-    # argparser.add_argument('--h5_embedding_path', type=str, default='/data/shared/roboclip/data/h5_buffers/openx_embeddings/openx_embeddings_full_uncompressed_with_langtable_processed.h5')
-    argparser.add_argument('--h5_embedding_path', type=str, default='/home/jzhang96/openx_embeddings_full_uncompressed_with_langtable_processed.h5')
+    argparser.add_argument('--h5_embedding_path', type=str, default='/data/shared/roboclip/data/h5_buffers/openx_embeddings/openx_embeddings_full_uncompressed_with_langtable_processed.h5')
+    # argparser.add_argument('--h5_embedding_path', type=str, default='/home/jzhang96/openx_embeddings_full_uncompressed_with_langtable_processed.h5')
     # argparser.add_argument('--h5_embedding_path', type=str, default='/mnt/ssd_a_4tb/jzhang96/openx_embeddings_full_uncompressed_with_langtable_processed.h5')
     argparser.add_argument('--extra_data_type', type=str, choices=["metaworld", "real_world"], default="real_world")
     argparser.add_argument('--batch_size', type=int, default=512)
