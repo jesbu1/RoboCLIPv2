@@ -227,16 +227,16 @@ def update_model(args, video_array, text_array, batch_triangular_mask, self_atte
                 wandb_log["openx_progress_accuracy"] = openx_progress_accuracy
                 wandb_log["extra_progress_accuracy"] = extra_progress_accuracy
 
-                openx_zero_pred_label = openx_progress_label[openx_progress_label == 0]
+                openx_zero_pred_label = openx_predict_label[openx_progress_label == 0]
                 openx_zero_label = openx_progress_label[openx_progress_label == 0]
 
-                extra_zero_pred_label = extra_progress_label[extra_progress_label == 0]
+                extra_zero_pred_label = extra_predict_label[extra_progress_label == 0]
                 extra_zero_label = extra_progress_label[extra_progress_label == 0]
 
-                openx_non_zero_pred_label = openx_progress_label[openx_progress_label != 0]
+                openx_non_zero_pred_label = openx_predict_label[openx_progress_label != 0]
                 openx_non_zero_label = openx_progress_label[openx_progress_label != 0]
 
-                extra_non_zero_pred_label = extra_progress_label[extra_progress_label != 0]
+                extra_non_zero_pred_label = extra_predict_label[extra_progress_label != 0]
                 extra_non_zero_label = extra_progress_label[extra_progress_label != 0]
 
                 openx_zero_accuracy = torch.sum(openx_zero_pred_label == openx_zero_label).item() / len(openx_zero_pred_label)
