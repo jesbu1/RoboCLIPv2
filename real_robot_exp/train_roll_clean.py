@@ -93,7 +93,7 @@ def main(args):
     if args.extra_data_type == "metaworld":
         group_name = "MetaWorld"
     else:
-        group_name = "RealWorld_Koch"
+        group_name = "RealWorld_Koch_Debug"
     # get today date
     
     group_name += "Feb8th"

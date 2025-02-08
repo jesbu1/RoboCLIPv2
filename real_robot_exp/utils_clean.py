@@ -203,7 +203,7 @@ def update_model(args, video_array, text_array, batch_triangular_mask, self_atte
                 openx_progress_loss = progress_loss_function(openx_pred_progress, openx_progress_label)
                 extra_progress_loss = progress_loss_function(extra_pred_progress, extra_progress_label)
 
-            progress_loss = (1 - args.openx_progress_loss) * openx_progress_loss + args.extra_data_ratio * extra_progress_loss
+            progress_loss = (1 - args.extra_data_ratio) * openx_progress_loss + args.extra_data_ratio * extra_progress_loss
 
             loss = progress_loss
 
@@ -221,10 +221,47 @@ def update_model(args, video_array, text_array, batch_triangular_mask, self_atte
 
                 openx_predict_label = torch.argmax(openx_pred_progress, dim=1)
                 extra_predict_label = torch.argmax(extra_pred_progress, dim=1)
+
                 openx_progress_accuracy = torch.sum(openx_predict_label == openx_progress_label).item() / len(openx_predict_label)
                 extra_progress_accuracy = torch.sum(extra_predict_label == extra_progress_label).item() / len(extra_predict_label)
                 wandb_log["openx_progress_accuracy"] = openx_progress_accuracy
                 wandb_log["extra_progress_accuracy"] = extra_progress_accuracy
+
+                openx_zero_pred_label = openx_progress_label[openx_progress_label == 0]
+                openx_zero_label = openx_progress_label[openx_progress_label == 0]
+
+                extra_zero_pred_label = extra_progress_label[extra_progress_label == 0]
+                extra_zero_label = extra_progress_label[extra_progress_label == 0]
+
+                openx_non_zero_pred_label = openx_progress_label[openx_progress_label != 0]
+                openx_non_zero_label = openx_progress_label[openx_progress_label != 0]
+
+                extra_non_zero_pred_label = extra_progress_label[extra_progress_label != 0]
+                extra_non_zero_label = extra_progress_label[extra_progress_label != 0]
+
+                openx_zero_accuracy = torch.sum(openx_zero_pred_label == openx_zero_label).item() / len(openx_zero_pred_label)
+                openx_non_zero_accuracy = torch.sum(openx_non_zero_pred_label == openx_non_zero_label).item() / len(openx_non_zero_pred_label)
+
+                extra_zero_accuracy = torch.sum(extra_zero_pred_label == extra_zero_label).item() / len(extra_zero_pred_label)
+                extra_non_zero_accuracy = torch.sum(extra_non_zero_pred_label == extra_non_zero_label).item() / len(extra_non_zero_pred_label)
+
+                wandb_log["train/openx_zero_accuracy"] = openx_zero_accuracy
+                wandb_log["train/openx_non_zero_accuracy"] = openx_non_zero_accuracy
+
+                wandb_log["train/extra_zero_accuracy"] = extra_zero_accuracy
+                wandb_log["train/extra_non_zero_accuracy"] = extra_non_zero_accuracy
+
+
+
+
+
+                # choose the correct label index
+                # openx_predict_label = torch.argmax(openx_pred_progress, dim=1)
+                # extra_predict_label = torch.argmax(extra_pred_progress, dim=1)
+
+                # openx_progress_accuracy = torch.sum(openx_predict_label == openx_progress_label).item() / len(openx_predict_label)
+                # torch.sum(openx_predict_label[openx_predict_label == openx_progress_label])
+
 
         else:
             progress = progress.view(batch_size * seq_len, -1)
