@@ -27,7 +27,20 @@ import pickle
 
 os.environ["TOKENIZERS_PARALLELISM"] = "False"
 
+class PCATransform(torch.nn.Module):
+    def __init__(self, components, mean):
+        super().__init__()
+        self.linear = torch.nn.Linear(components.shape[1], components.shape[0], bias=False)
+        self.register_buffer("mean", torch.from_numpy(mean).float())
 
+        # Set weights (PyTorch Linear expects weights transposed)
+        # self.linear.weight = torch.nn.Parameter(components)
+        self.linear.weight = torch.nn.Parameter(torch.from_numpy(components).float(), requires_grad=False)
+
+    def forward(self, x):
+        return self.linear(x - self.mean)
+
+# Move model to GPU
 
 
 
@@ -51,7 +64,7 @@ def main(args):
         experiment_name = "RealWorld_Koch"
 
     if args.pca:
-        experiment = "PCA_" + experiment_name
+        experiment_name = "PCA_" + experiment_name
 
     if args.openx_data:
         experiment_name += "_AddOpenXData"
@@ -97,8 +110,10 @@ def main(args):
     if args.extra_data_type == "metaworld":
         group_name = "MetaWorld"
     else:
-        group_name = "RealWorld_KochDebug"
+        group_name = "RealWorld_Koch"
     # get today date
+
+
     
     group_name += "Feb9th"
     run = wandb.init(
@@ -132,9 +147,14 @@ def main(args):
     if args.pca:
         pca_video_model_path = "pca_models/pca_video_model_512.pkl"
         pca_text_model_path = "pca_models/pca_text_model_512.pkl"
-        pca_video_model = pickle.load(open(pca_video_model_path, "rb"))
-        pca_text_model = pickle.load(open(pca_text_model_path, "rb"))
-        embedding_dim = pca_video_model.components_.shape[0]
+        pca_video_model_para = pickle.load(open(pca_video_model_path, "rb"))
+        pca_text_model_para = pickle.load(open(pca_text_model_path, "rb"))
+        embedding_dim = pca_video_model_para.components_.shape[0]
+        pca_video_model = PCATransform(pca_video_model_para.components_, pca_video_model_para.mean_)
+        pca_text_model = PCATransform(pca_text_model_para.components_, pca_text_model_para.mean_)
+        pca_video_model = pca_video_model.to(device).eval()
+        pca_text_model = pca_text_model.to(device).eval()
+
 
     else:
         pca_video_model = None
@@ -153,7 +173,7 @@ def main(args):
         openx_batch_size = int(round(args.batch_size * (1 - args.extra_data_ratio)))
         extra_batch_size = int(round(args.batch_size * args.extra_data_ratio))
 
-        openx_dataloader = DataLoader(openx_dataset, batch_size=openx_batch_size, shuffle=True, num_workers=int(args.worker * 16), drop_last=True, pin_memory=True)
+        openx_dataloader = DataLoader(openx_dataset, batch_size=openx_batch_size, shuffle=True, num_workers=int(args.worker * 18), drop_last=True, pin_memory=True)
         extra_dataloader = DataLoader(extra_dataset, batch_size=extra_batch_size, shuffle=True, num_workers=args.worker, drop_last=True, pin_memory=True)
 
 
@@ -314,11 +334,12 @@ def main(args):
                 if args.pca:
                     batch_size = video_array.size(0)
                     batch_seq_len = video_array.size(1)
-                    video_array = pca_video_model.transform(video_array.view(batch_size * batch_seq_len, -1).detach().cpu().numpy())
-                    video_array = torch.from_numpy(video_array).view(batch_size, batch_seq_len, -1).to(device).float()
 
-                    text_array = pca_text_model.transform(text_array.view(batch_size, -1).detach().cpu().numpy())
-                    text_array = torch.from_numpy(text_array).to(device).float().squeeze(1)
+                    with torch.no_grad():
+                        video_array = video_array.view(batch_size * batch_seq_len, -1)
+                        video_array = pca_video_model(video_array)
+                        video_array = video_array.view(batch_size, batch_seq_len, -1).to(device).float()
+                        text_array = pca_text_model(text_array.view(batch_size, -1))
 
                 openx_len = len(openx_pos_video_array)
                 extra_len = len(extra_pos_video_array)

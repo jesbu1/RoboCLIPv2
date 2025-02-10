@@ -313,11 +313,13 @@ def eval_model(positive_eval_openx_dataset, self_attention_model, progress_loss_
             batch_size = video_array.size(0)
             batch_seq_len = video_array.size(1)
 
-            video_array = pca_video_model.transform(video_array.view(batch_size * batch_seq_len, -1).detach().cpu().numpy())
-            video_array = torch.from_numpy(video_array).view(batch_size, batch_seq_len, -1).to(device).float()
+            video_array = video_array.view(batch_size * batch_seq_len, -1)
+            video_array = pca_video_model(video_array)
+            video_array = video_array.view(batch_size, batch_seq_len, -1).to(device).float()
 
-            text_array = pca_text_model.transform(text_array.view(batch_size, -1).detach().cpu().numpy())
-            text_array = torch.from_numpy(text_array).to(device).float().squeeze(1)
+            text_array = text_array.view(batch_size, -1)
+            text_array = pca_text_model(text_array)
+            text_array = text_array.to(device).float().squeeze(1)
 
 
         if args.catagorical_progress:

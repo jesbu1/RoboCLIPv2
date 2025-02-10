@@ -121,11 +121,12 @@ def plot_confusion_matrix(h5_file, set, self_attention_model, args, prob = False
     text_list = []
     for key in eval_envs:
         embedding = np.asarray(h5_file[key]["lang_embedding"])[0].reshape(1, -1)
-        if args.pca:
-            embedding = pca_text_model.transform(embedding)
         text_embeddings.append(embedding)
         text_list.append(key)
-    text_embeddings = torch.tensor(text_embeddings).to(device).float()
+    text_embeddings = np.concatenate(text_embeddings, axis=0)
+    text_embeddings = torch.from_numpy(text_embeddings).to(device).float()
+    if args.pca:
+        text_embeddings = pca_text_model(text_embeddings)
 
     if args.normalize_embedding:
         text_embeddings = normalize_embeddings(text_embeddings)
@@ -136,10 +137,10 @@ def plot_confusion_matrix(h5_file, set, self_attention_model, args, prob = False
     for i  in tqdm(range(len(eval_envs))):
         env = eval_envs[i]
         video_embedding = np.asarray(h5_file[env]["2"])
+        video_embedding = torch.from_numpy(video_embedding).to(device).float()
         if args.pca:
-            video_embedding = pca_video_model.transform(video_embedding)
-        
-        video_embedding = torch.tensor(video_embedding).to(device).float()
+            video_embedding = pca_video_model(video_embedding)
+
         if args.subsample_video:
             video_embedding = padding_video(video_embedding, args.max_length)
         if args.normalize_embedding:
@@ -147,8 +148,8 @@ def plot_confusion_matrix(h5_file, set, self_attention_model, args, prob = False
         else:
             traj_data = video_embedding
         if args.pca:
-            dim = pca_video_model.n_components
-            traj_data = traj_data.view(-1, dim).unsqueeze(0).repeat(text_embeddings.shape[0], 1, 1)
+            # dim = pca_video_model.n_components
+            traj_data = traj_data.view(-1, 512).unsqueeze(0).repeat(text_embeddings.shape[0], 1, 1)
         else:
             traj_data = traj_data.view(-1, 1024).unsqueeze(0).repeat(text_embeddings.shape[0], 1, 1)
 
