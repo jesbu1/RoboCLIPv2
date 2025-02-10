@@ -142,9 +142,9 @@ def main(args):
         extra_dataloader = DataLoader(extra_dataset, batch_size=extra_batch_size, shuffle=True, num_workers=args.worker, drop_last=True, pin_memory=True)
 
 
-        h5_openx_eval_file = h5py.File("/home/jzhang96/openx_embeddings_test_dataset_progrssed.h5", "r")
+        # h5_openx_eval_file = h5py.File("/home/jzhang96/openx_embeddings_test_dataset_progrssed.h5", "r")
         # h5_openx_eval_file = h5py.File("/mnt/ssd_a_4tb/jzhang96/openx_embeddings_test_dataset_progrssed.h5", "r")
-        # h5_openx_eval_file = h5py.File("/data/shared/roboclip/data/h5_buffers/openx_embeddings/openx_embeddings_test_dataset_progrssed.h5", "r")
+        h5_openx_eval_file = h5py.File("/data/shared/roboclip/data/h5_buffers/openx_embeddings/openx_embeddings_test_dataset_progrssed.h5", "r")
 
         positive_eval_openx_dataset = LivRealVideoEvalDataset(args, 
                                                         h5_openx_eval_file,
@@ -443,8 +443,8 @@ def main(args):
 
 if __name__ == "__main__":
     argparser = argparse.ArgumentParser()
-    # argparser.add_argument('--h5_embedding_path', type=str, default='/data/shared/roboclip/data/h5_buffers/openx_embeddings/openx_embeddings_full_uncompressed_with_langtable_processed.h5')
-    argparser.add_argument('--h5_embedding_path', type=str, default='/home/jzhang96/openx_embeddings_full_uncompressed_with_langtable_processed.h5')
+    argparser.add_argument('--h5_embedding_path', type=str, default='/data/shared/roboclip/data/h5_buffers/openx_embeddings/openx_embeddings_full_uncompressed_with_langtable_processed.h5')
+    # argparser.add_argument('--h5_embedding_path', type=str, default='/home/jzhang96/openx_embeddings_full_uncompressed_with_langtable_processed.h5')
     # argparser.add_argument('--h5_embedding_path', type=str, default='/mnt/ssd_a_4tb/jzhang96/openx_embeddings_full_uncompressed_with_langtable_processed.h5')
     argparser.add_argument('--extra_data_type', type=str, choices=["metaworld", "real_world"], default="real_world")
     argparser.add_argument('--batch_size', type=int, default=512)
@@ -469,7 +469,7 @@ if __name__ == "__main__":
     argparser.add_argument('--cosine_scheduler', action='store_true')
     argparser.add_argument('--clip_grad', action='store_true')
     argparser.add_argument('--progress_loss', action='store_true')
-    argparser.add_argument('--view', type=str, default="side", choices=["side", "top", "both"])
+    argparser.add_argument('--view', type=str, default="side", choices=["side", "top"])
     argparser.add_argument('--extra_data_ratio', type=float, default=0.02)
 
     args = argparser.parse_args()
