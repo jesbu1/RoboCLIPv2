@@ -88,7 +88,7 @@ def main(args):
     experiment_name += "_epochs_" + str(args.epochs)
     experiment_name += "_lr_" + str(args.lr)
     # experiment_name += "_1_demo"
-    experiment_name += "_FIXFIX"
+    #experiment_name += "_FIXFIX"
     
     if args.extra_data_type == "metaworld":
         group_name = "MetaWorld"
@@ -96,7 +96,7 @@ def main(args):
         group_name = "RealWorld_Koch"
     # get today date
     
-    group_name += "Feb9th"
+    group_name += "JZ"
     run = wandb.init(
         entity=WANDB_ENTITY_NAME,
         project=WANDB_PROJECT_NAME,
@@ -138,13 +138,14 @@ def main(args):
         openx_batch_size = int(round(args.batch_size * (1 - args.extra_data_ratio)))
         extra_batch_size = int(round(args.batch_size * args.extra_data_ratio))
 
-        openx_dataloader = DataLoader(openx_dataset, batch_size=openx_batch_size, shuffle=True, num_workers=int(args.worker * 16), drop_last=True, pin_memory=True)
+        openx_dataloader = DataLoader(openx_dataset, batch_size=openx_batch_size, shuffle=True, num_workers=int(args.worker * 6), drop_last=True, pin_memory=True)
         extra_dataloader = DataLoader(extra_dataset, batch_size=extra_batch_size, shuffle=True, num_workers=args.worker, drop_last=True, pin_memory=True)
 
 
         # h5_openx_eval_file = h5py.File("/home/jzhang96/openx_embeddings_test_dataset_progrssed.h5", "r")
         # h5_openx_eval_file = h5py.File("/mnt/ssd_a_4tb/jzhang96/openx_embeddings_test_dataset_progrssed.h5", "r")
-        h5_openx_eval_file = h5py.File("/data/shared/roboclip/data/h5_buffers/openx_embeddings/openx_embeddings_test_dataset_progrssed.h5", "r")
+        #h5_openx_eval_file = h5py.File("/data/shared/roboclip/data/h5_buffers/openx_embeddings/openx_embeddings_test_dataset_progrssed.h5", "r")
+        h5_openx_eval_file = h5py.File("/home/jessez/openx_embeddings_test_dataset_progrssed.h5", "r")
 
         positive_eval_openx_dataset = LivRealVideoEvalDataset(args, 
                                                         h5_openx_eval_file,
@@ -370,7 +371,7 @@ def main(args):
         # else:
         #     assert False, "No dataset specified"
 
-        if epoch % 5 == 0:
+        if epoch % 20 == 0:
             self_attention_model.eval()
             with torch.no_grad():
                 if args.extra_data_type == "metaworld":
@@ -405,8 +406,8 @@ def main(args):
 
 
 
-        if epoch % 20 == 0:
-            save_path = "/home/jzhang96/roboclip_v2_models"
+        if epoch % 100 == 0:
+            save_path = "/home/jessez/roboclip_v2_models"
             if not os.path.exists(save_path):
                 os.makedirs(save_path)
             save_path = os.path.join(save_path, experiment_name)
