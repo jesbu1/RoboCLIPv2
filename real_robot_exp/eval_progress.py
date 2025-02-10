@@ -56,7 +56,7 @@ def sample_video_frames(frames, num_frames = 32):
 
     return frames
 
-def plot_progress(h5_file, set, self_attention_model, args):
+def plot_progress(h5_file, set, self_attention_model, args, pca_text_model = None, pca_video_model = None):
     device = next(self_attention_model.parameters()).device
     keys = list(h5_file.keys())
     eval_envs = keys
@@ -78,18 +78,31 @@ def plot_progress(h5_file, set, self_attention_model, args):
     for key in tqdm(eval_envs):
         video_group = h5_file[key]
         text_embedding = np.asarray(video_group["lang_embedding"])[0].reshape(1, -1)
+
+        if args.pca:
+            text_embedding = pca_text_model.transform(text_embedding)
         text_embedding = torch.tensor(text_embedding).to(device).float().unsqueeze(0)
+
+        
 
         if args.normalize_embedding:
             text_embedding = normalize_embeddings(text_embedding)
 
         video_embeddings = np.asarray(video_group["2"])
+        if args.pca:
+            video_embeddings = pca_video_model.transform(video_embeddings)
         video_embeddings = torch.tensor(video_embeddings).to(device).float()
         if args.normalize_embedding:
             video_embeddings = normalize_embeddings(video_embeddings)
         if args.subsample_video:
             traj_data = sample_embedding_frames(video_embeddings, args.max_length)
-        traj_data = traj_data.view(-1, 1024).unsqueeze(0).repeat(text_embedding.shape[0], 1, 1)
+        
+        if args.pca:
+            dim = pca_video_model.n_components
+            traj_data = traj_data.view(-1, dim).unsqueeze(0).repeat(text_embedding.shape[0], 1, 1)
+        else:
+            traj_data = traj_data.view(-1, 1024).unsqueeze(0).repeat(text_embedding.shape[0], 1, 1)
+
         
         triangle_mask = torch.tril(torch.ones(traj_data.shape[1] + 1, traj_data.shape[1] + 1)).to(device).unsqueeze(0).unsqueeze(0).repeat(traj_data.shape[0], 1, 1, 1)
 

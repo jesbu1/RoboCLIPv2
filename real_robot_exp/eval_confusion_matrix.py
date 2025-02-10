@@ -99,7 +99,7 @@ def plot_matrix_as_image(matrix, names, set, text, prob = False):
 
 
 
-def plot_confusion_matrix(h5_file, set, self_attention_model, args, prob = False):
+def plot_confusion_matrix(h5_file, set, self_attention_model, args, prob = False, pca_text_model = None, pca_video_model = None):
     device = next(self_attention_model.parameters()).device
 
     keys = list(h5_file.keys())
@@ -121,6 +121,8 @@ def plot_confusion_matrix(h5_file, set, self_attention_model, args, prob = False
     text_list = []
     for key in eval_envs:
         embedding = np.asarray(h5_file[key]["lang_embedding"])[0].reshape(1, -1)
+        if args.pca:
+            embedding = pca_text_model.transform(embedding)
         text_embeddings.append(embedding)
         text_list.append(key)
     text_embeddings = torch.tensor(text_embeddings).to(device).float()
@@ -134,6 +136,8 @@ def plot_confusion_matrix(h5_file, set, self_attention_model, args, prob = False
     for i  in tqdm(range(len(eval_envs))):
         env = eval_envs[i]
         video_embedding = np.asarray(h5_file[env]["2"])
+        if args.pca:
+            video_embedding = pca_video_model.transform(video_embedding)
         
         video_embedding = torch.tensor(video_embedding).to(device).float()
         if args.subsample_video:
@@ -142,7 +146,11 @@ def plot_confusion_matrix(h5_file, set, self_attention_model, args, prob = False
             traj_data = normalize_embeddings(video_embedding)
         else:
             traj_data = video_embedding
-        traj_data = traj_data.view(-1, 1024).unsqueeze(0).repeat(text_embeddings.shape[0], 1, 1)
+        if args.pca:
+            dim = pca_video_model.n_components
+            traj_data = traj_data.view(-1, dim).unsqueeze(0).repeat(text_embeddings.shape[0], 1, 1)
+        else:
+            traj_data = traj_data.view(-1, 1024).unsqueeze(0).repeat(text_embeddings.shape[0], 1, 1)
 
         triangle_mask = torch.tril(torch.ones(traj_data.shape[1] + 1, traj_data.shape[1] + 1)).to(device).unsqueeze(0).unsqueeze(0).repeat(traj_data.shape[0], 1, 1, 1)
 
