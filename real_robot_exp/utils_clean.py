@@ -80,7 +80,7 @@ def update_model(args, video_array, text_array, batch_triangular_mask, self_atte
 
                 # progress_loss = openx_progress_loss + extra_progress_loss
 
-                progress_loss = (1 - args.extra_data_ratio) * progress_loss + args.extra_data_ratio * extra_progress_loss
+                progress_loss = (1 - args.extra_data_ratio) * openx_progress_loss + args.extra_data_ratio * extra_progress_loss
 
                 loss = class_loss + progress_loss
             else:
@@ -109,15 +109,15 @@ def update_model(args, video_array, text_array, batch_triangular_mask, self_atte
 
             wandb_log = {
                 "total_loss": loss.item(),
-                "class_loss": class_loss.item(),
-                "openx_class_loss": openx_class_loss.item(),
-                "extra_class_loss": extra_class_loss.item(),
-                "openx_class_accuracy": openx_class_accuracy,
-                "extra_class_accuracy": extra_class_accuracy,
-                "train_accuracy/openx_true_data_accuracy": openx_class_none_zero_accuracy,
-                "train_accuracy/openx_wrong_data_accuracy": openx_class_zero_accuracy,
-                "train_accuracy/extra_true_data_accuracy": extra_class_none_zero_accuracy,
-                "train_accuracy/extra_wrong_data_accuracy": extra_class_zero_accuracy
+                "binary_class_loss": class_loss.item(),
+                "openx_binary_class_loss": openx_class_loss.item(),
+                "extra_binary_class_loss": extra_class_loss.item(),
+                "openx_binary_class_accuracy": openx_class_accuracy,
+                "extra_binary_class_accuracy": extra_class_accuracy,
+                "train_accuracy/openx_paired_binary_accuracy": openx_class_none_zero_accuracy,
+                "train_accuracy/openx_mismatched_accuracy": openx_class_zero_accuracy,
+                "train_accuracy/extra_paired_accuracy": extra_class_none_zero_accuracy,
+                "train_accuracy/extra_mismatched_accuracy": extra_class_zero_accuracy
                 
             }
 
@@ -302,6 +302,7 @@ def eval_model(positive_eval_openx_dataset, self_attention_model, progress_loss_
     correct_num = 0
     total_num = 0
     total_loss = 0
+    total_data = 0
     # wrong_num = 0
     for eval_data in tqdm(positive_eval_openx_dataset):
         
@@ -347,6 +348,7 @@ def eval_model(positive_eval_openx_dataset, self_attention_model, progress_loss_
             class_predict_label = class_predict_label.float().squeeze()
             # class_accuracy = torch.sum(class_predict_label == class_label).item() / len(class_predict_label)
             correct_num += torch.sum(class_predict_label == class_label).item()
+            total_data += len(class_predict_label)
             
 
         else:
@@ -361,7 +363,7 @@ def eval_model(positive_eval_openx_dataset, self_attention_model, progress_loss_
     progress = total_loss / total_num
 
     if args.two_step_training:
-        class_accuracy = correct_num / total_num
+        class_accuracy = correct_num / total_data
     else:
         class_accuracy = None
 

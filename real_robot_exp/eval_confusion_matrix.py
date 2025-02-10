@@ -178,6 +178,7 @@ def plot_confusion_matrix(h5_file, set, self_attention_model, args, prob = False
 
             pred_class = pred_class * two_step_class[:, -1].squeeze()
             pred_two_step_prob_list.append(two_step_prob.cpu().detach().numpy())
+            predicted_progress = pred_class.cpu().detach().numpy()
         else:
             predicted_progress = pred_class.cpu().detach().numpy()
 

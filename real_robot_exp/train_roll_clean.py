@@ -115,7 +115,7 @@ def main(args):
 
 
     
-    group_name += "Feb9th"
+    group_name += "Feb9thDebug"
     run = wandb.init(
         entity=WANDB_ENTITY_NAME,
         project=WANDB_PROJECT_NAME,
@@ -364,6 +364,8 @@ def main(args):
 
 
         else:
+            if args.pca:
+                assert False, "PCA shouldn't applied only for extra data"
             for extra_data in tqdm(extra_dataloader):
                 optimizer.zero_grad()
                 
