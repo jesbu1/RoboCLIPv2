@@ -160,6 +160,8 @@ class RewardTwoStepNewPositionEmbeddingPredictor(nn.Module):
         two_step_label = torch.sigmoid(two_step_label)
         return x, two_step_label
 
+
+
 class RewardOneStepNewPositionEmbeddingPredictor(nn.Module):
     def __init__(self, input_dim, args, class_num):
         super(RewardOneStepNewPositionEmbeddingPredictor, self).__init__()

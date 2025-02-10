@@ -22,11 +22,25 @@ from torch.optim import Optimizer
 from torch.utils.data import DataLoader
 import math
 from datetime import date
+import pickle
 
 
 os.environ["TOKENIZERS_PARALLELISM"] = "False"
 
+class PCATransform(torch.nn.Module):
+    def __init__(self, components, mean):
+        super().__init__()
+        self.linear = torch.nn.Linear(components.shape[1], components.shape[0], bias=False)
+        self.register_buffer("mean", torch.from_numpy(mean).float())
 
+        # Set weights (PyTorch Linear expects weights transposed)
+        # self.linear.weight = torch.nn.Parameter(components)
+        self.linear.weight = torch.nn.Parameter(torch.from_numpy(components).float(), requires_grad=False)
+
+    def forward(self, x):
+        return self.linear(x - self.mean)
+
+# Move model to GPU
 
 
 
@@ -48,6 +62,9 @@ def main(args):
         experiment_name = "MetaWorld" 
     else: 
         experiment_name = "RealWorld_Koch"
+
+    if args.pca:
+        experiment_name = "PCA_" + experiment_name
 
     if args.openx_data:
         experiment_name += "_AddOpenXData"
@@ -95,6 +112,8 @@ def main(args):
     else:
         group_name = "RealWorld_Koch"
     # get today date
+
+
     
     group_name += "JZ"
     run = wandb.init(
@@ -125,6 +144,22 @@ def main(args):
             extra_data_path = "usc_koch_rewind_reward_train.h5"
     embedding_dim = 1024
 
+    if args.pca:
+        pca_video_model_path = "pca_models/pca_video_model_512.pkl"
+        pca_text_model_path = "pca_models/pca_text_model_512.pkl"
+        pca_video_model_para = pickle.load(open(pca_video_model_path, "rb"))
+        pca_text_model_para = pickle.load(open(pca_text_model_path, "rb"))
+        embedding_dim = pca_video_model_para.components_.shape[0]
+        pca_video_model = PCATransform(pca_video_model_para.components_, pca_video_model_para.mean_)
+        pca_text_model = PCATransform(pca_text_model_para.components_, pca_text_model_para.mean_)
+        pca_video_model = pca_video_model.to(device).eval()
+        pca_text_model = pca_text_model.to(device).eval()
+
+
+    else:
+        pca_video_model = None
+        pca_text_model = None
+
 
     eval_dataset = None
     eval_dataloader = None
@@ -142,7 +177,7 @@ def main(args):
         extra_dataloader = DataLoader(extra_dataset, batch_size=extra_batch_size, shuffle=True, num_workers=args.worker, drop_last=True, pin_memory=True)
 
 
-        # h5_openx_eval_file = h5py.File("/home/jzhang96/openx_embeddings_test_dataset_progrssed.h5", "r")
+        h5_openx_eval_file = h5py.File("/home/jzhang96/openx_embeddings_test_dataset_progrssed.h5", "r")
         # h5_openx_eval_file = h5py.File("/mnt/ssd_a_4tb/jzhang96/openx_embeddings_test_dataset_progrssed.h5", "r")
         #h5_openx_eval_file = h5py.File("/data/shared/roboclip/data/h5_buffers/openx_embeddings/openx_embeddings_test_dataset_progrssed.h5", "r")
         h5_openx_eval_file = h5py.File("/home/jessez/openx_embeddings_test_dataset_progrssed.h5", "r")
@@ -187,14 +222,14 @@ def main(args):
     # else:
     #     assert False, "No dataset specified"
 
-    if args.extra_data_type == "metaworld":
-        eval_file_name = "metaworld_embedding_5_demo_dataset_v3_eval.h5"
-    else:
-        # eval_file_name = "jesse_collect_dataset_new_token.h5"
-        if args.view == "side":
-            eval_file_name = "usc_koch_rewind_reward_side_only_eval.h5"
-        elif args.view == "top":
-            eval_file_name = "usc_koch_rewind_reward_eval.h5"
+    # if args.extra_data_type == "metaworld":
+    #     eval_file_name = "metaworld_embedding_5_demo_dataset_v3_eval.h5"
+    # else:
+    #     # eval_file_name = "jesse_collect_dataset_new_token.h5"
+    #     if args.view == "side":
+    #         eval_file_name = "usc_koch_rewind_reward_side_only_eval.h5"
+    #     elif args.view == "top":
+    #         eval_file_name = "usc_koch_rewind_reward_eval.h5"
     # extra_eval_train_pos_dataset = LivDemoVideoEvalDataset(args, extra_data_path, label = "positive", set_name="train")
     # extra_eval_train_neg_dataset = LivDemoVideoEvalDataset(args, extra_data_path, label = "negative", set_name="train")
 
@@ -297,6 +332,15 @@ def main(args):
                 text_array = torch.cat([openx_pos_text_array, extra_pos_text_array], dim = 0)
                 progress = torch.cat([openx_pos_progress, extra_pos_progress], dim = 0)
                 
+                if args.pca:
+                    batch_size = video_array.size(0)
+                    batch_seq_len = video_array.size(1)
+
+                    with torch.no_grad():
+                        video_array = video_array.view(batch_size * batch_seq_len, -1)
+                        video_array = pca_video_model(video_array)
+                        video_array = video_array.view(batch_size, batch_seq_len, -1).to(device).float()
+                        text_array = pca_text_model(text_array.view(batch_size, -1))
 
                 openx_len = len(openx_pos_video_array)
                 extra_len = len(extra_pos_video_array)
@@ -304,7 +348,7 @@ def main(args):
 
                 wandb_log, self_attention_model = update_model(args, video_array, text_array, batch_triangular_mask, self_attention_model, progress, class_label,
                 classification_loss_function, progress_loss_function, optimizer, openx_len = openx_len, extra_len = extra_len, scheduler = scheduler)
-                
+
                 
                 if args.clip_grad:
                     torch.nn.utils.clip_grad_norm_(self_attention_model.parameters(), max_norm=1.0)
@@ -321,6 +365,8 @@ def main(args):
 
 
         else:
+            if args.pca:
+                assert False, "PCA shouldn't applied only for extra data"
             for extra_data in tqdm(extra_dataloader):
                 optimizer.zero_grad()
                 
@@ -343,22 +389,26 @@ def main(args):
         wandb_eval_log = {}
         if extra_eval_eval_pos_dataset is not None:
 
-            class_accuracy, progress_loss = eval_model(extra_eval_eval_pos_dataloader, self_attention_model, progress_loss_function, triangular_mask, args)
+            class_accuracy, progress_loss = eval_model(extra_eval_eval_pos_dataloader, self_attention_model, progress_loss_function, triangular_mask, args, 
+                                                       pca_text_model = pca_text_model, pca_video_model = pca_video_model)
             wandb_eval_log["extra_eval/progress_loss"] = progress_loss
             wandb_eval_log["extra_eval/correct_class_accuracy"] = class_accuracy
 
         if extra_eval_eval_neg_dataset is not None:
-            class_accuracy, progress_loss = eval_model(extra_eval_eval_neg_dataloader, self_attention_model, progress_loss_function, triangular_mask, args)
+            class_accuracy, progress_loss = eval_model(extra_eval_eval_neg_dataloader, self_attention_model, progress_loss_function, triangular_mask, args,
+                                                         pca_text_model = pca_text_model, pca_video_model = pca_video_model)
             wandb_eval_log["extra_eval/wrong_class_accuracy"] = class_accuracy
 
         if positive_eval_openx_dataset is not None:
-            class_accuracy, progress_loss = eval_model(openx_positive_eval_dataloader, self_attention_model, progress_loss_function, triangular_mask, args)
+            class_accuracy, progress_loss = eval_model(openx_positive_eval_dataloader, self_attention_model, progress_loss_function, triangular_mask, args,
+                                                         pca_text_model = pca_text_model, pca_video_model = pca_video_model)
             wandb_eval_log["openx_eval/progress_loss"] = progress_loss
             if args.two_step_training:
                 wandb_eval_log["openx_eval/correct_class_accuracy"] = class_accuracy
 
         if negative_eval_openx_dataset is not None:
-            class_accuracy, progress_loss = eval_model(openx_negative_eval_dataloader, self_attention_model, progress_loss_function, triangular_mask, args)
+            class_accuracy, progress_loss = eval_model(openx_negative_eval_dataloader, self_attention_model, progress_loss_function, triangular_mask, args,
+                                                            pca_text_model = pca_text_model, pca_video_model = pca_video_model)
             wandb_eval_log["openx_eval/wrong_class_accuracy"] = class_accuracy
 
         wandb.log(wandb_eval_log)
@@ -375,29 +425,40 @@ def main(args):
             self_attention_model.eval()
             with torch.no_grad():
                 if args.extra_data_type == "metaworld":
-                    plot_progress(h5_train_eval_file, "train", self_attention_model, args)
+                    plot_progress(h5_train_eval_file, "train", self_attention_model, args, pca_text_model = pca_text_model, pca_video_model = pca_video_model)
                     plot_confusion_matrix(h5_file = h5_train_eval_file,
                                         set = "train",
                                         self_attention_model = self_attention_model,
-                                        args = args)
+                                        args = args,
+                                        pca_text_model = pca_text_model,
+                                        pca_video_model = pca_video_model)
 
-                    plot_progress(h5_eval_file, "eval", self_attention_model, args)
+                    plot_progress(h5_eval_file, "eval", self_attention_model, args, pca_text_model = pca_text_model, pca_video_model = pca_video_model)
                     plot_confusion_matrix(h5_file = h5_eval_file,
                                         set = "eval",
                                         self_attention_model = self_attention_model,
-                                        args = args)                    
+                                        args = args,
+                                        pca_text_model = pca_text_model,
+                                        pca_video_model = pca_video_model)               
 
                 else:
-                    plot_progress(h5_train_eval_file, "train", self_attention_model, args)
-                    plot_progress(h5_eval_file, "eval", self_attention_model, args)
+
+                    plot_progress(h5_train_eval_file, "train", self_attention_model, args, pca_text_model = pca_text_model, pca_video_model = pca_video_model)
+                    plot_progress(h5_eval_file, "eval", self_attention_model, args, pca_text_model = pca_text_model, pca_video_model = pca_video_model)
                     plot_confusion_matrix(h5_file = h5_train_eval_file,
                                         set = "train",
                                         self_attention_model = self_attention_model,
-                                        args = args)
+                                        args = args, 
+                                        prob = args.two_step_training,
+                                        pca_text_model = pca_text_model, 
+                                        pca_video_model = pca_video_model)
                     plot_confusion_matrix(h5_file = h5_eval_file,
                                         set = "eval",
                                         self_attention_model = self_attention_model,
-                                        args = args)
+                                        args = args,
+                                        prob = args.two_step_training,
+                                        pca_text_model = pca_text_model,
+                                        pca_video_model = pca_video_model)
                     # plot_confusion_matrix(h5_file = h5_eval_file, 
                     #                         set = "all", 
                     #                         self_attention_model = self_attention_model, 
@@ -444,8 +505,8 @@ def main(args):
 
 if __name__ == "__main__":
     argparser = argparse.ArgumentParser()
-    argparser.add_argument('--h5_embedding_path', type=str, default='/data/shared/roboclip/data/h5_buffers/openx_embeddings/openx_embeddings_full_uncompressed_with_langtable_processed.h5')
-    # argparser.add_argument('--h5_embedding_path', type=str, default='/home/jzhang96/openx_embeddings_full_uncompressed_with_langtable_processed.h5')
+    # argparser.add_argument('--h5_embedding_path', type=str, default='/data/shared/roboclip/data/h5_buffers/openx_embeddings/openx_embeddings_full_uncompressed_with_langtable_processed.h5')
+    argparser.add_argument('--h5_embedding_path', type=str, default='/home/jzhang96/openx_embeddings_full_uncompressed_with_langtable_processed.h5')
     # argparser.add_argument('--h5_embedding_path', type=str, default='/mnt/ssd_a_4tb/jzhang96/openx_embeddings_full_uncompressed_with_langtable_processed.h5')
     argparser.add_argument('--extra_data_type', type=str, choices=["metaworld", "real_world"], default="real_world")
     argparser.add_argument('--batch_size', type=int, default=512)
@@ -472,6 +533,7 @@ if __name__ == "__main__":
     argparser.add_argument('--progress_loss', action='store_true')
     argparser.add_argument('--view', type=str, default="side", choices=["side", "top"])
     argparser.add_argument('--extra_data_ratio', type=float, default=0.02)
+    argparser.add_argument('--pca', action='store_true')
 
     args = argparser.parse_args()
     main(args)

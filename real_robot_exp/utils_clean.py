@@ -80,7 +80,7 @@ def update_model(args, video_array, text_array, batch_triangular_mask, self_atte
 
                 # progress_loss = openx_progress_loss + extra_progress_loss
 
-                progress_loss = (1 - args.openx_progress_loss) * progress_loss + args.extra_data_ratio * extra_progress_loss
+                progress_loss = (1 - args.extra_data_ratio) * openx_progress_loss + args.extra_data_ratio * extra_progress_loss
 
                 loss = class_loss + progress_loss
             else:
@@ -109,15 +109,15 @@ def update_model(args, video_array, text_array, batch_triangular_mask, self_atte
 
             wandb_log = {
                 "total_loss": loss.item(),
-                "class_loss": class_loss.item(),
-                "openx_class_loss": openx_class_loss.item(),
-                "extra_class_loss": extra_class_loss.item(),
-                "openx_class_accuracy": openx_class_accuracy,
-                "extra_class_accuracy": extra_class_accuracy,
-                "train_accuracy/openx_true_data_accuracy": openx_class_none_zero_accuracy,
-                "train_accuracy/openx_wrong_data_accuracy": openx_class_zero_accuracy,
-                "train_accuracy/extra_true_data_accuracy": extra_class_none_zero_accuracy,
-                "train_accuracy/extra_wrong_data_accuracy": extra_class_zero_accuracy
+                "binary_class_loss": class_loss.item(),
+                "openx_binary_class_loss": openx_class_loss.item(),
+                "extra_binary_class_loss": extra_class_loss.item(),
+                "openx_binary_class_accuracy": openx_class_accuracy,
+                "extra_binary_class_accuracy": extra_class_accuracy,
+                "train_accuracy/openx_paired_binary_accuracy": openx_class_none_zero_accuracy,
+                "train_accuracy/openx_mismatched_accuracy": openx_class_zero_accuracy,
+                "train_accuracy/extra_paired_accuracy": extra_class_none_zero_accuracy,
+                "train_accuracy/extra_mismatched_accuracy": extra_class_zero_accuracy
                 
             }
 
@@ -185,23 +185,23 @@ def update_model(args, video_array, text_array, batch_triangular_mask, self_atte
             openx_pred_progress = progress_output[:openx_len]
             extra_pred_progress = progress_output[openx_len:]
 
-            if not args.catagorical_progress:
-                openx_progress_label = openx_progress_label.view(openx_len * seq_len)
-                extra_progress_label = extra_progress_label.view(extra_len * seq_len)
-                openx_pred_progress = progress_output[:openx_len].view(openx_len * seq_len, -1).squeeze(1)
-                extra_pred_progress = progress_output[openx_len:].view(extra_len * seq_len, -1).squeeze(1)
+            # if not args.catagorical_progress:
+            #     openx_progress_label = openx_progress_label.view(openx_len * seq_len)
+            #     extra_progress_label = extra_progress_label.view(extra_len * seq_len)
+            #     openx_pred_progress = progress_output[:openx_len].view(openx_len * seq_len, -1).squeeze(1)
+            #     extra_pred_progress = progress_output[openx_len:].view(extra_len * seq_len, -1).squeeze(1)
 
-                openx_progress_loss = progress_loss_function(openx_pred_progress, openx_progress_label)
-                extra_progress_loss = progress_loss_function(extra_pred_progress, extra_progress_label)
-            else:
+            #     openx_progress_loss = progress_loss_function(openx_pred_progress, openx_progress_label)
+            #     extra_progress_loss = progress_loss_function(extra_pred_progress, extra_progress_label)
+            # else:
 
-                openx_progress_label = openx_progress_label.view(openx_len * seq_len)
-                extra_progress_label = extra_progress_label.view(extra_len * seq_len)
-                openx_pred_progress = progress_output[:openx_len].view(openx_len * seq_len, -1).squeeze(1)
-                extra_pred_progress = progress_output[openx_len:].view(extra_len * seq_len, -1).squeeze(1)
+            openx_progress_label = openx_progress_label.view(openx_len * seq_len)
+            extra_progress_label = extra_progress_label.view(extra_len * seq_len)
+            openx_pred_progress = progress_output[:openx_len].view(openx_len * seq_len, -1).squeeze(1)
+            extra_pred_progress = progress_output[openx_len:].view(extra_len * seq_len, -1).squeeze(1)
 
-                openx_progress_loss = progress_loss_function(openx_pred_progress, openx_progress_label)
-                extra_progress_loss = progress_loss_function(extra_pred_progress, extra_progress_label)
+            openx_progress_loss = progress_loss_function(openx_pred_progress, openx_progress_label)
+            extra_progress_loss = progress_loss_function(extra_pred_progress, extra_progress_label)
 
             progress_loss = (1 - args.extra_data_ratio) * openx_progress_loss + args.extra_data_ratio * extra_progress_loss
 
@@ -297,17 +297,32 @@ def update_model(args, video_array, text_array, batch_triangular_mask, self_atte
     return wandb_log, self_attention_model
 
 
-def eval_model(positive_eval_openx_dataset, self_attention_model, progress_loss_function, triangular_mask, args):
+def eval_model(positive_eval_openx_dataset, self_attention_model, progress_loss_function, triangular_mask, args, pca_text_model = None, pca_video_model = None):
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     correct_num = 0
     total_num = 0
     total_loss = 0
+    total_data = 0
     # wrong_num = 0
     for eval_data in tqdm(positive_eval_openx_dataset):
         
         video_array = eval_data["video_array"].to(device).float()
         text_array = eval_data["text_array"].to(device).float().squeeze(1)
         progress = eval_data["progress"].to(device)
+
+        if args.pca:
+            batch_size = video_array.size(0)
+            batch_seq_len = video_array.size(1)
+
+            video_array = video_array.view(batch_size * batch_seq_len, -1)
+            video_array = pca_video_model(video_array)
+            video_array = video_array.view(batch_size, batch_seq_len, -1).to(device).float()
+
+            text_array = text_array.view(batch_size, -1)
+            text_array = pca_text_model(text_array)
+            text_array = text_array.to(device).float().squeeze(1)
+
+
         if args.catagorical_progress:
             progress = progress.long()
 
@@ -333,6 +348,7 @@ def eval_model(positive_eval_openx_dataset, self_attention_model, progress_loss_
             class_predict_label = class_predict_label.float().squeeze()
             # class_accuracy = torch.sum(class_predict_label == class_label).item() / len(class_predict_label)
             correct_num += torch.sum(class_predict_label == class_label).item()
+            total_data += len(class_predict_label)
             
 
         else:
@@ -347,7 +363,7 @@ def eval_model(positive_eval_openx_dataset, self_attention_model, progress_loss_
     progress = total_loss / total_num
 
     if args.two_step_training:
-        class_accuracy = correct_num / total_num
+        class_accuracy = correct_num / total_data
     else:
         class_accuracy = None
 
