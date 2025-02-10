@@ -80,7 +80,7 @@ def update_model(args, video_array, text_array, batch_triangular_mask, self_atte
 
                 # progress_loss = openx_progress_loss + extra_progress_loss
 
-                progress_loss = (1 - args.openx_progress_loss) * progress_loss + args.extra_data_ratio * extra_progress_loss
+                progress_loss = (1 - args.extra_data_ratio) * progress_loss + args.extra_data_ratio * extra_progress_loss
 
                 loss = class_loss + progress_loss
             else:
@@ -185,23 +185,23 @@ def update_model(args, video_array, text_array, batch_triangular_mask, self_atte
             openx_pred_progress = progress_output[:openx_len]
             extra_pred_progress = progress_output[openx_len:]
 
-            if not args.catagorical_progress:
-                openx_progress_label = openx_progress_label.view(openx_len * seq_len)
-                extra_progress_label = extra_progress_label.view(extra_len * seq_len)
-                openx_pred_progress = progress_output[:openx_len].view(openx_len * seq_len, -1).squeeze(1)
-                extra_pred_progress = progress_output[openx_len:].view(extra_len * seq_len, -1).squeeze(1)
+            # if not args.catagorical_progress:
+            #     openx_progress_label = openx_progress_label.view(openx_len * seq_len)
+            #     extra_progress_label = extra_progress_label.view(extra_len * seq_len)
+            #     openx_pred_progress = progress_output[:openx_len].view(openx_len * seq_len, -1).squeeze(1)
+            #     extra_pred_progress = progress_output[openx_len:].view(extra_len * seq_len, -1).squeeze(1)
 
-                openx_progress_loss = progress_loss_function(openx_pred_progress, openx_progress_label)
-                extra_progress_loss = progress_loss_function(extra_pred_progress, extra_progress_label)
-            else:
+            #     openx_progress_loss = progress_loss_function(openx_pred_progress, openx_progress_label)
+            #     extra_progress_loss = progress_loss_function(extra_pred_progress, extra_progress_label)
+            # else:
 
-                openx_progress_label = openx_progress_label.view(openx_len * seq_len)
-                extra_progress_label = extra_progress_label.view(extra_len * seq_len)
-                openx_pred_progress = progress_output[:openx_len].view(openx_len * seq_len, -1).squeeze(1)
-                extra_pred_progress = progress_output[openx_len:].view(extra_len * seq_len, -1).squeeze(1)
+            openx_progress_label = openx_progress_label.view(openx_len * seq_len)
+            extra_progress_label = extra_progress_label.view(extra_len * seq_len)
+            openx_pred_progress = progress_output[:openx_len].view(openx_len * seq_len, -1).squeeze(1)
+            extra_pred_progress = progress_output[openx_len:].view(extra_len * seq_len, -1).squeeze(1)
 
-                openx_progress_loss = progress_loss_function(openx_pred_progress, openx_progress_label)
-                extra_progress_loss = progress_loss_function(extra_pred_progress, extra_progress_label)
+            openx_progress_loss = progress_loss_function(openx_pred_progress, openx_progress_label)
+            extra_progress_loss = progress_loss_function(extra_pred_progress, extra_progress_label)
 
             progress_loss = (1 - args.extra_data_ratio) * openx_progress_loss + args.extra_data_ratio * extra_progress_loss
 
@@ -297,7 +297,7 @@ def update_model(args, video_array, text_array, batch_triangular_mask, self_atte
     return wandb_log, self_attention_model
 
 
-def eval_model(positive_eval_openx_dataset, self_attention_model, progress_loss_function, triangular_mask, args):
+def eval_model(positive_eval_openx_dataset, self_attention_model, progress_loss_function, triangular_mask, args, pca_text_model = None, pca_video_model = None):
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     correct_num = 0
     total_num = 0
@@ -308,6 +308,18 @@ def eval_model(positive_eval_openx_dataset, self_attention_model, progress_loss_
         video_array = eval_data["video_array"].to(device).float()
         text_array = eval_data["text_array"].to(device).float().squeeze(1)
         progress = eval_data["progress"].to(device)
+
+        if args.pca:
+            batch_size = video_array.size(0)
+            batch_seq_len = video_array.size(1)
+
+            video_array = pca_video_model.transform(video_array.view(batch_size * batch_seq_len, -1).detach().cpu().numpy())
+            video_array = torch.from_numpy(video_array).view(batch_size, batch_seq_len, -1).to(device).float()
+
+            text_array = pca_text_model.transform(text_array.view(batch_size, -1).detach().cpu().numpy())
+            text_array = torch.from_numpy(text_array).to(device).float().squeeze(1)
+
+
         if args.catagorical_progress:
             progress = progress.long()
 
