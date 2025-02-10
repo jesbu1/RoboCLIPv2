@@ -1,6 +1,6 @@
 import torch
 import numpy as np
-from reward_model.base_reward_model import BaseRewardModel
+from models.reward_model.base_reward_model import BaseRewardModel
 import requests
 import base64
 import cv2

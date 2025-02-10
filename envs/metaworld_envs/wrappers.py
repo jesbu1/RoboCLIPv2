@@ -5,7 +5,8 @@ import torch.nn.functional as F
 from gym import spaces
 from typing import List
 
-from reward_model.base_reward_model import BaseRewardModel
+from models.reward_model.base_reward_model import BaseRewardModel
+from models.encoders.base_encoder import BaseEncoder
 
 
 class SingleLayerMLP(th.nn.Module):
@@ -156,6 +157,7 @@ class LearnedRewardWrapper(gym.Wrapper):
         self,
         env: gym.Env,
         reward_model: BaseRewardModel,
+        encoder: BaseEncoder,
         language_features_reward: th.Tensor,
         is_state_based: bool = False,
         dense_eval: bool = False,
@@ -163,6 +165,7 @@ class LearnedRewardWrapper(gym.Wrapper):
     ):
         super(LearnedRewardWrapper, self).__init__(env)
         self.reward_model = reward_model
+        self.image_encoder = encoder
         self.is_state_based = is_state_based
         self.use_proprio = use_proprio
 

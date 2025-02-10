@@ -1,4 +1,4 @@
-from reward_model import BaseRewardModel
+from models.reward_model import BaseRewardModel
 import os
 import torch
 import abc
@@ -6,8 +6,8 @@ import numpy as np
 import joblib
 from typing import List, Union
 import torch.nn.functional as F
-from reward_model.self_attention_utils import MultiHeadAttentionSubtraction, MultiHeadAttention
-from reward_model.liv_reward_model import LIVRewardModel
+from models.reward_model.self_attention_utils import MultiHeadAttentionSubtraction, MultiHeadAttention
+from models.reward_model.liv_reward_model import LIVRewardModel
 from liv import load_liv
 import clip
 

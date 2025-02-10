@@ -28,8 +28,8 @@ wget https://www.rocq.inria.fr/cluster-willow/amiech/howto100m/s3d_howto100m.pth
 wget https://www.rocq.inria.fr/cluster-willow/amiech/howto100m/s3d_dict.npy
 git submodule init
 git submodule update --recursive
-pip install -e reward_models/LIV 
-pip install -e reward_models/LIV/liv/models/clip
+pip install -e models/LIV 
+pip install -e models/LIV/liv/models/clip
 
 # Reinstall pytorch>=2.0. https://pytorch.org/
 pip install torch # look at instructions at URL

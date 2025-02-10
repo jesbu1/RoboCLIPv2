@@ -9,8 +9,8 @@ import numpy as np
 import sys, os
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from reward_model import VLCRewardModel, RoboclipV2RewardModel
-from reward_model.env_reward_model import EnvRewardModel
+from models.reward_model import VLCRewardModel, RoboclipV2RewardModel
+from models.reward_model.env_reward_model import EnvRewardModel
 # RoboCLIPEncoder
 
 def label_trajectories_iteratively(args, traj_h5, output_file):

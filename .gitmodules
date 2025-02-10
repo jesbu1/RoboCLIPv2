@@ -10,6 +10,3 @@
 [submodule "Metaworld"]
 	path = Metaworld
 	url = https://github.com/sumedh7/Metaworld.git
-[submodule "reward_model/LIV"]
-	path = reward_model/LIV
-	url = https://github.com/penn-pal-lab/LIV.git

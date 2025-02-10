@@ -47,15 +47,18 @@ from offline_rl_algorithms.base_offline_rl_algorithm import OfflineRLAlgorithm
 from offline_rl_algorithms.wandb_logger import WandBLogger
 from offline_rl_algorithms.callbacks import CustomWandbCallback, OfflineEvalCallback
 
-# from reward_model.xclip_encoder import XCLIPEncoder
-# from reward_model import image_encoders
-from reward_model.base_reward_model import BaseRewardModel
-from reward_model.roboclip_reward_model import RoboclipRewardModel
-from reward_model.vlc_reward_model import VLCRewardModel
-from reward_model.roboclipv2_reward_model import RoboclipV2RewardModel
-from reward_model.gvl_reward_model import GVLRewardModel
+# from models.reward_model.xclip_encoder import XCLIPEncoder
+# from models.reward_model import image_encoders
 
-from reward_model.env_reward_model import EnvRewardModel
+from models.encoders.liv_encoder import LIVEncoder
+
+from models.reward_model.base_reward_model import BaseRewardModel
+from models.reward_model.roboclip_reward_model import RoboclipRewardModel
+from models.reward_model.vlc_reward_model import VLCRewardModel
+from models.reward_model.roboclipv2_reward_model import RoboclipV2RewardModel
+from models.reward_model.gvl_reward_model import GVLRewardModel
+
+from models.reward_model.env_reward_model import EnvRewardModel
 
 from envs.metaworld_envs.metaworld import (
     create_wrapped_env,
@@ -181,7 +184,17 @@ def parse_reward_model(reward_cfg: DictConfig) -> BaseRewardModel:
     reward_model.set_reward_divisor(reward_cfg.reward_divisor)
     print(f"Success bonus: {reward_model.success_bonus}")
 
-    return reward_model
+
+    # Also set default image encoder to be a LIVEncoder
+    image_encoder = LIVEncoder(
+        model_load_path="",
+        use_pca=False,
+        attention_heads=4,
+        device="cuda",
+        batch_size=64,
+    )
+
+    return reward_model, image_encoder
 
 
 # Define the function to initialize Hydra
@@ -220,10 +233,10 @@ def main(cfg: DictConfig):
     if not os.path.exists(log_dir):
         os.makedirs(log_dir)
 
-    reward_model = parse_reward_model(cfg.reward_model)
+    reward_model, image_encoder = parse_reward_model(cfg.reward_model)
 
     ### Create environment and callbacks ###
-    envs, eval_env = create_envs(cfg, reward_model)
+    envs, eval_env = create_envs(cfg, reward_model, image_encoder)
     model, model_class, policy_kwargs = get_policy_algorithm(cfg, envs, log_dir)
 
     # Set eval freq and video freq if not set
@@ -396,7 +409,7 @@ def main(cfg: DictConfig):
         wandb.finish()
 
 
-def create_envs(cfg: DictConfig, reward_model: BaseRewardModel):
+def create_envs(cfg: DictConfig, reward_model: BaseRewardModel, image_encoder):
     env_config = cfg.environment
     # Extract configuration
     # env_id = env_config.env_id
@@ -428,6 +441,7 @@ def create_envs(cfg: DictConfig, reward_model: BaseRewardModel):
                     language_features_policy=lang_feat_policy if not ignore_language else None,
                     language_features_reward=lang_feat_reward,
                     reward_model=reward_model,
+                    image_encoder=image_encoder,
                     goal_observable=True,
                     success_bonus=cfg.reward_model.success_bonus,
                     is_state_based=env_config.is_state_based,
@@ -447,6 +461,7 @@ def create_envs(cfg: DictConfig, reward_model: BaseRewardModel):
                     language_features_policy=lang_feat_policy if not ignore_language else None,
                     language_features_reward=lang_feat_reward,
                     reward_model=reward_model,
+                    image_encoder=image_encoder,
                     goal_observable=True,
                     is_state_based=env_config.is_state_based,
                     use_proprio=env_config.use_proprio,
@@ -462,6 +477,7 @@ def create_envs(cfg: DictConfig, reward_model: BaseRewardModel):
                 create_wrapped_env(
                     env_id,
                     reward_model=reward_model,
+                    image_encoder=image_encoder,
                     language_features_policy=lang_feat_policy if not ignore_language else None,
                     language_features_reward=lang_feat_reward,
                     monitor=True,
@@ -479,6 +495,7 @@ def create_envs(cfg: DictConfig, reward_model: BaseRewardModel):
                 create_wrapped_env(
                     env_id,
                     reward_model=reward_model,
+                    image_encoder=image_encoder,
                     language_features_policy=lang_feat_policy if not ignore_language else None,
                     language_features_reward=lang_feat_reward,
                     monitor=True,

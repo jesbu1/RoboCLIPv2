@@ -3,8 +3,8 @@ import numpy as np
 
 import abc
 from typing import Union, List
-from reward_model.base_reward_model import BaseRewardModel
-from reward_model.liv_reward_model import LIVRewardModel # TODO: implement liv_reward_model.py
+from models.reward_model.base_reward_model import BaseRewardModel
+from models.reward_model.liv_reward_model import LIVRewardModel # TODO: implement liv_reward_model.py
 
 
 class EnvRewardModel(BaseRewardModel):

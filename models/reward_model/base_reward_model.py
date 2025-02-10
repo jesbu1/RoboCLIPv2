@@ -110,7 +110,7 @@ class BaseRewardModel(abc.ABC):
                 self.device
             )
             # print("batch_images shape", batch_images.shape) # (1,1,3,480,640)
-            encoded_images = self._encode_image_batch(batch_images).cpu().numpy()
+            encoded_images = self._encode_image_batch(batch_images)
             if i == 0:
                 encoded_images_all = encoded_images
             else:

@@ -1,4 +1,4 @@
-from reward_model import BaseRewardModel
+from models.encoders.base_encoder import BaseEncoder
 import os
 import torch
 import abc
@@ -6,22 +6,14 @@ import numpy as np
 import joblib
 from typing import List, Union
 import torch.nn.functional as F
-from reward_model.self_attention_utils import MultiHeadAttentionSubtraction, MultiHeadAttention
+from models.reward_model.self_attention_utils import MultiHeadAttentionSubtraction, MultiHeadAttention
 from liv import load_liv
 import clip
 
 
-def normalize_embeddings(embeddings, return_tensor=True):
-    if isinstance(embeddings, np.ndarray):
-        embeddings = torch.tensor(embeddings)
-    normalized_embeddings = F.normalize(embeddings, p=2, dim=1)
-    if return_tensor:
-        return normalized_embeddings
-    else:
-        return normalized_embeddings.detach().cpu().numpy()
 
-class LIVRewardModel(BaseRewardModel):
-    def __init__(self, model_load_path: str, use_pca: bool, attention_heads: int, pca_model_dir: str = None, device: str = 'cuda', batch_size=64, success_bonus: float = 10.0):
+class LIVEncoder(BaseEncoder):
+    def __init__(self, model_load_path: str, use_pca: bool, attention_heads: int, device: str = 'cuda', batch_size=64):
         """
         Initializes the LIV reward model.
         :param model_load_path: Path to the model checkpoint.
@@ -31,7 +23,7 @@ class LIVRewardModel(BaseRewardModel):
         :param device: Device to run the model on (default: 'cuda').
         :param batch_size: Batch size to use for encoding data (default: 64).
         """
-        super().__init__(device, batch_size, success_bonus=success_bonus)
+        super().__init__(device, batch_size)
         self.use_pca = use_pca
         self.attention_heads = attention_heads
         self.pretrained_liv_model = self._load_model(model_load_path)
@@ -72,15 +64,6 @@ class LIVRewardModel(BaseRewardModel):
         # image_embeddings = normalize_embeddings(image_embeddings, return_tensor=True)
         return image_embeddings.unsqueeze(0)
 
-    def _calculate_reward_batch(self, encoded_texts: np.ndarray, encoded_videos: np.ndarray) -> np.ndarray:
-        """
-        Calculates the rewards for a batch of text and video representations.
-        :param encoded_texts: Encoded text representations.
-        :param encoded_videos: Encoded video representations.
-        :return: Reward values for each text-video pair.
-        """
-        pass
-
     @property
     def img_output_dim(self) -> int:
         """
@@ -103,4 +86,4 @@ class LIVRewardModel(BaseRewardModel):
         """
         Returns the name of the encoder class.
         """
-        return 'LIVRewardModel'
+        return 'LIVEncoder'

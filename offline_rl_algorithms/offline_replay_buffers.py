@@ -19,7 +19,7 @@ from stable_baselines3.common.type_aliases import (
 from stable_baselines3.common.utils import get_device
 from stable_baselines3.common.vec_env import VecNormalize
 
-from reward_model.base_reward_model import BaseRewardModel
+from models.reward_model.base_reward_model import BaseRewardModel
 
 try:
     # Check memory used by replay buffer when possible

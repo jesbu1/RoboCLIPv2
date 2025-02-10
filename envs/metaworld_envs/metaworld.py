@@ -11,7 +11,7 @@ from metaworld.envs import (
 )
 
 from envs.metaworld_envs.wrappers import *
-from reward_model.env_reward_model import EnvRewardModel
+from models.reward_model.env_reward_model import EnvRewardModel
 
 environment_to_instruction = {
     "assembly-v2": "assembling",
@@ -226,6 +226,7 @@ class MetaworldBase(Env):
 def create_wrapped_env(
     env_id,
     reward_model,
+    image_encoder,
     pca_model=None,
     language_features_policy=None,
     language_features_reward=None,
@@ -293,6 +294,7 @@ def create_wrapped_env(
             base_env = LearnedRewardWrapper(
                 base_env,
                 reward_model,
+                image_encoder,
                 is_state_based=is_state_based,
                 language_features_reward=language_features_reward,
                 dense_eval=dense_eval,
