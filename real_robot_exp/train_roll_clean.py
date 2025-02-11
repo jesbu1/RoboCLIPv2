@@ -115,7 +115,8 @@ def main(args):
 
 
     
-    group_name += "Feb9thDebug"
+    # group_name += "Feb11th"
+    group_name = "BinaryCheck" + group_name
     run = wandb.init(
         entity=WANDB_ENTITY_NAME,
         project=WANDB_PROJECT_NAME,

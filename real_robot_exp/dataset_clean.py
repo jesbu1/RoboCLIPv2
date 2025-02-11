@@ -14,6 +14,8 @@ import json
 def normalize_embeddings(embeddings, return_tensor=True):
     if isinstance(embeddings, np.ndarray):
         embeddings = th.tensor(embeddings).float()
+    if len(embeddings.shape) == 1:
+        embeddings = embeddings.unsqueeze(0)
     normalized_embeddings = F.normalize(embeddings, p=2, dim=1)
     if return_tensor:
         return normalized_embeddings

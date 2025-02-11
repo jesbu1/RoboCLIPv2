@@ -4,13 +4,14 @@ from clip_utils import load_model, embedding_text
 
 annotations = json.load(open("../llm_utils/additional_lang_instructions_usc_koch_rewind_reward.h5.json", "r"))
 
-h5_file = h5py.File("usc_koch_rewind_reward_concat.h5", 'a')
+h5_file = h5py.File("usc_koch_rewind_reward_concat.h5", 'w')
 
 model, processor, tokenizer = load_model("liv")
 
 model = model.to("cuda")
 
 for key in annotations.keys():
+
     if key not in h5_file:
         print("Key not found: ", key)
 
