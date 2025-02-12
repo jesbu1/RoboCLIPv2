@@ -174,12 +174,13 @@ class LearnedRewardWrapper(gym.Wrapper):
                 low=-np.inf,
                 high=np.inf,
                 shape=(
-                    self.reward_model.img_output_dim + (4 if self.use_proprio else 0),
+                    self.image_encoder.img_output_dim + (4 if self.use_proprio else 0),
                 ),
                 dtype=np.float32,
             )
 
         self.past_observations = []
+        self.raw_observations = []
         self.counter = 0
 
         self.dense_eval = dense_eval
@@ -204,7 +205,6 @@ class LearnedRewardWrapper(gym.Wrapper):
     def step(self, action):
         self.counter += 1
         obs, original_reward, done, info = self.env.step(action)
-
         proprio = obs[0:4]
 
         encoded_image = None
@@ -220,11 +220,14 @@ class LearnedRewardWrapper(gym.Wrapper):
                 not self.is_state_based
             ):
                 image = self.env.render()
-
                 # Input should be of shape (batch_size, num_frames, height, width, channels)
                 # However, the input is of shape (height, width, channels)
                 image_for_model = image[None, None, :, :, :]
-                encoded_image = self.reward_model.encode_images(
+                self.raw_observations.append(image_for_model)
+                # encoded_image = self.reward_model.encode_images(
+                #     image_for_model
+                # ).squeeze()
+                encoded_image = self.image_encoder.encode_images(
                     image_for_model
                 ).squeeze()
 
@@ -251,6 +254,7 @@ class LearnedRewardWrapper(gym.Wrapper):
 
             return obs, sparse_reward, done, info
 
+        
         if encoded_image is not None:
             self.past_observations.append(encoded_image)
 
@@ -258,6 +262,19 @@ class LearnedRewardWrapper(gym.Wrapper):
             self.reward_language_features is not None
         ), "Language features are None in the reward model"
         if self.reward_at_every_step:
+            # frames = [
+            #             frame[ 
+            #                 (frame.shape[0] - 224) // 2 : (frame.shape[0] + 224) // 2,
+            #                 (frame.shape[1] - 224) // 2 : (frame.shape[1] + 224) // 2,
+            #                 :3 
+            #             ]
+            #             for frame in self.raw_observations
+            #         ]
+            # print(f"frames shape: {frames.shape}")
+            # frames_embeddings = self.reward_model.encode_images(
+            #     th.tensor(frames).float().to(self.reward_model.device)
+            # )
+            # print(f"frames_embeddings shape: {frames_embeddings.shape}")
             stacked_sequence = np.stack(self.past_observations, axis=1)
             stacked_sequence = (
                 th.from_numpy(stacked_sequence).float().to(self.reward_model.device)
@@ -269,15 +286,34 @@ class LearnedRewardWrapper(gym.Wrapper):
 
         else:
             if done:
-                stacked_sequence = np.stack(self.past_observations, axis=0)
-                stacked_sequence = (
-                    th.from_numpy(stacked_sequence).float().to(self.reward_model.device)
-                )
-
+                # stacked_sequence = np.stack(self.past_observations, axis=0)
+                # stacked_sequence = (
+                #     th.from_numpy(stacked_sequence).float().to(self.reward_model.device)
+                # )
+                # print(f"stacked_sequence shape: {stacked_sequence.shape}")
+                # print(f"raw_observations shape: {len(self.raw_observations)}")
+                # print(f"raw_observations shape: {self.raw_observations[0].shape}")
+                frames = [
+                          frame[
+                            :,
+                            :, 
+                            (frame.shape[2] - 224) // 2 : (frame.shape[2] + 224) // 2,
+                            (frame.shape[3] - 224) // 2 : (frame.shape[3] + 224) // 2,
+                            :3 
+                        ]
+                        for frame in self.raw_observations
+                    ]
+                frames = np.stack(frames, axis=1).squeeze(2)
+                # print(f"frames shape: {frames.shape}") # (1, 128, 224, 224, 3)
+                frames_embeddings = self.reward_model.encode_images(
+                    frames
+                ).squeeze()
+                # print(f"frames_embeddings shape: {frames_embeddings.shape}")
                 reward = self.reward_model.calculate_rewards(
-                    self.reward_language_features, stacked_sequence.unsqueeze(0)
+                    self.reward_language_features, frames_embeddings.unsqueeze(0)
                 )
                 self.past_observations = []
+                self.raw_observations = []
             else:
                 reward = 0
 
@@ -286,11 +322,11 @@ class LearnedRewardWrapper(gym.Wrapper):
         # Success bonus
         if info.get("success", False):
             reward += self.reward_model.success_bonus
-
         return obs, reward, done, info
 
     def reset(self):
         self.past_observations = []
+        self.raw_observations = []
         self.counter = 0
 
         obs = self.env.reset()
@@ -298,7 +334,7 @@ class LearnedRewardWrapper(gym.Wrapper):
         # This is for the reward function
         image = self.env.render()
         image_for_model = image[None, None, :, :, :]
-        encoded_image = self.reward_model.encode_images(image_for_model).squeeze()
+        encoded_image = self.image_encoder.encode_images(image_for_model).squeeze()
 
         if self.is_state_based is False:
             if self.use_proprio:
@@ -307,7 +343,6 @@ class LearnedRewardWrapper(gym.Wrapper):
 
             else:
                 obs = encoded_image
-
         # self.past_observations.append(encoded_image)
 
         return obs

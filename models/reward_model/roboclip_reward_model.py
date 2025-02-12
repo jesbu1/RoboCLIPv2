@@ -11,22 +11,37 @@ class RoboclipRewardModel(BaseRewardModel):
         self.device = device
         self.reward_at_every_step = reward_at_every_step
     
-    def padding_video(video_frames, max_length):
-        video_length = len(video_frames)
-        if type(video_frames) == np.ndarray:
-            video_frames = torch.tensor(video_frames)
-        if video_length < max_length:
-            # padding first frame
-            padding_length = max_length - video_length
-            first_frame = video_frames[0].unsqueeze(0)
-            padding_frames = first_frame.repeat(padding_length, 1)
-            video_frames = torch.cat([padding_frames, video_frames], dim=0)
-        
-        elif video_length > max_length:
-            frame_idx = np.linspace(0, video_length-1, max_length).astype(int)
-            video_frames = video_frames[frame_idx]
+    def padding_video(self, video_frames, max_length):
+        num_vids, num_frames, c, h, w = video_frames.shape
+        processed_videos = []
 
-        return video_frames
+        for i in range(num_vids):
+            frames = video_frames[i]  # shape: (num_frames, 3, H, W)
+            length = frames.shape[0]
+
+            if length < max_length:
+                # 需要 padding
+                padding_length = max_length - length
+                first_frame = frames[0].unsqueeze(0)  # shape: (1, 3, H, W)
+                # 重复第一帧 padding_length 次
+                padding_frames = first_frame.repeat(padding_length, 1, 1, 1)  
+                # 在第 0 维 (时间维) 拼接
+                new_frames = torch.cat([padding_frames, frames], dim=0)  # (max_length, 3, H, W)
+
+            elif length > max_length:
+                # 超出长度则进行等间隔采样
+                frame_idx = np.linspace(0, length - 1, max_length).astype(int)
+                new_frames = frames[frame_idx]  # (max_length, 3, H, W)
+
+            else:
+                # 刚好等于 max_length
+                new_frames = frames
+
+            processed_videos.append(new_frames)
+
+        # 在 batch 维度(第 0 维)把所有处理后的视频拼接起来
+        padded_videos = torch.stack(processed_videos, dim=0)
+        return padded_videos
     
     def load_model(self, model_load_path = 's3d_howto100m.pth'):
         device = "cuda" if torch.cuda.is_available() else "cpu"
@@ -37,10 +52,11 @@ class RoboclipRewardModel(BaseRewardModel):
         return net
 
     def _encode_image_batch(self, images):
-        images = images[:, :, :, 240-112:240+112, 320-112:320+112]
-        print("images shape", images.shape)
+        # images = images[:, :, 240-112:240+112, 320-112:320+112, :3]
         images = self.padding_video(images, 32)
+        images = images.permute(0, 2, 1, 3, 4)
         # images = images.permute(3, 0, 1, 2).unsqueeze(0).to(self.device).float()
+        # print("images shape", images.shape) # (1,3,32,224,224)
         video_embeddings = self.net(images)["video_embedding"].to(self.device).float()
         return video_embeddings
 
@@ -49,6 +65,8 @@ class RoboclipRewardModel(BaseRewardModel):
         return text_embeddings
     
     def _calculate_reward_batch(self, text_embeddings, video_embeddings):
+        text_embeddings = text_embeddings.squeeze(0)
+        # print("video_embeddings shape", video_embeddings.shape)
         return torch.matmul(video_embeddings, text_embeddings.t())[0].detach().cpu().numpy()
 
     @property
