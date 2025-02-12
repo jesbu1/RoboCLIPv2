@@ -76,6 +76,8 @@ def main(args):
 
     if args.rewind:
         experiment_name += "_ReWind"
+    if args.embedding_dim != 1024:
+        experiment_name += str(args.embedding_dim)
     if args.catagorical_progress:
         experiment_name += "_CatProgress"
     if args.subsample_video:
@@ -98,12 +100,13 @@ def main(args):
         experiment_name += "_CosScheduler"
     if args.clip_grad:
         experiment_name += "_ClipGrad"
-    experiment_name += "_View_" + str(args.view)
-    experiment_name += "_ExtraDataRatio_" + str(args.extra_data_ratio)
+    experiment_name += "_View" + str(args.view)
+    experiment_name += "_ExtraDataRatio" + str(args.extra_data_ratio)
+    experiment_name += "_NegProgStart" + str(args.negative_progress_start)
     
-    experiment_name += "_DecoderNum_" + str(args.decoder_num)
-    experiment_name += "_epochs_" + str(args.epochs)
-    experiment_name += "_lr_" + str(args.lr)
+    experiment_name += "_Decoder#" + str(args.decoder_num)
+    experiment_name += "_epoch" + str(args.epochs)
+    experiment_name += "_lr" + str(args.lr)
     # experiment_name += "_1_demo"
     #experiment_name += "_FIXFIX"
     
@@ -142,7 +145,7 @@ def main(args):
             h5_train_eval_file = h5py.File("usc_koch_rewind_reward_train.h5", "r")
             h5_eval_file = h5py.File("usc_koch_rewind_reward_eval.h5", "r")
             extra_data_path = "usc_koch_rewind_reward_train.h5"
-    embedding_dim = 1024
+    embedding_dim = args.embedding_dim
 
     if args.pca:
         pca_video_model_path = "pca_models/pca_video_model_512.pkl"
@@ -177,7 +180,7 @@ def main(args):
         extra_dataloader = DataLoader(extra_dataset, batch_size=extra_batch_size, shuffle=True, num_workers=args.worker, drop_last=True, pin_memory=True)
 
 
-        h5_openx_eval_file = h5py.File("/home/jzhang96/openx_embeddings_test_dataset_progrssed.h5", "r")
+        #h5_openx_eval_file = h5py.File("/home/jzhang96/openx_embeddings_test_dataset_progrssed.h5", "r")
         # h5_openx_eval_file = h5py.File("/mnt/ssd_a_4tb/jzhang96/openx_embeddings_test_dataset_progrssed.h5", "r")
         #h5_openx_eval_file = h5py.File("/data/shared/roboclip/data/h5_buffers/openx_embeddings/openx_embeddings_test_dataset_progrssed.h5", "r")
         h5_openx_eval_file = h5py.File("/home/jessez/openx_embeddings_test_dataset_progrssed.h5", "r")
@@ -282,6 +285,13 @@ def main(args):
     # else:
     #     triangular_mask = torch.tril(torch.ones(args.max_length, args.max_length)).to(device).unsqueeze(0).unsqueeze(0)
 
+    # don't apply negative progress loss (0 progress to all timesteps)
+    #TODO not supported for openx yet
+    negative_progress_mask = torch.zeros((1, args.max_length)).to(device)
+    negative_progress_mask[:, int(args.max_length * args.negative_progress_start):] = 1
+
+    progress_mask = torch.ones((args.batch_size, args.max_length)).to(device)
+
     for epoch in range(args.epochs):
 
         self_attention_model.train()
@@ -374,9 +384,11 @@ def main(args):
                 text_array = extra_data["text_array"].to(device).float().squeeze(1)
                 progress = extra_data["progress"].to(device)
                 class_label = extra_data["class_label"].to(device)
+                # when class label is 0 then negative progress mask needs to be applied
+                final_progress_mask = torch.where(class_label == 0, negative_progress_mask, progress_mask)
                 batch_triangular_mask = triangular_mask.repeat(video_array.size(0), 1, 1, 1).bool()
                 wandb_log, self_attention_model = update_model(args, video_array, text_array, batch_triangular_mask, self_attention_model, progress, class_label,
-                classification_loss_function, progress_loss_function, optimizer)
+                classification_loss_function, progress_loss_function, optimizer, progress_loss_mask=final_progress_mask)
                 wandb.log(wandb_log)
 
                 if args.clip_grad:
@@ -506,7 +518,7 @@ def main(args):
 if __name__ == "__main__":
     argparser = argparse.ArgumentParser()
     # argparser.add_argument('--h5_embedding_path', type=str, default='/data/shared/roboclip/data/h5_buffers/openx_embeddings/openx_embeddings_full_uncompressed_with_langtable_processed.h5')
-    argparser.add_argument('--h5_embedding_path', type=str, default='/home/jzhang96/openx_embeddings_full_uncompressed_with_langtable_processed.h5')
+    argparser.add_argument('--h5_embedding_path', type=str, default='/home/jessez/openx_embeddings_test_dataset_progrssed.h5')
     # argparser.add_argument('--h5_embedding_path', type=str, default='/mnt/ssd_a_4tb/jzhang96/openx_embeddings_full_uncompressed_with_langtable_processed.h5')
     argparser.add_argument('--extra_data_type', type=str, choices=["metaworld", "real_world"], default="real_world")
     argparser.add_argument('--batch_size', type=int, default=512)
@@ -526,6 +538,7 @@ if __name__ == "__main__":
     argparser.add_argument('--layer_norm', action='store_true')
     argparser.add_argument('--two_step_training', action='store_true')
     argparser.add_argument('--decoder_num', type=int, default=1)
+    argparser.add_argument('--embedding_dim', type=int, default=1024)
     argparser.add_argument('--first_frame_embedding', action='store_true')
     argparser.add_argument('--learner_parameter', action='store_true')
     argparser.add_argument('--cosine_scheduler', action='store_true')
@@ -533,6 +546,7 @@ if __name__ == "__main__":
     argparser.add_argument('--progress_loss', action='store_true')
     argparser.add_argument('--view', type=str, default="side", choices=["side", "top"])
     argparser.add_argument('--extra_data_ratio', type=float, default=0.02)
+    argparser.add_argument('--negative_progress_start', type=float, default=0.9)
     argparser.add_argument('--pca', action='store_true')
 
     args = argparser.parse_args()

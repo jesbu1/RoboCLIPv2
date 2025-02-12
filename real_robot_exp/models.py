@@ -169,6 +169,13 @@ class RewardOneStepNewPositionEmbeddingPredictor(nn.Module):
         decoder_num = args.decoder_num
         self.transformer_decoder = nn.ModuleList([DecoderOnlyBlock(input_dim, args.attention_heads, input_dim, args.layer_norm) for _ in range(decoder_num)])
 
+        self.text_downproject = None
+        self.video_downproject = None
+        if input_dim != 1024:
+            # downproject the language and image inputs first
+            self.text_downproject = nn.Linear(1024, input_dim)
+            self.video_downproject = nn.Linear(1024, input_dim)
+
         if class_num == 1:
             self.classifier = nn.Linear(input_dim, 1)
         else:
@@ -198,6 +205,10 @@ class RewardOneStepNewPositionEmbeddingPredictor(nn.Module):
     
     def forward(self, x, triangular_mask, text_array, mask = None):
         batch_size, seq_len, _ = x.size()
+        if self.text_downproject is not None:
+            text_array = self.text_downproject(text_array.view(-1, 1024)).view(batch_size, -1)
+        if self.video_downproject is not None:
+            x = self.video_downproject(x.view(-1, 1024)).view(batch_size, seq_len, -1)
         if self.args.learner_parameter:
             text_array = text_array + self.text_learner_parameter
             x = x + self.video_learner_parameter.repeat(batch_size, seq_len, 1)

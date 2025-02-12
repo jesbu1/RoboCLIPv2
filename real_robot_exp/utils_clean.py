@@ -25,7 +25,7 @@ class CosineWithMinLRScheduler(torch.optim.lr_scheduler._LRScheduler):
 
 
 def update_model(args, video_array, text_array, batch_triangular_mask, self_attention_model, progress, class_label, 
-                classification_loss_function, progress_loss_function, optimizer, openx_len = None, extra_len = None, scheduler = None):
+                classification_loss_function, progress_loss_function, optimizer, openx_len = None, extra_len = None, scheduler = None, progress_loss_mask=None):
     
     progress_output, class_output = self_attention_model(video_array, batch_triangular_mask, text_array, mask = None)
     
@@ -48,6 +48,7 @@ def update_model(args, video_array, text_array, batch_triangular_mask, self_atte
             pred_extra_class = class_output[openx_len:].view(extra_len * seq_len, -1).squeeze(1)
             openx_pred_progress = progress_output[:openx_len]
             extra_pred_progress = progress_output[openx_len:]
+
 
             openx_class_label = openx_class_label.view(openx_len * seq_len)
             extra_class_label = extra_class_label.view(extra_len * seq_len)
@@ -266,6 +267,10 @@ def update_model(args, video_array, text_array, batch_triangular_mask, self_atte
         else:
             progress = progress.view(batch_size * seq_len, -1)
             progress_output = progress_output.view(batch_size * seq_len, -1)
+
+            progress_loss_mask = progress_loss_mask.view(batch_size * seq_len).bool()
+
+            progress, progress_output = progress[progress_loss_mask], progress_output[progress_loss_mask]
 
             if not args.catagorical_progress:
                 progress_loss = progress_loss_function(progress_output, progress)
