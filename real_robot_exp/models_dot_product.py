@@ -125,3 +125,51 @@ class VideoTransformerEncoder(nn.Module):
 
         return x
 
+
+class TextTransformerEncoder(nn.Module):
+    def __init__(self, emb_size, max_t=100, num_heads=8, num_layers=1, ff_dim=1024):
+        super().__init__()
+        self.emb_size = emb_size
+        self.max_t = max_t  # Maximum expected sequence length
+
+        # Transformer Decoder
+        decoder_layer = nn.TransformerDecoderLayer(d_model=emb_size, 
+                                                   nhead=num_heads, 
+                                                   dim_feedforward=ff_dim,
+                                                   batch_first=True)
+        self.decoder = nn.TransformerDecoder(decoder_layer, num_layers=num_layers)
+
+        # Learnable Query Token
+        self.query_token = nn.Parameter(torch.randn(1, 1, emb_size))  # (1, 1, emb_size)
+
+        # Precompute positional encodings
+        self.positional_encoding = self._generate_positional_encoding(max_t, emb_size)  # (max_t, emb_size)
+
+    def _generate_positional_encoding(self, t, emb_size):
+        """ Generate sinusoidal positional encodings (cosine & sine). """
+        pos = torch.arange(t, dtype=torch.float).unsqueeze(1)  # Shape: (t, 1)
+        div_term = torch.exp(torch.arange(0, emb_size, 2).float() * (-math.log(10000.0) / emb_size))  # Shape: (emb_size/2)
+
+        pe = torch.zeros(t, emb_size)
+        pe[:, 0::2] = torch.sin(pos * div_term)  # Apply sine to even indices
+        pe[:, 1::2] = torch.cos(pos * div_term)  # Apply cosine to odd indices
+
+        return pe.unsqueeze(0)  # Shape: (1, t, emb_size) for broadcasting
+
+    def forward(self, x, mask):
+        """
+        x: (bs, t, emb_size) - Input sequence embeddings
+        mask: (bs, t) - Boolean mask, True for padding, False for valid tokens
+        """
+        bs, t, emb_size = x.shape
+
+        # Add positional encoding (slice to match sequence length)
+        x = x + self.positional_encoding[:, :t, :].to(x.device)  # (bs, t, emb_size)
+
+        # Expand query token for the batch
+        query = self.query_token.expand(bs, -1, -1)  # Shape: (bs, 1, emb_size)
+
+        # Pass through the transformer decoder with mask
+        output = self.decoder(query, x, memory_key_padding_mask=mask)  # (bs, 1, emb_size)
+
+        return output.squeeze(1)  # (bs, emb_size)
