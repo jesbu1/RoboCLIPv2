@@ -24,6 +24,22 @@ device = "cuda" if torch.cuda.is_available() else "cpu"
 
 
 
+dino_transform_image = T.Compose(
+    [T.ToTensor(), T.Resize(244), T.CenterCrop(224), T.Normalize([0.5], [0.5])]
+)
+
+
+def dino_load_image(img: np.ndarray) -> torch.Tensor:
+    """
+    Load an image and return a tensor that can be used as an input to DINOv2.
+    """
+    img = Image.fromarray(img)
+
+    transformed_img = dino_transform_image(img)[:3].unsqueeze(0)
+
+    return transformed_img
+
+
 def load_model(model_name = "liv"):
     if model_name == "clip":
         model = CLIPModel.from_pretrained("openai/clip-vit-large-patch14")

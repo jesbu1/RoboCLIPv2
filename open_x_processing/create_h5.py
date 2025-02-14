@@ -1,4 +1,6 @@
 import tensorflow_datasets as tfds
+import torchvision.transforms as T
+import torch
 import random
 from tqdm import tqdm
 import os
@@ -11,6 +13,7 @@ from clip_utils import (
     embedding_text,
     embedding_image,
     get_full_liv_embedding,
+    dino_load_image,
 )
 from PIL import Image
 
@@ -30,10 +33,13 @@ POSSIBLE_LANG_INSTRUCTION_KEYS = [
     "instruction",
     "language_instruction",
 ]
+EMBEDDING_MODEL = "liv"
 
-
-model, processor, tokenizer = load_model("liv")
-model = model.cuda()
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+dinov2_vits14 = torch.hub.load("facebookresearch/dinov2", "dinov2_vitb14")
+dinov2_vits14 = dinov2_vits14.to(device)
+liv_model, processor, tokenizer = load_model("liv")
+liv_model = liv_model.to(device)
 
 
 # dataset_names = [x.split()[0] for x in DATASET_TRANSFORMS]
@@ -122,12 +128,15 @@ with h5py.File(SAVE_H5_NAME, "w") as f:
                         print(f"Tasks seen so far: {tasks_seen.keys()}")
                     f.create_group(task)
                     task_embedding = (
-                        embedding_text(model, tokenizer, [task]).detach().cpu().numpy()
+                        embedding_text(liv_model, tokenizer, [task])
+                        .detach()
+                        .cpu()
+                        .numpy()
                     )
                     # create a dataset with the embeddings
                     f[task].create_dataset("lang_embedding", data=task_embedding)
                     individual_task_embedding = (
-                        get_full_liv_embedding(model, tokenizer, [task])
+                        get_full_liv_embedding(liv_model, tokenizer, [task])
                         .detach()
                         .cpu()
                         .numpy()
@@ -146,7 +155,6 @@ with h5py.File(SAVE_H5_NAME, "w") as f:
                 # convert length to string
                 task_group_len_str = str(task_group_len)
 
-                embedding_list = []
                 # linspace to get the indices of the frames to sample
                 indices = np.linspace(
                     0, len(episode_images) - 1, MAX_NUM_FRAMES_PER_EPISODE, dtype=int
@@ -157,16 +165,33 @@ with h5py.File(SAVE_H5_NAME, "w") as f:
                 episode_images = [episode_images[i] for i in indices]
 
                 # center crop 224x224
-                for ep_img in episode_images:
+                if EMBEDDING_MODEL == "dinov2":
+                    # batch it
+                    episode_images_dino = [
+                        dino_load_image(img) for img in episode_images
+                    ]
                     image_embeddings = (
-                        embedding_image(
-                            model, processor, Image.fromarray(ep_img.astype(np.uint8))
-                        )
+                        dinov2_vits14(torch.cat(episode_images_dino))
                         .squeeze()
                         .detach()
                         .cpu()
                         .numpy()
                     )
+                    breakpoint()
+                else:
+                    embedding_list = []
+                    for ep_img in episode_images:
+                        image_embeddings = (
+                            embedding_image(
+                                liv_model,
+                                processor,
+                                Image.fromarray(ep_img.astype(np.uint8)),
+                            )
+                            .squeeze()
+                            .detach()
+                            .cpu()
+                            .numpy()
+                        )
                     embedding_list.append(image_embeddings)
                 episode_image_embeddings = np.array(embedding_list)
                 # create a dataset with the embeddings
