@@ -348,7 +348,7 @@ def main(args):
 
                 openx_target = progress[:openx_len]
                 extra_target = progress[openx_len:]
-                import pdb ; pdb.set_trace()
+
                 openx_loss = progress_loss_function(openx_pred[openx_pos_progress_mask], openx_target[openx_pos_progress_mask])
                 extra_loss = progress_loss_function(extra_pred[extra_pos_progress_mask], extra_target[extra_pos_progress_mask])
 
