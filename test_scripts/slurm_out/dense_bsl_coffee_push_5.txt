@@ -1,0 +1,403 @@
+/home/yusenluo/anaconda3/envs/roboclip/lib/python3.8/site-packages/gym/spaces/box.py:73: UserWarning: [33mWARN: Box bound precision lowered by casting to float32[0m
+  logger.warn(
+wandb: Currently logged in as: yusenluo (clvr). Use `wandb login --relogin` to force relogin
+wandb: wandb version 0.19.6 is available!  To upgrade, please run:
+wandb:  $ pip install wandb --upgrade
+wandb: Tracking run with wandb version 0.13.3
+wandb: Run data is saved locally in /home/yusenluo/rewind/RoboCLIPv2/outputs/2025-02-13/18-47-17/wandb/run-20250213_184718-1qzx5x6r
+wandb: Run `wandb offline` to turn off syncing.
+wandb: Syncing run metaworld_some_tasks_15_dense_sac_use_proprio__seed_coffee-push-v2_seed_5
+wandb: ⭐️ View project at https://wandb.ai/clvr/roboclip-v2
+wandb: 🚀 View run at https://wandb.ai/clvr/roboclip-v2/runs/1qzx5x6r
+wandb_notes: ''
+logging:
+  wandb: true
+  wandb_entity_name: clvr
+  wandb_project_name: roboclip-v2
+  wandb_group_name: ${general_training.algo}
+  log_dir: ./logs/${logging.wandb_group_name}
+  eval_freq: 5000
+  video_freq: 10000
+general_training:
+  algo: sac
+  n_steps: 128
+  seed: 5
+  pretrained: false
+  action_noise: 0.1
+  learning_rate: 0.001
+  dense_rewards_at_end: true
+  entropy_term: auto
+  critic_update_ratio: 1
+  gamma: 0.99
+  policy_extraction: awr
+  awr_advantage_temp: 0.5
+  ddpg_bc_weight: 0.0
+  cql_min_q_weight: 1.0
+  cql_min_q_temp: 1.0
+  use_calibrated_q: false
+  random_reset: false
+  norm_input: false
+  norm_output: false
+  time_reward: 1.0
+  threshold_reward: false
+  time_penalty: 0.0
+  name: sac
+online_training:
+  total_time_steps: 500000
+  mix_buffers_ratio: 0.0
+  warm_start_online_rl: true
+  learning_starts: 1000
+offline_training:
+  offline_h5_path: data/h5_buffers/updated_trajs/metaworld_traj_15_demos_{}.h5
+  offline_training_steps: 0
+  offline_tasks:
+  - window-open-v2
+  - window-close-v2
+  - door-open-v2
+  - drawer-open-v2
+  - faucet-open-v2
+  ckpt_path: null
+model:
+  policy_layer_norm: true
+  critic_layer_norm: true
+  pi_net_arch:
+  - 768
+  - 512
+  - 256
+  qf_net_arch:
+  - 768
+  - 512
+  - 512
+reward_model:
+  name: dense
+  batch_size: 128
+  model_path: null
+  success_bonus: 0.0
+  reward_divisor: 1.0
+  encoder: liv
+  general_training:
+    dense_rewards_at_end: false
+environment:
+  text_string: null
+  n_envs: 1
+  train_freq_num: 1
+  train_freq_type: step
+  dir_add: ''
+  video_path: null
+  pca_path: null
+  transform_base_path: null
+  transform_model_path: null
+  ignore_language: false
+  is_state_based: false
+  use_proprio: true
+  cfg_name: metaworld_some_tasks_15
+  env_id: coffee-push-v2
+
+absolute log dir is /home/yusenluo/rewind/RoboCLIPv2/outputs/2025-02-13/18-47-17/logs/sac
+Success bonus: 0.0
+Lang feat reward shape (1024,)
+Using cuda device
+[2025-02-13 18:48:19,000][imageio_ffmpeg][WARNING] - IMAGEIO FFMPEG_WRITER WARNING: input image is not divisible by macro_block_size=16, resizing from (214, 160) to (224, 160) to ensure video compatibility with most codecs and players. To prevent resizing, make your input image divisible by the macro_block_size or set the macro_block_size to 1 (risking incompatibility).
+[swscaler @ 0x639a2c0] Warning: data is not aligned! This can lead to a speed loss
+/home/yusenluo/anaconda3/envs/roboclip/lib/python3.8/site-packages/gym/spaces/box.py:73: UserWarning: [33mWARN: Box bound precision lowered by casting to float32[0m
+  logger.warn(
+wandb: WARNING Step cannot be set when using syncing with tensorboard. Please log your step values as a metric such as 'global_step'
+video logged
+Eval num_timesteps=5000, episode_reward=6.06 +/- 0.23
+Episode length: 128.00 +/- 0.00
+Success rate: 0.00%
+New best mean reward!
+[2025-02-13 19:17:21,609][imageio_ffmpeg][WARNING] - IMAGEIO FFMPEG_WRITER WARNING: input image is not divisible by macro_block_size=16, resizing from (214, 160) to (224, 160) to ensure video compatibility with most codecs and players. To prevent resizing, make your input image divisible by the macro_block_size or set the macro_block_size to 1 (risking incompatibility).
+[swscaler @ 0x60c02c0] Warning: data is not aligned! This can lead to a speed loss
+video logged
+Eval num_timesteps=10000, episode_reward=2.66 +/- 0.67
+Episode length: 128.00 +/- 0.00
+Success rate: 0.00%
+Eval num_timesteps=15000, episode_reward=2.81 +/- 1.03
+Episode length: 128.00 +/- 0.00
+Success rate: 0.00%
+[2025-02-13 19:53:50,581][imageio_ffmpeg][WARNING] - IMAGEIO FFMPEG_WRITER WARNING: input image is not divisible by macro_block_size=16, resizing from (214, 160) to (224, 160) to ensure video compatibility with most codecs and players. To prevent resizing, make your input image divisible by the macro_block_size or set the macro_block_size to 1 (risking incompatibility).
+[swscaler @ 0x72c72c0] Warning: data is not aligned! This can lead to a speed loss
+video logged
+Eval num_timesteps=20000, episode_reward=1.95 +/- 0.32
+Episode length: 128.00 +/- 0.00
+Success rate: 0.00%
+Eval num_timesteps=25000, episode_reward=3.30 +/- 1.36
+Episode length: 128.00 +/- 0.00
+Success rate: 0.00%
+[2025-02-13 20:29:05,417][imageio_ffmpeg][WARNING] - IMAGEIO FFMPEG_WRITER WARNING: input image is not divisible by macro_block_size=16, resizing from (214, 160) to (224, 160) to ensure video compatibility with most codecs and players. To prevent resizing, make your input image divisible by the macro_block_size or set the macro_block_size to 1 (risking incompatibility).
+[swscaler @ 0x570c2c0] Warning: data is not aligned! This can lead to a speed loss
+video logged
+Eval num_timesteps=30000, episode_reward=3.12 +/- 0.80
+Episode length: 128.00 +/- 0.00
+Success rate: 0.00%
+Eval num_timesteps=35000, episode_reward=1.30 +/- 0.20
+Episode length: 128.00 +/- 0.00
+Success rate: 0.00%
+[2025-02-13 21:04:47,750][imageio_ffmpeg][WARNING] - IMAGEIO FFMPEG_WRITER WARNING: input image is not divisible by macro_block_size=16, resizing from (214, 160) to (224, 160) to ensure video compatibility with most codecs and players. To prevent resizing, make your input image divisible by the macro_block_size or set the macro_block_size to 1 (risking incompatibility).
+[swscaler @ 0x702f2c0] Warning: data is not aligned! This can lead to a speed loss
+video logged
+Eval num_timesteps=40000, episode_reward=3.06 +/- 0.97
+Episode length: 128.00 +/- 0.00
+Success rate: 0.00%
+Eval num_timesteps=45000, episode_reward=5.96 +/- 1.34
+Episode length: 128.00 +/- 0.00
+Success rate: 0.00%
+[2025-02-13 21:41:01,565][imageio_ffmpeg][WARNING] - IMAGEIO FFMPEG_WRITER WARNING: input image is not divisible by macro_block_size=16, resizing from (214, 160) to (224, 160) to ensure video compatibility with most codecs and players. To prevent resizing, make your input image divisible by the macro_block_size or set the macro_block_size to 1 (risking incompatibility).
+[swscaler @ 0x69692c0] Warning: data is not aligned! This can lead to a speed loss
+video logged
+Eval num_timesteps=50000, episode_reward=4.16 +/- 1.49
+Episode length: 128.00 +/- 0.00
+Success rate: 0.00%
+Eval num_timesteps=55000, episode_reward=2.50 +/- 0.57
+Episode length: 128.00 +/- 0.00
+Success rate: 0.00%
+[2025-02-13 22:16:18,703][imageio_ffmpeg][WARNING] - IMAGEIO FFMPEG_WRITER WARNING: input image is not divisible by macro_block_size=16, resizing from (214, 160) to (224, 160) to ensure video compatibility with most codecs and players. To prevent resizing, make your input image divisible by the macro_block_size or set the macro_block_size to 1 (risking incompatibility).
+[swscaler @ 0x663c2c0] Warning: data is not aligned! This can lead to a speed loss
+video logged
+Eval num_timesteps=60000, episode_reward=2.41 +/- 0.62
+Episode length: 128.00 +/- 0.00
+Success rate: 0.00%
+Eval num_timesteps=65000, episode_reward=2.85 +/- 0.64
+Episode length: 128.00 +/- 0.00
+Success rate: 0.00%
+[2025-02-13 22:51:32,385][imageio_ffmpeg][WARNING] - IMAGEIO FFMPEG_WRITER WARNING: input image is not divisible by macro_block_size=16, resizing from (214, 160) to (224, 160) to ensure video compatibility with most codecs and players. To prevent resizing, make your input image divisible by the macro_block_size or set the macro_block_size to 1 (risking incompatibility).
+[swscaler @ 0x56202c0] Warning: data is not aligned! This can lead to a speed loss
+video logged
+Eval num_timesteps=70000, episode_reward=6.31 +/- 2.06
+Episode length: 128.00 +/- 0.00
+Success rate: 0.00%
+New best mean reward!
+Eval num_timesteps=75000, episode_reward=2.24 +/- 0.48
+Episode length: 128.00 +/- 0.00
+Success rate: 0.00%
+[2025-02-13 23:27:25,241][imageio_ffmpeg][WARNING] - IMAGEIO FFMPEG_WRITER WARNING: input image is not divisible by macro_block_size=16, resizing from (214, 160) to (224, 160) to ensure video compatibility with most codecs and players. To prevent resizing, make your input image divisible by the macro_block_size or set the macro_block_size to 1 (risking incompatibility).
+[swscaler @ 0x60562c0] Warning: data is not aligned! This can lead to a speed loss
+video logged
+Eval num_timesteps=80000, episode_reward=2.35 +/- 0.45
+Episode length: 128.00 +/- 0.00
+Success rate: 0.00%
+Eval num_timesteps=85000, episode_reward=3.97 +/- 0.72
+Episode length: 128.00 +/- 0.00
+Success rate: 0.00%
+[2025-02-14 00:03:29,388][imageio_ffmpeg][WARNING] - IMAGEIO FFMPEG_WRITER WARNING: input image is not divisible by macro_block_size=16, resizing from (214, 160) to (224, 160) to ensure video compatibility with most codecs and players. To prevent resizing, make your input image divisible by the macro_block_size or set the macro_block_size to 1 (risking incompatibility).
+[swscaler @ 0x6bd92c0] Warning: data is not aligned! This can lead to a speed loss
+video logged
+Eval num_timesteps=90000, episode_reward=1.49 +/- 0.21
+Episode length: 128.00 +/- 0.00
+Success rate: 0.00%
+Eval num_timesteps=95000, episode_reward=3.20 +/- 0.73
+Episode length: 128.00 +/- 0.00
+Success rate: 0.00%
+[2025-02-14 00:39:49,843][imageio_ffmpeg][WARNING] - IMAGEIO FFMPEG_WRITER WARNING: input image is not divisible by macro_block_size=16, resizing from (214, 160) to (224, 160) to ensure video compatibility with most codecs and players. To prevent resizing, make your input image divisible by the macro_block_size or set the macro_block_size to 1 (risking incompatibility).
+[swscaler @ 0x5bcb2c0] Warning: data is not aligned! This can lead to a speed loss
+video logged
+Eval num_timesteps=100000, episode_reward=8.35 +/- 7.23
+Episode length: 128.00 +/- 0.00
+Success rate: 0.00%
+New best mean reward!
+Eval num_timesteps=105000, episode_reward=3.69 +/- 0.99
+Episode length: 128.00 +/- 0.00
+Success rate: 0.00%
+[2025-02-14 01:16:18,157][imageio_ffmpeg][WARNING] - IMAGEIO FFMPEG_WRITER WARNING: input image is not divisible by macro_block_size=16, resizing from (214, 160) to (224, 160) to ensure video compatibility with most codecs and players. To prevent resizing, make your input image divisible by the macro_block_size or set the macro_block_size to 1 (risking incompatibility).
+[swscaler @ 0x6fbe2c0] Warning: data is not aligned! This can lead to a speed loss
+video logged
+Eval num_timesteps=110000, episode_reward=1.61 +/- 0.16
+Episode length: 128.00 +/- 0.00
+Success rate: 0.00%
+Eval num_timesteps=115000, episode_reward=12.90 +/- 12.83
+Episode length: 128.00 +/- 0.00
+Success rate: 0.00%
+New best mean reward!
+[2025-02-14 01:52:12,858][imageio_ffmpeg][WARNING] - IMAGEIO FFMPEG_WRITER WARNING: input image is not divisible by macro_block_size=16, resizing from (214, 160) to (224, 160) to ensure video compatibility with most codecs and players. To prevent resizing, make your input image divisible by the macro_block_size or set the macro_block_size to 1 (risking incompatibility).
+[swscaler @ 0x71852c0] Warning: data is not aligned! This can lead to a speed loss
+video logged
+Eval num_timesteps=120000, episode_reward=2.44 +/- 0.46
+Episode length: 128.00 +/- 0.00
+Success rate: 0.00%
+Eval num_timesteps=125000, episode_reward=4.69 +/- 1.67
+Episode length: 128.00 +/- 0.00
+Success rate: 0.00%
+[2025-02-14 02:28:05,816][imageio_ffmpeg][WARNING] - IMAGEIO FFMPEG_WRITER WARNING: input image is not divisible by macro_block_size=16, resizing from (214, 160) to (224, 160) to ensure video compatibility with most codecs and players. To prevent resizing, make your input image divisible by the macro_block_size or set the macro_block_size to 1 (risking incompatibility).
+[swscaler @ 0x5c252c0] Warning: data is not aligned! This can lead to a speed loss
+video logged
+Eval num_timesteps=130000, episode_reward=2.16 +/- 0.41
+Episode length: 128.00 +/- 0.00
+Success rate: 0.00%
+Eval num_timesteps=135000, episode_reward=1.59 +/- 0.31
+Episode length: 128.00 +/- 0.00
+Success rate: 0.00%
+[2025-02-14 03:04:46,253][imageio_ffmpeg][WARNING] - IMAGEIO FFMPEG_WRITER WARNING: input image is not divisible by macro_block_size=16, resizing from (214, 160) to (224, 160) to ensure video compatibility with most codecs and players. To prevent resizing, make your input image divisible by the macro_block_size or set the macro_block_size to 1 (risking incompatibility).
+[swscaler @ 0x5d152c0] Warning: data is not aligned! This can lead to a speed loss
+video logged
+Eval num_timesteps=140000, episode_reward=2.33 +/- 0.76
+Episode length: 128.00 +/- 0.00
+Success rate: 0.00%
+Eval num_timesteps=145000, episode_reward=2.34 +/- 0.49
+Episode length: 128.00 +/- 0.00
+Success rate: 0.00%
+[2025-02-14 03:41:22,184][imageio_ffmpeg][WARNING] - IMAGEIO FFMPEG_WRITER WARNING: input image is not divisible by macro_block_size=16, resizing from (214, 160) to (224, 160) to ensure video compatibility with most codecs and players. To prevent resizing, make your input image divisible by the macro_block_size or set the macro_block_size to 1 (risking incompatibility).
+[swscaler @ 0x59182c0] Warning: data is not aligned! This can lead to a speed loss
+video logged
+Eval num_timesteps=150000, episode_reward=3.87 +/- 0.91
+Episode length: 128.00 +/- 0.00
+Success rate: 0.00%
+Eval num_timesteps=155000, episode_reward=2.43 +/- 0.60
+Episode length: 128.00 +/- 0.00
+Success rate: 0.00%
+[2025-02-14 04:17:56,606][imageio_ffmpeg][WARNING] - IMAGEIO FFMPEG_WRITER WARNING: input image is not divisible by macro_block_size=16, resizing from (214, 160) to (224, 160) to ensure video compatibility with most codecs and players. To prevent resizing, make your input image divisible by the macro_block_size or set the macro_block_size to 1 (risking incompatibility).
+[swscaler @ 0x62a12c0] Warning: data is not aligned! This can lead to a speed loss
+video logged
+Eval num_timesteps=160000, episode_reward=40.36 +/- 159.16
+Episode length: 128.00 +/- 0.00
+Success rate: 12.00%
+New best mean reward!
+Eval num_timesteps=165000, episode_reward=2.87 +/- 0.92
+Episode length: 128.00 +/- 0.00
+Success rate: 0.00%
+[2025-02-14 04:54:28,826][imageio_ffmpeg][WARNING] - IMAGEIO FFMPEG_WRITER WARNING: input image is not divisible by macro_block_size=16, resizing from (214, 160) to (224, 160) to ensure video compatibility with most codecs and players. To prevent resizing, make your input image divisible by the macro_block_size or set the macro_block_size to 1 (risking incompatibility).
+[swscaler @ 0x5ca62c0] Warning: data is not aligned! This can lead to a speed loss
+video logged
+Eval num_timesteps=170000, episode_reward=2.28 +/- 0.43
+Episode length: 128.00 +/- 0.00
+Success rate: 0.00%
+Eval num_timesteps=175000, episode_reward=2.39 +/- 0.24
+Episode length: 128.00 +/- 0.00
+Success rate: 0.00%
+[2025-02-14 05:30:30,774][imageio_ffmpeg][WARNING] - IMAGEIO FFMPEG_WRITER WARNING: input image is not divisible by macro_block_size=16, resizing from (214, 160) to (224, 160) to ensure video compatibility with most codecs and players. To prevent resizing, make your input image divisible by the macro_block_size or set the macro_block_size to 1 (risking incompatibility).
+[swscaler @ 0x68c62c0] Warning: data is not aligned! This can lead to a speed loss
+video logged
+Eval num_timesteps=180000, episode_reward=5.62 +/- 1.72
+Episode length: 128.00 +/- 0.00
+Success rate: 0.00%
+Eval num_timesteps=185000, episode_reward=2.06 +/- 0.60
+Episode length: 128.00 +/- 0.00
+Success rate: 0.00%
+[2025-02-14 06:06:43,876][imageio_ffmpeg][WARNING] - IMAGEIO FFMPEG_WRITER WARNING: input image is not divisible by macro_block_size=16, resizing from (214, 160) to (224, 160) to ensure video compatibility with most codecs and players. To prevent resizing, make your input image divisible by the macro_block_size or set the macro_block_size to 1 (risking incompatibility).
+[swscaler @ 0x55b42c0] Warning: data is not aligned! This can lead to a speed loss
+video logged
+Eval num_timesteps=190000, episode_reward=1.47 +/- 0.27
+Episode length: 128.00 +/- 0.00
+Success rate: 0.00%
+Eval num_timesteps=195000, episode_reward=3.13 +/- 0.59
+Episode length: 128.00 +/- 0.00
+Success rate: 0.00%
+[2025-02-14 06:43:11,261][imageio_ffmpeg][WARNING] - IMAGEIO FFMPEG_WRITER WARNING: input image is not divisible by macro_block_size=16, resizing from (214, 160) to (224, 160) to ensure video compatibility with most codecs and players. To prevent resizing, make your input image divisible by the macro_block_size or set the macro_block_size to 1 (risking incompatibility).
+[swscaler @ 0x662a2c0] Warning: data is not aligned! This can lead to a speed loss
+video logged
+Eval num_timesteps=200000, episode_reward=1.35 +/- 0.16
+Episode length: 128.00 +/- 0.00
+Success rate: 0.00%
+Eval num_timesteps=205000, episode_reward=1.75 +/- 0.24
+Episode length: 128.00 +/- 0.00
+Success rate: 0.00%
+[2025-02-14 07:19:41,344][imageio_ffmpeg][WARNING] - IMAGEIO FFMPEG_WRITER WARNING: input image is not divisible by macro_block_size=16, resizing from (214, 160) to (224, 160) to ensure video compatibility with most codecs and players. To prevent resizing, make your input image divisible by the macro_block_size or set the macro_block_size to 1 (risking incompatibility).
+[swscaler @ 0x59322c0] Warning: data is not aligned! This can lead to a speed loss
+video logged
+Eval num_timesteps=210000, episode_reward=1.36 +/- 0.21
+Episode length: 128.00 +/- 0.00
+Success rate: 0.00%
+Eval num_timesteps=215000, episode_reward=2.60 +/- 0.44
+Episode length: 128.00 +/- 0.00
+Success rate: 0.00%
+[2025-02-14 07:56:12,488][imageio_ffmpeg][WARNING] - IMAGEIO FFMPEG_WRITER WARNING: input image is not divisible by macro_block_size=16, resizing from (214, 160) to (224, 160) to ensure video compatibility with most codecs and players. To prevent resizing, make your input image divisible by the macro_block_size or set the macro_block_size to 1 (risking incompatibility).
+[swscaler @ 0x5e102c0] Warning: data is not aligned! This can lead to a speed loss
+video logged
+Eval num_timesteps=220000, episode_reward=5.83 +/- 1.59
+Episode length: 128.00 +/- 0.00
+Success rate: 0.00%
+Eval num_timesteps=225000, episode_reward=2.12 +/- 0.61
+Episode length: 128.00 +/- 0.00
+Success rate: 0.00%
+[2025-02-14 08:32:29,425][imageio_ffmpeg][WARNING] - IMAGEIO FFMPEG_WRITER WARNING: input image is not divisible by macro_block_size=16, resizing from (214, 160) to (224, 160) to ensure video compatibility with most codecs and players. To prevent resizing, make your input image divisible by the macro_block_size or set the macro_block_size to 1 (risking incompatibility).
+[swscaler @ 0x64052c0] Warning: data is not aligned! This can lead to a speed loss
+video logged
+Eval num_timesteps=230000, episode_reward=1.99 +/- 0.16
+Episode length: 128.00 +/- 0.00
+Success rate: 0.00%
+Eval num_timesteps=235000, episode_reward=3.17 +/- 0.32
+Episode length: 128.00 +/- 0.00
+Success rate: 0.00%
+[2025-02-14 09:08:46,159][imageio_ffmpeg][WARNING] - IMAGEIO FFMPEG_WRITER WARNING: input image is not divisible by macro_block_size=16, resizing from (214, 160) to (224, 160) to ensure video compatibility with most codecs and players. To prevent resizing, make your input image divisible by the macro_block_size or set the macro_block_size to 1 (risking incompatibility).
+[swscaler @ 0x5ef62c0] Warning: data is not aligned! This can lead to a speed loss
+video logged
+Eval num_timesteps=240000, episode_reward=4.76 +/- 0.33
+Episode length: 128.00 +/- 0.00
+Success rate: 0.00%
+Eval num_timesteps=245000, episode_reward=6.82 +/- 0.54
+Episode length: 128.00 +/- 0.00
+Success rate: 0.00%
+[2025-02-14 09:45:08,802][imageio_ffmpeg][WARNING] - IMAGEIO FFMPEG_WRITER WARNING: input image is not divisible by macro_block_size=16, resizing from (214, 160) to (224, 160) to ensure video compatibility with most codecs and players. To prevent resizing, make your input image divisible by the macro_block_size or set the macro_block_size to 1 (risking incompatibility).
+[swscaler @ 0x70452c0] Warning: data is not aligned! This can lead to a speed loss
+video logged
+Eval num_timesteps=250000, episode_reward=2.69 +/- 0.19
+Episode length: 128.00 +/- 0.00
+Success rate: 0.00%
+Eval num_timesteps=255000, episode_reward=1.51 +/- 0.21
+Episode length: 128.00 +/- 0.00
+Success rate: 0.00%
+[2025-02-14 10:21:28,697][imageio_ffmpeg][WARNING] - IMAGEIO FFMPEG_WRITER WARNING: input image is not divisible by macro_block_size=16, resizing from (214, 160) to (224, 160) to ensure video compatibility with most codecs and players. To prevent resizing, make your input image divisible by the macro_block_size or set the macro_block_size to 1 (risking incompatibility).
+[swscaler @ 0x65022c0] Warning: data is not aligned! This can lead to a speed loss
+video logged
+Eval num_timesteps=260000, episode_reward=5.87 +/- 0.85
+Episode length: 128.00 +/- 0.00
+Success rate: 0.00%
+Eval num_timesteps=265000, episode_reward=2.76 +/- 0.29
+Episode length: 128.00 +/- 0.00
+Success rate: 0.00%
+[2025-02-14 10:57:44,767][imageio_ffmpeg][WARNING] - IMAGEIO FFMPEG_WRITER WARNING: input image is not divisible by macro_block_size=16, resizing from (214, 160) to (224, 160) to ensure video compatibility with most codecs and players. To prevent resizing, make your input image divisible by the macro_block_size or set the macro_block_size to 1 (risking incompatibility).
+[swscaler @ 0x61262c0] Warning: data is not aligned! This can lead to a speed loss
+video logged
+Eval num_timesteps=270000, episode_reward=3.82 +/- 0.34
+Episode length: 128.00 +/- 0.00
+Success rate: 0.00%
+Eval num_timesteps=275000, episode_reward=3.52 +/- 0.77
+Episode length: 128.00 +/- 0.00
+Success rate: 0.00%
+[2025-02-14 11:34:16,263][imageio_ffmpeg][WARNING] - IMAGEIO FFMPEG_WRITER WARNING: input image is not divisible by macro_block_size=16, resizing from (214, 160) to (224, 160) to ensure video compatibility with most codecs and players. To prevent resizing, make your input image divisible by the macro_block_size or set the macro_block_size to 1 (risking incompatibility).
+[swscaler @ 0x70492c0] Warning: data is not aligned! This can lead to a speed loss
+video logged
+Eval num_timesteps=280000, episode_reward=10.87 +/- 2.72
+Episode length: 128.00 +/- 0.00
+Success rate: 8.00%
+Eval num_timesteps=285000, episode_reward=2.14 +/- 0.49
+Episode length: 128.00 +/- 0.00
+Success rate: 0.00%
+[2025-02-14 12:11:04,813][imageio_ffmpeg][WARNING] - IMAGEIO FFMPEG_WRITER WARNING: input image is not divisible by macro_block_size=16, resizing from (214, 160) to (224, 160) to ensure video compatibility with most codecs and players. To prevent resizing, make your input image divisible by the macro_block_size or set the macro_block_size to 1 (risking incompatibility).
+[swscaler @ 0x57fe2c0] Warning: data is not aligned! This can lead to a speed loss
+video logged
+Eval num_timesteps=290000, episode_reward=1.59 +/- 0.31
+Episode length: 128.00 +/- 0.00
+Success rate: 0.00%
+Eval num_timesteps=295000, episode_reward=4.36 +/- 0.40
+Episode length: 128.00 +/- 0.00
+Success rate: 0.00%
+[2025-02-14 12:47:20,100][imageio_ffmpeg][WARNING] - IMAGEIO FFMPEG_WRITER WARNING: input image is not divisible by macro_block_size=16, resizing from (214, 160) to (224, 160) to ensure video compatibility with most codecs and players. To prevent resizing, make your input image divisible by the macro_block_size or set the macro_block_size to 1 (risking incompatibility).
+[swscaler @ 0x60e82c0] Warning: data is not aligned! This can lead to a speed loss
+video logged
+Eval num_timesteps=300000, episode_reward=6.92 +/- 0.55
+Episode length: 128.00 +/- 0.00
+Success rate: 0.00%
+Eval num_timesteps=305000, episode_reward=3.02 +/- 0.34
+Episode length: 128.00 +/- 0.00
+Success rate: 0.00%
+[2025-02-14 13:23:44,107][imageio_ffmpeg][WARNING] - IMAGEIO FFMPEG_WRITER WARNING: input image is not divisible by macro_block_size=16, resizing from (214, 160) to (224, 160) to ensure video compatibility with most codecs and players. To prevent resizing, make your input image divisible by the macro_block_size or set the macro_block_size to 1 (risking incompatibility).
+[swscaler @ 0x63b12c0] Warning: data is not aligned! This can lead to a speed loss
+video logged
+Eval num_timesteps=310000, episode_reward=2.68 +/- 0.53
+Episode length: 128.00 +/- 0.00
+Success rate: 0.00%
+Eval num_timesteps=315000, episode_reward=6.52 +/- 0.67
+Episode length: 128.00 +/- 0.00
+Success rate: 0.00%
+[2025-02-14 13:59:58,067][imageio_ffmpeg][WARNING] - IMAGEIO FFMPEG_WRITER WARNING: input image is not divisible by macro_block_size=16, resizing from (214, 160) to (224, 160) to ensure video compatibility with most codecs and players. To prevent resizing, make your input image divisible by the macro_block_size or set the macro_block_size to 1 (risking incompatibility).
+[swscaler @ 0x59e62c0] Warning: data is not aligned! This can lead to a speed loss
+video logged
+Eval num_timesteps=320000, episode_reward=4.36 +/- 0.30
+Episode length: 128.00 +/- 0.00
+Success rate: 0.00%
+Eval num_timesteps=325000, episode_reward=2.25 +/- 0.49
+Episode length: 128.00 +/- 0.00
+Success rate: 0.00%
+[2025-02-14 14:36:22,946][imageio_ffmpeg][WARNING] - IMAGEIO FFMPEG_WRITER WARNING: input image is not divisible by macro_block_size=16, resizing from (214, 160) to (224, 160) to ensure video compatibility with most codecs and players. To prevent resizing, make your input image divisible by the macro_block_size or set the macro_block_size to 1 (risking incompatibility).
+[swscaler @ 0x5a2e2c0] Warning: data is not aligned! This can lead to a speed loss
