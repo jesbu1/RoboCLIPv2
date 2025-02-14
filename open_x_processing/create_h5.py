@@ -14,16 +14,18 @@ from clip_utils import (
     embedding_image,
     get_full_liv_embedding,
     dino_load_image,
+    mean_pooling,
 )
 from PIL import Image
+from transformers import AutoTokenizer, AutoModel
 
 TFDS_PATH = "/data/shared/openx_rlds_data"
-SAVE_H5_NAME = "openx_embeddings.h5"  # name of the h5 file it'll be saved to
-DEBUG = False  # will only make 10 per dataset
-SPECIFIC_TASKS = "language_table,austin_sirius_dataset_converted_externally_to_rlds,austin_buds_dataset_converted_externally_to_rlds,ucsd_kitchen_dataset_converted_externally_to_rlds,stanford_hydra_dataset_converted_externally_to_rlds,iamlab_cmu_pickup_insert_converted_externally_to_rlds,cmu_stretch,berkeley_fanuc_manipulation,berkeley_autolab_ur5,bridge,bc_z,fractal20220817_data,jaco_play"
-MAX_NUM_FRAMES_PER_EPISODE = 128
 TRAIN_SPLIT = "train"  # "test"
-MAX_EPISODES_FOR_LANG_TABLE = 35000
+SAVE_H5_NAME = f"full_openx_embeddings_dino_{TRAIN_SPLIT}.h5"  # name of the h5 file it'll be saved to
+DEBUG = False # will only make 10 per dataset
+SPECIFIC_TASKS = "language_table,austin_sirius_dataset_converted_externally_to_rlds,austin_buds_dataset_converted_externally_to_rlds,ucsd_kitchen_dataset_converted_externally_to_rlds,stanford_hydra_dataset_converted_externally_to_rlds,iamlab_cmu_pickup_insert_converted_externally_to_rlds,cmu_stretch,berkeley_fanuc_manipulation,berkeley_autolab_ur5,bridge,bc_z,fractal20220817_data,jaco_play"
+MAX_NUM_FRAMES_PER_EPISODE = 32
+MAX_EPISODES_FOR_LANG_TABLE = 10000
 
 # prevent TFDS from taking up all GPU memory
 os.environ["TF_FORCE_GPU_ALLOW_GROWTH"] = "true"
@@ -33,13 +35,24 @@ POSSIBLE_LANG_INSTRUCTION_KEYS = [
     "instruction",
     "language_instruction",
 ]
-EMBEDDING_MODEL = "liv"
+EMBEDDING_MODEL = "dinov2"
+DINO_BATCH_SIZE = 32
+assert EMBEDDING_MODEL in ["liv", "dinov2"]
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 dinov2_vits14 = torch.hub.load("facebookresearch/dinov2", "dinov2_vitb14")
 dinov2_vits14 = dinov2_vits14.to(device)
 liv_model, processor, tokenizer = load_model("liv")
 liv_model = liv_model.to(device)
+
+# also load mini_lm sentence embeddings from sentence_transformers
+minilm_tokenizer = AutoTokenizer.from_pretrained(
+    "sentence-transformers/all-MiniLM-L12-v2"
+)
+minilm_model = AutoModel.from_pretrained(
+    "sentence-transformers/all-MiniLM-L12-v2"
+).to(device)
+
 
 
 # dataset_names = [x.split()[0] for x in DATASET_TRANSFORMS]
@@ -123,28 +136,49 @@ with h5py.File(SAVE_H5_NAME, "w") as f:
                 task = task.strip(" .,!?-_")
 
                 if task not in tasks_seen:
-                    tasks_seen[task] = 1
-                    if random.random() < 0.1:
-                        print(f"Tasks seen so far: {tasks_seen.keys()}")
-                    f.create_group(task)
-                    task_embedding = (
-                        embedding_text(liv_model, tokenizer, [task])
-                        .detach()
-                        .cpu()
-                        .numpy()
-                    )
-                    # create a dataset with the embeddings
-                    f[task].create_dataset("lang_embedding", data=task_embedding)
-                    individual_task_embedding = (
-                        get_full_liv_embedding(liv_model, tokenizer, [task])
-                        .detach()
-                        .cpu()
-                        .numpy()
-                    )
-                    # create a dataset with the embeddings
-                    f[task].create_dataset(
-                        "lang_embedding_individual", data=individual_task_embedding
-                    )
+                    with torch.inference_mode():
+                        tasks_seen[task] = 1
+                        if random.random() < 0.1:
+                            print(f"Tasks seen so far: {tasks_seen.keys()}")
+                        f.create_group(task)
+                        task_embedding = (
+                            embedding_text(liv_model, tokenizer, [task])
+                            .detach()
+                            .cpu()
+                            .numpy()
+                        )
+                        # create a dataset with the embeddings
+                        f[task].create_dataset("liv_lang_embedding", data=task_embedding)
+                        individual_task_embedding = (
+                            get_full_liv_embedding(liv_model, tokenizer, [task])
+                            .detach()
+                            .cpu()
+                            .numpy()
+                        )
+                        # create a dataset with the embeddings
+                        f[task].create_dataset(
+                            "liv_lang_embedding_individual", data=individual_task_embedding
+                        )
+
+                        # create the minilm embeddings and save them
+                        encoded_input = minilm_tokenizer(
+                            [task], padding=False, truncation=True, return_tensors="pt"
+                        ).to(device)
+
+                        model_output = minilm_model(**encoded_input)
+                        minlm_task_embedding = mean_pooling(
+                            model_output, encoded_input["attention_mask"]
+                        ).cpu().numpy()
+
+                        f[task].create_dataset(
+                            "minilm_lang_embedding", data=minlm_task_embedding
+                        )
+
+                        per_token_embeddings = model_output[0].cpu().numpy()
+
+                        f[task].create_dataset(
+                            "minilm_lang_embedding_individual", data=per_token_embeddings
+                        )
                 else:
                     tasks_seen[task] += 1
 
@@ -166,18 +200,23 @@ with h5py.File(SAVE_H5_NAME, "w") as f:
 
                 # center crop 224x224
                 if EMBEDDING_MODEL == "dinov2":
-                    # batch it
-                    episode_images_dino = [
-                        dino_load_image(img) for img in episode_images
-                    ]
-                    image_embeddings = (
-                        dinov2_vits14(torch.cat(episode_images_dino))
-                        .squeeze()
-                        .detach()
-                        .cpu()
-                        .numpy()
-                    )
-                    breakpoint()
+                    with torch.inference_mode():
+                        # batch it
+                        episode_images_dino = [
+                            dino_load_image(img) for img in episode_images
+                        ]
+                        episode_images_dino = [torch.concatenate(episode_images_dino[i:i+DINO_BATCH_SIZE]) for i in range(0, len(episode_images_dino), DINO_BATCH_SIZE)]
+                        embedding_list = []
+                        for i, batch in enumerate(episode_images_dino):
+                            episode_image_embeddings = (
+                                dinov2_vits14(batch.to(device))
+                                .squeeze()
+                                .detach()
+                                .cpu()
+                                .numpy()
+                            )
+                            embedding_list.append(episode_image_embeddings) 
+                        episode_image_embeddings = np.concatenate(embedding_list)
                 else:
                     embedding_list = []
                     for ep_img in episode_images:
@@ -193,7 +232,7 @@ with h5py.File(SAVE_H5_NAME, "w") as f:
                             .numpy()
                         )
                     embedding_list.append(image_embeddings)
-                episode_image_embeddings = np.array(embedding_list)
+                    episode_image_embeddings = np.array(embedding_list)
                 # create a dataset with the embeddings
                 task_group.create_dataset(
                     task_group_len_str,
