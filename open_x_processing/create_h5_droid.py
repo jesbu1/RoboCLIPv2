@@ -21,6 +21,7 @@ from PIL import Image
 SAVE_H5_NAME = "droid_embeddings_dino.h5"  # name of the h5 file it'll be saved to
 DEBUG = False # will use DROID_100
 MAX_NUM_FRAMES_PER_EPISODE = 32
+MAX_SAMPLES = 25_000
 TRAIN_SPLIT = "train"  # "test", droid training set doesn't exist
 
 # prevent TFDS from taking up all GPU memory
@@ -59,14 +60,13 @@ tasks_seen = dict()
 total_samples = 0
 with h5py.File(SAVE_H5_NAME, "w") as f:
     dataset = tfds.load(dataset_name, data_dir="gs://gresearch/robotics", split=TRAIN_SPLIT)
-    n_samples = 1000000000000000000
     valid_samples_per_dataset = 0
     img_key_to_name = OXE_DATASET_CONFIGS[dataset_name.split("_")[0]][
         "image_obs_keys"
     ]  # dict mapping img_keys to the names of the images in OXE
 
     # get both ext camera left and ext camera right
-    len_of_dataset = min(dataset.cardinality().numpy(), n_samples)
+    len_of_dataset = min(dataset.cardinality().numpy(), MAX_SAMPLES)
     views = [img_key_to_name["primary"], img_key_to_name["secondary"]]
     i = 0
     num_failures_in_a_row = 0
@@ -85,7 +85,7 @@ with h5py.File(SAVE_H5_NAME, "w") as f:
 
             episode_images_list = [[] for _ in range(len(views))]
 
-            if valid_samples_per_dataset >= n_samples:
+            if valid_samples_per_dataset >= MAX_SAMPLES:
                 break
             # task is the language instruction
             task = None
