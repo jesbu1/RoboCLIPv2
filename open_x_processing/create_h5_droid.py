@@ -119,7 +119,7 @@ with h5py.File(SAVE_H5_NAME, "w") as f:
                 if task not in tasks_seen:
                     with torch.inference_mode():
                         tasks_seen[task] = 1
-                        if random.random() < 0.1:
+                        if random.random() < 0.01:
                             print(f"Tasks seen so far: {tasks_seen.keys()}")
                         f.create_group(task)
                         task_embedding = (
