@@ -1,26 +1,11 @@
-import tensorflow_datasets as tfds
-import random
 from tqdm import tqdm
-import os
-from oxe_configs import OXE_DATASET_CONFIGS
-import json
-import numpy as np
 import h5py
-from clip_utils import (
-    load_model,
-    embedding_text,
-    embedding_image,
-    get_full_liv_embedding,
-)
-from PIL import Image
 
-MAIN_H5 = "/data/shared/roboclip/data/h5_buffers/openx_embeddings/openx_embeddings_full_uncompressed_with_langtable35k.h5"
-H5_MERGING_FROM = "openx_embeddings_lang_table_35k.h5"
+#MAIN_H5 = "/data/shared/roboclip/data/h5_buffers/openx_embeddings/openx_embeddings_full_uncompressed_with_langtable35k.h5"
+MAIN_H5 = "full_openx_embeddings_dino_train.h5"
+H5_MERGING_FROM = "droid_embeddings_dino.h5"
 print(f"Adding to {MAIN_H5} from {H5_MERGING_FROM}")
 MAX_TO_MERGE = 30_000
-
-model, processor, tokenizer = load_model("liv")
-model = model.cuda()
 
 
 # make a set to keep track of the tasks we've seen

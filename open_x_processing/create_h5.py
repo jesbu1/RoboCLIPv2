@@ -20,7 +20,7 @@ from PIL import Image
 from transformers import AutoTokenizer, AutoModel
 
 TFDS_PATH = "/data/shared/openx_rlds_data"
-TRAIN_SPLIT = "train"  # "test"
+TRAIN_SPLIT = "test"  # "train"
 SAVE_H5_NAME = f"full_openx_embeddings_dino_{TRAIN_SPLIT}.h5"  # name of the h5 file it'll be saved to
 DEBUG = False # will only make 10 per dataset
 SPECIFIC_TASKS = "language_table,austin_sirius_dataset_converted_externally_to_rlds,austin_buds_dataset_converted_externally_to_rlds,ucsd_kitchen_dataset_converted_externally_to_rlds,stanford_hydra_dataset_converted_externally_to_rlds,iamlab_cmu_pickup_insert_converted_externally_to_rlds,cmu_stretch,berkeley_fanuc_manipulation,berkeley_autolab_ur5,bridge,bc_z,fractal20220817_data,jaco_play"
