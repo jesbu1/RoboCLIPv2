@@ -61,6 +61,9 @@ def main(args):
     else: 
         experiment_name = "RealWorld_Koch"
 
+    if args.roll_percentage != 1.0:
+        experiment_name = "RollPercentage_" + str(args.roll_percentage) + "_" + experiment_name
+
     if args.pca:
         experiment_name = "PCA_" + experiment_name
 
@@ -182,9 +185,9 @@ def main(args):
                                      collate_fn=VideoTextTokenCollateFn)
 
 
-        h5_openx_eval_file = h5py.File("/home/jzhang96/openx_embeddings_test_dataset_progrssed.h5", "r")
+        # h5_openx_eval_file = h5py.File("/home/jzhang96/openx_embeddings_test_dataset_progrssed.h5", "r")
         # h5_openx_eval_file = h5py.File("/mnt/ssd_a_4tb/jzhang96/openx_embeddings_test_dataset_progrssed.h5", "r")
-        # h5_openx_eval_file = h5py.File("/data/shared/roboclip/data/h5_buffers/openx_embeddings/openx_embeddings_test_dataset_progrssed.h5", "r")
+        h5_openx_eval_file = h5py.File("/data/shared/roboclip/data/h5_buffers/openx_embeddings/openx_embeddings_test_dataset_progrssed.h5", "r")
 
         positive_eval_openx_dataset = LivRealVideoEvalTokenDataset(args, 
                                                         h5_openx_eval_file,
@@ -297,15 +300,15 @@ def main(args):
 
 
                 negative_video_array_1 = torch.roll(positive_video_array, extra_len, 0)
-
+                select_length = int(round(positive_video_array.size(0) * args.roll_percentage))
                 neg_openx_video_array = negative_video_array_1[:openx_len]
                 rand_idx = torch.randperm(neg_openx_video_array.size(0))
-                neg_openx_video_array = neg_openx_video_array[rand_idx]
-                negative_text_array_1 = positive_text_array.clone()[rand_idx]
-                negative_text_mask_1 = positive_text_mask.clone()[rand_idx]
-                negative_progress_1 = torch.zeros_like(positive_progress)[:neg_openx_video_array.size(0)]
+                neg_openx_video_array = neg_openx_video_array[rand_idx][:select_length]
+                negative_text_array_1 = positive_text_array.clone()[rand_idx][:select_length]
+                negative_text_mask_1 = positive_text_mask.clone()[rand_idx][:select_length]
+                negative_progress_1 = torch.zeros_like(positive_progress)[:neg_openx_video_array.size(0)][:select_length]
                 
-                negative_progress_mask_1 = torch.ones_like(negative_progress_1).bool()
+                negative_progress_mask_1 = torch.ones_like(negative_progress_1).bool()[:select_length]
                 stop_idx = round(negative_progress_1.size(1) * args.negative_mask_ratio)
                 negative_progress_mask_1[:, :stop_idx] = False
 
@@ -546,8 +549,8 @@ def main(args):
 
 if __name__ == "__main__":
     argparser = argparse.ArgumentParser()
-    # argparser.add_argument('--h5_embedding_path', type=str, default='/data/shared/roboclip/data/h5_buffers/openx_embeddings/openx_embeddings_full_uncompressed_with_langtable_processed.h5')
-    argparser.add_argument('--h5_embedding_path', type=str, default='/home/jzhang96/openx_embeddings_full_uncompressed_with_langtable_processed.h5')
+    argparser.add_argument('--h5_embedding_path', type=str, default='/data/shared/roboclip/data/h5_buffers/openx_embeddings/openx_embeddings_full_uncompressed_with_langtable_processed.h5')
+    # argparser.add_argument('--h5_embedding_path', type=str, default='/home/jzhang96/openx_embeddings_full_uncompressed_with_langtable_processed.h5')
     # argparser.add_argument('--h5_embedding_path', type=str, default='/mnt/ssd_a_4tb/jzhang96/openx_embeddings_full_uncompressed_with_langtable_processed.h5')
     argparser.add_argument('--extra_data_type', type=str, choices=["metaworld", "real_world"], default="real_world")
     argparser.add_argument('--batch_size', type=int, default=1024)
