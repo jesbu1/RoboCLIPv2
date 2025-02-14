@@ -207,7 +207,7 @@ with h5py.File(SAVE_H5_NAME, "w") as f:
                         ]
                         episode_images_dino = [torch.concatenate(episode_images_dino[i:i+DINO_BATCH_SIZE]) for i in range(0, len(episode_images_dino), DINO_BATCH_SIZE)]
                         embedding_list = []
-                        for i, batch in enumerate(episode_images_dino):
+                        for batch in episode_images_dino:
                             episode_image_embeddings = (
                                 dinov2_vits14(batch.to(device))
                                 .squeeze()
