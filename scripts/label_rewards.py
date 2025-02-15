@@ -14,15 +14,49 @@ from reward_model.env_reward_model import EnvRewardModel
 # RoboCLIPEncoder
 
 
-def label_trajectories_iteratively(args, traj_h5, output_file):
+def compute_debug_reward(state):
+    # In debug mode, we apply a manual reward function based on the current state
+    state = state
+    # # Let us set the task to be to approach a specific goal position
+    goal_position = [
+        90,
+        0,
+        0,
+        0,
+        0,
+        0,
+        90,
+        0,
+        0,
+        0,
+        0,
+        0,
+    ]
+
+    goal_position = np.array(goal_position)
+
+    # Reward is L2 distance to the goal position from state
+    # reward = -torch.norm(state - goal_position)
+
+    # The positions are rotations of motors, so we want the average degree difference
+    difference = np.abs(state - goal_position)
+    # Bound the difference to 180 degrees
+    difference = np.minimum(difference, 180 - difference)
+
+    reward = -np.sum(difference) / 12
+    return reward
+
+
+def label_trajectories_iteratively(
+    args, traj_h5, output_file, image_keys, reward_image_key
+):
     """
     Processes trajectories iteratively, computes rewards, and saves data directly to the output HDF5 file.
     If the output file already exists with embeddings, only updates the rewards.
     """
     # Check if this is just a reward update
     is_reward_update = all(
-        key in output_file.keys()
-        for key in ["img_embedding", "lang_embedding", "img", "timesteps"]
+        key in output_file.keys() for key in ["lang_embedding", "img", "timesteps"]
     )
 
     # Initialize the specified encoder
@@ -49,6 +83,10 @@ def label_trajectories_iteratively(args, traj_h5, output_file):
         reward_model = EnvRewardModel(model_path=None)  # Uses a LIV encoder
     elif args.reward_model == "dense":
         reward_model = EnvRewardModel(model_path=None)  # Uses a LIV encoder
+    elif args.reward_model == "debug":
+        reward_model = EnvRewardModel(model_path=None)  # Uses a LIV encoder
+
+    reward_image_idx = image_keys.index(reward_image_key)
 
     # If this is just a reward update, we can skip the embedding computation
     if is_reward_update:
@@ -72,7 +110,7 @@ def label_trajectories_iteratively(args, traj_h5, output_file):
                     if args.reward_model == "dense":
                         rewards[current_timestep] = traj_data["reward"][i]
                     else:
-                        rewards[current_timestep] = 1.0
+                        rewards[current_timestep] = 0.0  # should be 0 right?
                 else:
                     # Dense and sparse are special cases
                     if args.reward_model == "sparse":
@@ -86,7 +124,9 @@ def label_trajectories_iteratively(args, traj_h5, output_file):
                         video_embeddings = []
                         for j in range(start_idx, i + 1):
                             video_embeddings.append(
-                                output_file["img_embedding"][current_timestep - (i - j)]
+                                output_file[f"img_embedding_{reward_image_idx}"][
+                                    current_timestep - (i - j)
+                                ]
                             )
                         video_embedding = np.stack(video_embeddings)
                         text_embedding = output_file["lang_embedding"][current_timestep]
@@ -122,24 +162,39 @@ def label_trajectories_iteratively(args, traj_h5, output_file):
         (total_timesteps, reward_model.policy_text_output_dim),
         dtype="float32",
     )
-    output_file.create_dataset(
-        "img_embedding", (total_timesteps, reward_model.img_output_dim), dtype="float32"
-    )
+
+    for i, key in enumerate(image_keys):
+        output_file.create_dataset(
+            f"img_embedding_{i}",
+            (total_timesteps, reward_model.img_output_dim),
+            dtype="float32",
+        )
 
     output_file.create_dataset("timesteps", (total_timesteps,), dtype="int32")
 
     # Determine image dataset shape and initialize it
-    sample_img = traj_h5[traj_keys[0]]["img"][0]  # Sample image for shape and dtype
-    img_shape = (total_timesteps,) + sample_img.shape
-    img_dtype = sample_img.dtype
-    output_file.create_dataset("img", shape=img_shape, dtype=img_dtype)
+    sample_img = traj_h5[traj_keys[0]][reward_image_key][
+        0
+    ]  # Sample image for shape and dtype
+    # img_shape = (total_timesteps,) + sample_img.shape
+    # img_dtype = sample_img.dtype
+    # output_file.create_dataset("img", shape=img_shape, dtype=img_dtype)
+
+    # image_datasets = {}
+    # for key in image_keys:
+    #     output_file.create_dataset(key, shape=img_shape, dtype=img_dtype)
+    #     image_datasets[key] = output_file[key]
 
     rewards = output_file["rewards"]
     lang_embeds = output_file["lang_embedding"]
     policy_lang_embeds = output_file["policy_lang_embedding"]
-    img_embeds = output_file["img_embedding"]
+    # img_embeds = output_file["img_embedding"]
+    image_embeds_dict = {
+        key: output_file[f"img_embedding_{i}"] for i, key in enumerate(image_keys)
+    }
+
     timesteps = output_file["timesteps"]
-    img_dataset = output_file["img"]
+    # img_dataset = output_file["img"]
 
     current_timestep = 0
     previous_instruction = None
@@ -167,17 +222,30 @@ def label_trajectories_iteratively(args, traj_h5, output_file):
             timesteps[current_timestep] = current_timestep
 
             # Use the image to get the image embedding
-            img = traj_data["img"][i][None, None, ...]
-            img_embedding = reward_model.encode_images(img).squeeze()
+            for j, key in enumerate(image_keys):
+                image = traj_data[key][i]
+                image = image[None, None, :, :, :]
+                image_embeds_dict[key][current_timestep] = reward_model.encode_images(
+                    image
+                ).squeeze()
 
-            img_embeds[current_timestep] = img_embedding
+            # img = traj_data["img"][i][None, None, ...]
+            # img_embedding = reward_model.encode_images(img).squeeze()
+
+            # img_embeds[current_timestep] = img_embedding
 
             # Compute reward
             if not traj_data["done"][i]:
                 if args.reward_model == "dense":
                     rewards[current_timestep] = traj_data["reward"][i]
+                elif args.reward_model == "debug":
+                    # In debug mode, we apply a manual reward function based on the current state
+                    state = traj_data["state"][i]
+                    reward = compute_debug_reward(state)
+                    rewards[current_timestep] = reward
+
                 else:
-                    rewards[current_timestep] = 1.0
+                    rewards[current_timestep] = 0.0  # should be 0 right?
 
             else:
                 # Dense and sparse are special cases
@@ -185,16 +253,25 @@ def label_trajectories_iteratively(args, traj_h5, output_file):
                     rewards[current_timestep] = 1.0
                 elif args.reward_model == "dense":
                     rewards[current_timestep] = traj_data["reward"][i]
+                elif args.reward_model == "debug":
+                    # In debug mode, we apply a manual reward function based on the current state
+                    state = traj_data["state"][i]
+                    reward = compute_debug_reward(state)
+                    rewards[current_timestep] = reward
 
                 # Otherwise use the other reward models
                 else:
                     # Process video frames iteratively
-                    start_idx = max(0, i - args.window_length + 1)
-                    video_frames = [
-                        traj_data["img"][j] for j in range(start_idx, i + 1)
-                    ]
-                    video_frames = np.stack(video_frames)[None, ...]
-                    video_embedding = reward_model.encode_images(video_frames)
+                    # start_idx = max(0, i - args.window_length + 1)
+                    # video_frames = [
+                    #     traj_data[reward_image_key][j] for j in range(start_idx, i + 1)
+                    # ]
+                    # video_frames = np.stack(video_frames)[None, ...]
+                    # video_embedding = reward_model.encode_images(video_frames)
+
+                    # Should be of shape (1, num_frames, embedding_dim)
+                    video_embeddings = image_embeds_dict[reward_image_key].unsqueeze(0)
+
                     # repeat the text embedding to match the batch size
                     text_embedding = (
                         torch.from_numpy(text_embedding)
@@ -208,7 +285,9 @@ def label_trajectories_iteratively(args, traj_h5, output_file):
                     rewards[current_timestep] = reward
 
             # Save the image for the current timestep
-            img_dataset[current_timestep] = traj_data["img"][i]
+            # img_dataset[current_timestep] = traj_data["img"][i]
+            # for key in image_keys:
+            #     image_datasets[key][current_timestep] = traj_data[key][i]
 
             current_timestep += 1
 
@@ -227,7 +306,7 @@ def main():
     # )
     parser.add_argument(
         "--reward_model",
-        choices=["roboclipv2", "roboclip", "vlc", "dense", "sparse"],
+        choices=["roboclipv2", "roboclip", "vlc", "dense", "sparse", "debug"],
         default="roboclipv2",
         help="Type of encoder to use.",
     )
@@ -261,6 +340,12 @@ def main():
         help="Batch size for encoding video frames.",
     )
 
+    # Todo: turn this into an argument
+    image_keys = ["observation.images.main", "observation.images.side"]
+    image_keys = sorted(image_keys)
+
+    reward_image_key = "observation.images.main"
+
     args = parser.parse_args()
 
     # The path should be data/{path after data}/updated_trajs/{original file name}_{reward model}.h5
@@ -280,13 +365,17 @@ def main():
             # if False:
             print("Output file already exists. Updating rewards...")
             with h5py.File(output_path, "a") as output_file:
-                label_trajectories_iteratively(args, traj_file, output_file)
+                label_trajectories_iteratively(
+                    args, traj_file, output_file, image_keys, reward_image_key
+                )
         else:
             with h5py.File(output_path, "w") as output_file:
-                label_trajectories_iteratively(args, traj_file, output_file)
+                label_trajectories_iteratively(
+                    args, traj_file, output_file, image_keys, reward_image_key
+                )
                 first_key = [key for key in traj_file.keys()][0]
                 for key in traj_file[first_key].keys():
-                    if key not in ["rewards", "img"]:
+                    if key not in ["rewards"] + image_keys:
                         print(f"Saving {key}...")
                         items = []
                         for i in traj_file.keys():

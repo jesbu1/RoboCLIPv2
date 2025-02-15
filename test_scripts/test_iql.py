@@ -154,6 +154,12 @@ def parse_reward_model(reward_cfg: DictConfig) -> BaseRewardModel:
             model_path=reward_cfg.model_path,
             success_bonus=reward_cfg.success_bonus,
         )
+    elif reward_string == "debug":
+        reward_model = EnvRewardModel(
+            reward_type="dense",
+            model_path=reward_cfg.model_path,
+            success_bonus=reward_cfg.success_bonus,
+        )
     else:
         raise ValueError(f"Unknown reward model: {reward_string}")
 
@@ -335,9 +341,29 @@ def main(cfg: DictConfig):
                 model.offline_algo = new_offline_algo
                 model.set_logger(wandb_logger)
                 model.learned_offline = True
+                model.set_policies_with_offline(offline_algo=new_offline_algo)
 
             else:
                 model.load(offline_config.ckpt_path, env=envs)
+
+            print("Setting chunk size and all")
+            # Replace action chunked buffer again since loading it may not always work
+            if cfg.general_training.action_chunk_size > 1:
+                model.replace_with_chunked_buffer(
+                    cfg.general_training.action_chunk_size
+                )
+
+            # Various other things to set that don't get set by load
+            model.set_logger(wandb_logger)
+            model.learned_offline = True
+            # Set train_freq, gradient_steps, etc.
+            model.train_freq = (
+                cfg.environment.train_freq_num,
+                cfg.environment.train_freq_type,
+            )  # type: ignore[arg-type]
+            model.gradient_steps = cfg.online_training.gradient_steps
+            model._convert_train_freq()
+
         else:
             model.learn_offline(
                 offline_replay_buffer=buffer,
@@ -441,6 +467,11 @@ def create_envs(cfg: DictConfig, reward_model: BaseRewardModel):
 
     ignore_language = env_config.ignore_language
 
+    camera_kwargs = {
+        "image_keys": env_config.image_keys,
+        "reward_image_key": env_config.reward_image_key,
+    }
+
     wrapped_env_func = create_wrapped_env(
         env_id,
         language_features=lang_feat if not ignore_language else None,
@@ -452,6 +483,7 @@ def create_envs(cfg: DictConfig, reward_model: BaseRewardModel):
         mode="train",
         dense_rewards_at_end=cfg.general_training.dense_rewards_at_end,
         action_chunk_size=cfg.general_training.action_chunk_size,
+        camera_kwargs=camera_kwargs,
     )
 
     # Define envs (dummy example for illustration)
@@ -583,6 +615,7 @@ def get_policy_algorithm(cfg: DictConfig, envs: VecEnv, log_dir: str):
                     cfg.environment.train_freq_num,
                     cfg.environment.train_freq_type,
                 ),
+                gradient_steps=cfg.online_training.gradient_steps,
             )
         else:
             model = model_class.load(args.pretrained, env=envs, tensorboard_log=log_dir)
@@ -613,6 +646,7 @@ def get_policy_algorithm(cfg: DictConfig, envs: VecEnv, log_dir: str):
                 n_critics_to_sample=cfg.general_training.n_critics_to_sample,
                 warm_start_online_rl=cfg.online_training.warm_start_online_rl,
                 gamma=cfg.general_training.gamma,
+                gradient_steps=cfg.online_training.gradient_steps,
             )
         else:
             model = model_class.load(args.pretrained, env=envs, tensorboard_log=log_dir)
@@ -646,6 +680,7 @@ def get_policy_algorithm(cfg: DictConfig, envs: VecEnv, log_dir: str):
                 warm_start_online_rl=cfg.online_training.warm_start_online_rl,
                 gamma=cfg.general_training.gamma,
                 action_chunk_size=cfg.general_training.action_chunk_size,
+                gradient_steps=cfg.online_training.gradient_steps,
             )
         else:
             model = model_class.load(args.pretrained, env=envs, tensorboard_log=log_dir)
@@ -701,6 +736,7 @@ def get_policy_algorithm(cfg: DictConfig, envs: VecEnv, log_dir: str):
                 warm_start_online_rl=cfg.online_training.warm_start_online_rl,
                 gamma=cfg.general_training.gamma,
                 action_chunk_size=cfg.general_training.action_chunk_size,
+                gradient_steps=cfg.online_training.gradient_steps,
             )
         else:
             model = model_class.load(args.pretrained, env=envs, tensorboard_log=log_dir)

@@ -250,7 +250,7 @@ class IQL(OfflineRLAlgorithm):
         # self.policy.actor = th.compile(self.policy.actor, mode="reduce-overhead")
         # self.policy.critic = th.compile(self.policy.critic, mode="reduce-overhead")
         # self.policy.critic_target = th.compile(
-        #     self.policy.critic_target, mode="reduce-overhead"
+        # self.policy.critic_target, mode="reduce-overhead"
         # )
 
         self._create_aliases()

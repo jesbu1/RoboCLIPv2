@@ -133,21 +133,92 @@ class LanguageWrapper(gym.Wrapper):
             language_feature = language_feature.cpu().numpy()
 
         self.language_features = language_feature
-        self.observation_space = spaces.Box(
+        # self.observation_space = spaces.Box(
+        #     low=-np.inf,
+        #     high=np.inf,
+        #     shape=(self.env.observation_space.shape[0] + len(self.language_features),),
+        #     dtype=np.float32,
+        # )
+
+        # The observation space is a dict
+        # Let us add language_feature to the observation space
+        current_obs_space = self.env.observation_space
+        assert isinstance(current_obs_space, spaces.Dict), (
+            "Observation space must be a Dict."
+        )
+
+        new_spaces = current_obs_space.spaces.copy()
+        new_spaces["language_feature"] = spaces.Box(
             low=-np.inf,
             high=np.inf,
-            shape=(self.env.observation_space.shape[0] + len(self.language_features),),
+            shape=(len(self.language_features),),
             dtype=np.float32,
         )
 
-    def step(self, action):
-        obs, reward, done, info = self.env.step(action)
-        obs = np.concatenate([obs, self.language_features])
-        return obs, reward, done, info
+        self.observation_space = spaces.Dict(new_spaces)
+
+    def _observation(self, observation):
+        observation["language_feature"] = self.language_features
+        return observation
 
     def reset(self):
         obs = self.env.reset()
-        return np.concatenate([obs, self.language_features])
+        obs = self._observation(obs)
+        return obs
+
+    def step(self, action):
+        obs, reward, done, info = self.env.step(action)
+        obs = self._observation(obs)
+        return obs, reward, done, info
+
+
+class ImageEmbeddingWrapper(gym.Wrapper):
+    def __init__(self, env, reward_model):
+        super(ImageEmbeddingWrapper, self).__init__(env)
+        self.reward_model = reward_model
+
+        # The observation space is a dict
+        # Let us add image_feature to the observation space
+
+        current_obs_space = self.env.observation_space
+        assert isinstance(current_obs_space, spaces.Dict), (
+            "Observation space must be a Dict."
+        )
+
+        image_keys = self.env.image_keys
+
+        # Define the new observation space
+        new_spaces = current_obs_space.spaces.copy()
+        for i, key in enumerate(image_keys):
+            # Add a new key for the image feature corresponding to each image key
+            new_spaces[f"image_feature_{i}"] = spaces.Box(
+                low=-np.inf,
+                high=np.inf,
+                shape=(reward_model.img_output_dim,),
+                dtype=np.float32,
+            )
+
+        # Set the updated observation space
+        self.observation_space = spaces.Dict(new_spaces)
+
+    def _observation(self, observation):
+        for i, key in enumerate(self.image_keys):
+            image = observation[key]
+            image = image[None, None, :, :, :]
+            image_feature = self.reward_model.encode_images(image).squeeze()
+            observation[f"image_feature_{i}"] = image_feature
+
+        return observation
+
+    def reset(self):
+        obs = self.env.reset()
+        obs = self._observation(obs)
+        return obs
+
+    def step(self, action):
+        obs, reward, done, info = self.env.step(action)
+        obs = self._observation(obs)
+        return obs, reward, done, info
 
 
 class LearnedRewardWrapper(gym.Wrapper):
@@ -158,23 +229,10 @@ class LearnedRewardWrapper(gym.Wrapper):
         language_features: th.Tensor,
         is_state_based: bool = False,
         dense_eval: bool = False,
-        use_proprio: bool = False,
     ):
         super(LearnedRewardWrapper, self).__init__(env)
         self.reward_model = reward_model
         self.is_state_based = is_state_based
-        self.use_proprio = use_proprio
-
-        if self.is_state_based is False:
-            self.observation_space = spaces.Box(
-                low=-np.inf,
-                high=np.inf,
-                shape=(
-                    self.reward_model.img_output_dim
-                    + (env.action_space.shape[0] if self.use_proprio else 0),
-                ),
-                dtype=np.float32,
-            )
 
         self.past_observations = []
         self.counter = 0
@@ -202,35 +260,11 @@ class LearnedRewardWrapper(gym.Wrapper):
         self.counter += 1
         obs, original_reward, done, info = self.env.step(action)
 
-        proprio = obs
-
         encoded_image = None
         # IF the model is state-based and is dense/sparse reward, we can skip this
-        if not (
-            (self.is_state_based)
-            and (
-                self.reward_model.name == "sparse" or self.reward_model.name == "dense"
-            )
-        ):
-            # if state-based, we can render every 10 steps
-            if (self.is_state_based and self.counter % 10 == 0) or (
-                not self.is_state_based
-            ):
-                image = self.env.render()
 
-                # Input should be of shape (batch_size, num_frames, height, width, channels)
-                # However, the input is of shape (height, width, channels)
-                image_for_model = image[None, None, :, :, :]
-                encoded_image = self.reward_model.encode_images(
-                    image_for_model
-                ).squeeze()
-
-        if self.is_state_based is False:
-            # obs = np.concatenate([obs, self.reward_model(obs)])
-            obs = encoded_image
-
-            if self.use_proprio:
-                obs = np.concatenate([obs, proprio])
+        if f"image_feature_{self.image_reward_idx}" in obs:
+            encoded_image = obs[f"image_feature_{self.image_reward_idx}"]
 
         if self.reward_model.name == "dense" or self.dense_eval:
             reward = original_reward / self.reward_divisor
@@ -254,6 +288,7 @@ class LearnedRewardWrapper(gym.Wrapper):
         assert self.reward_language_features is not None, (
             "Language features are None in the reward model"
         )
+
         if self.reward_at_every_step:
             stacked_sequence = np.stack(self.past_observations, axis=1)
             stacked_sequence = (
@@ -292,18 +327,10 @@ class LearnedRewardWrapper(gym.Wrapper):
 
         obs = self.env.reset()
 
-        # This is for the reward function
-        image = self.env.render()
-        image_for_model = image[None, None, :, :, :]
-        encoded_image = self.reward_model.encode_images(image_for_model).squeeze()
+        encoded_image = None
 
-        if self.is_state_based is False:
-            if self.use_proprio:
-                proprio = obs
-                obs = np.concatenate([encoded_image, proprio])
-
-            else:
-                obs = encoded_image
+        if f"image_feature_{self.image_reward_idx}" in obs:
+            encoded_image = obs[f"image_feature_{self.image_reward_idx}"]
 
         self.past_observations.append(encoded_image)
 

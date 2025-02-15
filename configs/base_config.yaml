@@ -25,12 +25,13 @@ general_training:
   pretrained: false
   action_noise: null
   learning_rate: 1e-3
-  dense_rewards_at_end: true
+  dense_rewards_at_end: false
   entropy_term: "auto"
 
   # offline rl parameters
   critic_update_ratio: 1 # iql and cql
-  gamma: 0.998 # (1/(1-gamma)) = 500 steps
+  # gamma: 0.998 # (1/(1-gamma)) = 500 steps
+  gamma: 0.99 # (1/(1-gamma)) = 500 steps
 
   # IQL-specific parameters
   policy_extraction: 'awr' # awr or ddpg

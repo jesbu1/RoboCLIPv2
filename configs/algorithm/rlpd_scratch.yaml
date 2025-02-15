@@ -15,15 +15,16 @@ general_training:
   learning_rate: 3e-4
 
   # offline rl parameters
-  n_critics: 5
+  n_critics: 4
   n_critics_to_sample: 2
 
   # RLPD-specific parameters
   rlpd_train_critic_with_entropy: true
   # Note: RLPD's offline step uses default params defined in base_config.yaml
   rlpd_offline_algo: iql
+  action_chunk_size: 60
 
-  entropy_term: 0.1
+  # entropy_term: 0.1
 
 model:
   policy_layer_norm: true
@@ -41,5 +42,6 @@ online_training:
   total_time_steps: 500000
   mix_buffers_ratio: 0.0 # WSRL does not use old replay buffer
   warm_start_online_rl: false # main change for WSRL
-  learning_starts: 500
+  learning_starts: 1000
   critic_update_ratio: 1
+  gradient_steps: 2000

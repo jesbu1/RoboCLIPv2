@@ -1,0 +1,6 @@
+# @package _global_
+
+reward_model: 
+  name: 'debug'
+  encoder: 'liv' # default and only option is vlc
+  success_bonus: 100.0

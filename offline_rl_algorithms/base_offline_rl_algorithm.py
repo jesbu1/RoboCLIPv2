@@ -179,6 +179,9 @@ class OfflineRLAlgorithm(OffPolicyAlgorithm):
 
         self.action_chunk_size = action_chunk_size
 
+        if _init_setup_model:
+            self._setup_model()
+
         if action_chunk_size > 1:
             try:
                 self.env.get_attr("chunk_size")
@@ -186,20 +189,20 @@ class OfflineRLAlgorithm(OffPolicyAlgorithm):
                 raise ValueError(
                     "Check if your env is wrapped with ActionChunkingWrapper"
                 )
-            # Replace the replay buffer with ActionChunkedReplayBuffer
-            self.replay_buffer = ActionChunkedReplayBuffer(
-                action_chunk_size=action_chunk_size,
-                pad_action_chunk_with_last_action=True,
-                buffer_size=self.buffer_size,
-                observation_space=self.observation_space,
-                action_space=self.action_space,
-                device=self.device,
-                n_envs=self.n_envs,
-                optimize_memory_usage=self.optimize_memory_usage,
-            )
+            self.replace_with_chunked_buffer(action_chunk_size)
 
-        if _init_setup_model:
-            self._setup_model()
+    def replace_with_chunked_buffer(self, action_chunk_size: int):
+        # Replace the replay buffer with ActionChunkedReplayBuffer
+        self.replay_buffer = ActionChunkedReplayBuffer(
+            action_chunk_size=action_chunk_size,
+            pad_action_chunk_with_last_action=True,
+            buffer_size=self.buffer_size,
+            observation_space=self.observation_space,
+            action_space=self.action_space,
+            device=self.device,
+            n_envs=self.n_envs,
+            optimize_memory_usage=self.optimize_memory_usage,
+        )
 
     def _setup_model(self) -> None:
         super()._setup_model()

@@ -32,12 +32,80 @@ import pybullet as p
 import pybullet_data
 
 
+def compute_debug_reward(state):
+    # In debug mode, we apply a manual reward function based on the current state
+    state = state
+    # # Let us set the task to be to approach a specific goal position
+    goal_position = [
+        90,
+        0,
+        0,
+        0,
+        0,
+        -180,
+        90,
+        0,
+        0,
+        0,
+        0,
+        -180,
+    ]
+
+    goal_position = np.array(goal_position)
+
+    # Reward is L2 distance to the goal position from state
+    # reward = -torch.norm(state - goal_position)
+
+    # The positions are rotations of motors, so we want the average degree difference
+    difference = np.abs(state - goal_position)
+    # Bound the difference to 180 degrees
+    difference = np.minimum(difference, 180 - difference)
+
+    reward = -np.sum(difference) / 12
+    return reward
+
+
 class KochBimanualEnv(Env):
-    def __init__(self, robot_path, max_episode_steps=500, fps=30):
+    def __init__(
+        self,
+        robot_path,
+        max_episode_steps=500,
+        fps=30,
+        image_keys=[],
+        reward_image_key=None,
+        fake_robot=False,
+    ):
         self.max_episode_steps = max_episode_steps
         self.fps = fps
 
+        self.image_keys = sorted(image_keys, reverse=False)
+        self.reward_image_key = reward_image_key
+        self.image_reward_idx = self.image_keys.index(reward_image_key)
+
         robot_cfg = init_hydra_config(robot_path)
+
+        # action space is of size 12
+        self.action_space = gym.spaces.Box(
+            low=-180, high=180, shape=(12,), dtype=np.float32
+        )
+        # Make the observation just the state
+
+        # Must define yourself
+        self.observation_space = gym.spaces.Dict(
+            {
+                "proprio": gym.spaces.Box(
+                    low=-1, high=1, shape=(12,), dtype=np.float32
+                ),
+            }
+        )
+        for key in image_keys:
+            self.observation_space.spaces[key] = gym.spaces.Box(
+                low=0, high=255, shape=(480, 640, 3), dtype=np.uint8
+            )
+
+        self.fake_robot = fake_robot
+        if self.fake_robot:
+            return
 
         # For Hydra purposes, must set absolute dir
         robot_cfg["calibration_dir"] = to_absolute_path(robot_cfg["calibration_dir"])
@@ -45,15 +113,7 @@ class KochBimanualEnv(Env):
 
         self.robot.connect()
 
-        # action space is of size 12
-        self.action_space = gym.spaces.Box(
-            low=-180, high=180, shape=(12,), dtype=np.float32
-        )
-
-        # The observation is a 12-dim vector
-        self.observation_space = gym.spaces.Box(
-            low=-1, high=1, shape=(12,), dtype=np.float32
-        )
+        self.reward_image_key = reward_image_key
 
         self.current_observation = None
 
@@ -86,14 +146,22 @@ class KochBimanualEnv(Env):
         if not torch.allclose(goal_pos, safe_goal_pos):
             print(
                 "Relative goal position magnitude had to be clamped to be safe.\n"
-                f"  requested relative goal position target: {diff}\n"
-                f"    clamped relative goal position target: {safe_diff}"
+                f"  requested relative goal position target: {diff.tolist()}\n"
+                f"    clamped relative goal position target: {safe_diff.tolist()}\n"
             )
 
         return safe_goal_pos
 
     def step(self, action):
         start_episode_t = time.perf_counter()
+
+        if self.fake_robot:
+            # return fake data
+            obs = {}
+            obs["proprio"] = torch.zeros(12)
+            for key in self.image_keys:
+                obs[key] = torch.zeros(480, 640, 3)
+            return obs, 0, False, {}
 
         self.counter += 1
         done = False
@@ -128,58 +196,26 @@ class KochBimanualEnv(Env):
 
         state = observation["observation.state"]
 
-        # # # Let us set the task to be to approach a specific goal position
-        # goal_position = [
-        #     90,
-        #     0,
-        #     0,
-        #     0,
-        #     0,
-        #     0,
-        #     90,
-        #     0,
-        #     0,
-        #     0,
-        #     0,
-        #     0,
-        # ]
+        obs = {}
+        obs["proprio"] = state
 
-        # goal_position = torch.tensor(goal_position)
+        for key in self.image_keys:
+            obs[key] = observation[key]
 
-        # # Reward is L2 distance to the goal position from state
-        # # reward = -torch.norm(state - goal_position)
+        reward = compute_debug_reward(state.numpy())
+        print(reward)
 
-        # # The positions are rotations of motors, so we want the average degree difference
-        # difference = torch.abs(state - goal_position)
-        # # Bound the difference to 180 degrees
-        # difference = torch.min(difference, 180 - difference)
-        # reward = -torch.sum(difference) / 12
-
-        # print(reward)
-        # print()
-
-        # # if the difference is less than 2 degrees, we can set success to True
-        # if torch.norm(state - goal_position) < 2.0:
-        #     info["success"] = True
-
-        return state, reward, done, info
+        return obs, reward, done, info
 
     def render(self, mode="rgb_array"):
-        # obs = []
-        # for key in self.current_observation:
-        #     if "image" in key:
-        #         obs.append(self.current_observation[key])
-        # Return the image
-
-        # Let's only use 1 camera
+        if self.fake_robot:
+            # Return fake data
+            return np.random.rand(480, 640, 3)
 
         obs = self.current_observation["observation.images.main"]
 
         # turn into a numpy array
         obs = obs.numpy()
-
-        # self.im1.set_data(obs)
-        # plt.pause(1 / self.fps)
 
         return obs
 
@@ -191,15 +227,23 @@ class KochBimanualEnv(Env):
             90,
             90,
             90,
-            0,
+            -180,
             30,
             90,
             90,
             90,
             90,
-            0,
+            -180,
             30,
         ]
+
+        if self.fake_robot:
+            # return fake data
+            obs = {}
+            obs["proprio"] = torch.zeros(12)
+            for key in self.image_keys:
+                obs[key] = torch.zeros(480, 640, 3)
+            return obs
 
         # breakpoint()
         reset_position = torch.tensor(reset_position)
@@ -223,77 +267,110 @@ class KochBimanualEnv(Env):
         self.robot.send_action(reset_position)
 
         # sleep
-        busy_wait(10)
+        # busy_wait(5)
+        busy_wait(1)
         observation = self.robot.capture_observation()
         self.current_observation = observation
         self.prev_time = time.perf_counter()
 
-        return observation["observation.state"]
+        obs = {}
+        obs["proprio"] = observation["observation.state"]
+        for key in self.image_keys:
+            obs[key] = observation[key]
+
+        return obs
 
     # Delete the robot
     def close(self):
-        self.robot.disconnect()
+        if not self.fake_robot:
+            self.robot.disconnect()
 
     def seed(self, seed=None):
         pass
 
-    # def _update_sim(self, state):
-    #     # update simulator
-    #     obs_left = state[:6]
-    #     obs_right = state[6:]
-
-    #     obs_left = obs_left - self.offset
-    #     obs_right = obs_right - self.offset
-
-    #     obs_left = obs_left * np.pi / 180.0
-    #     obs_right = obs_right * np.pi / 180.0
-
-    #     p.setJointMotorControlArray(
-    #         self.robot_id1,
-    #         jointIndices=range(len(obs_left)),
-    #         controlMode=p.POSITION_CONTROL,
-    #         targetPositions=obs_left,
-    #     )
-    #     p.stepSimulation()
-
-    #     p.setJointMotorControlArray(
-    #         self.robot_id2,
-    #         jointIndices=range(len(obs_right)),
-    #         controlMode=p.POSITION_CONTROL,
-    #         targetPositions=obs_right,
-    #     )
-    #     p.stepSimulation()
-
-    #     link_state1 = p.getLinkState(self.robot_id1, 6, computeForwardKinematics=True)
-    #     link_state2 = p.getLinkState(self.robot_id2, 6, computeForwardKinematics=True)
-
-    #     self.current_ee1 = link_state1[0]
-    #     self.current_ee2 = link_state2[0]
-
-    #     self.current_ee1_rpy = p.getEulerFromQuaternion(link_state1[1])
-    #     self.current_ee2_rpy = p.getEulerFromQuaternion(link_state2[1])
-
-    #     # Conver to torch tensor
-    #     self.current_ee1 = torch.tensor(self.current_ee1)
-    #     self.current_ee2 = torch.tensor(self.current_ee2)
-    #     self.current_ee1_rpy = torch.tensor(self.current_ee1_rpy)
-    #     self.current_ee2_rpy = torch.tensor(self.current_ee2_rpy)
-
-    # def _ee_to_state(self, ee1, ee2, ee1_rpy, ee2_rpy):
-    #     # pos1 = torch.tensor(self.r1.inverse_kinematics_rot(ee1, ee1_rpy))
-    #     # pos2 = torch.tensor(self.r2.inverse_kinematics_rot(ee2, ee2_rpy))
-
-    #     # let's to ik here
-    #     pos1 = p.calculateInverseKinematics(self.robot_id1, 6, ee1, ee1_rpy)
-    #     pos2 = p.calculateInverseKinematics(self.robot_id2, 6, ee2, ee2_rpy)
-
-    #     pos1 = torch.tensor(pos1)
-    #     pos2 = torch.tensor(pos2)
-    #     # convert to degrees
-    #     pos1 = pos1 * 180.0 / np.pi
-
 
 from inputimeout import inputimeout, TimeoutOccurred
+
+from gym import spaces
+
+
+class FlattenDictObservationWrapper(gym.Wrapper):
+    def __init__(self, env, use_proprio=True):
+        super().__init__(env)
+        self.env = env
+
+        # Concatenation will be done in the order of the keys
+        # Proprio, text_vector, image_vectors
+
+        obs_space = self.env.observation_space
+        total_concat_size = 0
+
+        image_feature_keys = [
+            key for key in obs_space.spaces.keys() if "image_feature" in key
+        ]
+
+        # Sort the images keys in case there are multiple images
+        image_feature_keys = sorted(image_feature_keys)
+
+        # Get text keys
+        lang_feature_key = (
+            "lang_feature" if "lang_feature" in obs_space.spaces.keys() else None
+        )
+
+        if use_proprio and "proprio" in obs_space.spaces.keys():
+            proprio_key = "proprio"
+        else:
+            proprio_key = None
+
+        # Get total size
+        if proprio_key is not None:
+            total_concat_size += obs_space[proprio_key].shape[0]
+
+        if lang_feature_key is not None:
+            total_concat_size += obs_space[lang_feature_key].shape[0]
+
+        for key in image_feature_keys:
+            total_concat_size += obs_space[key].shape[0]
+
+        self.lang_feature_key = lang_feature_key
+        self.proprio_key = proprio_key
+        self.image_feature_keys = sorted(image_feature_keys)
+
+        self.observation_space = gym.spaces.Box(
+            low=-1, high=1, shape=(total_concat_size,), dtype=np.float32
+        )
+
+    def _observation(self, obs: dict):
+        flattened_obs = []
+
+        # Lang
+        if "lang_feature" in obs:
+            lang = obs["lang_feature"]
+            lang = lang.reshape(-1)
+            flattened_obs.append(lang)
+
+        # Get image in order
+        for key in self.image_feature_keys:
+            if key in obs:
+                image = obs[key]
+                image = image.reshape(-1)
+                flattened_obs.append(image)
+
+        # Proprio
+        if "proprio" in obs:
+            proprio = obs["proprio"]
+            proprio = proprio.reshape(-1)
+            flattened_obs.append(proprio)
+
+        return np.concatenate(flattened_obs)
+
+    def step(self, action):
+        obs, reward, done, info = self.env.step(action)
+        return self._observation(obs), reward, done, info
+
+    def reset(self):
+        obs = self.env.reset()
+        return self._observation(obs)
 
 
 # Asks the user to provide the reward at the end of the episode
@@ -311,7 +388,7 @@ class ManualRewardWrapper(gym.Wrapper):
                     answer = None
                     # If no response in 5 seconds, then assume 0.0
                     try:
-                        prompt = "Give a reward in 2 seconds, else it is a failure"
+                        prompt = "Give a reward in 5 seconds, else it is a failure"
                         answer = inputimeout(prompt, timeout=5)
                     except TimeoutOccurred:
                         answer = 0.0
@@ -345,6 +422,7 @@ def create_wrapped_env(
     use_proprio=True,  # this flag is not used
     dense_rewards_at_end=False,
     action_chunk_size=1,
+    camera_kwargs=None,
 ):
     """
     Creates a wrapped MetaWorld environment with the given options.
@@ -363,8 +441,14 @@ def create_wrapped_env(
     """
 
     def _init():
+        if camera_kwargs is not None:
+            image_keys = camera_kwargs["image_keys"]
+            reward_image_key = camera_kwargs["reward_image_key"]
+
         base_env = KochBimanualEnv(
-            "/home/abrar/koch_arms/lerobot/lerobot/configs/robot/koch_bimanual.yaml"
+            "/home/abrar/koch_arms/lerobot/lerobot/configs/robot/koch_bimanual.yaml",
+            image_keys=image_keys,
+            reward_image_key=reward_image_key,
         )
 
         if pca_model is not None:
@@ -373,8 +457,9 @@ def create_wrapped_env(
         if use_time:
             base_env = TimeWrapper(base_env)
 
-        # breakpoint()
         # This replaces the metaworld state-based input with an image embedding too
+
+        base_env = ImageEmbeddingWrapper(base_env, reward_model)
 
         dense_eval = True if (mode == "eval" or mode == "demo") else False
 
@@ -384,12 +469,11 @@ def create_wrapped_env(
             is_state_based=is_state_based,
             language_features=language_features,
             dense_eval=dense_eval,
-            use_proprio=use_proprio,
         )
 
         # This is all for koch, so this is fine.
-        if reward_model.name == "sparse" or reward_model.name == "dense":
-            base_env = ManualRewardWrapper(base_env)
+        # if reward_model.name == "sparse" or reward_model.name == "dense":
+        #     base_env = ManualRewardWrapper(base_env)
 
         # This adds the language features to the observation
         if language_features is not None:
@@ -399,13 +483,7 @@ def create_wrapped_env(
         if dense_rewards_at_end:
             base_env = RewardAtEndWrapper(base_env)
 
-        # else:
-        #     # Then we are an EnvRewardModel
-        #     if reward_model.name == 'sparse':
-        #         use_sparse = True
-        #     elif reward_model.name == 'dense':
-        #         use_sparse = False
-        #     base_env = RewardWrapper(base_env, sparse=use_sparse, success_bonus=reward_model.success_bonus)
+        base_env = FlattenDictObservationWrapper(base_env, use_proprio=use_proprio)
 
         if action_chunk_size > 1:
             base_env = ActionChunkingWrapper(base_env, action_chunk_size)

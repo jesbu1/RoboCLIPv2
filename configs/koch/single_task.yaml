@@ -5,7 +5,7 @@ defaults:
 
 # tentatively unused
 offline_training:
-  offline_h5_path: "data/real_robot/updated_trajs/pick_orange_left_right_{}.h5"
+  offline_h5_path: "data/real_robot/updated_trajs/orange_left_right_handover_{}.h5"
   
   offline_tasks: null
 
@@ -16,9 +16,11 @@ environment:
   train_freq_num: 1
   train_freq_type: 'episode'
   ignore_language: false
+  image_keys: ['observation.images.main', 'observation.images.side']
+  reward_image_key: 'observation.images.main'
 
 online_training:
-  gradient_steps: 1
+  gradient_steps: 500
 
 
 # Reward divisor is environment-dependent

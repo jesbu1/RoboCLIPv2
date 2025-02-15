@@ -30,12 +30,33 @@ from stable_baselines3.common.torch_layers import (
     CombinedExtractor,
 )
 from stable_baselines3.common.type_aliases import Schedule
+import math
 
 import copy
 
 # Type definitions
 TensorDict = dict[str, th.Tensor]
 PyTorchObs = Union[th.Tensor, TensorDict]
+
+
+class PositionalEncoding(nn.Module):
+    def __init__(self, d_model, dropout=0.1, max_len=5000):
+        super(PositionalEncoding, self).__init__()
+        self.dropout = nn.Dropout(p=dropout)
+
+        pe = th.zeros(max_len, d_model)
+        position = th.arange(0, max_len, dtype=th.float).unsqueeze(1)
+        div_term = th.exp(
+            th.arange(0, d_model, 2).float() * (-math.log(10000.0) / d_model)
+        )
+        pe[:, 0::2] = th.sin(position * div_term)
+        pe[:, 1::2] = th.cos(position * div_term)
+        pe = pe.unsqueeze(0)
+        self.register_buffer("pe", pe)
+
+    def forward(self, x):
+        x = x + self.pe[:, : x.size(1)]
+        return self.dropout(x)
 
 
 def create_mlp(
@@ -242,13 +263,31 @@ class ActionSequenceActor(CustomActor):
         last_layer_dim = net_arch[-1] if len(net_arch) > 0 else features_dim
 
         self.action_dist = SquashedDiagGaussianDistribution(action_dim)  # type: ignore[assignment]
-        self.mu = nn.GRU(last_layer_dim, last_layer_dim, num_layers=1, batch_first=True)
-        self.mu_processor = nn.Linear(last_layer_dim, action_dim)
-        self.log_std = nn.GRU(
-            last_layer_dim, last_layer_dim, num_layers=1, batch_first=True
+        decoder_layer = nn.TransformerDecoderLayer(
+            d_model=512, nhead=4, batch_first=True
         )
+        self.action_transformer = nn.TransformerDecoder(
+            decoder_layer, num_layers=1, norm=nn.LayerNorm(512)
+        )
+        self.triangular_mask = th.triu(
+            th.ones(action_sequence_length, action_sequence_length) * float("-inf"),
+            diagonal=1,
+        )
+        self.position_embedding = PositionalEncoding(
+            512, max_len=action_sequence_length
+        )
+        # self.mu = GRU(last_layer_dim, last_layer_dim, num_layers=1, batch_first=True)
+        self.mu_processor = nn.Linear(last_layer_dim, action_dim)
+        # self.log_std = nn.GRU(
+        #    last_layer_dim, last_layer_dim, num_layers=1, batch_first=True
+        # )
         self.log_std_processor = nn.Linear(last_layer_dim, action_dim)
         self.action_sequence_length = action_sequence_length
+
+        # Print action transformer parameter count
+        print(
+            f"ActionTransformer has {sum(p.numel() for p in self.action_transformer.parameters())} parameters"
+        )
 
     def get_action_dist_params(
         self, obs: PyTorchObs
@@ -264,22 +303,46 @@ class ActionSequenceActor(CustomActor):
         features = self.extract_features(obs, self.features_extractor)
         latent_pi = self.latent_pi(features)
         # run the rnn  for self.action_sequence_length for mu and log_std
-        mean_actions_intermediate, _ = self.mu(
+        # mean_actions_intermediate, _ = self.mu(
+        #    latent_pi.unsqueeze(1).repeat(1, self.action_sequence_length, 1)
+        # )
+        mean_actions_intermediate = self.position_embedding(
             latent_pi.unsqueeze(1).repeat(1, self.action_sequence_length, 1)
         )
+
+        mean_actions_intermediate = self.action_transformer(
+            mean_actions_intermediate,
+            memory=mean_actions_intermediate,
+            # tgt_mask=self.triangular_mask,
+        )
+        # mean_actions_intermediate = self.action_transformer(
+        #     mean_actions_intermediate, memory=None, tgt_mask=self.triangular_mask
+        # )
         mean_actions_intermediate = mean_actions_intermediate.reshape(
             -1, mean_actions_intermediate.shape[-1]
         )
         mean_actions = self.mu_processor(
             self.activation_fn()(mean_actions_intermediate)
         )
-        log_std_intermediate, _ = self.log_std(
-            latent_pi.unsqueeze(1).repeat(1, self.action_sequence_length, 1)
-        )
-        log_std_intermediate = log_std_intermediate.reshape(
-            -1, log_std_intermediate.shape[-1]
-        )
+
+        # Add batch back
+        # mean_actions = mean_actions.reshape(
+        #    -1, self.action_sequence_length, mean_actions.shape[-1]
+        # )
+
+        # log_std_intermediate, _ = self.log_std(
+        #     latent_pi.unsqueeze(1).repeat(1, self.action_sequence_length, 1)
+        # )
+        # log_std_intermediate = log_std_intermediate.reshape(
+        #     -1, log_std_intermediate.shape[-1]
+        # )
+        # log_std = self.log_std_processor(self.activation_fn()(log_std_intermediate))
+
+        log_std_intermediate = mean_actions_intermediate  # Adjust as needed
         log_std = self.log_std_processor(self.activation_fn()(log_std_intermediate))
+
+        # Add batch back
+        # log_std = log_std.reshape(-1, self.action_sequence_length, log_std.shape[-1])
 
         # Original Implementation to cap the standard deviation
         log_std = th.clamp(log_std, LOG_STD_MIN, LOG_STD_MAX)
@@ -296,14 +359,18 @@ class ActionSequenceActor(CustomActor):
         # reshape everything to be (batch_size * action_sequence_length, action_dim)
         batch_size = mean_actions.shape[0] // self.action_sequence_length
         action_dim = mean_actions.shape[-1]
-        mean_actions = mean_actions.reshape(
-            batch_size * self.action_sequence_length, action_dim
-        )
-        log_std = log_std.reshape(batch_size * self.action_sequence_length, action_dim)
+        # try:
+        #     mean_actions = mean_actions.reshape(
+        #         batch_size * self.action_sequence_length, action_dim
+        #     )
+        # except:
+        #     breakpoint()
+        # log_std = log_std.reshape(batch_size * self.action_sequence_length, action_dim)
 
         actions = self.action_dist.actions_from_params(
             mean_actions, log_std, deterministic=deterministic, **kwargs
         )
+
         return actions.reshape(batch_size, self.action_sequence_length, action_dim)
 
     def action_log_prob(self, obs: PyTorchObs) -> Tuple[th.Tensor, th.Tensor]:
@@ -393,11 +460,21 @@ class ActionSequenceActor(CustomActor):
 class RecurrentQNetwork(nn.Module):
     def __init__(self, action_dim, features_dim, activation_fn, q_network):
         super().__init__()
-        self.action_feature_extractor = nn.Linear(action_dim, features_dim)
-        self.activation_fn = activation_fn()
-        self.recurrent_action_processor = nn.GRU(
-            features_dim, features_dim, batch_first=True
+        self.action_feature_extractor = nn.Linear(action_dim, 128)
+        # self.activation_fn = activation_fn()
+        # self.recurrent_action_processor = nn.GRU(
+        #    features_dim, features_dim, batch_first=True
+        # )
+
+        # self.downprojector = nn.Linear(features_dim, 128)
+
+        encoder_layer = nn.TransformerEncoderLayer(
+            d_model=128, nhead=4, batch_first=True
         )
+        self.transformer_action_processor = nn.TransformerEncoder(
+            encoder_layer, num_layers=1, norm=nn.LayerNorm(128)
+        )
+        self.position_embedding = PositionalEncoding(128, max_len=100)
         self.q_network = q_network
 
     def forward(self, q_input: Tuple[th.Tensor, th.Tensor]) -> th.Tensor:
@@ -405,15 +482,19 @@ class RecurrentQNetwork(nn.Module):
         # reshape actions to be (batch_size * action_sequence_length, action_dim)
         batch_size = actions.shape[0]
         action_dim = actions.shape[-1]
+        chunk_size = actions.shape[1]
         actions = actions.reshape(batch_size * actions.shape[1], action_dim)
         action_features = self.action_feature_extractor(actions)
-        action_features = self.activation_fn(action_features)
-        action_features = action_features.reshape(
-            batch_size, -1, action_features.shape[-1]
-        )
-        action_features, _ = self.recurrent_action_processor(action_features)
-        last_action_features = action_features[:, -1, :]
-        q_input = th.cat([obs, last_action_features], dim=1)
+        # action_features = self.activation_fn(action_features)
+        # action_features = self.downprojector(action_features)
+        # action_features = action_features.reshape(batch_size, actions.shape[1], -1)
+        # action_features, _ = self.recurrent_action_processor(action_features)
+        action_features = action_features.reshape(batch_size, chunk_size, -1)
+
+        action_features = self.position_embedding(action_features)
+        action_features = self.transformer_action_processor(action_features)
+        action_features = action_features.mean(dim=1)
+        q_input = th.cat([obs, action_features], dim=1)
         return self.q_network(q_input)
 
 
@@ -476,7 +557,9 @@ class CustomContinuousCritic(ContinuousCritic):
         self.recurrent_action = recurrent_action
         for idx in range(n_critics):
             q_net = create_mlp(
-                features_dim + action_dim if not recurrent_action else features_dim * 2,
+                features_dim + action_dim
+                if not recurrent_action
+                else features_dim + 128,
                 1,
                 net_arch,
                 activation_fn,
@@ -504,6 +587,7 @@ class CustomContinuousCritic(ContinuousCritic):
             self.params = nn.ParameterList([nn.Parameter(p) for p in params.values()])
 
             for k, v in buffers.items():
+                k = k.replace(".", "_")
                 self.register_buffer(k, v)
 
     def forward(
