@@ -2,7 +2,8 @@ from tqdm import tqdm
 import h5py
 
 #MAIN_H5 = "/data/shared/roboclip/data/h5_buffers/openx_embeddings/openx_embeddings_full_uncompressed_with_langtable35k.h5"
-MAIN_H5 = "full_openx_embeddings_dino_train.h5"
+#MAIN_H5 = "full_openx_embeddings_dino_train.h5"
+MAIN_H5 = "test_merge_dino_train.h5"
 H5_MERGING_FROM = "droid_embeddings_dino.h5"
 print(f"Adding to {MAIN_H5} from {H5_MERGING_FROM}")
 MAX_TO_MERGE = 30_000
