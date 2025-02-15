@@ -70,7 +70,13 @@ total_samples = 0
 with h5py.File(SAVE_H5_NAME, "w") as f:
     for dataset_name in tqdm(dataset_names):
         try:
-            dataset = tfds.load(dataset_name, data_dir=TFDS_PATH, split=TRAIN_SPLIT)
+            if TRAIN_SPLIT == "test":
+                try:
+                    dataset = tfds.load(dataset_name, data_dir=TFDS_PATH, split=TRAIN_SPLIT)
+                except ValueError as e:
+                    dataset = tfds.load(dataset_name, data_dir=TFDS_PATH, split="val")
+            else:
+                dataset = tfds.load(dataset_name, data_dir=TFDS_PATH, split=TRAIN_SPLIT)
         except ValueError as e:
             print(f"Failed to load dataset {dataset_name}: \n{e}")
             continue
