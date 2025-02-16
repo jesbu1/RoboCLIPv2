@@ -36,7 +36,7 @@ Eval_keys = [
     'Put the red tape in the box on the right'
 ]
 
-h5_file_name = "usc_koch_rewind_reward_concat.h5"
+h5_file_name = "usc_koch_rewind_dino_reward_side_main.h5"
 h5_file = h5py.File(h5_file_name, 'r')
 
 # print("Keys: %s" % h5_file.keys())
@@ -50,12 +50,12 @@ for key in Eval_keys:
         print("Key not found: ", key)
 
 
-train_file = h5py.File("usc_koch_rewind_reward_concat_train.h5", 'w')
+train_file = h5py.File("usc_koch_rewind_dino_reward_side_main_train.h5", 'w')
 for key in train_keys:
     h5_file.copy(key, train_file)
 train_file.close()
 
-eval_file = h5py.File("usc_koch_rewind_reward_concat_eval.h5", 'w')
+eval_file = h5py.File("usc_koch_rewind_dino_reward_side_main_eval.h5", 'w')
 for key in Eval_keys:
     h5_file.copy(key, eval_file)
 eval_file.close()

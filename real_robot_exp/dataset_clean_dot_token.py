@@ -40,9 +40,9 @@ class LivRealVideoTrainTokenDataset(Dataset):
 
     def sample_text_feature(self, data_group):
         key = list(data_group.keys())
-        key = [k for k in key if "lang_embedding_individual" in k]
-        if len(key) > 1:
-            key.remove("lang_embedding_individual")
+        key = [k for k in key if "liv_lang_embedding_individual" in k]
+        # if len(key) > 1:
+        #     key.remove("lang_embedding_individual")
         
         key = random.choice(key)
         lang_embedding = np.array(data_group[key])[0]
@@ -61,10 +61,10 @@ class LivRealVideoTrainTokenDataset(Dataset):
         
         data_group = self.h5_file[random_key]
         key = list(data_group.keys())
-        key = [k for k in key if "lang_embedding_individual" in k]
+        key = [k for k in key if "liv_lang_embedding_individual" in k]
         
-        if len(key) > 1:
-            key.remove("lang_embedding_individual")
+        # if len(key) > 1:
+        #     key.remove("lang_embedding_individual")
         key = random.choice(key)
         lang_embedding = np.array(data_group[key])[0]
 
@@ -77,7 +77,9 @@ class LivRealVideoTrainTokenDataset(Dataset):
     def sample_video_feature(self, data_group):
 
         traj_lists = list(data_group.keys())
-        traj_lists = [traj for traj in traj_lists if "lang" not in traj]   
+
+        traj_lists = [traj for traj in traj_lists if "lang" not in traj]  
+
         random_name = random.choice(traj_lists)
 
         progress_dataset = np.asarray(data_group[random_name]) # all video data
@@ -131,6 +133,7 @@ class LivRealVideoTrainTokenDataset(Dataset):
             video_frames = normalize_embeddings(video_frames, return_tensor=True)
 
         if self.args.subsample_video:
+
             video_frames = self.padding_video(video_frames, self.args.max_length)
 
             progress = np.expand_dims(progress, axis=1)
@@ -240,7 +243,8 @@ class LivRealVideoEvalTokenDataset(Dataset):
 
     def sample_text_feature(self, data_group):
         key = list(data_group.keys())
-        key = [k for k in key if "lang_embedding_individual" in k]
+        key = [k for k in key if "liv_lang_embedding_individual" in k]
+        
         key = random.choice(key)
         lang_embedding = np.array(data_group[key])[0]
 

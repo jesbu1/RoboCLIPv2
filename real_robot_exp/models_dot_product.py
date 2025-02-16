@@ -131,16 +131,17 @@ class TextTransformerEncoder(nn.Module):
         super().__init__()
         self.emb_size = emb_size
         self.max_t = max_t  # Maximum expected sequence length
+        self.project = nn.Linear(emb_size, ff_dim)
 
         # Transformer Decoder
-        decoder_layer = nn.TransformerDecoderLayer(d_model=emb_size, 
+        decoder_layer = nn.TransformerDecoderLayer(d_model=ff_dim, 
                                                    nhead=num_heads, 
                                                    dim_feedforward=ff_dim,
                                                    batch_first=True)
         self.decoder = nn.TransformerDecoder(decoder_layer, num_layers=num_layers)
 
         # Learnable Query Token
-        self.query_token = nn.Parameter(torch.randn(1, 1, emb_size))  # (1, 1, emb_size)
+        self.query_token = nn.Parameter(torch.randn(1, 1, ff_dim))  # (1, 1, emb_size)
 
         # Precompute positional encodings
         self.positional_encoding = self._generate_positional_encoding(max_t, emb_size)  # (max_t, emb_size)
@@ -168,6 +169,10 @@ class TextTransformerEncoder(nn.Module):
 
         # Expand query token for the batch
         query = self.query_token.expand(bs, -1, -1)  # Shape: (bs, 1, emb_size)
+
+        # Pass through the linear projection
+
+        x = self.project(x.view(bs * t, emb_size)).view(bs, t, -1)  # (bs, t, ff_dim)
 
         # Pass through the transformer decoder with mask
         output = self.decoder(query, x, memory_key_padding_mask=mask)  # (bs, 1, emb_size)

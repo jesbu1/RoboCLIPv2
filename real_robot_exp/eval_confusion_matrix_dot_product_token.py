@@ -111,7 +111,7 @@ def plot_confusion_matrix(h5_file, set, video_encoder, text_encoder, args, pca_t
     for key in eval_envs:
         video_group = h5_file[key]
         select_key = list(video_group.keys())
-        select_key = [k for k in select_key if "individual" in k]
+        select_key = [k for k in select_key if "liv_lang_embedding_individual" in k]
         select_key = random.choice(select_key)
         embedding = np.asarray(video_group[select_key])
         embedding = torch.from_numpy(embedding).to(device).float()
@@ -132,7 +132,7 @@ def plot_confusion_matrix(h5_file, set, video_encoder, text_encoder, args, pca_t
 
     for i  in tqdm(range(len(eval_envs))):
         env = eval_envs[i]
-        video_embedding = np.asarray(h5_file[env]["2"])
+        video_embedding = np.asarray(h5_file[env]["4"])
         video_embedding = torch.from_numpy(video_embedding).to(device).float()
         if args.subsample_video:
             video_embedding = padding_video(video_embedding, args.max_length)

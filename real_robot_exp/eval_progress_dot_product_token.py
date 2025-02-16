@@ -65,7 +65,7 @@ def plot_progress(h5_file, set, video_encoder, text_encoder, args, pca_text_mode
     for key in tqdm(eval_envs):
         video_group = h5_file[key]
         select_key = list(video_group.keys())
-        select_key = [k for k in select_key if "individual" in k]
+        select_key = [k for k in select_key if "liv_lang_embedding_individual" in k]
         select_key = random.choice(select_key)
 
         text_embedding = np.asarray(video_group[select_key])[0]
@@ -76,7 +76,7 @@ def plot_progress(h5_file, set, video_encoder, text_encoder, args, pca_text_mode
         if args.normalize_embedding:
             text_embedding = normalize_embeddings(text_embedding)
 
-        video_embeddings = np.asarray(video_group["2"])
+        video_embeddings = np.asarray(video_group["4"])
         video_embeddings = torch.from_numpy(video_embeddings).to(device).float()
         if args.pca:
             video_embeddings = pca_video_model(video_embeddings)
@@ -88,7 +88,7 @@ def plot_progress(h5_file, set, video_encoder, text_encoder, args, pca_text_mode
         if args.pca:
             traj_data = traj_data.view(-1, 512).unsqueeze(0).repeat(text_embedding.shape[0], 1, 1)
         else:
-            traj_data = traj_data.view(-1, 1024).unsqueeze(0).repeat(text_embedding.shape[0], 1, 1)
+            traj_data = traj_data.view(-1, 768).unsqueeze(0).repeat(text_embedding.shape[0], 1, 1)
 
         
         triangle_mask = torch.tril(torch.ones(traj_data.shape[1], traj_data.shape[1])).to(device).unsqueeze(0).unsqueeze(0).repeat(traj_data.shape[0], 1, 1, 1)
