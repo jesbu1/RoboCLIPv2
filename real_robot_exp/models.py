@@ -155,8 +155,10 @@ class RewardTwoStepNewPositionEmbeddingPredictor(nn.Module):
 
         two_step_label = self.twostep_classifier(x)
         x = self.classifier(x)
+        
         if self.class_num == 1:
-            x = torch.clamp(x, 0, 1)
+            x = torch.sigmoid(x)
+            # x = torch.clamp(x, 0, 1)
         x = x.view(batch_size, seq_len, -1)
         two_step_label = two_step_label.view(batch_size, seq_len, -1)
         two_step_label = torch.sigmoid(two_step_label)

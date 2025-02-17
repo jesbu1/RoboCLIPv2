@@ -108,6 +108,7 @@ def plot_progress(h5_file, set, self_attention_model, args, pca_text_model = Non
 
         mask = None
         pred_class, two_step_class = self_attention_model(traj_data, triangle_mask, text_embedding.squeeze(1), mask)
+
         # batch_size, seq_len, _ = traj_data.size()
         if not args.catagorical_progress:
             pred_class = pred_class.view(-1, 1)

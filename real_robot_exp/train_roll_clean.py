@@ -117,7 +117,7 @@ def main(args):
     
     # group_name += "Feb11th"
     # group_name = "ProgressCheck" + group_name
-    group_name = "TokenDotProductRealWorld_Koch"
+    group_name = "Dino_Koch"
     run = wandb.init(
         entity=WANDB_ENTITY_NAME,
         project=WANDB_PROJECT_NAME,
