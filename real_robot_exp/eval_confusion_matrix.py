@@ -120,7 +120,7 @@ def plot_confusion_matrix(h5_file, set, self_attention_model, args, prob = False
     text_embeddings = []
     text_list = []
     for key in eval_envs:
-        embedding = np.asarray(h5_file[key]["lang_embedding"])[0].reshape(1, -1)
+        embedding = np.asarray(h5_file[key]["liv_lang_embedding"])[0].reshape(1, -1)
         text_embeddings.append(embedding)
         text_list.append(key)
     text_embeddings = np.concatenate(text_embeddings, axis=0)
@@ -136,7 +136,7 @@ def plot_confusion_matrix(h5_file, set, self_attention_model, args, prob = False
         pred_two_step_prob_list = []
     for i  in tqdm(range(len(eval_envs))):
         env = eval_envs[i]
-        video_embedding = np.asarray(h5_file[env]["2"])
+        video_embedding = np.asarray(h5_file[env]["4"])
         video_embedding = torch.from_numpy(video_embedding).to(device).float()
         if args.pca:
             video_embedding = pca_video_model(video_embedding)
@@ -151,7 +151,7 @@ def plot_confusion_matrix(h5_file, set, self_attention_model, args, prob = False
             # dim = pca_video_model.n_components
             traj_data = traj_data.view(-1, 512).unsqueeze(0).repeat(text_embeddings.shape[0], 1, 1)
         else:
-            traj_data = traj_data.view(-1, 1024).unsqueeze(0).repeat(text_embeddings.shape[0], 1, 1)
+            traj_data = traj_data.view(-1, 768).unsqueeze(0).repeat(text_embeddings.shape[0], 1, 1)
 
         triangle_mask = torch.tril(torch.ones(traj_data.shape[1] + 1, traj_data.shape[1] + 1)).to(device).unsqueeze(0).unsqueeze(0).repeat(traj_data.shape[0], 1, 1, 1)
 

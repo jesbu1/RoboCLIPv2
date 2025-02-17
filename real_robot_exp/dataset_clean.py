@@ -43,7 +43,7 @@ class LivRealVideoTrainDataset(Dataset):
 
 
     def sample_text_feature(self, data_group):
-        lang_embedding = np.array(data_group["lang_embedding"])
+        lang_embedding = np.array(data_group["liv_lang_embedding"])
         if lang_embedding.shape[0] == 1024:
             lang_embedding = np.expand_dims(lang_embedding, axis=0)
 
@@ -62,7 +62,7 @@ class LivRealVideoTrainDataset(Dataset):
         while random_key == key:
             random_key = random.choice(self.keys)
         data_group = self.h5_file[random_key]
-        lang_embedding = np.array(data_group["lang_embedding"])
+        lang_embedding = np.array(data_group["liv_lang_embedding"])
         if lang_embedding.shape[0] == 1024:
             lang_embedding = np.expand_dims(lang_embedding, axis=0)
 
@@ -79,9 +79,7 @@ class LivRealVideoTrainDataset(Dataset):
     def sample_video_feature(self, data_group):
 
         traj_lists = list(data_group.keys())
-        traj_lists.remove("lang_embedding")
-        if "lang_embedding_individual" in traj_lists:
-            traj_lists.remove("lang_embedding_individual")    
+        traj_lists = [traj for traj in traj_lists if "lang" not in traj] 
         
         random_name = random.choice(traj_lists)
 
@@ -120,9 +118,11 @@ class LivRealVideoTrainDataset(Dataset):
 
     def sample_reverse_video_feature(self, data_group):
         traj_lists = list(data_group.keys())
-        traj_lists.remove("lang_embedding")
-        if "lang_embedding_individual" in traj_lists:
-            traj_lists.remove("lang_embedding_individual")  
+        # traj_lists.remove("lang_embedding")
+        # if "lang_embedding_individual" in traj_lists:
+        #     traj_lists.remove("lang_embedding_individual")  
+        traj_lists = [traj for traj in traj_lists if "lang" not in traj] 
+
         random_name = random.choice(traj_lists)
 
         progress_dataset = np.asarray(data_group[random_name]) # all video data
@@ -263,7 +263,7 @@ class LivRealVideoEvalDataset(Dataset):
 
     def sample_text_feature(self, data_group):
 
-        lang_embedding = np.array(data_group["lang_embedding"])
+        lang_embedding = np.array(data_group["liv_lang_embedding"])
         if lang_embedding.shape[0] == 1024:
             lang_embedding = np.expand_dims(lang_embedding, axis=0)
 
@@ -277,9 +277,9 @@ class LivRealVideoEvalDataset(Dataset):
     
     def sample_video_feature(self, data_group):
         traj_lists = list(data_group.keys())
-        traj_lists.remove("lang_embedding")
-        if "lang_embedding_individual" in traj_lists:
-            traj_lists.remove("lang_embedding_individual")
+
+        traj_lists = [traj for traj in traj_lists if "lang" not in traj]
+
         random_name = random.choice(traj_lists)
 
         video_frames = np.asarray(data_group[random_name]) # all video data
@@ -315,9 +315,9 @@ class LivRealVideoEvalDataset(Dataset):
 
         negative_video_group = self.h5_file[negative_env_name]
         negative_datasets = list(negative_video_group.keys())
-        negative_datasets.remove("lang_embedding")
-        if "lang_embedding_individual" in negative_datasets:
-            negative_datasets.remove("lang_embedding_individual")
+
+        negative_datasets = [dataset for dataset in negative_datasets if "lang" not in dataset]
+
 
         negative_random_name = random.choice(negative_datasets)
         negative_video_frames = np.asarray(negative_video_group[negative_random_name])

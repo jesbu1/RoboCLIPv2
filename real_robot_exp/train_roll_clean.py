@@ -116,7 +116,8 @@ def main(args):
 
     
     # group_name += "Feb11th"
-    group_name = "ProgressCheck" + group_name
+    # group_name = "ProgressCheck" + group_name
+    group_name = "TokenDotProductRealWorld_Koch"
     run = wandb.init(
         entity=WANDB_ENTITY_NAME,
         project=WANDB_PROJECT_NAME,
@@ -136,14 +137,14 @@ def main(args):
         # h5_eval_file = h5py.File("jesse_collect_dataset_new_token.h5", "r")
         # extra_data_path = "jesse_collect_dataset_new_token.h5"
         if args.view == "side":
-            h5_train_eval_file = h5py.File("usc_koch_rewind_reward_side_only_train.h5", "r")
-            h5_eval_file = h5py.File("usc_koch_rewind_reward_side_only_eval.h5", "r")
-            extra_data_path = "usc_koch_rewind_reward_side_only_train.h5"
+            h5_train_eval_file = h5py.File("usc_koch_rewind_dino_reward_side_main_train.h5", "r")
+            h5_eval_file = h5py.File("usc_koch_rewind_dino_reward_side_main_eval.h5", "r")
+            extra_data_path = "usc_koch_rewind_dino_reward_side_main_train.h5"
         elif args.view == "top":
             h5_train_eval_file = h5py.File("usc_koch_rewind_reward_train.h5", "r")
             h5_eval_file = h5py.File("usc_koch_rewind_reward_eval.h5", "r")
             extra_data_path = "usc_koch_rewind_reward_train.h5"
-    embedding_dim = 1024
+    embedding_dim = 768
 
     if args.pca:
         pca_video_model_path = "pca_models/pca_video_model_512.pkl"
@@ -178,9 +179,9 @@ def main(args):
         extra_dataloader = DataLoader(extra_dataset, batch_size=extra_batch_size, shuffle=True, num_workers=args.worker, drop_last=True, pin_memory=True)
 
 
-        h5_openx_eval_file = h5py.File("/home/jzhang96/openx_embeddings_test_dataset_progrssed.h5", "r")
-        # h5_openx_eval_file = h5py.File("/mnt/ssd_a_4tb/jzhang96/openx_embeddings_test_dataset_progrssed.h5", "r")
-        # h5_openx_eval_file = h5py.File("/data/shared/roboclip/data/h5_buffers/openx_embeddings/openx_embeddings_test_dataset_progrssed.h5", "r")
+        # h5_openx_eval_file = h5py.File("/home/jzhang96/full_openx_embeddings_dino_test_backup.h5", "r")
+        # h5_openx_eval_file = h5py.File("/mnt/ssd_a_4tb/jzhang96/full_openx_embeddings_dino_test_backup.h5", "r")
+        h5_openx_eval_file = h5py.File("/data/shared/roboclip/data/h5_buffers/openx_embeddings/full_openx_embeddings_dino_test_backup.h5", "r")
 
         positive_eval_openx_dataset = LivRealVideoEvalDataset(args, 
                                                         h5_openx_eval_file,
@@ -505,11 +506,11 @@ def main(args):
 
 if __name__ == "__main__":
     argparser = argparse.ArgumentParser()
-    # argparser.add_argument('--h5_embedding_path', type=str, default='/data/shared/roboclip/data/h5_buffers/openx_embeddings/openx_embeddings_full_uncompressed_with_langtable_processed.h5')
-    argparser.add_argument('--h5_embedding_path', type=str, default='/home/jzhang96/openx_embeddings_full_uncompressed_with_langtable_processed.h5')
+    argparser.add_argument('--h5_embedding_path', type=str, default='/data/shared/roboclip/data/h5_buffers/openx_embeddings/full_openx_embeddings_droid_dino_train_backup.h5')
+    # argparser.add_argument('--h5_embedding_path', type=str, default='/home/jzhang96/openx_embeddings_full_uncompressed_with_langtable_processed.h5')
     # argparser.add_argument('--h5_embedding_path', type=str, default='/mnt/ssd_a_4tb/jzhang96/openx_embeddings_full_uncompressed_with_langtable_processed.h5')
     argparser.add_argument('--extra_data_type', type=str, choices=["metaworld", "real_world"], default="real_world")
-    argparser.add_argument('--batch_size', type=int, default=512)
+    argparser.add_argument('--batch_size', type=int, default=1024)
     argparser.add_argument('--epochs', type=int, default=10000)
     argparser.add_argument('--seed', type=int, default=42)
     argparser.add_argument('--lr', type=float, default=1e-4)
