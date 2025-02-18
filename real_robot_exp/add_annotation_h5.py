@@ -28,6 +28,7 @@ for key in h5_file.keys():
     for i in range(len(anns)):
         ann = anns[i]
         text_embedding = get_full_liv_embedding(model, processor, ann).detach().cpu().numpy()
+        del h5_file[key][f"liv_lang_embedding_individual_{i}"]
         h5_file[key].create_dataset(f"liv_lang_embedding_individual_{i}", data=text_embedding)
 
 
