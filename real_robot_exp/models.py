@@ -184,8 +184,10 @@ class RewardOneStepNewPositionEmbeddingPredictor(nn.Module):
         if args.positional_encoding:
             self.position_embedding = self._get_cosine_positional_encoding(args.max_length, input_dim)
         if args.learner_parameter:
-            self.text_learner_parameter = nn.Parameter(torch.randn(1, input_dim))
+            self.text_learner_parameter = nn.Parameter(torch.randn(1, 1024))
             self.video_learner_parameter = nn.Parameter(torch.randn(1, input_dim))
+
+        self.text_projector = nn.Linear(1024, input_dim)
 
 
     def _get_cosine_positional_encoding(self, max_seq_len, embed_dim):
@@ -213,6 +215,7 @@ class RewardOneStepNewPositionEmbeddingPredictor(nn.Module):
                 x = x + positional_embedding
 
         # concatenate text in front of the input
+        text_array = self.text_projector(text_array)
         text_array = text_array.unsqueeze(1)
         x = torch.cat([text_array, x], dim=1)
 

@@ -3,7 +3,7 @@ from tqdm import tqdm
 import numpy as np
 dataset_info = dict()
 
-file_path = "/data/shared/roboclip/data/h5_buffers/openx_embeddings/full_openx_embeddings_dino_test_backup.h5"
+file_path = "/data/shared/roboclip/data/h5_buffers/openx_embeddings/full_openx_embeddings_dino_test.h5"
 h5_file = h5py.File(file_path, 'a')
 key_num = len(h5_file.keys())
 dataset_info["key_num"] = key_num
@@ -14,6 +14,7 @@ shorter_length = 0
 # del h5_file['Place red
 num = 0
 del_num = 0
+print("before", len(h5_file.keys()))
 for key in tqdm(h5_file.keys()):
     data_group = h5_file[key]
     if len(data_group) <= 4:
@@ -30,7 +31,7 @@ for key in tqdm(h5_file.keys()):
                     if len(data_group) == 4:
                         del_num += 1
                         del h5_file[key]
-                
+print("after", len(h5_file.keys()))
 
             #     print(key, sub_key)
             #     num += 1
