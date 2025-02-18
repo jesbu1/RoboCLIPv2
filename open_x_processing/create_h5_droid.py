@@ -105,9 +105,6 @@ with h5py.File(SAVE_H5_NAME, "w") as f:
                 print(
                     f"Skipping episode {i + 1} of dataset {dataset_name} as the task is None or empty."
                 )
-                print(
-                    f"Keys in step: {step.keys()} and keys in observation: {step['observation'].keys()}"
-                )
                 continue
 
             # process task name to capitalize the first letter
