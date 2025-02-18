@@ -175,7 +175,7 @@ with h5py.File(SAVE_H5_NAME, "w") as f:
                     0, len(episode_images) - 1, MAX_NUM_FRAMES_PER_EPISODE, dtype=int
                 )
                 # make sure there are no duplicates
-                indices = list(set(indices))
+                indices = sorted(list(set(indices)))
 
                 episode_images = [episode_images[i] for i in indices]
 
