@@ -141,9 +141,13 @@ def main(args):
             h5_eval_file = h5py.File("usc_koch_rewind_dino_reward_side_main_eval.h5", "r")
             extra_data_path = "usc_koch_rewind_dino_reward_side_main_train.h5"
         elif args.view == "top":
-            h5_train_eval_file = h5py.File("usc_koch_rewind_reward_train.h5", "r")
-            h5_eval_file = h5py.File("usc_koch_rewind_reward_eval.h5", "r")
-            extra_data_path = "usc_koch_rewind_reward_train.h5"
+            h5_train_eval_file = h5py.File("usc_koch_rewind_dino_reward_side_main_train.h5", "r")
+            h5_eval_file = h5py.File("usc_koch_rewind_dino_reward_side_main_eval.h5", "r")
+            extra_data_path = "usc_koch_rewind_dino_reward_side_main_train.h5"
+        elif args.view == "both":
+            h5_train_eval_file = h5py.File("usc_koch_rewind_dino_reward_side_main_train.h5", "r")
+            h5_eval_file = h5py.File("usc_koch_rewind_dino_reward_side_main_eval.h5", "r")
+            extra_data_path = "usc_koch_rewind_dino_reward_side_main_train.h5"
     embedding_dim = 768
 
     if args.pca:
@@ -179,7 +183,7 @@ def main(args):
         extra_dataloader = DataLoader(extra_dataset, batch_size=extra_batch_size, shuffle=True, num_workers=args.worker, drop_last=True, pin_memory=True)
 
 
-        h5_openx_eval_file = h5py.File("/home/jzhang96/full_openx_embeddings_dino_test.h5", "r")
+        h5_openx_eval_file = h5py.File("/data/shared/roboclip/data/h5_buffers/openx_embeddings/full_openx_embeddings_dino_test.h5", "r")
         # h5_openx_eval_file = h5py.File("/mnt/ssd_a_4tb/jzhang96/full_openx_embeddings_dino_test_backup.h5", "r")
         # h5_openx_eval_file = h5py.File("/data/shared/roboclip/data/h5_buffers/openx_embeddings/full_openx_embeddings_dino_test.h5", "r")
 
@@ -473,7 +477,7 @@ def main(args):
 
 
         if epoch % 20 == 0:
-            save_path = "/home/jzhang96/roboclip_v2_models"
+            save_path = "/home/abrar/roboclip_v2_models"
             if not os.path.exists(save_path):
                 os.makedirs(save_path)
             save_path = os.path.join(save_path, experiment_name)
@@ -511,10 +515,10 @@ def main(args):
 if __name__ == "__main__":
     argparser = argparse.ArgumentParser()
     # argparser.add_argument('--h5_embedding_path', type=str, default='/data/shared/roboclip/data/h5_buffers/openx_embeddings/full_openx_embeddings_droid_dino_train.h5')
-    argparser.add_argument('--h5_embedding_path', type=str, default='/home/jzhang96/full_openx_embeddings_droid_dino_train.h5')
+    argparser.add_argument('--h5_embedding_path', type=str, default='/data/shared/roboclip/data/h5_buffers/openx_embeddings/full_openx_embeddings_dino_train.h5')
     # argparser.add_argument('--h5_embedding_path', type=str, default='/mnt/ssd_a_4tb/jzhang96/openx_embeddings_full_uncompressed_with_langtable_processed.h5')
     argparser.add_argument('--extra_data_type', type=str, choices=["metaworld", "real_world"], default="real_world")
-    argparser.add_argument('--batch_size', type=int, default=1024)
+    argparser.add_argument('--batch_size', type=int, default=512)
     argparser.add_argument('--epochs', type=int, default=10000)
     argparser.add_argument('--seed', type=int, default=42)
     argparser.add_argument('--lr', type=float, default=1e-4)
@@ -536,8 +540,8 @@ if __name__ == "__main__":
     argparser.add_argument('--cosine_scheduler', action='store_true')
     argparser.add_argument('--clip_grad', action='store_true')
     argparser.add_argument('--progress_loss', action='store_true')
-    argparser.add_argument('--view', type=str, default="side", choices=["side", "top"])
-    argparser.add_argument('--extra_data_ratio', type=float, default=0.02)
+    argparser.add_argument('--view', type=str, default="side", choices=["side", "top", "both"])
+    argparser.add_argument('--extra_data_ratio', type=float, default=0.5)
     argparser.add_argument('--pca', action='store_true')
 
     args = argparser.parse_args()

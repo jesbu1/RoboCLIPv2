@@ -120,7 +120,7 @@ def plot_confusion_matrix(h5_file, set, self_attention_model, args, prob = False
     text_embeddings = []
     text_list = []
     for key in eval_envs:
-        embedding = np.asarray(h5_file[key]["liv_lang_embedding"])[0].reshape(1, -1)
+        embedding = np.asarray(h5_file[key]["minilm_lang_embedding"])[0].reshape(1, -1)
         text_embeddings.append(embedding)
         text_list.append(key)
     text_embeddings = np.concatenate(text_embeddings, axis=0)

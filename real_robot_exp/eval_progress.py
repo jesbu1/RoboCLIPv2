@@ -77,7 +77,7 @@ def plot_progress(h5_file, set, self_attention_model, args, pca_text_model = Non
 
     for key in tqdm(eval_envs):
         video_group = h5_file[key]
-        text_embedding = np.asarray(video_group["liv_lang_embedding"])[0].reshape(1, -1)
+        text_embedding = np.asarray(video_group["minilm_lang_embedding"])[0].reshape(1, -1)
 
 
         text_embedding = torch.from_numpy(text_embedding).to(device).float().unsqueeze(0)

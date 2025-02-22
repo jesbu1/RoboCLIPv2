@@ -137,7 +137,11 @@ def main(args):
             h5_train_eval_file = h5py.File("usc_koch_rewind_reward_train.h5", "r")
             h5_eval_file = h5py.File("usc_koch_rewind_reward_eval.h5", "r")
             extra_data_path = "usc_koch_rewind_reward_train.h5"
-    embedding_dim = 1024
+        elif args.view == "both":
+            h5_train_eval_file = h5py.File("usc_koch_rewind_dino_reward_side_main_train.h5", "r")
+            h5_eval_file = h5py.File("usc_koch_rewind_dino_reward_side_main_eval.h5", "r")
+            extra_data_path = "usc_koch_rewind_dino_reward_side_main_train.h5"
+    embedding_dim = 768
 
 
 
@@ -176,7 +180,7 @@ def main(args):
 
         # h5_openx_eval_file = h5py.File("/home/jzhang96/openx_embeddings_test_dataset_progrssed.h5", "r")
         # h5_openx_eval_file = h5py.File("/mnt/ssd_a_4tb/jzhang96/openx_embeddings_test_dataset_progrssed.h5", "r")
-        h5_openx_eval_file = h5py.File("/data/shared/roboclip/data/h5_buffers/openx_embeddings/openx_embeddings_test_dataset_progrssed.h5", "r")
+        h5_openx_eval_file = h5py.File("/data/shared/roboclip/data/h5_buffers/openx_embeddings/full_openx_embeddings_dino_test.h5", "r")
 
         positive_eval_openx_dataset = LivRealVideoEvalDataset(args, 
                                                         h5_openx_eval_file,
@@ -428,7 +432,7 @@ def main(args):
 
 if __name__ == "__main__":
     argparser = argparse.ArgumentParser()
-    argparser.add_argument('--h5_embedding_path', type=str, default='/data/shared/roboclip/data/h5_buffers/openx_embeddings/openx_embeddings_full_uncompressed_with_langtable_processed.h5')
+    argparser.add_argument('--h5_embedding_path', type=str, default='/data/shared/roboclip/data/h5_buffers/openx_embeddings/full_openx_embeddings_dino_train.h5')
     # argparser.add_argument('--h5_embedding_path', type=str, default='/home/jzhang96/openx_embeddings_full_uncompressed_with_langtable_processed.h5')
     # argparser.add_argument('--h5_embedding_path', type=str, default='/mnt/ssd_a_4tb/jzhang96/openx_embeddings_full_uncompressed_with_langtable_processed.h5')
     argparser.add_argument('--extra_data_type', type=str, choices=["metaworld", "real_world"], default="real_world")
@@ -451,7 +455,7 @@ if __name__ == "__main__":
     argparser.add_argument('--learner_parameter', action='store_true')
     argparser.add_argument('--cosine_scheduler', action='store_true')
     argparser.add_argument('--clip_grad', action='store_true')
-    argparser.add_argument('--view', type=str, default="side", choices=["side", "top"])
+    argparser.add_argument('--view', type=str, default="side", choices=["side", "top", "both"])
     argparser.add_argument('--extra_data_ratio', type=float, default=0.02)
     argparser.add_argument('--pca', action='store_true')
     argparser.add_argument('--norm_length', action='store_true')

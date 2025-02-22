@@ -43,7 +43,7 @@ class LivRealVideoTrainDataset(Dataset):
 
 
     def sample_text_feature(self, data_group):
-        lang_embedding = np.array(data_group["liv_lang_embedding"])
+        lang_embedding = np.array(data_group["minilm_lang_embedding"])
         if lang_embedding.shape[0] == 1024:
             lang_embedding = np.expand_dims(lang_embedding, axis=0)
 
@@ -62,7 +62,7 @@ class LivRealVideoTrainDataset(Dataset):
         while random_key == key:
             random_key = random.choice(self.keys)
         data_group = self.h5_file[random_key]
-        lang_embedding = np.array(data_group["liv_lang_embedding"])
+        lang_embedding = np.array(data_group["minilm_lang_embedding"])
         if lang_embedding.shape[0] == 1024:
             lang_embedding = np.expand_dims(lang_embedding, axis=0)
 
@@ -263,7 +263,7 @@ class LivRealVideoEvalDataset(Dataset):
 
     def sample_text_feature(self, data_group):
 
-        lang_embedding = np.array(data_group["liv_lang_embedding"])
+        lang_embedding = np.array(data_group["minilm_lang_embedding"])
         if lang_embedding.shape[0] == 1024:
             lang_embedding = np.expand_dims(lang_embedding, axis=0)
 
