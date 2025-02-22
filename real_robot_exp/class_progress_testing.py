@@ -138,30 +138,39 @@ def plot_confusion_matrix(h5_file, set, model, args, pca_text_model = None, pca_
 
     for i  in tqdm(range(len(eval_envs))):
         env = eval_envs[i]
-        video_embedding = np.asarray(h5_file[env]["4"])
-        video_embedding = torch.from_numpy(video_embedding).to(device).float()
-        if args.subsample_video:
-            video_embedding = padding_video(video_embedding, args.max_length)
-        if args.pca:
-            video_embedding = pca_video_model(video_embedding)
-
-        # if args.normalize_embedding:
-        #     traj_data = normalize_embeddings(video_embedding)
-        # else:
-        traj_data = video_embedding
-
-        traj_data = traj_data.unsqueeze(0)
-        triangle_mask = torch.tril(torch.ones(traj_data.shape[1], traj_data.shape[1])).to(device).unsqueeze(0).unsqueeze(0).repeat(traj_data.shape[0], 1, 1, 1)
         
-        traj_data = traj_data.repeat(len(text_embeddings),1,1,)
-        
-        progress_pred, class_pred = model(traj_data, text_embeddings)
-        progress_pred = progress_pred[:, -1, :]
-        print(progress_pred, class_pred)
-        class_pred = (class_pred > 0.5).float()
-        progress = progress_pred * class_pred # set to 0 if notin right class
-        # progress = progress_pred
-        progress = progress.cpu().squeeze().numpy()
+        keys = list(h5_file[env].keys())
+        keys = [traj for traj in keys if "lang" not in traj]
+        progress_list = []
+        for key in keys:
+            video_embedding = np.asarray(h5_file[env][key])
+            video_embedding = torch.from_numpy(video_embedding).to(device).float()
+            if args.subsample_video:
+                video_embedding = padding_video(video_embedding, args.max_length)
+            if args.pca:
+                video_embedding = pca_video_model(video_embedding)
+
+            # if args.normalize_embedding:
+            #     traj_data = normalize_embeddings(video_embedding)
+            # else:
+            traj_data = video_embedding
+
+            traj_data = traj_data.unsqueeze(0)
+            triangle_mask = torch.tril(torch.ones(traj_data.shape[1], traj_data.shape[1])).to(device).unsqueeze(0).unsqueeze(0).repeat(traj_data.shape[0], 1, 1, 1)
+            
+            traj_data = traj_data.repeat(len(text_embeddings),1,1,)
+            progress_pred, class_pred = model(traj_data, text_embeddings)
+            progress_pred = progress_pred[:, -1, :]
+            print(progress_pred, class_pred)
+            class_pred = (class_pred > 0.5).float()
+            progress = progress_pred * class_pred # set to 0 if notin right class
+            # progress = progress_pred
+            progress = progress.cpu().squeeze().numpy()
+            progress_list.append(progress)
+            
+            
+        progress_list = np.stack(progress_list)
+        progress = np.mean(progress_list, axis=0)
 
         predicted_progress_row.append(progress)
     img = plot_matrix_as_image(predicted_progress_row, eval_envs, set, text_list, prob = False)    
