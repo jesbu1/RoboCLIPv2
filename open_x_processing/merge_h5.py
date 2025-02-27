@@ -3,10 +3,10 @@ import h5py
 
 #MAIN_H5 = "/data/shared/roboclip/data/h5_buffers/openx_embeddings/openx_embeddings_full_uncompressed_with_langtable35k.h5"
 #MAIN_H5 = "full_openx_embeddings_dino_train.h5"
-MAIN_H5 = "test_merge_dino_train.h5"
+MAIN_H5 = "droid_test_merge_dino_train.h5"
 H5_MERGING_FROM = "droid_embeddings_dino.h5"
 print(f"Adding to {MAIN_H5} from {H5_MERGING_FROM}")
-MAX_TO_MERGE = 30_000
+MAX_TO_MERGE = float("inf")
 
 
 # make a set to keep track of the tasks we've seen
@@ -38,10 +38,16 @@ with h5py.File(MAIN_H5, "a") as f:
             else:
                 f.create_group(task)
                 for key in f2[task].keys():
-                    f[task].create_dataset(
-                        key,
-                        data=f2[task][key],
-                    )
+                    try:
+                        f[task].create_dataset(
+                            key,
+                            data=f2[task][key],
+                        )
+                    except TypeError as e:
+                        print(f"failed to create group {task} with key {key}: {e}")
+                        total_samples -= 1
+                        del f[task]
+                        break
                     total_samples += 1
     num_keys_after = len(f.keys())
     num_trajs_after = sum(
