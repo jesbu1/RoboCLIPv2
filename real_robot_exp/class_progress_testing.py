@@ -140,7 +140,7 @@ def plot_confusion_matrix(h5_file, set, model, args, pca_text_model = None, pca_
         env = eval_envs[i]
         
         keys = list(h5_file[env].keys())
-        keys = [traj for traj in keys if "lang" not in traj]
+
         progress_list = []
         for key in keys:
             video_embedding = np.asarray(h5_file[env][key])
@@ -161,7 +161,6 @@ def plot_confusion_matrix(h5_file, set, model, args, pca_text_model = None, pca_
             traj_data = traj_data.repeat(len(text_embeddings),1,1,)
             progress_pred, class_pred = model(traj_data, text_embeddings)
             progress_pred = progress_pred[:, -1, :]
-            print(progress_pred, class_pred)
             class_pred = (class_pred > 0.5).float()
             progress = progress_pred * class_pred # set to 0 if notin right class
             # progress = progress_pred
@@ -276,15 +275,25 @@ class ClassProgressTransformer(nn.Module):
         # Class token embedding
         self.class_token = nn.Parameter(torch.randn(1, 1, hidden_dim))
         
-        # Transformer encoder
-        encoder_layer = nn.TransformerEncoderLayer(
+        # # Transformer encoder
+        # encoder_layer = nn.TransformerEncoderLayer(
+        #     d_model=hidden_dim,
+        #     nhead=num_heads,
+        #     dim_feedforward=hidden_dim * 4,
+        #     dropout=0.1,
+        #     batch_first=True
+        # )
+        # self.transformer = nn.TransformerEncoder(encoder_layer, num_layers=num_layers)
+        
+        # use a decoder-style transformer
+        decoder_layer = nn.TransformerDecoderLayer(
             d_model=hidden_dim,
             nhead=num_heads,
             dim_feedforward=hidden_dim * 4,
             dropout=0.1,
             batch_first=True
         )
-        self.transformer = nn.TransformerEncoder(encoder_layer, num_layers=num_layers)
+        self.transformer = nn.TransformerDecoder(decoder_layer, num_layers=num_layers)
         
         # Progress prediction head (applied to each frame)
         self.progress_head = nn.Sequential(
@@ -321,7 +330,8 @@ class ClassProgressTransformer(nn.Module):
         class_tokens = self.class_token.expand(batch_size, -1, -1)
         
         # Combine sequence: [class_token, video_frames, text]
-        sequence = torch.cat([class_tokens, video_embed, text_embed], dim=1)
+        # sequence = torch.cat([class_tokens, video_embed, text_embed], dim=1)
+        sequence = torch.cat([text_embed, video_embed, class_tokens], dim=1)
         
         # Create attention mask if needed
         if attention_mask is not None:
@@ -330,10 +340,13 @@ class ClassProgressTransformer(nn.Module):
             attention_mask = torch.cat([extended_mask, attention_mask], dim=1)
         
         # Pass through transformer
-        transformed = self.transformer(sequence, src_key_padding_mask=attention_mask if attention_mask is not None else None)
+        memory = torch.zeros_like(sequence) 
+        # TODO: using sequence as the memory might be incorrect
+        transformed = self.transformer(sequence, sequence)
         
         # Get class prediction from class token
-        class_pred = self.classification_head(transformed[:, 0])  # Use class token
+        # class_pred = self.classification_head(transformed[:, 0])  # Use class token
+        class_pred = self.classification_head(transformed[:, -1])  # Use class token
         
         # Get progress predictions for each frame
         progress_preds = self.progress_head(transformed[:, 1:-1])  # Exclude class token and text token
@@ -629,7 +642,7 @@ def main(args):
                     l2_reg = l2_reg + torch.norm(param)
                 
                 # Combined loss with regularization
-                loss = openx_loss + extra_loss + progress_loss + l2_lambda * l2_reg
+                loss = openx_loss + extra_loss + 2*progress_loss
 
                 loss.backward()
                 if args.clip_grad:
