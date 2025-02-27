@@ -140,6 +140,7 @@ def plot_confusion_matrix(h5_file, set, model, args, pca_text_model = None, pca_
         env = eval_envs[i]
         
         keys = list(h5_file[env].keys())
+        keys =  [key for key in keys if "lang" not in key] 
 
         progress_list = []
         for key in keys:
@@ -276,24 +277,25 @@ class ClassProgressTransformer(nn.Module):
         self.class_token = nn.Parameter(torch.randn(1, 1, hidden_dim))
         
         # # Transformer encoder
-        # encoder_layer = nn.TransformerEncoderLayer(
-        #     d_model=hidden_dim,
-        #     nhead=num_heads,
-        #     dim_feedforward=hidden_dim * 4,
-        #     dropout=0.1,
-        #     batch_first=True
-        # )
-        # self.transformer = nn.TransformerEncoder(encoder_layer, num_layers=num_layers)
-        
-        # use a decoder-style transformer
-        decoder_layer = nn.TransformerDecoderLayer(
+        encoder_layer = nn.TransformerEncoderLayer(
             d_model=hidden_dim,
             nhead=num_heads,
             dim_feedforward=hidden_dim * 4,
             dropout=0.1,
             batch_first=True
         )
-        self.transformer = nn.TransformerDecoder(decoder_layer, num_layers=num_layers)
+        self.transformer = nn.TransformerEncoder(encoder_layer, num_layers=num_layers)
+        
+        # use a decoder-style transformer
+        # decoder_layer = nn.TransformerDecoderLayer(
+        #     d_model=hidden_dim,
+        #     nhead=num_heads,
+        #     dim_feedforward=hidden_dim * 4,
+        #     dropout=0.1,
+        #     batch_first=True
+        # )
+        # self.transformer = nn.TransformerDecoder(decoder_layer, num_layers=num_layers)
+
         
         # Progress prediction head (applied to each frame)
         self.progress_head = nn.Sequential(
@@ -340,9 +342,7 @@ class ClassProgressTransformer(nn.Module):
             attention_mask = torch.cat([extended_mask, attention_mask], dim=1)
         
         # Pass through transformer
-        memory = torch.zeros_like(sequence) 
-        # TODO: using sequence as the memory might be incorrect
-        transformed = self.transformer(sequence, sequence)
+        transformed = self.transformer(sequence, is_causal=True)
         
         # Get class prediction from class token
         # class_pred = self.classification_head(transformed[:, 0])  # Use class token
