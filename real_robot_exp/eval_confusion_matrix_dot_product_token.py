@@ -132,29 +132,42 @@ def plot_confusion_matrix(h5_file, set, video_encoder, text_encoder, args, pca_t
 
     for i  in tqdm(range(len(eval_envs))):
         env = eval_envs[i]
-        video_embedding = np.asarray(h5_file[env]["4"])
-        video_embedding = torch.from_numpy(video_embedding).to(device).float()
-        if args.subsample_video:
-            video_embedding = padding_video(video_embedding, args.max_length)
-        if args.pca:
-            video_embedding = pca_video_model(video_embedding)
+        all_key = list(h5_file[env].keys())
+        all_key = [k for k in all_key if "lang" not in k]
+        all_trajs = list()
 
-        if args.normalize_embedding:
-            traj_data = normalize_embeddings(video_embedding)
-        else:
-            traj_data = video_embedding
+        for key in all_key:
+            video_embedding = np.asarray(h5_file[env][key])
+            video_embedding = torch.from_numpy(video_embedding).to(device).float()
+            if args.subsample_video:
+                video_embedding = padding_video(video_embedding, args.max_length)
+            if args.pca:
+                video_embedding = pca_video_model(video_embedding)
 
-        traj_data = traj_data.unsqueeze(0)
+            if args.normalize_embedding:
+                traj_data = normalize_embeddings(video_embedding)
+            else:
+                traj_data = video_embedding
+
+            traj_data = traj_data.unsqueeze(0)
+            all_trajs.append(traj_data)
+        traj_data = torch.cat(all_trajs, dim=0)
         triangle_mask = torch.tril(torch.ones(traj_data.shape[1], traj_data.shape[1])).to(device).unsqueeze(0).unsqueeze(0).repeat(traj_data.shape[0], 1, 1, 1)
-        
         video_embedding = video_encoder(traj_data, triangle_mask).squeeze(0)
-        last_frame = video_embedding[-1].unsqueeze(0).repeat(len(text_embeddings), 1)
+        last_frame = video_embedding[:, -1, :]
 
         if args.norm_length:
             last_frame = F.normalize(last_frame, p=2, dim=1)
             text_embeddings = F.normalize(text_embeddings, p=2, dim=1)
-        progress = torch.sum(last_frame * text_embeddings, dim=1)
-        progress = progress.cpu().detach().numpy()
+
+        total_progress = list()
+        for i in range(last_frame.shape[0]):
+            use_last_frame = last_frame[i].unsqueeze(0).repeat(text_embeddings.shape[0], 1)
+            single_progress = torch.sum(use_last_frame * text_embeddings, dim=1).cpu().detach().numpy() 
+            total_progress.append(single_progress)
+        total_progress = np.array(total_progress)
+        progress = np.mean(total_progress, axis=0)
+
         
         predicted_progress_row.append(progress)
 

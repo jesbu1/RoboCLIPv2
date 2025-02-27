@@ -76,7 +76,10 @@ def plot_progress(h5_file, set, video_encoder, text_encoder, args, pca_text_mode
         if args.normalize_embedding:
             text_embedding = normalize_embeddings(text_embedding)
 
-        video_embeddings = np.asarray(video_group["4"])
+        choose_key = list(video_group.keys())
+        choose_key = [k for k in choose_key if "lang" not in k]
+        choose_key = random.choice(choose_key)
+        video_embeddings = np.asarray(video_group[choose_key])
         video_embeddings = torch.from_numpy(video_embeddings).to(device).float()
         if args.pca:
             video_embeddings = pca_video_model(video_embeddings)

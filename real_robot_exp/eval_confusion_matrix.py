@@ -136,58 +136,69 @@ def plot_confusion_matrix(h5_file, set, self_attention_model, args, prob = False
         pred_two_step_prob_list = []
     for i  in tqdm(range(len(eval_envs))):
         env = eval_envs[i]
-        video_embedding = np.asarray(h5_file[env]["4"])
-        video_embedding = torch.from_numpy(video_embedding).to(device).float()
+        choose_keys = list(h5_file[env].keys())
+        choose_keys = [key for key in choose_keys if "lang" not in key]
+
+        traj_list = []
+
+        for key in choose_keys:
+            video_embedding = np.asarray(h5_file[env][key])
+            if args.subsample_video:
+                video_embedding = padding_video(video_embedding, args.max_length)
+            if args.normalize_embedding:
+                video_embedding = normalize_embeddings(video_embedding)
+            traj_list.append(video_embedding)
+        traj_data_all = np.stack(traj_list, axis=0)
+        traj_data_all = torch.from_numpy(traj_data_all).to(device).float()
         if args.pca:
-            video_embedding = pca_video_model(video_embedding)
+            traj_data_all = pca_video_model(traj_data_all)
 
-        if args.subsample_video:
-            video_embedding = padding_video(video_embedding, args.max_length)
-        if args.normalize_embedding:
-            traj_data = normalize_embeddings(video_embedding)
-        else:
-            traj_data = video_embedding
-        if args.pca:
-            # dim = pca_video_model.n_components
-            traj_data = traj_data.view(-1, 512).unsqueeze(0).repeat(text_embeddings.shape[0], 1, 1)
-        else:
-            traj_data = traj_data.view(-1, 768).unsqueeze(0).repeat(text_embeddings.shape[0], 1, 1)
+        # if args.pca:
+        #     # dim = pca_video_model.n_components
+        #     traj_data = traj_data.view(-1, 512).unsqueeze(0).repeat(text_embeddings.shape[0], 1, 1)
+        # else:
+        #     traj_data = traj_data.view(-1, 768).unsqueeze(0).repeat(text_embeddings.shape[0], 1, 1)
+        progress_result_list = []
+        progress_prob_list = []
+        for id in range(traj_data_all.shape[0]):
+            traj_data = traj_data_all[id].unsqueeze(0).repeat(text_embeddings.shape[0], 1, 1)
+            triangle_mask = torch.tril(torch.ones(traj_data.shape[1] + 1, traj_data.shape[1] + 1)).to(device).unsqueeze(0).unsqueeze(0).repeat(traj_data.shape[0], 1, 1, 1)
+            mask = None
+            pred_class, two_step_class = self_attention_model(traj_data, triangle_mask, text_embeddings, mask)
 
-        triangle_mask = torch.tril(torch.ones(traj_data.shape[1] + 1, traj_data.shape[1] + 1)).to(device).unsqueeze(0).unsqueeze(0).repeat(traj_data.shape[0], 1, 1, 1)
-
-        mask = None
-        pred_class, two_step_class = self_attention_model(traj_data, triangle_mask, text_embeddings.squeeze(1), mask)
-
-        if not args.catagorical_progress:
-            pred_class = pred_class.squeeze()
-        else:
-            if args.two_step_training:
-                pred_class = torch.argmax(pred_class, dim = 2) + 1
+            if not args.catagorical_progress:
+                pred_class = pred_class.squeeze()
             else:
-                if args.catagorical_progress:
-                    pred_class = torch.argmax(pred_class, dim = 2)
+                if args.two_step_training:
+                    pred_class = torch.argmax(pred_class, dim = 2) + 1
                 else:
-                    pred_class = torch.argmax(pred_class, dim = 2).view(-1, 1)
-        
-        pred_class = pred_class[:, -1].squeeze()
-        if args.two_step_training:
-            batch_size = two_step_class.shape[0]
-            two_step_prob = two_step_class.clone().float()
-            two_step_prob = two_step_prob[:, -1].squeeze()
-            two_step_class = two_step_class > 0.5
+                    if args.catagorical_progress:
+                        pred_class = torch.argmax(pred_class, dim = 2)
+                    else:
+                        pred_class = torch.argmax(pred_class, dim = 2).view(-1, 1)
+            
+            pred_class = pred_class[:, -1].squeeze()
+            if args.two_step_training:
+                batch_size = two_step_class.shape[0]
+                two_step_prob = two_step_class.clone().float()
+                two_step_prob = two_step_prob[:, -1].squeeze()
+                two_step_class = two_step_class > 0.5
 
-            pred_class = pred_class * two_step_class[:, -1].squeeze()
-            pred_two_step_prob_list.append(two_step_prob.cpu().detach().numpy())
-            predicted_progress = pred_class.cpu().detach().numpy()
-        else:
-            predicted_progress = pred_class.cpu().detach().numpy()
-
-        
+                pred_class = pred_class * two_step_class[:, -1].squeeze()
+                progress_prob_list.append(two_step_prob.cpu().detach().numpy())
+                predicted_progress = pred_class.cpu().detach().numpy()
+            else:
+                predicted_progress = pred_class.cpu().detach().numpy()
+            
+            progress_result_list.append(predicted_progress)
+        predicted_progress = np.stack(progress_result_list, axis=0)
+        predicted_progress = np.mean(predicted_progress, axis=0)
         predicted_progress_row.append(predicted_progress)
-
-
+        if args.two_step_training:
+            progress_prob_list = np.stack(progress_prob_list, axis=0)
+            progress_prob_list = np.mean(progress_prob_list, axis=0)
+            pred_two_step_prob_list.append(progress_prob_list)
     predicted_progress_row = np.array(predicted_progress_row)
-
     if args.two_step_training:
         pred_two_step_prob_list = np.array(pred_two_step_prob_list)
         img = plot_matrix_as_image(predicted_progress_row, eval_envs, set, text_list, prob = False)
