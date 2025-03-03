@@ -146,7 +146,7 @@ for dataset_name in tqdm(dataset_names):
                                 step["observation"][img_key].numpy()
                             )
 
-                if task is None:
+                if task is None or task == "":
                     print(
                         f"Skipping episode {i + 1} of dataset {dataset_name} as the task is None or empty."
                     )

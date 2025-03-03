@@ -53,6 +53,33 @@ python merge_all_h5.py --input_dir path/to/h5/files --output_file merged_output.
 - `--input_dir`: Directory containing H5 files to merge (default: "dataset_embeddings")
 - `--output_file`: Path for the output merged file (default: "merged_embeddings.h5")
 
+### 3. `remove_bad_data.py`
+
+This script cleans H5 files by removing invalid embeddings and poor quality language instructions.
+
+#### Features
+- Validates DINO embedding dimensions (should be 768)
+- Removes tasks with poor quality instructions (e.g., "no action", "none")
+- Filters out instructions that are too short
+- Preserves language embeddings without validation
+- Provides detailed statistics about removed data
+
+#### Usage
+```bash
+# Clean a single file
+python remove_bad_data.py input.h5
+
+# Clean a single file and save to new location
+python remove_bad_data.py input.h5 --output_path cleaned.h5
+
+# Clean all H5 files in a directory
+python remove_bad_data.py path/to/directory
+```
+
+#### Arguments
+- `input_path`: Path to input H5 file or directory
+- `--output_path`: Optional path for output file (only used for single file processing)
+
 ## File Structure
 
 The H5 files are structured as follows:
@@ -94,4 +121,5 @@ Where:
 - The scripts handle large datasets efficiently by processing them in batches
 - For the language_table dataset, processing is limited to prevent memory issues
 - Error handling ensures the process continues even if individual files or episodes fail
-- The merge script automatically handles index conflicts when combining files 
+- The merge script automatically handles index conflicts when combining files
+- The cleaning script provides statistics about removed data and invalid embeddings 
