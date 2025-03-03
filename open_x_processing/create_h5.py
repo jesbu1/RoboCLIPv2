@@ -21,7 +21,7 @@ from transformers import AutoTokenizer, AutoModel
 
 TFDS_PATH = "/data/shared/openx_rlds_data"
 TRAIN_SPLIT = "train"  # "train"
-SAVE_H5_DIR = "dataset_embeddings"  # directory to save individual h5 files
+SAVE_H5_DIR = f"{TRAIN_SPLIT}_dataset_embeddings"  # directory to save individual h5 files
 DEBUG = False  # will only make 10 per dataset
 SPECIFIC_TASKS = "language_table,austin_sirius_dataset_converted_externally_to_rlds,austin_buds_dataset_converted_externally_to_rlds,ucsd_kitchen_dataset_converted_externally_to_rlds,stanford_hydra_dataset_converted_externally_to_rlds,iamlab_cmu_pickup_insert_converted_externally_to_rlds,cmu_stretch,berkeley_fanuc_manipulation,berkeley_autolab_ur5,bridge_v2,bc_z,fractal20220817_data,jaco_play"
 MAX_NUM_FRAMES_PER_EPISODE = 32
@@ -95,14 +95,11 @@ for dataset_name in tqdm(dataset_names):
             "image_obs_keys"
         ]  # dict mapping img_keys to the names of the images in OXE
 
-        # get the image key that matches "primary" to get the main camera view
-        primary_img_key = img_key_to_name["primary"]
-
         # get all non-None image keys except "wrist"
-        valid_img_keys = [
-            k for k, v in img_key_to_name.items() if v is not None and k != "wrist"
+        valid_img_values = [
+            v for k, v in img_key_to_name.items() if v is not None and k != "wrist"
         ]
-        print(f"Valid image keys for dataset {dataset_name}: {valid_img_keys}")
+        print(f"Valid image values for dataset {dataset_name}: {valid_img_values}")
 
         i = 0
         len_of_dataset = min(dataset.cardinality().numpy(), n_samples)
@@ -120,7 +117,7 @@ for dataset_name in tqdm(dataset_names):
                 this_episode_name = f"{dataset_name}_ep{i}"
 
                 episode_images = dict()
-                for key in valid_img_keys:
+                for key in valid_img_values:
                     episode_images[key] = []
 
                 if valid_samples_per_dataset >= n_samples:
@@ -143,7 +140,7 @@ for dataset_name in tqdm(dataset_names):
                             task = step[key].numpy().decode()
                             break
                     # extract images from all valid keys
-                    for img_key in valid_img_keys:
+                    for img_key in valid_img_values:
                         if img_key in step["observation"]:
                             episode_images[img_key].append(
                                 step["observation"][img_key].numpy()
@@ -224,7 +221,7 @@ for dataset_name in tqdm(dataset_names):
                 task_group_len_str = str(task_group_len)
 
                 # Process each image key separately
-                for img_key in valid_img_keys:
+                for img_key in valid_img_values:
                     if len(episode_images[img_key]) == 0:
                         print(f"Skipping {img_key} as no images were found")
                         continue
