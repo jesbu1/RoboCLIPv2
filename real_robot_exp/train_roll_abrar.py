@@ -628,7 +628,7 @@ def main(args):
 if __name__ == "__main__":
     argparser = argparse.ArgumentParser()
     # argparser.add_argument('--h5_embedding_path', type=str, default='/data/shared/roboclip/data/h5_buffers/openx_embeddings/full_openx_embeddings_droid_dino_train.h5')
-    argparser.add_argument('--h5_embedding_path', type=str, default='/home/jzhang96/full_openx_embeddings_dino_train.h5')
+    argparser.add_argument('--h5_embedding_path', type=str, default='/home/jzhang96/full_openx_embeddings_droid_dino_train.h5')
     # argparser.add_argument('--h5_embedding_path', type=str, default='/mnt/ssd_a_4tb/jzhang96/openx_embeddings_full_uncompressed_with_langtable_processed.h5')
     argparser.add_argument('--extra_data_type', type=str, choices=["metaworld", "real_world"], default="real_world")
     argparser.add_argument('--batch_size', type=int, default=1024)

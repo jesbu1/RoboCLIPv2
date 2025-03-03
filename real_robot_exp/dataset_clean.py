@@ -214,7 +214,12 @@ class LivRealVideoTrainDataset(Dataset):
             else:
                 video_array, progress, class_label = self.sample_video_feature(data_group)
         else:
+            
             video_array, progress, class_label = self.sample_video_feature(data_group)
+            if len(video_array.shape) != 2:
+                import pdb; pdb.set_trace()
+            if video_array.shape[0] != 16 or video_array.shape[1] != 768:
+                import pdb; pdb.set_trace()
 
         # sample text sample
         if self.sample_neg:
