@@ -152,7 +152,7 @@ def plot_confusion_matrix(h5_file, set, self_attention_model, args):
             pred_class = pred_class[:, -1].squeeze()
 
             two_step_prob = two_step_class.clone().float().squeeze()
-            two_step_class = two_step_class.squeeze() > 0.5
+            two_step_class = two_step_class.squeeze() > args.binary_threshold
 
             pred_class = pred_class * two_step_class.squeeze()
 

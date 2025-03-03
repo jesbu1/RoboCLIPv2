@@ -73,7 +73,10 @@ def main(args):
         experiment_name = "MetaWorld" 
     else: 
         experiment_name = "RealWorld_Koch"
-    experiment_name = "FixRewind" + experiment_name
+    experiment_name = "AugTextFixRewind" + experiment_name
+
+    experiment_name += "_binary_thrd_" + str(args.binary_threshold)
+
     if args.text_embedding_model == "minilm":
         experiment_name += "_MiniLM"
     elif args.text_embedding_model == "liv":
@@ -448,34 +451,34 @@ def main(args):
                                                       (np.mean(openx_negative_eval_losses) if len(openx_negative_eval_losses) > 0 else 0) / 2
                     
                     if len(openx_preds) > 0:
-                        wandb_eval_log["openx_eval/f1"] = f1_score(openx_targets > 0.5, openx_preds > 0.5)
-                        wandb_eval_log["openx_eval/precision"] = precision_score(openx_targets > 0.5, openx_preds > 0.5)
-                        wandb_eval_log["openx_eval/recall"] = recall_score(openx_targets > 0.5, openx_preds > 0.5)
-                        wandb_eval_log["openx_eval/accuracy"] = accuracy_score(openx_targets > 0.5, openx_preds > 0.5)
+                        wandb_eval_log["openx_eval/f1"] = f1_score(openx_targets > args.binary_threshold, openx_preds > args.binary_threshold)
+                        wandb_eval_log["openx_eval/precision"] = precision_score(openx_targets > args.binary_threshold, openx_preds > args.binary_threshold)
+                        wandb_eval_log["openx_eval/recall"] = recall_score(openx_targets > args.binary_threshold, openx_preds > args.binary_threshold)
+                        wandb_eval_log["openx_eval/accuracy"] = accuracy_score(openx_targets > args.binary_threshold, openx_preds > args.binary_threshold)
                     
                     # OpenX Positive Sample Metrics
                     if len(openx_positive_eval_preds) > 0:
                         wandb_eval_log["openx_eval/positive_loss"] = np.mean(openx_positive_eval_losses)
                         wandb_eval_log["openx_eval/positive_f1"] = f1_score(np.ones_like(openx_positive_eval_targets), 
-                                                                          np.array(openx_positive_eval_preds) > 0.5)
+                                                                          np.array(openx_positive_eval_preds) > args.binary_threshold)
                         wandb_eval_log["openx_eval/positive_precision"] = precision_score(np.ones_like(openx_positive_eval_targets), 
-                                                                                       np.array(openx_positive_eval_preds) > 0.5)
+                                                                                       np.array(openx_positive_eval_preds) > args.binary_threshold)
                         wandb_eval_log["openx_eval/positive_recall"] = recall_score(np.ones_like(openx_positive_eval_targets), 
-                                                                                 np.array(openx_positive_eval_preds) > 0.5)
+                                                                                 np.array(openx_positive_eval_preds) > args.binary_threshold)
                         wandb_eval_log["openx_eval/positive_accuracy"] = accuracy_score(np.ones_like(openx_positive_eval_targets), 
-                                                                                    np.array(openx_positive_eval_preds) > 0.5)
+                                                                                    np.array(openx_positive_eval_preds) > args.binary_threshold)
                     
                     # OpenX Negative Sample Metrics
                     if len(openx_negative_eval_preds) > 0:
                         wandb_eval_log["openx_eval/negative_loss"] = np.mean(openx_negative_eval_losses)
                         wandb_eval_log["openx_eval/negative_f1"] = f1_score(np.zeros_like(openx_negative_eval_targets), 
-                                                                          np.array(openx_negative_eval_preds) > 0.5)
+                                                                          np.array(openx_negative_eval_preds) > args.binary_threshold)
                         wandb_eval_log["openx_eval/negative_precision"] = precision_score(np.zeros_like(openx_negative_eval_targets), 
-                                                                                       np.array(openx_negative_eval_preds) > 0.5)
+                                                                                       np.array(openx_negative_eval_preds) > args.binary_threshold)
                         wandb_eval_log["openx_eval/negative_recall"] = recall_score(np.zeros_like(openx_negative_eval_targets), 
-                                                                                 np.array(openx_negative_eval_preds) > 0.5)
+                                                                                 np.array(openx_negative_eval_preds) > args.binary_threshold)
                         wandb_eval_log["openx_eval/negative_accuracy"] = accuracy_score(np.zeros_like(openx_negative_eval_targets), 
-                                                                                    np.array(openx_negative_eval_preds) > 0.5)
+                                                                                    np.array(openx_negative_eval_preds) > args.binary_threshold)
                     
                     # OpenX Progress Metrics
                     if len(openx_positive_eval_progress_losses) > 0 or len(openx_negative_eval_progress_losses) > 0:
@@ -547,34 +550,34 @@ def main(args):
                                                       (np.mean(extra_eval_eval_neg_losses) if len(extra_eval_eval_neg_losses) > 0 else 0) / 2
                     
                     if len(extra_preds) > 0:
-                        wandb_eval_log["extra_eval/f1"] = f1_score(extra_targets > 0.5, extra_preds > 0.5)
-                        wandb_eval_log["extra_eval/precision"] = precision_score(extra_targets > 0.5, extra_preds > 0.5)
-                        wandb_eval_log["extra_eval/recall"] = recall_score(extra_targets > 0.5, extra_preds > 0.5)
-                        wandb_eval_log["extra_eval/accuracy"] = accuracy_score(extra_targets > 0.5, extra_preds > 0.5)
+                        wandb_eval_log["extra_eval/f1"] = f1_score(extra_targets > args.binary_threshold, extra_preds > args.binary_threshold)
+                        wandb_eval_log["extra_eval/precision"] = precision_score(extra_targets > args.binary_threshold, extra_preds > args.binary_threshold)
+                        wandb_eval_log["extra_eval/recall"] = recall_score(extra_targets > args.binary_threshold, extra_preds > args.binary_threshold)
+                        wandb_eval_log["extra_eval/accuracy"] = accuracy_score(extra_targets > args.binary_threshold, extra_preds > args.binary_threshold)
                     
                     # Extra Positive Sample Metrics
                     if len(extra_eval_eval_pos_preds) > 0:
                         wandb_eval_log["extra_eval/positive_loss"] = np.mean(extra_eval_eval_pos_losses)
                         wandb_eval_log["extra_eval/positive_f1"] = f1_score(np.ones_like(extra_eval_eval_pos_targets), 
-                                                                         np.array(extra_eval_eval_pos_preds) > 0.5)
+                                                                         np.array(extra_eval_eval_pos_preds) > args.binary_threshold)
                         wandb_eval_log["extra_eval/positive_precision"] = precision_score(np.ones_like(extra_eval_eval_pos_targets), 
-                                                                                      np.array(extra_eval_eval_pos_preds) > 0.5)
+                                                                                      np.array(extra_eval_eval_pos_preds) > args.binary_threshold)
                         wandb_eval_log["extra_eval/positive_recall"] = recall_score(np.ones_like(extra_eval_eval_pos_targets), 
-                                                                                np.array(extra_eval_eval_pos_preds) > 0.5)
+                                                                                np.array(extra_eval_eval_pos_preds) > args.binary_threshold)
                         wandb_eval_log["extra_eval/positive_accuracy"] = accuracy_score(np.ones_like(extra_eval_eval_pos_targets), 
-                                                                                    np.array(extra_eval_eval_pos_preds) > 0.5)
+                                                                                    np.array(extra_eval_eval_pos_preds) > args.binary_threshold)
                     
                     # Extra Negative Sample Metrics
                     if len(extra_eval_eval_neg_preds) > 0:
                         wandb_eval_log["extra_eval/negative_loss"] = np.mean(extra_eval_eval_neg_losses)
                         wandb_eval_log["extra_eval/negative_f1"] = f1_score(np.zeros_like(extra_eval_eval_neg_targets), 
-                                                                         np.array(extra_eval_eval_neg_preds) > 0.5)
+                                                                         np.array(extra_eval_eval_neg_preds) > args.binary_threshold)
                         wandb_eval_log["extra_eval/negative_precision"] = precision_score(np.zeros_like(extra_eval_eval_neg_targets), 
-                                                                                      np.array(extra_eval_eval_neg_preds) > 0.5)
+                                                                                      np.array(extra_eval_eval_neg_preds) > args.binary_threshold)
                         wandb_eval_log["extra_eval/negative_recall"] = recall_score(np.zeros_like(extra_eval_eval_neg_targets), 
-                                                                                np.array(extra_eval_eval_neg_preds) > 0.5)
+                                                                                np.array(extra_eval_eval_neg_preds) > args.binary_threshold)
                         wandb_eval_log["extra_eval/negative_accuracy"] = accuracy_score(np.zeros_like(extra_eval_eval_neg_targets), 
-                                                                                    np.array(extra_eval_eval_neg_preds) > 0.5)
+                                                                                    np.array(extra_eval_eval_neg_preds) > args.binary_threshold)
                     
                     # Extra Progress Metrics
                     if len(extra_eval_eval_pos_progress_losses) > 0 or len(extra_eval_eval_neg_progress_losses) > 0:
@@ -649,6 +652,7 @@ if __name__ == "__main__":
 
     argparser.add_argument('--text_embedding_model', type=str, default="minilm", choices=["minilm", "liv"])
     argparser.add_argument('--eval_interval', type=int, default=2)
+    argparser.add_argument('--binary_threshold', type=float, default=0.5)
 
 
 

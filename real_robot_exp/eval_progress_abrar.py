@@ -93,7 +93,7 @@ def plot_progress(h5_file, set, self_attention_model, args):
 
         two_step_class_prob = two_step_class.squeeze()
         # if two_step_class_prob > 0.5 is 1 else 0
-        two_step_class_prob = two_step_class_prob > 0.5 
+        two_step_class_prob = two_step_class_prob > args.binary_threshold
         two_step_class_prob = two_step_class_prob.float()
 
         pred_class = pred_class * two_step_class_prob
