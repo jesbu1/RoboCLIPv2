@@ -225,6 +225,9 @@ for dataset_name in tqdm(dataset_names):
                     if len(episode_images[img_key]) == 0:
                         print(f"Skipping {img_key} as no images were found")
                         continue
+                    if np.all(episode_images[img_key] == 0):
+                        print(f"Skipping {img_key} as all images are 0.")
+                        continue
 
                     # linspace to get the indices of the frames to sample
                     indices = np.linspace(
