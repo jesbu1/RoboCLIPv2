@@ -23,7 +23,7 @@ TFDS_PATH = "/data/shared/openx_rlds_data"
 TRAIN_SPLIT = "train"  # "train"
 SAVE_H5_DIR = "dataset_embeddings"  # directory to save individual h5 files
 DEBUG = False  # will only make 10 per dataset
-SPECIFIC_TASKS = "language_table,austin_sirius_dataset_converted_externally_to_rlds,austin_buds_dataset_converted_externally_to_rlds,ucsd_kitchen_dataset_converted_externally_to_rlds,stanford_hydra_dataset_converted_externally_to_rlds,iamlab_cmu_pickup_insert_converted_externally_to_rlds,cmu_stretch,berkeley_fanuc_manipulation,berkeley_autolab_ur5,bridge,bc_z,fractal20220817_data,jaco_play"
+SPECIFIC_TASKS = "language_table,austin_sirius_dataset_converted_externally_to_rlds,austin_buds_dataset_converted_externally_to_rlds,ucsd_kitchen_dataset_converted_externally_to_rlds,stanford_hydra_dataset_converted_externally_to_rlds,iamlab_cmu_pickup_insert_converted_externally_to_rlds,cmu_stretch,berkeley_fanuc_manipulation,berkeley_autolab_ur5,bridge_v2,bc_z,fractal20220817_data,jaco_play"
 MAX_NUM_FRAMES_PER_EPISODE = 32
 MAX_EPISODES_FOR_LANG_TABLE = 10000
 
