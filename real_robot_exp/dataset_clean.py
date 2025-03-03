@@ -43,8 +43,13 @@ class LivRealVideoTrainDataset(Dataset):
 
 
     def sample_text_feature(self, data_group):
-        lang_embedding = np.array(data_group["liv_lang_embedding"])
+        if self.args.text_embedding_model == "minilm":
+            lang_embedding = np.array(data_group["minilm_lang_embedding"])
+        else:
+            lang_embedding = np.array(data_group["liv_lang_embedding"])
         if lang_embedding.shape[0] == 1024:
+            lang_embedding = np.expand_dims(lang_embedding, axis=0)
+        elif lang_embedding.shape[0] == 384:
             lang_embedding = np.expand_dims(lang_embedding, axis=0)
 
         len_lang_embedding = lang_embedding.shape[0]
@@ -62,8 +67,13 @@ class LivRealVideoTrainDataset(Dataset):
         while random_key == key:
             random_key = random.choice(self.keys)
         data_group = self.h5_file[random_key]
-        lang_embedding = np.array(data_group["liv_lang_embedding"])
+        if self.args.text_embedding_model == "minilm":
+            lang_embedding = np.array(data_group["minilm_lang_embedding"])
+        else:
+            lang_embedding = np.array(data_group["liv_lang_embedding"])
         if lang_embedding.shape[0] == 1024:
+            lang_embedding = np.expand_dims(lang_embedding, axis=0)
+        elif lang_embedding.shape[0] == 384:
             lang_embedding = np.expand_dims(lang_embedding, axis=0)
 
         len_lang_embedding = lang_embedding.shape[0]
@@ -143,8 +153,13 @@ class LivRealVideoTrainDataset(Dataset):
                 progress += 1
 
         # rewind the video
-        reverse_frame = video_frames[::-1][1:]
-        reverse_progress = progress[::-1][1:]
+        # reverse_frame = video_frames[::-1][1:]
+        # reverse_progress = progress[::-1][1:]
+
+        # random start rewind
+        random_end = random.randint(2, len(full_frames))
+        reverse_frame = video_frames[::-1][1:random_end]
+        reverse_progress = progress[::-1][1:random_end]
 
         video_frames = np.concatenate([video_frames, reverse_frame], axis=0)
         progress = np.concatenate([progress, reverse_progress], axis=0)
@@ -199,7 +214,12 @@ class LivRealVideoTrainDataset(Dataset):
             else:
                 video_array, progress, class_label = self.sample_video_feature(data_group)
         else:
+            
             video_array, progress, class_label = self.sample_video_feature(data_group)
+            if len(video_array.shape) != 2:
+                import pdb; pdb.set_trace()
+            if video_array.shape[0] != 16 or video_array.shape[1] != 768:
+                import pdb; pdb.set_trace()
 
         # sample text sample
         if self.sample_neg:
@@ -263,8 +283,13 @@ class LivRealVideoEvalDataset(Dataset):
 
     def sample_text_feature(self, data_group):
 
-        lang_embedding = np.array(data_group["liv_lang_embedding"])
+        if self.args.text_embedding_model == "minilm":
+            lang_embedding = np.array(data_group["minilm_lang_embedding"])
+        else:
+            lang_embedding = np.array(data_group["liv_lang_embedding"])
         if lang_embedding.shape[0] == 1024:
+            lang_embedding = np.expand_dims(lang_embedding, axis=0)
+        elif lang_embedding.shape[0] == 384:
             lang_embedding = np.expand_dims(lang_embedding, axis=0)
 
         len_lang_embedding = lang_embedding.shape[0]

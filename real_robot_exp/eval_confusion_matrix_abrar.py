@@ -99,34 +99,25 @@ def plot_matrix_as_image(matrix, names, set, text, prob = False):
 
 
 
-def plot_confusion_matrix(h5_file, set, self_attention_model, args, prob = False, pca_text_model = None, pca_video_model = None):
+def plot_confusion_matrix(h5_file, set, self_attention_model, args):
     device = next(self_attention_model.parameters()).device
 
     keys = list(h5_file.keys())
     eval_envs = keys
-    # if set == "train":
-    #     if args.extra_data_type == "metaworld":
-    #         eval_envs = keys
-    #     else:
-    #         eval_envs = keys[:int(len(keys)*0.75)]
-    # elif set == "eval":
-    #     if args.extra_data_type == "metaworld":
-    #         eval_envs = keys
-    #     else:
-    #         eval_envs = keys[int(len(keys)*0.75):]
-    # else:
-    #     eval_envs = keys
+
 
     text_embeddings = []
     text_list = []
     for key in eval_envs:
-        embedding = np.asarray(h5_file[key]["liv_lang_embedding"])[0].reshape(1, -1)
+        if args.text_embedding_model == "minilm":
+            embedding = np.asarray(h5_file[key]["minilm_lang_embedding"])[0].reshape(1, -1)
+        else:
+            embedding = np.asarray(h5_file[key]["liv_lang_embedding"])[0].reshape(1, -1)
         text_embeddings.append(embedding)
         text_list.append(key)
     text_embeddings = np.concatenate(text_embeddings, axis=0)
     text_embeddings = torch.from_numpy(text_embeddings).to(device).float()
-    if args.pca:
-        text_embeddings = pca_text_model(text_embeddings)
+
 
     if args.normalize_embedding:
         text_embeddings = normalize_embeddings(text_embeddings)
@@ -150,45 +141,24 @@ def plot_confusion_matrix(h5_file, set, self_attention_model, args, prob = False
             traj_list.append(video_embedding)
         traj_data_all = np.stack(traj_list, axis=0)
         traj_data_all = torch.from_numpy(traj_data_all).to(device).float()
-        if args.pca:
-            traj_data_all = pca_video_model(traj_data_all)
 
-        # if args.pca:
-        #     # dim = pca_video_model.n_components
-        #     traj_data = traj_data.view(-1, 512).unsqueeze(0).repeat(text_embeddings.shape[0], 1, 1)
-        # else:
-        #     traj_data = traj_data.view(-1, 768).unsqueeze(0).repeat(text_embeddings.shape[0], 1, 1)
+
         progress_result_list = []
         progress_prob_list = []
         for id in range(traj_data_all.shape[0]):
             traj_data = traj_data_all[id].unsqueeze(0).repeat(text_embeddings.shape[0], 1, 1)
-            triangle_mask = torch.tril(torch.ones(traj_data.shape[1] + 1, traj_data.shape[1] + 1)).to(device).unsqueeze(0).unsqueeze(0).repeat(traj_data.shape[0], 1, 1, 1)
-            mask = None
-            pred_class, two_step_class = self_attention_model(traj_data, triangle_mask, text_embeddings, mask)
-
-            if not args.catagorical_progress:
-                pred_class = pred_class.squeeze()
-            else:
-                if args.two_step_training:
-                    pred_class = torch.argmax(pred_class, dim = 2) + 1
-                else:
-                    if args.catagorical_progress:
-                        pred_class = torch.argmax(pred_class, dim = 2)
-                    else:
-                        pred_class = torch.argmax(pred_class, dim = 2).view(-1, 1)
+            pred_class, two_step_class = self_attention_model(traj_data, text_embeddings)
             
             pred_class = pred_class[:, -1].squeeze()
-            if args.two_step_training:
-                batch_size = two_step_class.shape[0]
-                two_step_prob = two_step_class.clone().float()
-                two_step_prob = two_step_prob[:, -1].squeeze()
-                two_step_class = two_step_class > 0.5
 
-                pred_class = pred_class * two_step_class[:, -1].squeeze()
-                progress_prob_list.append(two_step_prob.cpu().detach().numpy())
-                predicted_progress = pred_class.cpu().detach().numpy()
-            else:
-                predicted_progress = pred_class.cpu().detach().numpy()
+            two_step_prob = two_step_class.clone().float().squeeze()
+            two_step_class = two_step_class.squeeze() > args.binary_threshold
+
+            pred_class = pred_class * two_step_class.squeeze()
+
+            progress_prob_list.append(two_step_prob.cpu().detach().numpy())
+            predicted_progress = pred_class.cpu().detach().numpy()
+
             
             progress_result_list.append(predicted_progress)
         predicted_progress = np.stack(progress_result_list, axis=0)

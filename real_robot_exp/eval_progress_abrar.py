@@ -56,63 +56,61 @@ def sample_video_frames(frames, num_frames = 32):
 
     return frames
 
-def plot_progress(h5_file, set, video_encoder, text_encoder, args, pca_text_model = None, pca_video_model = None):
-    device = next(video_encoder.parameters()).device
+def plot_progress(h5_file, set, self_attention_model, args):
+    device = next(self_attention_model.parameters()).device
     keys = list(h5_file.keys())
     eval_envs = keys
 
 
     for key in tqdm(eval_envs):
         video_group = h5_file[key]
-        select_key = list(video_group.keys())
-        select_key = [k for k in select_key if "liv_lang_embedding_individual" in k]
-        select_key = random.choice(select_key)
 
-        text_embedding = np.asarray(video_group[select_key])[0]
-        text_embedding = torch.from_numpy(text_embedding).to(device).float().unsqueeze(0)
+        if args.text_embedding_model == "minilm":
+            text_embedding = np.asarray(video_group["minilm_lang_embedding"])[0].reshape(1, -1)
+        else:
+            text_embedding = np.asarray(video_group["liv_lang_embedding"])[0].reshape(1, -1)
+        text_embedding = torch.from_numpy(text_embedding).to(device).float()
 
-        if args.pca:
-            text_embedding = pca_text_model(text_embedding)
         if args.normalize_embedding:
             text_embedding = normalize_embeddings(text_embedding)
-
-        choose_key = list(video_group.keys())
-        choose_key = [k for k in choose_key if "lang" not in k]
+        choose_key = [key for key in video_group.keys() if "lang" not in key]
         choose_key = random.choice(choose_key)
         video_embeddings = np.asarray(video_group[choose_key])
         video_embeddings = torch.from_numpy(video_embeddings).to(device).float()
-        if args.pca:
-            video_embeddings = pca_video_model(video_embeddings)
+
         if args.normalize_embedding:
             video_embeddings = normalize_embeddings(video_embeddings)
         if args.subsample_video:
             traj_data = sample_embedding_frames(video_embeddings, args.max_length)
         
-        if args.pca:
-            traj_data = traj_data.view(-1, 512).unsqueeze(0).repeat(text_embedding.shape[0], 1, 1)
-        else:
-            traj_data = traj_data.view(-1, 768).unsqueeze(0).repeat(text_embedding.shape[0], 1, 1)
+        # if args.pca:
+        #     # dim = pca_video_model.n_components
+        #     traj_data = traj_data.view(-1, 512).unsqueeze(0).repeat(text_embedding.shape[0], 1, 1)
+        # else:
+        traj_data = traj_data.view(-1, 768).unsqueeze(0).repeat(text_embedding.shape[0], 1, 1)
 
-        
-        triangle_mask = torch.tril(torch.ones(traj_data.shape[1], traj_data.shape[1])).to(device).unsqueeze(0).unsqueeze(0).repeat(traj_data.shape[0], 1, 1, 1)
-        video_embeddings = video_encoder(traj_data, triangle_mask).squeeze(0)
-        text_mask = torch.zeros(text_embedding.shape[0], text_embedding.shape[1]).to(device).bool()
-        
-        text_embedding = text_encoder(text_embedding, text_mask)
-        
-        if args.norm_length:
-            video_embeddings = F.normalize(video_embeddings, p=2, dim=1)
-            text_embedding = F.normalize(text_embedding, p=2, dim=1)
-        text_embedding = text_embedding.unsqueeze(0)
-        text_embedding = text_embedding.repeat(1, video_embeddings.shape[0], 1).squeeze(0)
+        pred_class, two_step_class = self_attention_model(traj_data, text_embedding)
 
-        progress = torch.sum(video_embeddings * text_embedding, dim=-1).detach().cpu().numpy()
+        two_step_class_prob = two_step_class.squeeze()
+        # if two_step_class_prob > 0.5 is 1 else 0
+        two_step_class_prob = two_step_class_prob > args.binary_threshold
+        two_step_class_prob = two_step_class_prob.float()
 
-        frame_index = np.linspace(1, len(progress), len(progress))
+        pred_class = pred_class * two_step_class_prob
+
+
+        # if args.catagorical_progress:
+        #     pred_class = torch.argmax(pred_class, dim = 1)
+        # else:
+
+        predicted_classes = np.array(pred_class.squeeze().detach().cpu().numpy())
+        predicted_classes = predicted_classes[1:]
+
+        frame_index = np.linspace(1, len(predicted_classes), len(predicted_classes))
 
         figure = plt.figure()
         
-        plt.plot(frame_index, progress, label="Correct Text", color="blue")
+        plt.plot(frame_index, predicted_classes, label="Correct Text", color="blue")
         plt.xlabel("Frame Index")
         plt.ylabel("Class")
         plt.title(f"{key}")

@@ -19,7 +19,7 @@ from clip_utils import (
 from PIL import Image
 
 SAVE_H5_NAME = "droid_embeddings_dino.h5"  # name of the h5 file it'll be saved to
-DEBUG = False # will use DROID_100
+DEBUG = False  # will use DROID_100
 MAX_NUM_FRAMES_PER_EPISODE = 32
 MAX_SAMPLES = float("inf")
 TRAIN_SPLIT = "train"  # "test", droid training set doesn't exist
@@ -46,9 +46,9 @@ liv_model = liv_model.to(device)
 minilm_tokenizer = AutoTokenizer.from_pretrained(
     "sentence-transformers/all-MiniLM-L12-v2"
 )
-minilm_model = AutoModel.from_pretrained(
-    "sentence-transformers/all-MiniLM-L12-v2"
-).to(device)
+minilm_model = AutoModel.from_pretrained("sentence-transformers/all-MiniLM-L12-v2").to(
+    device
+)
 
 
 dataset_name = "droid"
@@ -59,7 +59,9 @@ if DEBUG:
 tasks_seen = dict()
 total_samples = 0
 with h5py.File(SAVE_H5_NAME, "w") as f:
-    dataset = tfds.load(dataset_name, data_dir="gs://gresearch/robotics", split=TRAIN_SPLIT)
+    dataset = tfds.load(
+        dataset_name, data_dir="gs://gresearch/robotics", split=TRAIN_SPLIT
+    )
     valid_samples_per_dataset = 0
     img_key_to_name = OXE_DATASET_CONFIGS[dataset_name.split("_")[0]][
         "image_obs_keys"
@@ -99,9 +101,8 @@ with h5py.File(SAVE_H5_NAME, "w") as f:
                 # extract video
                 for j, img_key in enumerate(views):
                     episode_images_list[j].append(step["observation"][img_key].numpy())
-                    
 
-            if task is None or task == '':
+            if task is None or task == "":
                 print(
                     f"Skipping episode {i + 1} of dataset {dataset_name} as the task is None or empty."
                 )
@@ -126,7 +127,9 @@ with h5py.File(SAVE_H5_NAME, "w") as f:
                             .numpy()
                         )
                         # create a dataset with the embeddings
-                        f[task].create_dataset("liv_lang_embedding", data=task_embedding)
+                        f[task].create_dataset(
+                            "liv_lang_embedding", data=task_embedding
+                        )
                         individual_task_embedding = (
                             get_full_liv_embedding(liv_model, tokenizer, [task])
                             .detach()
@@ -135,7 +138,8 @@ with h5py.File(SAVE_H5_NAME, "w") as f:
                         )
                         # create a dataset with the embeddings
                         f[task].create_dataset(
-                            "liv_lang_embedding_individual", data=individual_task_embedding
+                            "liv_lang_embedding_individual",
+                            data=individual_task_embedding,
                         )
 
                         # create the minilm embeddings and save them
@@ -144,9 +148,11 @@ with h5py.File(SAVE_H5_NAME, "w") as f:
                         ).to(device)
 
                         model_output = minilm_model(**encoded_input)
-                        minlm_task_embedding = mean_pooling(
-                            model_output, encoded_input["attention_mask"]
-                        ).cpu().numpy()
+                        minlm_task_embedding = (
+                            mean_pooling(model_output, encoded_input["attention_mask"])
+                            .cpu()
+                            .numpy()
+                        )
 
                         f[task].create_dataset(
                             "minilm_lang_embedding", data=minlm_task_embedding
@@ -155,7 +161,8 @@ with h5py.File(SAVE_H5_NAME, "w") as f:
                         per_token_embeddings = model_output[0].cpu().numpy()
 
                         f[task].create_dataset(
-                            "minilm_lang_embedding_individual", data=per_token_embeddings
+                            "minilm_lang_embedding_individual",
+                            data=per_token_embeddings,
                         )
                 else:
                     tasks_seen[task] += 1
@@ -183,7 +190,12 @@ with h5py.File(SAVE_H5_NAME, "w") as f:
                         episode_images_dino = [
                             dino_load_image(img) for img in episode_images
                         ]
-                        episode_images_dino = [torch.concatenate(episode_images_dino[i:i+DINO_BATCH_SIZE]) for i in range(0, len(episode_images_dino), DINO_BATCH_SIZE)]
+                        episode_images_dino = [
+                            torch.concatenate(
+                                episode_images_dino[i : i + DINO_BATCH_SIZE]
+                            )
+                            for i in range(0, len(episode_images_dino), DINO_BATCH_SIZE)
+                        ]
                         embedding_list = []
                         for batch in episode_images_dino:
                             episode_image_embeddings = (
@@ -193,7 +205,7 @@ with h5py.File(SAVE_H5_NAME, "w") as f:
                                 .cpu()
                                 .numpy()
                             )
-                            embedding_list.append(episode_image_embeddings) 
+                            embedding_list.append(episode_image_embeddings)
                         episode_image_embeddings = np.concatenate(embedding_list)
                 else:
                     embedding_list = []
@@ -209,7 +221,7 @@ with h5py.File(SAVE_H5_NAME, "w") as f:
                             .cpu()
                             .numpy()
                         )
-                    embedding_list.append(image_embeddings)
+                        embedding_list.append(image_embeddings)
                     episode_image_embeddings = np.array(embedding_list)
 
                 # create a dataset with the embeddings
@@ -219,7 +231,6 @@ with h5py.File(SAVE_H5_NAME, "w") as f:
                     # compression="gzip",
                     # compression_opts=9,
                 )
-
 
                 valid_samples_per_dataset += 1
                 total_samples += 1
