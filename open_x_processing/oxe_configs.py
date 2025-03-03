@@ -99,6 +99,18 @@ OXE_DATASET_CONFIGS = {
         "state_encoding": StateEncoding.POS_EULER,
         "action_encoding": ActionEncoding.EEF_POS,
     },
+    "bridge_v2": {  # Version of Bridge V2 I downloaded
+        "image_obs_keys": {
+            "primary": "image_0",
+            "secondary": "image_1",
+            "tertiary": "image_2",
+            "wrist": None,
+        },
+        "depth_obs_keys": {"primary": None, "secondary": None, "wrist": None},
+        "state_obs_keys": ["EEF_state", None, "gripper_state"],
+        "state_encoding": StateEncoding.POS_EULER,
+        "action_encoding": ActionEncoding.EEF_POS,
+    },
     "bridge_dataset": {  # Original version of Bridge V2 from project website
         "image_obs_keys": {"primary": "image_0", "secondary": "image_1", "wrist": None},
         "depth_obs_keys": {"primary": None, "secondary": None, "wrist": None},
@@ -558,7 +570,7 @@ OXE_DATASET_CONFIGS = {
         "action_encoding": ActionEncoding.EEF_POS,
         "aux_kwargs": {
             "dataset_frame_transform_kwargs": {
-                #"chunk_filter_fn": zero_action_filter,
+                # "chunk_filter_fn": zero_action_filter,
             },
         },
     },
@@ -609,49 +621,77 @@ OXE_DATASET_CONFIGS = {
     ### T-DROID datasets
     "tdroid_carrot_in_bowl": {  # "put carrot in bowl" task, 50 demos @ 5 Hz control
         "image_obs_keys": {"primary": "static_image", "secondary": None, "wrist": None},
-        "depth_obs_keys": {"primary": "static_depth_image", "secondary": None, "wrist": None},
+        "depth_obs_keys": {
+            "primary": "static_depth_image",
+            "secondary": None,
+            "wrist": None,
+        },
         "state_obs_keys": ["EEF_state", None, "gripper_state"],
         "state_encoding": StateEncoding.POS_EULER,
         "action_encoding": ActionEncoding.EEF_POS,
     },
     "tdroid_pour_corn_in_pot": {  # "pour corn from red bowl into steel pot" task, 50 demos @ 5 Hz control
         "image_obs_keys": {"primary": "static_image", "secondary": None, "wrist": None},
-        "depth_obs_keys": {"primary": "static_depth_image", "secondary": None, "wrist": None},
+        "depth_obs_keys": {
+            "primary": "static_depth_image",
+            "secondary": None,
+            "wrist": None,
+        },
         "state_obs_keys": ["EEF_state", None, "gripper_state"],
         "state_encoding": StateEncoding.POS_EULER,
         "action_encoding": ActionEncoding.EEF_POS,
     },
     "tdroid_flip_pot_upright": {  # "flip pot upright" task, 10 demos @ 5 Hz control
         "image_obs_keys": {"primary": "static_image", "secondary": None, "wrist": None},
-        "depth_obs_keys": {"primary": "static_depth_image", "secondary": None, "wrist": None},
+        "depth_obs_keys": {
+            "primary": "static_depth_image",
+            "secondary": None,
+            "wrist": None,
+        },
         "state_obs_keys": ["EEF_state", None, "gripper_state"],
         "state_encoding": StateEncoding.POS_EULER,
         "action_encoding": ActionEncoding.EEF_POS,
     },
     "tdroid_move_object_onto_plate": {  # "move <object> onto plate" task, 150 demos @ 5 Hz control
         "image_obs_keys": {"primary": "static_image", "secondary": None, "wrist": None},
-        "depth_obs_keys": {"primary": "static_depth_image", "secondary": None, "wrist": None},
+        "depth_obs_keys": {
+            "primary": "static_depth_image",
+            "secondary": None,
+            "wrist": None,
+        },
         "state_obs_keys": ["EEF_state", None, "gripper_state"],
         "state_encoding": StateEncoding.POS_EULER,
         "action_encoding": ActionEncoding.EEF_POS,
     },
     "tdroid_knock_object_over": {  # "knock <object> over" task, 70 demos @ 5 Hz control
         "image_obs_keys": {"primary": "static_image", "secondary": None, "wrist": None},
-        "depth_obs_keys": {"primary": "static_depth_image", "secondary": None, "wrist": None},
+        "depth_obs_keys": {
+            "primary": "static_depth_image",
+            "secondary": None,
+            "wrist": None,
+        },
         "state_obs_keys": ["EEF_state", None, "gripper_state"],
         "state_encoding": StateEncoding.POS_EULER,
         "action_encoding": ActionEncoding.EEF_POS,
     },
     "tdroid_cover_object_with_towel": {  # "cover <object> with towel" task, 45 demos @ 5 Hz control
         "image_obs_keys": {"primary": "static_image", "secondary": None, "wrist": None},
-        "depth_obs_keys": {"primary": "static_depth_image", "secondary": None, "wrist": None},
+        "depth_obs_keys": {
+            "primary": "static_depth_image",
+            "secondary": None,
+            "wrist": None,
+        },
         "state_obs_keys": ["EEF_state", None, "gripper_state"],
         "state_encoding": StateEncoding.POS_EULER,
         "action_encoding": ActionEncoding.EEF_POS,
     },
     ### DROID Finetuning datasets
     "droid_wipe": {
-        "image_obs_keys": {"primary": "exterior_image_2_left", "secondary": None, "wrist": "wrist_image_left"},
+        "image_obs_keys": {
+            "primary": "exterior_image_2_left",
+            "secondary": None,
+            "wrist": "wrist_image_left",
+        },
         "depth_obs_keys": {"primary": None, "secondary": None, "wrist": None},
         "state_obs_keys": ["proprio"],
         "state_encoding": StateEncoding.POS_EULER,
@@ -659,28 +699,44 @@ OXE_DATASET_CONFIGS = {
     },
     ### LIBERO datasets (modified versions)
     "libero_spatial_no_noops": {
-        "image_obs_keys": {"primary": "image", "secondary": None, "wrist": "wrist_image"},
+        "image_obs_keys": {
+            "primary": "image",
+            "secondary": None,
+            "wrist": "wrist_image",
+        },
         "depth_obs_keys": {"primary": None, "secondary": None, "wrist": None},
         "state_obs_keys": ["EEF_state", None, "gripper_state"],
         "state_encoding": StateEncoding.POS_EULER,
         "action_encoding": ActionEncoding.EEF_POS,
     },
     "libero_object_no_noops": {
-        "image_obs_keys": {"primary": "image", "secondary": None, "wrist": "wrist_image"},
+        "image_obs_keys": {
+            "primary": "image",
+            "secondary": None,
+            "wrist": "wrist_image",
+        },
         "depth_obs_keys": {"primary": None, "secondary": None, "wrist": None},
         "state_obs_keys": ["EEF_state", None, "gripper_state"],
         "state_encoding": StateEncoding.POS_EULER,
         "action_encoding": ActionEncoding.EEF_POS,
     },
     "libero_goal_no_noops": {
-        "image_obs_keys": {"primary": "image", "secondary": None, "wrist": "wrist_image"},
+        "image_obs_keys": {
+            "primary": "image",
+            "secondary": None,
+            "wrist": "wrist_image",
+        },
         "depth_obs_keys": {"primary": None, "secondary": None, "wrist": None},
         "state_obs_keys": ["EEF_state", None, "gripper_state"],
         "state_encoding": StateEncoding.POS_EULER,
         "action_encoding": ActionEncoding.EEF_POS,
     },
     "libero_10_no_noops": {
-        "image_obs_keys": {"primary": "image", "secondary": None, "wrist": "wrist_image"},
+        "image_obs_keys": {
+            "primary": "image",
+            "secondary": None,
+            "wrist": "wrist_image",
+        },
         "depth_obs_keys": {"primary": None, "secondary": None, "wrist": None},
         "state_obs_keys": ["EEF_state", None, "gripper_state"],
         "state_encoding": StateEncoding.POS_EULER,
