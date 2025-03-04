@@ -21,19 +21,19 @@ def merge_h5_files(input_dir, output_file):
         # Iterate through each input H5 file
         for h5_file in tqdm(h5_files, desc="Merging H5 files"):
             file_path = os.path.join(input_dir, h5_file)
-            try:
-                with h5py.File(file_path, "r") as in_f:
-                    # Get all task groups in the input file
-                    for task_name in in_f.keys():
-                        # Create task group in output file if it doesn't exist
-                        if task_name not in out_f:
-                            task_group = out_f.create_group(task_name)
-                            # Copy all datasets from input task group to output task group
-                            for dataset_name in in_f[task_name].keys():
-                                in_f[task_name].copy(dataset_name, task_group)
-                        else:
-                            # If task exists, append new datasets with updated indices
-                            task_group = out_f[task_name]
+            with h5py.File(file_path, "r") as in_f:
+                # Get all task groups in the input file
+                for task_name in in_f.keys():
+                    # Create task group in output file if it doesn't exist
+                    if task_name not in out_f:
+                        task_group = out_f.create_group(task_name)
+                        # Copy all datasets from input task group to output task group
+                        for dataset_name in in_f[task_name].keys():
+                            in_f[task_name].copy(dataset_name, task_group)
+                    else:
+                        # If task exists, append new datasets with updated indices
+                        task_group = out_f[task_name]
+                        try:
                             current_max_idx = max(
                                 [
                                     int(k.split("_")[0])
@@ -65,9 +65,8 @@ def merge_h5_files(input_dir, output_file):
                                 in_f[task_name].copy(
                                     dataset_name, task_group, name=new_name
                                 )
-            except Exception as e:
-                print(f"Error processing file {h5_file}: {str(e)}")
-                continue
+                        except Exception as e:
+                            print(f"Encountered exception {e} with task group keys: {task_group.keys()}, task name: {task_name}")
 
 
 def main():
