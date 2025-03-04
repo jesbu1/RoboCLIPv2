@@ -213,13 +213,6 @@ for dataset_name in tqdm(dataset_names):
                 else:
                     tasks_seen[task] += 1
 
-                # get the task group
-                task_group = f[task]
-                # get its length
-                task_group_len = len(task_group.keys())
-                # convert length to string
-                task_group_len_str = str(task_group_len)
-
                 # Process each image key separately
                 for img_key in valid_img_values:
                     if len(episode_images[img_key]) == 0:
@@ -283,9 +276,16 @@ for dataset_name in tqdm(dataset_names):
                             )
                             embedding_list.append(image_embeddings)
                         episode_image_embeddings = np.array(embedding_list)
+                    # get the task group
+                    task_group = f[task]
+                    # get its length
+                    task_group_len = len(task_group.keys())
+                    # convert length to string
+                    task_group_len_str = str(task_group_len)
+
                     # create a dataset with the embeddings using the image key as part of the name
                     task_group.create_dataset(
-                        f"{task_group_len_str}_{img_key}",
+                        task_group_len_str,
                         data=episode_image_embeddings,
                         # compression="gzip",
                         # compression_opts=9,
