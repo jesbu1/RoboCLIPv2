@@ -76,6 +76,7 @@ def main(args):
     experiment_name = "AugTextFixRewind" + experiment_name
 
     experiment_name += "_binary_thrd_" + str(args.binary_threshold)
+    experiment_name += "_Rewind_ratio_" + str(args.rewind_ratio)
 
     if args.text_embedding_model == "minilm":
         experiment_name += "_MiniLM"
@@ -115,7 +116,7 @@ def main(args):
 
     
 
-    group_name = "Dino_Koch_test_new_abrar_model"
+    group_name = "Dino_Koch_v2"
     run = wandb.init(
         entity=WANDB_ENTITY_NAME,
         project=WANDB_PROJECT_NAME,
@@ -155,7 +156,7 @@ def main(args):
         extra_dataloader = DataLoader(extra_dataset, batch_size=extra_batch_size, shuffle=True, num_workers=args.worker, drop_last=True, pin_memory=True)
 
 
-        h5_openx_eval_file = h5py.File("/home/jzhang96/full_openx_embeddings_dino_test.h5", "r")
+        h5_openx_eval_file = h5py.File("/home/jzhang96/full_openx_embeddings_v2_test.h5", "r")
         # h5_openx_eval_file = h5py.File("/mnt/ssd_a_4tb/jzhang96/full_openx_embeddings_dino_test_backup.h5", "r")
         # h5_openx_eval_file = h5py.File("/data/shared/roboclip/data/h5_buffers/openx_embeddings/full_openx_embeddings_dino_test.h5", "r")
 
@@ -628,11 +629,11 @@ def main(args):
 if __name__ == "__main__":
     argparser = argparse.ArgumentParser()
     # argparser.add_argument('--h5_embedding_path', type=str, default='/data/shared/roboclip/data/h5_buffers/openx_embeddings/full_openx_embeddings_droid_dino_train.h5')
-    argparser.add_argument('--h5_embedding_path', type=str, default='/home/jzhang96/full_openx_embeddings_droid_dino_train.h5')
+    argparser.add_argument('--h5_embedding_path', type=str, default='/home/jzhang96/full_openx_embeddings_v2_train.h5')
     # argparser.add_argument('--h5_embedding_path', type=str, default='/mnt/ssd_a_4tb/jzhang96/openx_embeddings_full_uncompressed_with_langtable_processed.h5')
     argparser.add_argument('--extra_data_type', type=str, choices=["metaworld", "real_world"], default="real_world")
     argparser.add_argument('--batch_size', type=int, default=1024)
-    argparser.add_argument('--epochs', type=int, default=10000)
+    argparser.add_argument('--epochs', type=int, default=200)
     argparser.add_argument('--seed', type=int, default=42)
     argparser.add_argument('--lr', type=float, default=1e-4)
     argparser.add_argument('--worker', type=int, default=4)
@@ -653,6 +654,7 @@ if __name__ == "__main__":
     argparser.add_argument('--text_embedding_model', type=str, default="minilm", choices=["minilm", "liv"])
     argparser.add_argument('--eval_interval', type=int, default=2)
     argparser.add_argument('--binary_threshold', type=float, default=0.5)
+    argparser.add_argument('--rewind_ratio', type=float, default=0.5)
 
 
 

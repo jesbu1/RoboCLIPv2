@@ -48,7 +48,7 @@ def normalize_embeddings(embeddings, return_tensor=True):
     else:
         return normalized_embeddings.detach().cpu().numpy()
 
-def plot_matrix_as_image(matrix, names, set, text, prob = False):
+def plot_matrix_as_image(matrix, names, set, text, prob = False, org_progress = False):
     # Create a figure and axis
     # only keep 2 decimal points
     matrix = np.round(matrix, 2)
@@ -88,7 +88,9 @@ def plot_matrix_as_image(matrix, names, set, text, prob = False):
     # buf.seek(0)
     # image = Image.open(buf)
     if prob:
-        wandb.log({f"confusion_matrix_prob/{set}_prob_confusion_matrix": wandb.Image(fig)})
+        wandb.log({f"confusion_matrix_same_class_prob/{set}_prob_confusion_matrix": wandb.Image(fig)})
+    elif org_progress:
+        wandb.log({f"confusion_matrix_org_progress_no_two_step/{set}_original_progress_confusion_matrix": wandb.Image(fig)})
     else:
         wandb.log({f"confusion_matrix/{set}_confusion_matrix": wandb.Image(fig)})
     # plt.savefig(f"confusion_matrix_{set}.pdf", bbox_inches="tight")
@@ -125,6 +127,7 @@ def plot_confusion_matrix(h5_file, set, self_attention_model, args):
     predicted_progress_row = []
     if args.two_step_training:
         pred_two_step_prob_list = []
+        pred_org_progress_list = []
     for i  in tqdm(range(len(eval_envs))):
         env = eval_envs[i]
         choose_keys = list(h5_file[env].keys())
@@ -145,12 +148,13 @@ def plot_confusion_matrix(h5_file, set, self_attention_model, args):
 
         progress_result_list = []
         progress_prob_list = []
+        progress_org_list = []
         for id in range(traj_data_all.shape[0]):
             traj_data = traj_data_all[id].unsqueeze(0).repeat(text_embeddings.shape[0], 1, 1)
             pred_class, two_step_class = self_attention_model(traj_data, text_embeddings)
             
             pred_class = pred_class[:, -1].squeeze()
-
+            progress_org_list.append(pred_class.clone().cpu().detach().numpy())
             two_step_prob = two_step_class.clone().float().squeeze()
             two_step_class = two_step_class.squeeze() > args.binary_threshold
 
@@ -158,7 +162,6 @@ def plot_confusion_matrix(h5_file, set, self_attention_model, args):
 
             progress_prob_list.append(two_step_prob.cpu().detach().numpy())
             predicted_progress = pred_class.cpu().detach().numpy()
-
             
             progress_result_list.append(predicted_progress)
         predicted_progress = np.stack(progress_result_list, axis=0)
@@ -168,13 +171,21 @@ def plot_confusion_matrix(h5_file, set, self_attention_model, args):
             progress_prob_list = np.stack(progress_prob_list, axis=0)
             progress_prob_list = np.mean(progress_prob_list, axis=0)
             pred_two_step_prob_list.append(progress_prob_list)
+            progress_org_list = np.stack(progress_org_list, axis=0)
+            progress_org_list = np.mean(progress_org_list, axis=0)
+            pred_org_progress_list.append(progress_org_list)
     predicted_progress_row = np.array(predicted_progress_row)
     if args.two_step_training:
         pred_two_step_prob_list = np.array(pred_two_step_prob_list)
         img = plot_matrix_as_image(predicted_progress_row, eval_envs, set, text_list, prob = False)
         img1 = plot_matrix_as_image(pred_two_step_prob_list, eval_envs, set, text_list, prob = True)
+        img2 = plot_matrix_as_image(pred_org_progress_list, eval_envs, set, text_list, prob = False, org_progress = True)
     else:
         img = plot_matrix_as_image(predicted_progress_row, eval_envs, set, text_list, prob = False)    
+
+
+
+
 
 def plot_confusion_matrix_token(h5_file, set, self_attention_model, args):
     device = next(self_attention_model.parameters()).device

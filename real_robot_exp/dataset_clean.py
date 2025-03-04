@@ -209,7 +209,7 @@ class LivRealVideoTrainDataset(Dataset):
 
         if self.args.rewind:
             random_num = random.random()
-            if random_num < 0.5:
+            if random_num < self.args.rewind_ratio:
                 video_array, progress, class_label = self.sample_reverse_video_feature(data_group)
             else:
                 video_array, progress, class_label = self.sample_video_feature(data_group)

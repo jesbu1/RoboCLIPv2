@@ -3,7 +3,7 @@ from tqdm import tqdm
 import numpy as np
 dataset_info = dict()
 
-file_path = "/home/jzhang96/full_openx_embeddings_droid_dino_train.h5"
+file_path = "/home/jzhang96/full_openx_embeddings_v2_test.h5"
 
 h5_file = h5py.File(file_path, 'a')
 key_num = len(h5_file.keys())
