@@ -21,11 +21,14 @@ from transformers import AutoTokenizer, AutoModel
 
 TFDS_PATH = "/data/shared/openx_rlds_data"
 TRAIN_SPLIT = "train"  # "train"
-SAVE_H5_NAME = f"full_openx_embeddings_dino_{TRAIN_SPLIT}.h5"  # name of the h5 file it'll be saved to
+SAVE_H5_DIR = f"{TRAIN_SPLIT}_dataset_embeddings"  # directory to save individual h5 files
 DEBUG = False  # will only make 10 per dataset
-SPECIFIC_TASKS = "language_table,austin_sirius_dataset_converted_externally_to_rlds,austin_buds_dataset_converted_externally_to_rlds,ucsd_kitchen_dataset_converted_externally_to_rlds,stanford_hydra_dataset_converted_externally_to_rlds,iamlab_cmu_pickup_insert_converted_externally_to_rlds,cmu_stretch,berkeley_fanuc_manipulation,berkeley_autolab_ur5,bridge,bc_z,fractal20220817_data,jaco_play"
+SPECIFIC_TASKS = "language_table,austin_sirius_dataset_converted_externally_to_rlds,austin_buds_dataset_converted_externally_to_rlds,ucsd_kitchen_dataset_converted_externally_to_rlds,stanford_hydra_dataset_converted_externally_to_rlds,iamlab_cmu_pickup_insert_converted_externally_to_rlds,cmu_stretch,berkeley_fanuc_manipulation,berkeley_autolab_ur5,bridge_v2,bc_z,fractal20220817_data,jaco_play"
 MAX_NUM_FRAMES_PER_EPISODE = 32
 MAX_EPISODES_FOR_LANG_TABLE = 10000
+
+# Create directory for saving h5 files if it doesn't exist
+os.makedirs(SAVE_H5_DIR, exist_ok=True)
 
 # prevent TFDS from taking up all GPU memory
 os.environ["TF_FORCE_GPU_ALLOW_GROWTH"] = "true"
@@ -64,10 +67,15 @@ if SPECIFIC_TASKS is not None:
     dataset_names = SPECIFIC_TASKS.split(",")
 
 # make a set to keep track of the tasks we've seen
-tasks_seen = dict()
 total_samples = 0
-with h5py.File(SAVE_H5_NAME, "w") as f:
-    for dataset_name in tqdm(dataset_names):
+for dataset_name in tqdm(dataset_names):
+    # Create a new h5 file for each dataset
+    h5_file_path = os.path.join(
+        SAVE_H5_DIR, f"{dataset_name}_{TRAIN_SPLIT}_embeddings.h5"
+    )
+    tasks_seen = dict()  # Reset tasks_seen for each dataset
+
+    with h5py.File(h5_file_path, "w") as f:
         try:
             if TRAIN_SPLIT == "test":
                 try:
@@ -87,8 +95,12 @@ with h5py.File(SAVE_H5_NAME, "w") as f:
             "image_obs_keys"
         ]  # dict mapping img_keys to the names of the images in OXE
 
-        # get the image key that matches "primary" to get the main camera view
-        primary_img_key = img_key_to_name["primary"]
+        # get all non-None image keys except "wrist"
+        valid_img_values = [
+            v for k, v in img_key_to_name.items() if v is not None and k != "wrist"
+        ]
+        print(f"Valid image values for dataset {dataset_name}: {valid_img_values}")
+
         i = 0
         len_of_dataset = min(dataset.cardinality().numpy(), n_samples)
         # convert to iterator to be able to catch exception when failed to load an episode for any reason
@@ -104,7 +116,9 @@ with h5py.File(SAVE_H5_NAME, "w") as f:
                 # skip if we have already saved the video
                 this_episode_name = f"{dataset_name}_ep{i}"
 
-                episode_images = []
+                episode_images = dict()
+                for key in valid_img_values:
+                    episode_images[key] = []
 
                 if valid_samples_per_dataset >= n_samples:
                     break
@@ -125,10 +139,14 @@ with h5py.File(SAVE_H5_NAME, "w") as f:
                         elif key in step:
                             task = step[key].numpy().decode()
                             break
-                    # extract video
-                    episode_images.append(step["observation"][primary_img_key].numpy())
+                    # extract images from all valid keys
+                    for img_key in valid_img_values:
+                        if img_key in step["observation"]:
+                            episode_images[img_key].append(
+                                step["observation"][img_key].numpy()
+                            )
 
-                if task is None:
+                if task is None or task == "":
                     print(
                         f"Skipping episode {i + 1} of dataset {dataset_name} as the task is None or empty."
                     )
@@ -195,69 +213,83 @@ with h5py.File(SAVE_H5_NAME, "w") as f:
                 else:
                     tasks_seen[task] += 1
 
-                # get the task group
-                task_group = f[task]
-                # get its length
-                task_group_len = len(task_group.keys())
-                # convert length to string
-                task_group_len_str = str(task_group_len)
+                # Process each image key separately
+                for img_key in valid_img_values:
+                    if len(episode_images[img_key]) == 0:
+                        print(f"Skipping {img_key} as no images were found")
+                        continue
+                    if np.all(episode_images[img_key] == 0):
+                        print(f"Skipping {img_key} as all images are 0.")
+                        continue
 
-                # linspace to get the indices of the frames to sample
-                indices = np.linspace(
-                    0, len(episode_images) - 1, MAX_NUM_FRAMES_PER_EPISODE, dtype=int
-                )
-                # make sure there are no duplicates
-                indices = sorted(list(set(indices)))
+                    # linspace to get the indices of the frames to sample
+                    indices = np.linspace(
+                        0,
+                        len(episode_images[img_key]) - 1,
+                        MAX_NUM_FRAMES_PER_EPISODE,
+                        dtype=int,
+                    )
+                    # make sure there are no duplicates
+                    indices = sorted(list(set(indices)))
 
-                episode_images = [episode_images[i] for i in indices]
+                    sampled_images = [episode_images[img_key][i] for i in indices]
 
-                # center crop 224x224
-                if EMBEDDING_MODEL == "dinov2":
-                    with torch.inference_mode():
-                        # batch it
-                        episode_images_dino = [
-                            dino_load_image(img) for img in episode_images
-                        ]
-                        episode_images_dino = [
-                            torch.concatenate(
-                                episode_images_dino[i : i + DINO_BATCH_SIZE]
-                            )
-                            for i in range(0, len(episode_images_dino), DINO_BATCH_SIZE)
-                        ]
+                    # center crop 224x224
+                    if EMBEDDING_MODEL == "dinov2":
+                        with torch.inference_mode():
+                            # batch it
+                            episode_images_dino = [
+                                dino_load_image(img) for img in sampled_images
+                            ]
+                            episode_images_dino = [
+                                torch.concatenate(
+                                    episode_images_dino[i : i + DINO_BATCH_SIZE]
+                                )
+                                for i in range(
+                                    0, len(episode_images_dino), DINO_BATCH_SIZE
+                                )
+                            ]
+                            embedding_list = []
+                            for batch in episode_images_dino:
+                                episode_image_embeddings = (
+                                    dinov2_vits14(batch.to(device))
+                                    .squeeze()
+                                    .detach()
+                                    .cpu()
+                                    .numpy()
+                                )
+                                embedding_list.append(episode_image_embeddings)
+                            episode_image_embeddings = np.concatenate(embedding_list)
+                    else:
                         embedding_list = []
-                        for batch in episode_images_dino:
-                            episode_image_embeddings = (
-                                dinov2_vits14(batch.to(device))
+                        for ep_img in sampled_images:
+                            image_embeddings = (
+                                embedding_image(
+                                    liv_model,
+                                    processor,
+                                    Image.fromarray(ep_img.astype(np.uint8)),
+                                )
                                 .squeeze()
                                 .detach()
                                 .cpu()
                                 .numpy()
                             )
-                            embedding_list.append(episode_image_embeddings)
-                        episode_image_embeddings = np.concatenate(embedding_list)
-                else:
-                    embedding_list = []
-                    for ep_img in episode_images:
-                        image_embeddings = (
-                            embedding_image(
-                                liv_model,
-                                processor,
-                                Image.fromarray(ep_img.astype(np.uint8)),
-                            )
-                            .squeeze()
-                            .detach()
-                            .cpu()
-                            .numpy()
-                        )
-                        embedding_list.append(image_embeddings)
-                    episode_image_embeddings = np.array(embedding_list)
-                # create a dataset with the embeddings
-                task_group.create_dataset(
-                    task_group_len_str,
-                    data=episode_image_embeddings,
-                    # compression="gzip",
-                    # compression_opts=9,
-                )
+                            embedding_list.append(image_embeddings)
+                        episode_image_embeddings = np.array(embedding_list)
+                    # get the task group
+                    task_group = f[task]
+                    # get its length
+                    task_group_len = len(task_group.keys())
+                    # convert length to string
+                    task_group_len_str = str(task_group_len)
+
+                    # create a dataset with the embeddings using the image key as part of the name
+                    task_group.create_dataset(
+                        task_group_len_str,
+                        data=episode_image_embeddings,
+                        # compression="gzip",
+                        # compression_opts=9,
+                    )
 
                 valid_samples_per_dataset += 1
                 i += 1
