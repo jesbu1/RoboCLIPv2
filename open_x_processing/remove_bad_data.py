@@ -85,7 +85,7 @@ def clean_h5_file(input_path, output_path=None):
                     data = task_group[dataset_name][:]
                 except Exception as e:
                     stats["tasks_removed"] += 1
-                    print(f"Exception {e}, skipping this datapoint. dataset_name: {dataset_name}, task group keys: {task_group.keys(), task_name: {task_name}")
+                    print(f"Exception {e}, skipping this datapoint. dataset_name: {dataset_name}, task group keys: {task_group.keys()}, task_name: {task_name}")
                     continue
 
                 # Skip validation for language embeddings

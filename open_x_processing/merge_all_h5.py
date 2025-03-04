@@ -60,8 +60,8 @@ def merge_h5_files(input_dir, output_file):
                                     continue
 
                                 # Update index for image embeddings
-                                idx, img_key = dataset_name.split("_", 1)
-                                new_name = f"{current_max_idx + 1 + int(idx)}_{img_key}"
+                                idx = dataset_name.split("_", 1)[0]
+                                new_name = f"{current_max_idx + 1 + int(idx)}"
                                 in_f[task_name].copy(
                                     dataset_name, task_group, name=new_name
                                 )

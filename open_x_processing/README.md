@@ -147,9 +147,9 @@ dataset_name_train_embeddings.h5/
 │   ├── liv_lang_embedding_individual
 │   ├── minilm_lang_embedding
 │   ├── minilm_lang_embedding_individual
-│   ├── 0_primary
-│   ├── 0_overhead
-│   ├── 1_primary
+│   ├── 4
+│   ├── 5
+│   ├── 6
 │   └── ...
 ├── task_2/
 └── ...
@@ -158,8 +158,8 @@ dataset_name_train_embeddings.h5/
 Where:
 - Each task has its own group
 - Language embeddings are stored once per task
-- Image embeddings are stored as `{index}_{camera_view}`
-- Camera views include 'primary', 'overhead', etc. (varies by dataset)
+- Image embeddings are stored as `{index}`
+- Camera views include 'primary', 'overhead', etc. (varies by dataset). They're merged into the same keys.
 
 ## Requirements
 
