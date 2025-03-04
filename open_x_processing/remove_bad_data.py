@@ -81,7 +81,12 @@ def clean_h5_file(input_path, output_path=None):
             # Check all datasets in the task
             for dataset_name in task_group.keys():
                 stats["total_embeddings"] += 1
-                data = task_group[dataset_name][:]
+                try: 
+                    data = task_group[dataset_name][:]
+                except Exception as e:
+                    stats["tasks_removed"] += 1
+                    print(f"Exception {e}, skipping this datapoint. dataset_name: {dataset_name}, task group keys: {task_group.keys(), task_name: {task_name}")
+                    continue
 
                 # Skip validation for language embeddings
                 if any(x in dataset_name for x in LANG_EMBEDDING_KEYS):
