@@ -105,6 +105,7 @@ def main(args):
     
     experiment_name += "_epochs_" + str(args.epochs)
     experiment_name += "_lr_" + str(args.lr)
+    experiment_name += "_progress_loss_weight_" + str(args.progress_loss_weight)
 
     
     if args.extra_data_type == "metaworld":
@@ -316,7 +317,7 @@ def main(args):
                 openx_ratio = len(valid_openx_progress_pred) / (len(valid_openx_progress_pred) + len(valid_extra_progress_pred))
                 extra_ratio = len(valid_extra_progress_pred) / (len(valid_openx_progress_pred) + len(valid_extra_progress_pred))
                 progress_loss = openx_progress_loss * openx_ratio + extra_progress_loss * extra_ratio
-                loss = openx_loss * openx_ratio + extra_loss * extra_ratio + progress_loss
+                loss = openx_loss * openx_ratio + extra_loss * extra_ratio + progress_loss * args.progress_loss_weight
 
                 loss.backward()
                 if args.clip_grad:
@@ -655,6 +656,7 @@ if __name__ == "__main__":
     argparser.add_argument('--eval_interval', type=int, default=2)
     argparser.add_argument('--binary_threshold', type=float, default=0.5)
     argparser.add_argument('--rewind_ratio', type=float, default=0.5)
+    argparser.add_argument('--progress_loss_weight', type=float, default=1)
 
 
 
