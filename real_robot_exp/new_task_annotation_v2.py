@@ -41,7 +41,6 @@ eval_gt_annotation = {
         "soccer-v2": "Sliding the ball into the gate",
         "window-close-v2": "Closing the window",
         "sweep-into-v2": "Sweeping the block into the hole",
-        "door-unlock-v2": "Turning door lock clockwise"
 }
 
 generated_gt_annotation = {

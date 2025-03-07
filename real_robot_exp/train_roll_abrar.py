@@ -118,6 +118,7 @@ def main(args):
     
 
     group_name = "Dino_Koch_v2"
+    group_name = args.extra_data_type + "_" + group_name
     run = wandb.init(
         entity=WANDB_ENTITY_NAME,
         project=WANDB_PROJECT_NAME,
@@ -127,9 +128,9 @@ def main(args):
     )
 
     if args.extra_data_type == "metaworld":
-        h5_train_eval_file = h5py.File("metaworld_embedding_5_demo_dataset_v3_train.h5", "r")
-        h5_eval_file = h5py.File("metaworld_embedding_5_demo_dataset_v3_eval.h5", "r")
-        extra_data_path = "metaworld_embedding_5_demo_dataset_v3_train.h5"
+        h5_train_eval_file = h5py.File("metaworld_dino_embeddings_train.h5", "r")
+        h5_eval_file = h5py.File("metaworld_dino_embeddings_eval.h5", "r")
+        extra_data_path = "metaworld_dino_embeddings_train.h5"
     else:
         # h5_eval_file = h5py.File("jesse_collect_dataset_new_token.h5", "r")
         # extra_data_path = "jesse_collect_dataset_new_token.h5"
@@ -593,7 +594,7 @@ def main(args):
                 print("Logging evaluation metrics")
                 wandb.log(wandb_eval_log)
 
-        if epoch % 5 == 0:
+        if epoch % 2 == 0:
             self_attention_model.eval()
             with torch.no_grad():
                 if args.extra_data_type == "metaworld":
@@ -609,7 +610,8 @@ def main(args):
                                         set = "eval",
                                         self_attention_model = self_attention_model,
                                         args = args)               
-
+                    plot_progress(h5_train_eval_file, "train", self_attention_model, args)
+                    plot_progress(h5_eval_file, "eval", self_attention_model, args)
                 else:
 
                     plot_progress(h5_train_eval_file, "train", self_attention_model, args)
