@@ -76,7 +76,7 @@ def plot_progress(h5_file, set, self_attention_model, args):
         # Get all trajectory keys (exclude language embeddings)
         traj_keys = [k for k in video_group.keys() if "lang" not in k]
         random.shuffle(traj_keys)
-        traj_keys = traj_keys[:1]
+        traj_keys = traj_keys[:5]
         figure = plt.figure(figsize=(10, 6))
         
         # Plot each trajectory with a different color

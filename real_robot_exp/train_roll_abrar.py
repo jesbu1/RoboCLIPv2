@@ -34,6 +34,18 @@ def focal_loss(pred, target, gamma=2.0, alpha=0.25):
     return focal_loss.mean()
 
 
+def weighted_mse_loss(pred, target, weight_factor=2.0):
+    # weight based on target value (uncomment)
+    # weights = 1.0 + weight_factor * target  # Higher targets get higher weights
+    
+    # weight based on position in sequence (uncomment)
+    weights = torch.linspace(1, weight_factor, target.shape[1]).unsqueeze(0).expand_as(target).to(target.device)
+
+    squared_diff = (pred - target) ** 2
+    weighted_squared_diff = weights * squared_diff
+    return weighted_squared_diff.mean()
+
+
 def compute_metrics(predictions, targets):
     """Compute classification metrics"""
     # Convert predictions to binary (0 or 1)
@@ -109,7 +121,7 @@ def main(args):
 
     
     if args.extra_data_type == "metaworld":
-        group_name = "MetaWorld"
+        group_name = "MetaWorldNew"
     else:
         group_name = "RealWorld_Koch"
     # get today date
@@ -118,7 +130,7 @@ def main(args):
     
 
     group_name = "Dino_Koch_v2"
-    group_name = args.extra_data_type + "_" + group_name
+    group_name = args.extra_data_type + "_New_" + group_name
     run = wandb.init(
         entity=WANDB_ENTITY_NAME,
         project=WANDB_PROJECT_NAME,
@@ -180,6 +192,10 @@ def main(args):
         extra_dataloader = DataLoader(extra_dataset, batch_size=args.batch_size, shuffle=True, num_workers=args.worker, drop_last=True, pin_memory=True)
         positive_eval_openx_dataset = None
         negative_eval_openx_dataset = None
+        openx_positive_eval_dataloader = None
+        openx_negative_eval_dataloader = None
+
+
 
 
     extra_eval_eval_pos_dataset = LivRealVideoEvalDataset(args, h5_eval_file, label = "positive", dataset = "extra")
@@ -193,7 +209,8 @@ def main(args):
         extra_eval_eval_neg_dataloader = DataLoader(extra_eval_eval_neg_dataset, batch_size=5, shuffle=True, num_workers=0, drop_last=True)
 
 
-    progress_loss_function = mse_loss
+    # progress_loss_function = mse_loss
+    progress_loss_function = weighted_mse_loss
 
     video_dim = 768
     if args.text_embedding_model == "minilm":
@@ -218,8 +235,6 @@ def main(args):
     else:
         optimizer = torch.optim.Adam(self_attention_model.parameters(), lr=args.lr, weight_decay=1e-4)
         scheduler = None
-
-    triangular_mask = torch.tril(torch.ones(args.max_length, args.max_length)).to(device).unsqueeze(0).unsqueeze(0)
 
 
     for epoch in range(args.epochs):
@@ -353,6 +368,77 @@ def main(args):
                     "train/combined_f1": (1 - args.extra_data_ratio) * compute_metrics(openx_pred.squeeze(), openx_target)['f1'] + args.extra_data_ratio * compute_metrics(extra_pred.squeeze(), extra_target)['f1']
                 }
                 wandb.log(wandb_log)
+
+        else:
+            for extra_data in tqdm(extra_dataloader):
+                '''
+                data.keys:
+                ['video_array', 'text_array', 'progress', 'class_label']
+                video_array shape: torch.Size([batch_size, max_length, 1024])
+                text_array shape: torch.Size([batch_size, 1024])
+                progress shape: torch.Size([batch_size, max_length])
+                class_label shape: torch.Size([batch_size, 1])
+
+                '''
+                optimizer.zero_grad()
+
+                extra_len = len(extra_data["video_array"])
+
+                video_array = extra_data["video_array"].to(device).float()
+                text_array = extra_data["text_array"].squeeze(1).to(device).float()
+                progress = extra_data["progress"].to(device).float()
+                progress_mask = torch.ones_like(progress).bool()
+
+
+
+
+                video_embedding = video_array
+
+                # Binary classification targets
+                compressed_extra_class_label = extra_data["class_label"][:, 0].float()
+                extra_target = compressed_extra_class_label.to(device)
+
+                # Get predictions from classifier
+                progress_pred, class_pred = self_attention_model(video_embedding, text_array)
+                extra_pred = class_pred
+
+                # Calculate focal loss to handle class imbalance
+                extra_loss = focal_loss(extra_pred, extra_target)
+
+                extra_progress_pred = progress_pred
+                extra_progress_target = progress
+
+                valid_extra_progress_pred = extra_progress_pred[extra_target.bool()]
+                valid_extra_progress_target = extra_progress_target[extra_target.bool()]
+
+                # Add progress prediction loss if applicable
+                if args.catagorical_progress:
+                    assert "not supported yet"
+                else:
+                    extra_progress_loss = progress_loss_function(valid_extra_progress_pred[:,1:].squeeze(), valid_extra_progress_target[:,1:])
+
+                loss = extra_loss + extra_progress_loss * args.progress_loss_weight
+
+                loss.backward()
+                if args.clip_grad:
+                    torch.nn.utils.clip_grad_norm_(self_attention_model.parameters(), 1.0)
+                optimizer.step()
+                if scheduler is not None:
+                    scheduler.step()
+                # Log all metrics
+
+                wandb_log = {
+                    "train/extra_class_loss": extra_loss.item(),
+                    "train/progress_loss": extra_progress_loss.item(),
+                    "train/total_loss": loss.item(),
+                    "lr": optimizer.param_groups[0]["lr"],
+                    # Extra metrics
+                    "train/extra_accuracy": compute_metrics(extra_pred.squeeze(), extra_target)['accuracy'],
+                    "train/extra_precision": compute_metrics(extra_pred.squeeze(), extra_target)['precision'],
+                    "train/extra_recall": compute_metrics(extra_pred.squeeze(), extra_target)['recall'],
+                    "train/extra_f1": compute_metrics(extra_pred.squeeze(), extra_target)['f1'],
+                }
+
 
 
         # Evaluation
@@ -594,7 +680,7 @@ def main(args):
                 print("Logging evaluation metrics")
                 wandb.log(wandb_eval_log)
 
-        if epoch % 2 == 0:
+        if epoch % 1 == 0:
             self_attention_model.eval()
             with torch.no_grad():
                 if args.extra_data_type == "metaworld":
@@ -624,6 +710,24 @@ def main(args):
                                         set = "eval",
                                         self_attention_model = self_attention_model,
                                         args = args)
+
+            # save model
+            save_dict = {
+                "model": self_attention_model.state_dict(),
+                "optimizer": optimizer.state_dict(),
+                "epoch": epoch,
+                "args": args
+            }
+            save_folder = "saved_models"
+            if not os.path.exists(save_folder):
+                os.makedirs(save_folder)
+            save_path = os.path.join(save_folder, experiment_name)
+            if not os.path.exists(save_path):
+                os.makedirs(save_path)
+            save_path = os.path.join(save_path, f"epoch_{epoch}.pth")
+            torch.save(save_dict, save_path)
+
+
                 
 
 
