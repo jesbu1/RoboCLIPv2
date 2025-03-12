@@ -23,6 +23,7 @@ from sklearn.metrics import precision_score, recall_score, f1_score, accuracy_sc
 import math
 from datetime import date
 import pickle
+from torchcontrib.optim import SWA
 
 os.environ["TOKENIZERS_PARALLELISM"] = "False"
 
@@ -85,10 +86,13 @@ def main(args):
         experiment_name = "MetaWorld" 
     else: 
         experiment_name = "RealWorld_Koch"
-    experiment_name = "AugTextFixRewind" + experiment_name
 
+    if args.swa:
+        experiment_name += "_SWA"
     experiment_name += "_binary_thrd_" + str(args.binary_threshold)
     experiment_name += "_Rewind_ratio_" + str(args.rewind_ratio)
+
+
 
     if args.text_embedding_model == "minilm":
         experiment_name += "_MiniLM"
@@ -118,6 +122,8 @@ def main(args):
     experiment_name += "_epochs_" + str(args.epochs)
     experiment_name += "_lr_" + str(args.lr)
     experiment_name += "_progress_loss_weight_" + str(args.progress_loss_weight)
+    if args.weighted_mse:
+        experiment_name += "_weighted_mse"
 
     
     if args.extra_data_type == "metaworld":
@@ -129,8 +135,8 @@ def main(args):
 
     
 
-    group_name = "Dino_Koch_v2"
-    group_name = args.extra_data_type + "_New_" + group_name
+    # group_name = "Dino_Koch_v2"
+    group_name = args.extra_data_type + "_NewAblate_" + group_name
     run = wandb.init(
         entity=WANDB_ENTITY_NAME,
         project=WANDB_PROJECT_NAME,
@@ -210,7 +216,10 @@ def main(args):
 
 
     # progress_loss_function = mse_loss
-    progress_loss_function = weighted_mse_loss
+    if args.weighted_mse:
+        progress_loss_function = weighted_mse_loss
+    else:
+        progress_loss_function = mse_loss
 
     video_dim = 768
     if args.text_embedding_model == "minilm":
@@ -235,6 +244,9 @@ def main(args):
     else:
         optimizer = torch.optim.Adam(self_attention_model.parameters(), lr=args.lr, weight_decay=1e-4)
         scheduler = None
+
+    if args.swa:
+        optimizer = SWA(optimizer, swa_start=10, swa_freq=5, swa_lr=0.05)
 
 
     for epoch in range(args.epochs):
@@ -443,6 +455,8 @@ def main(args):
 
         # Evaluation
         if epoch % args.eval_interval == 0:  # Only evaluate at specified intervals
+            if args.swa:
+                optimizer.swap_swa_sgd()
             print(f"\nRunning evaluation at epoch {epoch}")
             with torch.no_grad():
                 self_attention_model.eval()
@@ -679,8 +693,12 @@ def main(args):
 
                 print("Logging evaluation metrics")
                 wandb.log(wandb_eval_log)
+            if args.swa:
+                optimizer.swap_swa_sgd()
 
         if epoch % 1 == 0:
+            if args.swa:
+                optimizer.swap_swa_sgd()
             self_attention_model.eval()
             with torch.no_grad():
                 if args.extra_data_type == "metaworld":
@@ -726,6 +744,8 @@ def main(args):
                 os.makedirs(save_path)
             save_path = os.path.join(save_path, f"epoch_{epoch}.pth")
             torch.save(save_dict, save_path)
+            if args.swa:
+                optimizer.swap_swa_sgd()
 
 
                 
@@ -763,6 +783,8 @@ if __name__ == "__main__":
     argparser.add_argument('--binary_threshold', type=float, default=0.5)
     argparser.add_argument('--rewind_ratio', type=float, default=0.5)
     argparser.add_argument('--progress_loss_weight', type=float, default=1)
+    argparser.add_argument('--weighted_mse', action='store_true')
+    argparser.add_argument('--swa', action='store_true')
 
 
 

@@ -27,7 +27,7 @@ dinov2_vits14 = dinov2_vits14.to(device)
 #     device
 # )
 
-path = "metaworld_video.h5"
+path = "/home/jzhang96/RoboCLIPv2/open_x_processing/metaworld_center_crop.h5"
 h5_file = h5py.File(path, 'r')
 
 new_file_name = "metaworld_dino_embeddings.h5"
@@ -80,7 +80,6 @@ for key in tqdm(h5_file.keys()):
             idx,
             data=episode_image_embeddings,
         )
-import pdb; pdb.set_trace()
 new_h5_file.close()
 
 
