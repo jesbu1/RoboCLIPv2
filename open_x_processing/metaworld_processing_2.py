@@ -30,7 +30,7 @@ dinov2_vits14 = dinov2_vits14.to(device)
 path = "/home/jzhang96/RoboCLIPv2/open_x_processing/metaworld_center_crop.h5"
 h5_file = h5py.File(path, 'r')
 
-new_file_name = "metaworld_dino_embeddings.h5"
+new_file_name = "metaworld_dino_embeddings_224.h5"
 new_h5_file = h5py.File(new_file_name, 'w')
 
 for key in tqdm(h5_file.keys()):

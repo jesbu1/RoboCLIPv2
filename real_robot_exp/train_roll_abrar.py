@@ -83,7 +83,7 @@ def main(args):
     WANDB_PROJECT_NAME = "roboclip-v2"
 
     if args.extra_data_type == "metaworld":
-        experiment_name = "MetaWorld" 
+        experiment_name = "Crop_MetaWorld" 
     else: 
         experiment_name = "RealWorld_Koch"
 
@@ -127,7 +127,7 @@ def main(args):
 
     
     if args.extra_data_type == "metaworld":
-        group_name = "MetaWorldNew"
+        group_name = "Crop_MetaWorldNew"
     else:
         group_name = "RealWorld_Koch"
     # get today date
