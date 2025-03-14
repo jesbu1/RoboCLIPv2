@@ -23,7 +23,8 @@ from sklearn.metrics import precision_score, recall_score, f1_score, accuracy_sc
 import math
 from datetime import date
 import pickle
-from torchcontrib.optim import SWA
+# from torchcontrib.optim import SWA
+from torch.optim.swa_utils import AveragedModel, SWALR
 
 os.environ["TOKENIZERS_PARALLELISM"] = "False"
 
@@ -239,14 +240,17 @@ def main(args):
 
     print(self_attention_model)
     if args.cosine_scheduler:
-        optimizer = torch.optim.Adam(self_attention_model.parameters(), lr=args.lr, weight_decay=1e-4)
-        scheduler = CosineWithMinLRScheduler(optimizer, max_steps=300000, max_lr=args.lr, min_lr=1e-5)
+        base_optimizer = torch.optim.Adam(self_attention_model.parameters(), lr=args.lr, weight_decay=1e-4)
+        scheduler = CosineWithMinLRScheduler(base_optimizer, max_steps=300000, max_lr=args.lr, min_lr=1e-5)
     else:
-        optimizer = torch.optim.Adam(self_attention_model.parameters(), lr=args.lr, weight_decay=1e-4)
+        base_optimizer = torch.optim.Adam(self_attention_model.parameters(), lr=args.lr, weight_decay=1e-4)
         scheduler = None
 
     if args.swa:
-        optimizer = SWA(optimizer, swa_start=10, swa_freq=5, swa_lr=0.05)
+        swa_model = AveragedModel(self_attention_model)
+        swa_scheduler = SWALR(base_optimizer, swa_lr=0.05)
+    else:
+        optimizer = base_optimizer
 
 
     for epoch in range(args.epochs):
@@ -264,7 +268,7 @@ def main(args):
                 class_label shape: torch.Size([batch_size, 1])
 
                 '''
-                optimizer.zero_grad()
+                base_optimizer.zero_grad()
 
                 openx_len = len(openx_data["video_array"])
                 extra_len = len(extra_data["video_array"])
@@ -350,7 +354,7 @@ def main(args):
                 loss.backward()
                 if args.clip_grad:
                     torch.nn.utils.clip_grad_norm_(self_attention_model.parameters(), 1.0)
-                optimizer.step()
+                base_optimizer.step()
                 if scheduler is not None:
                     scheduler.step()
                 # Log all metrics
@@ -362,7 +366,7 @@ def main(args):
                     "train/openx_progress_loss": openx_progress_loss.item(),
                     "train/extra_progress_loss": extra_progress_loss.item(),
                     "train/total_loss": loss.item(),
-                    "lr": optimizer.param_groups[0]["lr"],
+                    "lr": base_optimizer.param_groups[0]["lr"],
                     # OpenX metrics
                     "train/openx_accuracy": compute_metrics(openx_pred.squeeze(), openx_target)['accuracy'],
                     "train/openx_precision": compute_metrics(openx_pred.squeeze(), openx_target)['precision'],
@@ -380,7 +384,7 @@ def main(args):
                     "train/combined_f1": (1 - args.extra_data_ratio) * compute_metrics(openx_pred.squeeze(), openx_target)['f1'] + args.extra_data_ratio * compute_metrics(extra_pred.squeeze(), extra_target)['f1']
                 }
                 wandb.log(wandb_log)
-
+            
         else:
             for extra_data in tqdm(extra_dataloader):
                 '''
@@ -392,7 +396,7 @@ def main(args):
                 class_label shape: torch.Size([batch_size, 1])
 
                 '''
-                optimizer.zero_grad()
+                base_optimizer.zero_grad()
 
                 extra_len = len(extra_data["video_array"])
 
@@ -434,7 +438,7 @@ def main(args):
                 loss.backward()
                 if args.clip_grad:
                     torch.nn.utils.clip_grad_norm_(self_attention_model.parameters(), 1.0)
-                optimizer.step()
+                base_optimizer.step()
                 if scheduler is not None:
                     scheduler.step()
                 # Log all metrics
@@ -443,7 +447,7 @@ def main(args):
                     "train/extra_class_loss": extra_loss.item(),
                     "train/progress_loss": extra_progress_loss.item(),
                     "train/total_loss": loss.item(),
-                    "lr": optimizer.param_groups[0]["lr"],
+                    "lr": base_optimizer.param_groups[0]["lr"],
                     # Extra metrics
                     "train/extra_accuracy": compute_metrics(extra_pred.squeeze(), extra_target)['accuracy'],
                     "train/extra_precision": compute_metrics(extra_pred.squeeze(), extra_target)['precision'],
@@ -455,11 +459,16 @@ def main(args):
 
         # Evaluation
         if epoch % args.eval_interval == 0:  # Only evaluate at specified intervals
+            
             if args.swa:
-                optimizer.swap_swa_sgd()
+                swa_model.update_parameters(self_attention_model)
+                swa_scheduler.step()
             print(f"\nRunning evaluation at epoch {epoch}")
             with torch.no_grad():
-                self_attention_model.eval()
+                if args.swa:
+                    swa_model.eval()
+                else:
+                    self_attention_model.eval()
                 wandb_eval_log = {}
                 
                 # OpenX Evaluation
@@ -501,7 +510,10 @@ def main(args):
                         progress_target = data["progress"].to(device).float()
                         
                         # Get predictions
-                        progress_pred, class_pred = self_attention_model(video_array, text_array)
+                        if args.swa:
+                            progress_pred, class_pred = swa_model(video_array, text_array)
+                        else:
+                            progress_pred, class_pred = self_attention_model(video_array, text_array)
                         target = torch.ones(class_pred.size(0)).to(device)
                         
                         # Classification loss
@@ -527,7 +539,10 @@ def main(args):
                         progress_target = data["progress"].to(device).float()
                         
                         # Get predictions
-                        progress_pred, class_pred = self_attention_model(video_array, text_array)
+                        if args.swa:
+                            progress_pred, class_pred = swa_model(video_array, text_array)
+                        else:
+                            progress_pred, class_pred = self_attention_model(video_array, text_array)
                         target = torch.zeros(class_pred.size(0)).to(device)
                         
                         # Classification loss
@@ -604,7 +619,10 @@ def main(args):
                         progress_target = data["progress"].to(device).float()
                         
                         # Get predictions
-                        progress_pred, class_pred = self_attention_model(video_array, text_array)
+                        if args.swa:
+                            progress_pred, class_pred = swa_model(video_array, text_array)
+                        else:
+                            progress_pred, class_pred = self_attention_model(video_array, text_array)
                         target = torch.ones(class_pred.size(0)).to(device)
                         
                         # Classification loss
@@ -632,7 +650,10 @@ def main(args):
                         progress_target = data["progress"].to(device).float()
                         
                         # Get predictions
-                        progress_pred, class_pred = self_attention_model(video_array, text_array)
+                        if args.swa:
+                            progress_pred, class_pred = swa_model(video_array, text_array)
+                        else:
+                            progress_pred, class_pred = self_attention_model(video_array, text_array)
                         target = torch.zeros(class_pred.size(0)).to(device)
                         
                         # Classification loss
@@ -693,49 +714,61 @@ def main(args):
 
                 print("Logging evaluation metrics")
                 wandb.log(wandb_eval_log)
-            if args.swa:
-                optimizer.swap_swa_sgd()
+
 
         if epoch % 1 == 0:
+            # Plot confusion matrix
             if args.swa:
-                optimizer.swap_swa_sgd()
-            self_attention_model.eval()
+                swa_model.eval()
+            else:
+                self_attention_model.eval()
             with torch.no_grad():
                 if args.extra_data_type == "metaworld":
-                    # plot_progress(h5_train_eval_file, "train", class_progress_transformer, args, pca_text_model = pca_text_model, pca_video_model = pca_video_model)
-                    plot_confusion_matrix(h5_file = h5_train_eval_file,
-                                        set = "train",
-                                        self_attention_model = self_attention_model,
-                                        args = args
-                                        )
 
-                    # plot_progress(h5_eval_file, "eval", class_progress_transformer, args, pca_text_model = pca_text_model, pca_video_model = pca_video_model)
-                    plot_confusion_matrix(h5_file = h5_eval_file,
-                                        set = "eval",
-                                        self_attention_model = self_attention_model,
-                                        args = args)               
-                    plot_progress(h5_train_eval_file, "train", self_attention_model, args)
-                    plot_progress(h5_eval_file, "eval", self_attention_model, args)
+                    if args.swa:
+                        plot_confusion_matrix(h5_file = h5_train_eval_file, set = "train",self_attention_model = swa_model, args = args)
+                        plot_confusion_matrix(h5_file = h5_eval_file, set = "eval", self_attention_model = swa_model, args = args)
+                        plot_progress(h5_train_eval_file, "train", swa_model, args)
+                        plot_progress(h5_eval_file, "eval", swa_model, args)
+                    else:
+                        plot_confusion_matrix(h5_file = h5_train_eval_file, set = "train",self_attention_model = self_attention_model, args = args)
+                        plot_confusion_matrix(h5_file = h5_eval_file, set = "eval", self_attention_model = self_attention_model, args = args)
+                        plot_progress(h5_train_eval_file, "train", self_attention_model, args)
+                        plot_progress(h5_eval_file, "eval", self_attention_model, args)
                 else:
+                    if args.swa:
+                        plot_progress(h5_train_eval_file, "train", swa_model, args)
+                        plot_progress(h5_eval_file, "eval", swa_model, args)
+                        plot_confusion_matrix(h5_file = h5_train_eval_file, set = "train",self_attention_model = swa_model, args = args)
+                        plot_confusion_matrix(h5_file = h5_eval_file, set = "eval", self_attention_model = swa_model, args = args)
+                    else:
 
-                    plot_progress(h5_train_eval_file, "train", self_attention_model, args)
-                    plot_progress(h5_eval_file, "eval", self_attention_model, args)
-                    plot_confusion_matrix(h5_file = h5_train_eval_file,
-                                        set = "train",
-                                        self_attention_model = self_attention_model,
-                                        args = args)
-                    plot_confusion_matrix(h5_file = h5_eval_file,
-                                        set = "eval",
-                                        self_attention_model = self_attention_model,
-                                        args = args)
+                        plot_progress(h5_train_eval_file, "train", self_attention_model, args)
+                        plot_progress(h5_eval_file, "eval", self_attention_model, args)
+                        plot_confusion_matrix(h5_file = h5_train_eval_file,
+                                            set = "train",
+                                            self_attention_model = self_attention_model,
+                                            args = args)
+                        plot_confusion_matrix(h5_file = h5_eval_file,
+                                            set = "eval",
+                                            self_attention_model = self_attention_model,
+                                            args = args)
 
             # save model
-            save_dict = {
-                "model": self_attention_model.state_dict(),
-                "optimizer": optimizer.state_dict(),
-                "epoch": epoch,
-                "args": args
-            }
+            if args.swa:
+                save_dict = {
+                    "model": swa_model.state_dict(),
+                    "optimizer": base_optimizer.state_dict(),
+                    "epoch": epoch,
+                    "args": args
+                }
+            else:
+                save_dict = {
+                    "model": self_attention_model.state_dict(),
+                    "optimizer": base_optimizer.state_dict(),
+                    "epoch": epoch,
+                    "args": args
+                }
             save_folder = "saved_models"
             if not os.path.exists(save_folder):
                 os.makedirs(save_folder)
@@ -745,7 +778,8 @@ def main(args):
             save_path = os.path.join(save_path, f"epoch_{epoch}.pth")
             torch.save(save_dict, save_path)
             if args.swa:
-                optimizer.swap_swa_sgd()
+                swa_model.train()
+
 
 
                 
