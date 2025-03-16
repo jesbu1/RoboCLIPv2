@@ -48,18 +48,18 @@ def animate_incremental(frames_tensor, incremental_rewards, fps=15):
         gif_buffer: in-memory BytesIO containing the GIF.
     """
     # 1) Convert frames to numpy for display
-    if isinstance(frames_tensor, torch.Tensor):
-        frames_np = frames_tensor.cpu().numpy()
-    else:
-        frames_np = frames_tensor
-    frames_np = (frames_np * 255).astype(np.uint8)
+    # if isinstance(frames_tensor, torch.Tensor):
+    #     frames_np = frames_tensor.cpu().numpy()
+    # else:
+    #     frames_np = frames_tensor
+    # frames_np = (frames_np * 255).astype(np.uint8)
     # frames_np = np.transpose(frames_np, (0, 2, 3, 1))
 
     # 2) Prepare figure
-    n = len(frames_np)
+    # n = len(frames_np)
     fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(10, 5))
 
-    image_plot = ax1.imshow(frames_np[0])
+    # image_plot = ax1.imshow(frames_np[0])
     ax1.set_title('Video Frames')
     ax1.axis('off')
 
@@ -78,7 +78,7 @@ def animate_incremental(frames_tensor, incremental_rewards, fps=15):
 
     # 3) Update frames one by one
     for frame_idx in range(len(incremental_rewards)):
-        image_plot.set_array(frames_np[frame_idx])
+        # image_plot.set_array(frames_np[frame_idx])
         line_plot.set_data(np.arange(frame_idx + 1), incremental_rewards[:frame_idx + 1])
         scat.set_offsets(np.array([[frame_idx, incremental_rewards[frame_idx]]]))
         fig.canvas.draw()
@@ -336,7 +336,7 @@ def sample_embedding_frames(embeddings, num_frames = 32):
     return embeddings
 
 
-def plot_matrix_as_image(matrix, names, set, text):
+def plot_matrix_as_image(matrix, names, set, text, fig_name):
     # Create a figure and axis
     # only keep 2 decimal points
     m_min = matrix.min()
@@ -396,8 +396,8 @@ def plot_matrix_as_image(matrix, names, set, text):
     # plt.savefig(buf, format='png')
     # buf.seek(0)
     # image = Image.open(buf)
-    wandb.log({f"confusion_matrix/{set}_confusion_matrix_Rewind": wandb.Image(fig)})
-    plt.savefig(f"confusion_matrix_{set}_Rewind_oxe_2.0_weighted_mse.pdf", bbox_inches="tight")
+    wandb.log({f"confusion_matrix/{fig_name}": wandb.Image(fig)})
+    plt.savefig(f"confusion_matrix_{fig_name}.pdf", bbox_inches="tight")
     plt.close(fig)  # Close the figure to free memory
 
 
@@ -411,54 +411,10 @@ def normalize_embeddings(embeddings, return_tensor=True):
         return normalized_embeddings.detach().cpu().numpy()
 
 
-def compute_rewind_reward(frames, text_annotation, gif_path="incremental_reward_rewind.gif"):
-    rewind_model, args = load_rewind_model("/scr/yusenluo/RoboCLIP/visualization/decoder_only/NewPE_Crop_MetaWorld_binary_thrd_0.5_Rewind_ratio_0.5_MiniLM_AddOpenXData_ReWind_SubVideo_MaxLen16_PosEmb_CosScheduler_ClipGrad_View_side_ExtraDataRatio_0.2_epochs_20_lr_0.0001_progress_loss_weight_2.0/epoch_14.pth")
-    One_step = False
-    indices = np.linspace(
-            0,
-            len(frames) - 1,
-            MAX_NUM_FRAMES_PER_EPISODE,
-            dtype=int,
-        )
-    sampled_images = [frames[i] for i in indices]
-
-    with torch.inference_mode():
-        # 分批处理
-        episode_images_dino = [dino_load_image(img) for img in sampled_images]
-        episode_images_dino = [
-            torch.concatenate(episode_images_dino[i : i + DINO_BATCH_SIZE])
-            for i in range(0, len(episode_images_dino), DINO_BATCH_SIZE)
-        ]
-        embedding_list = []
-        for batch in episode_images_dino:
-            episode_image_embeddings = (
-                dinov2_vits14(batch.to(device))
-                .squeeze()
-                .detach()
-                .cpu()
-                .numpy()
-            )
-            embedding_list.append(episode_image_embeddings)
-        episode_image_embeddings = np.concatenate(embedding_list)
-        episode_image_embeddings = torch.tensor(episode_image_embeddings).to(device).float()
-        print(episode_image_embeddings.shape)
-
-    lang_embeddings = list()
-    encoded_input = minilm_tokenizer(
-            [text_annotation], padding=False, truncation=True, return_tensors="pt"
-        ).to(device)
-
-    model_output = minilm_model(**encoded_input)
-    minlm_task_embedding = (
-        mean_pooling(model_output, encoded_input["attention_mask"])
-        .cpu()
-        .detach()
-        .numpy()
-    )
-    lang_embeddings.append(minlm_task_embedding)
+def compute_rewind_reward(rewind_model, args, episode_image_embeddings, lang_embeddings, gif_path="incremental_reward_rewind.gif"):
+    One_step = args.
     reward_seq = []
-    lang_embeddings = np.concatenate(lang_embeddings, axis=0)
-    lang_embeddings = torch.tensor(lang_embeddings).to(device).float()
+
     if args.normalize_embedding:
         lang_embeddings = normalize_embeddings(lang_embeddings)
         episode_image_embeddings = normalize_embeddings(episode_image_embeddings)
@@ -469,7 +425,6 @@ def compute_rewind_reward(frames, text_annotation, gif_path="incremental_reward_
                 partial_image_embeddings, args.max_length
             ).unsqueeze(0)
 
-    
         pred_class, two_step_class = rewind_model(processed_video_embedding, lang_embeddings)
         if One_step:
             pred_class = pred_class 
@@ -489,7 +444,7 @@ def compute_rewind_reward(frames, text_annotation, gif_path="incremental_reward_
         reward_seq.append(video_reward)
         print(reward_seq)
 
-    gif_buffer = animate_incremental(frames, reward_seq, fps=15)
+    gif_buffer = animate_incremental(None, reward_seq, fps=15)
     with open(gif_path, 'wb') as f:
         f.write(gif_buffer.getvalue())
     print(f"Saved incremental reversed GIF to {gif_path}")
@@ -533,7 +488,6 @@ def generate_rewind_data(
     else:
         tasks = task_subset["test_tasks"]
     num_tasks = len(tasks)
-    One_step = False
     # 2) 打开 HDF5
     with h5py.File(h5_path, "r") as f:
         
@@ -804,7 +758,8 @@ def plot_confusion_matrix_from_predictions(
     predicted_rewards: np.ndarray,
     task_names: list,
     text_instructions: list,
-    set_type: str
+    set_type: str,
+    fig_name: str
 ):
     """
     将 NxN 矩阵 predicted_rewards 以混淆矩阵形式绘制。
@@ -824,7 +779,8 @@ def plot_confusion_matrix_from_predictions(
         matrix=predicted_rewards, 
         names=task_names,
         set=set_type,
-        text=text_instructions
+        text=text_instructions,
+        fig_name=fig_name
     )
 
 
@@ -1105,6 +1061,77 @@ def compute_avg_spearman(five_seqs):
         return 0.0
     return float(np.mean(cor_vals))
 
+
+def generate_rewind_gif(
+    h5_path: str,
+    json_path: str,
+    set_type: str,
+    rewind_model: torch.nn.Module,
+    device: str = "cuda",
+    args=None,
+    annotation = None,
+):
+
+    # 1) 从 new_task_v2.json 中读取 tasks
+    task_subset = json.load(open(json_path, "r"))
+    if set_type == "train":
+        tasks = task_subset["training_tasks"]
+    elif set_type == "eval":
+        tasks = task_subset["eval_tasks"]
+    else:
+        tasks = task_subset["test_tasks"]
+    num_tasks = len(tasks)
+
+    # 2) 打开 HDF5
+    with h5py.File(h5_path, "r") as f:
+
+        # 3) 读取所有文本 (与 tasks 对应) => text_list
+        text_list = []
+        for env in tasks:
+            # Read minilm_lang_embedding for each env
+            group = f[env]
+            if annotation != None:
+                text_arr = np.asarray(group[f"minilm_lang_embedding_{annotation}"])  # shape (1, 384)
+            else:
+                text_arr = np.asarray(group["minilm_lang_embedding"])
+            text_list.append(text_arr)
+        # e.g. shape: (N, 1, 384) after stacking
+        text_list = np.stack(text_list)
+        text_list = torch.tensor(text_list).to(device).float()
+
+        # 5) 遍历所有 (i, j)
+        for i, env_video_name in enumerate(tasks):
+            group = f[env_video_name]
+
+            # Gather all 5 embeddings
+            # Some HDF5 might not have exactly 5, so we do `range(5)` but check if dataset exists.
+            # 1) 找到所有数字型 key, 排序后取前 5
+            digit_keys = sorted([k for k in group.keys() if k.isdigit()], key=lambda x: int(x))
+            selected_keys = digit_keys[:5]
+
+            # 如果不等于 ["0","1","2","3","4"] 才打印
+            if selected_keys != ["0", "1", "2", "3", "4"]:
+                print(f"[Info] {env_video_name} selected demos: {selected_keys}")
+
+            # 2) 收集它们对应的 embedding
+            all_video_embeddings = []
+            for key_name in selected_keys:
+                embed_arr = np.asarray(group[key_name])  # shape (32, 768)
+                video_emb = torch.tensor(embed_arr).to(device).float()
+                all_video_embeddings.append(video_emb)
+
+            if len(all_video_embeddings) == 0:
+                # If no embeddings found, skip
+                print(f"Warning: no embeddings for {env_video_name}")
+                continue
+
+            # 5.2) 遍历所有文本 embedding j
+            for j, text_embedding in enumerate(text_list):
+                if i != j:
+                    continue
+                for demo_id, video_embedding in enumerate(all_video_embeddings):
+                    compute_rewind_reward(rewind_model=rewind_model, args=args, episode_image_embeddings=video_embedding, lang_embeddings=text_embedding, gif_path=f"rewind_gif/{env_video_name}_{demo_id}.gif")
+
 if __name__ == "__main__":
     
     # rewind_model, model_args = load_rewind_model(ckpt_path="/scr/yusenluo/RoboCLIP/visualization/decoder_only/saved_models_final/Crop_MetaWorld_binary_thrd_0.5_Rewind_ratio_0.5_MiniLM_AddOpenXData_ReWind_SubVideo_MaxLen16_CosScheduler_ClipGrad_View_side_ExtraDataRatio_0.2_epochs_20_lr_0.0001_progress_loss_weight_2.0_weighted_mse/epoch_15.pth")
@@ -1118,7 +1145,8 @@ if __name__ == "__main__":
         set_type="eval",
         rewind_model=rewind_model,
         cache_path="final_rewind_cache_oxe_pos_end.pkl",
-        args = model_args
+        args = model_args,
+        One_step=args.
     )
 
     confusion_matrix_1, all_seqs1, _, _ = generate_rewind_data(
@@ -1128,7 +1156,8 @@ if __name__ == "__main__":
         rewind_model=rewind_model,
         cache_path="final_rewind_cache_oxe_pos_end_1.pkl",
         args = model_args,
-        annotation = 1
+        annotation = 1,
+        One_step=args.
     )
 
     confusion_matrix_2, all_seqs2, _, _ = generate_rewind_data(
@@ -1138,7 +1167,8 @@ if __name__ == "__main__":
         rewind_model=rewind_model,
         cache_path="final_rewind_cache_oxe_pos_end_2.pkl",
         args = model_args,
-        annotation = 2
+        annotation = 2,
+        One_step=args.
     )
 
     confusion_matrix_3, all_seqs3, _, _ = generate_rewind_data(
@@ -1148,7 +1178,8 @@ if __name__ == "__main__":
         rewind_model=rewind_model,
         cache_path="final_rewind_cache_oxe_pos_end_3.pkl",
         args = model_args,
-        annotation = 3
+        annotation = 3,
+        One_step=args.
     )
 
 
@@ -1158,7 +1189,8 @@ if __name__ == "__main__":
         set_type="eval",
         rewind_model=rewind_model,
         cache_path="final_rewind_cache_oxe_pos_end_fail.pkl",
-        args = model_args
+        args = model_args,
+        One_step=args.
     )
 
     confusion_matrix_close_success, _, _, _ = generate_rewind_data(
@@ -1167,15 +1199,21 @@ if __name__ == "__main__":
         set_type="eval",
         rewind_model=rewind_model,
         cache_path="final_rewind_cache_oxe_pos_end_close_succ.pkl",
-        args = model_args
+        args = model_args,
+        One_step=args.
+    )
+
+    generate_rewind_gif(
+        h5_path="/scr/yusenluo/RoboCLIP/visualization/decoder_only/metaworld_dino_embeddings_eval.h5",
+        json_path="new_task_v2.json",
+        set_type="eval",
+        rewind_model=rewind_model,
+        device="cuda",
+        args=model_args,
     )
 
 
-    # h5_eval_file_all_fail = h5py.File("/scr/yusenluo/RoboCLIP/visualization/decoder_only/metaworld_embedding_1_demo_dataset_all_fail_v2.h5", "r")
-    # h5_eval_file_close_success = h5py.File("/scr/yusenluo/RoboCLIP/visualization/decoder_only/metaworld_embedding_1_demo_dataset_close_succ_v2.h5", "r")
-
     wandb.init(project="roboclip-v2", name=f"eval_rewind_new")
-    # all_seqs = [seq.cpu() for seq in all_seqs]
     
     # ============ 2) 计算相关(只用对角线) ============
     compute_pearson_correlation_from_sequences(
