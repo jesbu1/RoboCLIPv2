@@ -35,7 +35,7 @@ DINO_BATCH_SIZE = 128
 MAX_NUM_FRAMES_PER_EPISODE = 128
 
 
-def animate_incremental(frames_tensor, incremental_rewards, fps=15, fig_path="ax2_plot_rewind.pdf"):
+def animate_incremental(frames_tensor, incremental_rewards, fps=15, fig_path="ax2_plot_rewind.png"):
     """
     Create an animation that shows frames on the left and the incremental reward curve on the right.
 
@@ -129,23 +129,24 @@ def animate_incremental(frames_tensor, incremental_rewards, fps=15, fig_path="ax
     # 先构建不放大的正方形 bbox
     square_extent = Bbox.from_extents(x0, y0, x1, y1)
     
-    fig.savefig(
-        fig_path,         # 你想要保存的文件名
-        bbox_inches=square_extent.expanded(1.2, 1.2)  # 适当放大 1.2 倍，以免标签被裁切
-    )
+    # fig.savefig(
+    #     fig_path,         # 你想要保存的文件名
+    #     bbox_inches=square_extent.expanded(1.2, 1.2)  # 适当放大 1.2 倍，以免标签被裁切
+    # )
     
     buf = io.BytesIO()
-    fig.savefig(buf, format="pdf", bbox_inches=square_extent.expanded(1.2, 1.2))
+    fig.savefig(buf, format="png", bbox_inches=square_extent.expanded(1.2, 1.2))
     buf.seek(0)  # 将光标移到缓冲区开头
-
+    pil_image = Image.open(buf)
     # 4. 将缓冲区数据作为图片添加到 wandb
-    wandb.log({fig_path: wandb.Image(buf)})
+    wandb.log({fig_path: wandb.Image(pil_image)})
 
     # ---------------------------------------------------------------------
 
 
     plt.close(fig)
     return gif_buffer
+
 
 
 def rank_comparison(cm1, cm2, cm3):
@@ -392,7 +393,7 @@ def normalize_embeddings(embeddings, return_tensor=True):
         return normalized_embeddings.detach().cpu().numpy()
 
 
-def compute_rewind_reward(rewind_model, args, episode_image_embeddings, lang_embeddings, pdf_path="incremental_reward_rewind.pdf"):
+def compute_rewind_reward(rewind_model, args, episode_image_embeddings, lang_embeddings, pdf_path="incremental_reward_rewind.png"):
     One_step = args.
     reward_seq = []
 
@@ -1111,7 +1112,7 @@ def generate_rewind_gif(
                 if i != j:
                     continue
                 for demo_id, video_embedding in enumerate(all_video_embeddings):
-                    compute_rewind_reward(rewind_model=rewind_model, args=args, episode_image_embeddings=video_embedding, lang_embeddings=text_embedding, pdf_path=f"rewind_progress_close_success/{env_video_name}_{demo_id}.pdf")
+                    compute_rewind_reward(rewind_model=rewind_model, args=args, episode_image_embeddings=video_embedding, lang_embeddings=text_embedding, pdf_path=f"rewind_progress_close_success/{env_video_name}_{demo_id}.png")
 
 if __name__ == "__main__":
     
@@ -1184,6 +1185,10 @@ if __name__ == "__main__":
         One_step=args.
     )
 
+
+
+    wandb.init(project="roboclip-v2", name=f"eval_rewind_new")
+    
     generate_rewind_gif(
         h5_path="/scr/yusenluo/RoboCLIP/visualization/decoder_only/metaworld_dino_embeddings_eval_close_succ_128.h5",
         json_path="new_task_v2.json",
@@ -1193,9 +1198,6 @@ if __name__ == "__main__":
         args=model_args,
     )
 
-
-    wandb.init(project="roboclip-v2", name=f"eval_rewind_new")
-    
     # ============ 2) 计算相关(只用对角线) ============
     compute_pearson_correlation_from_sequences(
         all_seqs=all_seqs,
