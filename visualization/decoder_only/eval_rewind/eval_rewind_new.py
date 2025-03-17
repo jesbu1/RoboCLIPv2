@@ -771,73 +771,96 @@ def compute_mse_from_sequences(
     set_type: str,
 ):
     """
-    计算 all_seqs 中每个环境的预测值与参考序列 (1..len(seq)) 之间的 MSE，
-    并分别计算 Overall MSE (所有帧) 和 Final-frame MSE (仅最后一帧)，并绘制曲线到 wandb。
-
-    :param all_seqs:   List of length N, 
-                       all_seqs[i] 是第 i 个环境的逐帧预测值 (0..100), 形如 [val0, val1, ...]
-    :param env_names:  List of length N, 
-                       env_names[i] 为第 i 个环境（或任务）的名称 (str)
-    :param set_type:   "train" 或 "eval" 等标识，用于 wandb log
-    :return: (avg_mse, avg_final_mse, mse_list, final_mse_list)
-             avg_mse: 所有环境的 Overall MSE 均值
-             avg_final_mse: 所有环境的 Final-frame MSE 均值
-             mse_list: 长度 N 的列表，每个环境对应一个 Overall MSE
-             final_mse_list: 长度 N 的列表，每个环境对应一个 Final-frame MSE
+    现在 all_seqs[i] => 一个“demo列表”，例如 5 条序列:
+        all_seqs[i] = [ seq_demo0, seq_demo1, ..., seq_demo4 ]
+      每条序列都是 [val0, val1, ..., valN], 取值(0..100)。
+    
+    我们对同一个环境下的若干demo逐一算 Overall MSE & Final-frame MSE，再取平均。
+    然后在 wandb 上只画一张图，但包含多个 demo 的曲线。
     """
+
+    # 1) 检查长度一致
     if len(all_seqs) != len(env_names):
         print("[!] all_seqs 和 env_names 长度不一致，无法一一对应。")
         return 0.0, 0.0, [], []
 
+    # 存放每个环境（汇总多个demo后）的 MSE 和 final-MSE
     mse_list = []
     final_mse_list = []
 
-    for i, seq in enumerate(all_seqs):
+    # 2) 遍历每个环境 i
+    for i, demo_seqs in enumerate(all_seqs):
         env_name = env_names[i]
-        if len(seq) < 2:
-            # 如果帧数 < 2，无法计算 MSE，设为 0
-            mse_val = 0.0
-            final_mse_val = 0.0
-        else:
-            pred_array = np.array(seq, dtype=np.float32)
-            n = len(pred_array)
+        # demo_seqs: 比如 5 条序列 => [seq_demo0, seq_demo1, ...]
 
-            gt_array = np.linspace(0, 1, n, dtype=np.float32)
-            frame_numbers = np.arange(n)  # Frame Index
+        # 记录该环境下所有demo的MSE, final-MSE
+        local_mses = []
+        local_final_mses = []
 
-            # 计算 Overall MSE
-            mse_val = mean_squared_error(gt_array, pred_array)
-
-            # 计算 Final-frame MSE (只看最后一帧)
-            final_mse_val = mean_squared_error([gt_array[-1]], [pred_array[-1]])
-
-        mse_list.append(mse_val)
-        final_mse_list.append(final_mse_val)
-
-        # 逐个 log 到 wandb
-        wandb.log({f"{set_type}_overall_mse/{env_name}": mse_val})
-        wandb.log({f"{set_type}_final_mse/{env_name}": final_mse_val})
-
-        # 🔹 绘制预测 vs 真实值曲线
+        # 准备绘图
         fig, ax = plt.subplots(figsize=(6, 4))
-        ax.plot(frame_numbers, gt_array, label="Ground Truth", linestyle="dashed", color="blue")
-        ax.plot(frame_numbers, pred_array, label="Prediction", linestyle="-", color="red")
+
+        # 3) 遍历同一环境下的多个 demo
+        for demo_idx, seq in enumerate(demo_seqs):
+            if len(seq) < 2:
+                # 如果帧数 < 2，无法计算 MSE
+                mse_val = 0.0
+                final_mse_val = 0.0
+
+                # 画一条空线或仅打个提示
+                ax.text(0.5, 0.5, f"Demo {demo_idx} <2 frames", ha="center", va="center")
+            else:
+                # 转为 [0..1] 范围的预测
+                pred_array = np.array(seq, dtype=np.float32)
+                n = len(pred_array)
+
+                # 构造与之等长的 GT => [0..1]
+                gt_array = np.linspace(0, 1, n, dtype=np.float32)
+
+                # 计算 Overall MSE
+                mse_val = mean_squared_error(gt_array, pred_array)
+
+                # 计算 Final-frame MSE (只看最后一帧)
+                final_mse_val = mean_squared_error([gt_array[-1]], [pred_array[-1]])
+
+                # 画预测 vs GT
+                frame_numbers = np.arange(n)
+                ax.plot(frame_numbers, gt_array, label=f"GT_demo{demo_idx}", linestyle="dashed")
+                ax.plot(frame_numbers, pred_array, label=f"Pred_demo{demo_idx}", linestyle="-")
+
+            # 收集结果
+            local_mses.append(mse_val)
+            local_final_mses.append(final_mse_val)
+
+        # 4) 同一环境下多个 demo 的MSE求平均
+        if len(local_mses) > 0:
+            env_mse_val = float(np.mean(local_mses))
+            env_final_mse_val = float(np.mean(local_final_mses))
+        else:
+            env_mse_val = 0.0
+            env_final_mse_val = 0.0
+
+        mse_list.append(env_mse_val)
+        final_mse_list.append(env_final_mse_val)
+
+        # 上报到 wandb
+        wandb.log({f"{set_type}_overall_mse/{env_name}": env_mse_val})
+        wandb.log({f"{set_type}_final_mse/{env_name}": env_final_mse_val})
+
+        # 完善并上传图表
         ax.set_xlabel("Frame Number")
-        ax.set_ylabel("Reward")
-        ax.set_title(f"{env_name} Prediction vs. GT")
+        ax.set_ylabel("Reward (0..1)")
+        ax.set_title(f"{env_name} Prediction vs. GT (Multiple Demos)")
         ax.legend()
         plt.tight_layout()
-
-        # 🔹 记录到 wandb
         wandb.log({f"{set_type}_curve/{env_name}": wandb.Image(fig)})
+        plt.close(fig)
 
-        plt.close(fig)  # 释放内存
-
-    # 计算所有环境的均值
+    # 5) 计算所有环境的均值
     avg_mse = float(np.mean(mse_list)) if mse_list else 0.0
     avg_final_mse = float(np.mean(final_mse_list)) if final_mse_list else 0.0
 
-    # Log 平均值
+    # 全局记录
     wandb.log({f"{set_type}_mse/average_overall_mse": avg_mse})
     wandb.log({f"{set_type}_mse/average_final_mse": avg_final_mse})
 
@@ -845,6 +868,7 @@ def compute_mse_from_sequences(
     print(f"[{set_type}] 平均 Final-frame MSE: {avg_final_mse:.4f}")
 
     return avg_mse, avg_final_mse, mse_list, final_mse_list
+
 
 
 def compute_spearman_correlation_from_sequences(
