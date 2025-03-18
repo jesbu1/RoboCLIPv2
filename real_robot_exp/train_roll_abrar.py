@@ -12,7 +12,8 @@ import h5py
 from torch.nn.functional import mse_loss
 from torch.nn import CrossEntropyLoss, BCELoss
 import os
-from models import ClassProgressTransformer
+from models_pe import ClassProgressTransformer as pe_model
+from models import ClassProgressTransformer as no_pe_model
 # , RewardOneStepNewPositionEmbeddingPredictor
 from eval_confusion_matrix_abrar import plot_confusion_matrix
 from eval_progress_abrar import plot_progress
@@ -23,8 +24,9 @@ from sklearn.metrics import precision_score, recall_score, f1_score, accuracy_sc
 import math
 from datetime import date
 import pickle
-# from torchcontrib.optim import SWA
-from torch.optim.swa_utils import AveragedModel, SWALR
+from eval_rewind.eval_rewind_new import generate_rewind_data, generate_rewind_gif, compute_pearson_correlation_from_sequences
+from eval_rewind.eval_rewind_new import plot_confusion_matrix_from_predictions, compute_mse_from_sequences, compute_spearman_correlation_from_sequences
+from eval_rewind.eval_rewind_new import compute_spearman_correlation_multi_annotations, rank_comparison
 
 os.environ["TOKENIZERS_PARALLELISM"] = "False"
 
@@ -84,12 +86,10 @@ def main(args):
     WANDB_PROJECT_NAME = "roboclip-v2"
 
     if args.extra_data_type == "metaworld":
-        experiment_name = "Crop_MetaWorld" 
+        experiment_name = "NewPE_Crop_MetaWorld" 
     else: 
         experiment_name = "RealWorld_Koch"
 
-    if args.swa:
-        experiment_name += "_SWA"
     experiment_name += "_binary_thrd_" + str(args.binary_threshold)
     experiment_name += "_Rewind_ratio_" + str(args.rewind_ratio)
 
@@ -112,11 +112,9 @@ def main(args):
         experiment_name += "_MaxLen" + str(args.max_length)
     if args.positional_encoding:
         experiment_name += "_PosEmb"
+    if args.last_frame_pe:
+        experiment_name += "_LastFramePE"
 
-    if args.cosine_scheduler:
-        experiment_name += "_CosScheduler"
-    if args.clip_grad:
-        experiment_name += "_ClipGrad"
     experiment_name += "_View_" + str(args.view)
     experiment_name += "_ExtraDataRatio_" + str(args.extra_data_ratio)
     
@@ -128,7 +126,7 @@ def main(args):
 
     
     if args.extra_data_type == "metaworld":
-        group_name = "Crop_MetaWorldNew"
+        group_name = "FixLogPE_2step_Crop_MetaWorldNew"
     else:
         group_name = "RealWorld_Koch"
     # get today date
@@ -230,12 +228,20 @@ def main(args):
     else:
         raise ValueError("Invalid text embedding model")
 
-    self_attention_model = ClassProgressTransformer(
-        args=args,
-        video_dim=video_dim,  # Original video embedding dimension
-        text_dim=text_dim,   # Original text embedding dimension
-        hidden_dim=512  # Common dimension for transformer processing
-    ).to(device)
+    if args.positional_encoding:
+        self_attention_model = pe_model(
+            args=args,
+            video_dim=video_dim,  # Original video embedding dimension
+            text_dim=text_dim,   # Original text embedding dimension
+            hidden_dim=512  # Common dimension for transformer processing
+        ).to(device)
+    else:
+        self_attention_model = no_pe_model(
+            args=args,
+            video_dim=video_dim,  # Original video embedding dimension
+            text_dim=text_dim,   # Original text embedding dimension
+            hidden_dim=512  # Common dimension for transformer processing
+        ).to(device)
 
 
     print(self_attention_model)
@@ -246,11 +252,6 @@ def main(args):
         base_optimizer = torch.optim.Adam(self_attention_model.parameters(), lr=args.lr, weight_decay=1e-4)
         scheduler = None
 
-    if args.swa:
-        swa_model = AveragedModel(self_attention_model)
-        swa_scheduler = SWALR(base_optimizer, swa_lr=0.05)
-    else:
-        optimizer = base_optimizer
 
 
     for epoch in range(args.epochs):
@@ -459,16 +460,11 @@ def main(args):
 
         # Evaluation
         if epoch % args.eval_interval == 0:  # Only evaluate at specified intervals
-            
-            if args.swa:
-                swa_model.update_parameters(self_attention_model)
-                swa_scheduler.step()
+
             print(f"\nRunning evaluation at epoch {epoch}")
             with torch.no_grad():
-                if args.swa:
-                    swa_model.eval()
-                else:
-                    self_attention_model.eval()
+
+                self_attention_model.eval()
                 wandb_eval_log = {}
                 
                 # OpenX Evaluation
@@ -510,10 +506,8 @@ def main(args):
                         progress_target = data["progress"].to(device).float()
                         
                         # Get predictions
-                        if args.swa:
-                            progress_pred, class_pred = swa_model(video_array, text_array)
-                        else:
-                            progress_pred, class_pred = self_attention_model(video_array, text_array)
+
+                        progress_pred, class_pred = self_attention_model(video_array, text_array)
                         target = torch.ones(class_pred.size(0)).to(device)
                         
                         # Classification loss
@@ -539,10 +533,8 @@ def main(args):
                         progress_target = data["progress"].to(device).float()
                         
                         # Get predictions
-                        if args.swa:
-                            progress_pred, class_pred = swa_model(video_array, text_array)
-                        else:
-                            progress_pred, class_pred = self_attention_model(video_array, text_array)
+
+                        progress_pred, class_pred = self_attention_model(video_array, text_array)
                         target = torch.zeros(class_pred.size(0)).to(device)
                         
                         # Classification loss
@@ -619,10 +611,8 @@ def main(args):
                         progress_target = data["progress"].to(device).float()
                         
                         # Get predictions
-                        if args.swa:
-                            progress_pred, class_pred = swa_model(video_array, text_array)
-                        else:
-                            progress_pred, class_pred = self_attention_model(video_array, text_array)
+
+                        progress_pred, class_pred = self_attention_model(video_array, text_array)
                         target = torch.ones(class_pred.size(0)).to(device)
                         
                         # Classification loss
@@ -650,10 +640,8 @@ def main(args):
                         progress_target = data["progress"].to(device).float()
                         
                         # Get predictions
-                        if args.swa:
-                            progress_pred, class_pred = swa_model(video_array, text_array)
-                        else:
-                            progress_pred, class_pred = self_attention_model(video_array, text_array)
+
+                        progress_pred, class_pred = self_attention_model(video_array, text_array)
                         target = torch.zeros(class_pred.size(0)).to(device)
                         
                         # Classification loss
@@ -718,57 +706,181 @@ def main(args):
 
         if epoch % 1 == 0:
             # Plot confusion matrix
-            if args.swa:
-                swa_model.eval()
-            else:
-                self_attention_model.eval()
+
+            self_attention_model.eval()
             with torch.no_grad():
                 if args.extra_data_type == "metaworld":
 
-                    if args.swa:
-                        plot_confusion_matrix(h5_file = h5_train_eval_file, set = "train",self_attention_model = swa_model, args = args)
-                        plot_confusion_matrix(h5_file = h5_eval_file, set = "eval", self_attention_model = swa_model, args = args)
-                        plot_progress(h5_train_eval_file, "train", swa_model, args)
-                        plot_progress(h5_eval_file, "eval", swa_model, args)
-                    else:
-                        plot_confusion_matrix(h5_file = h5_train_eval_file, set = "train",self_attention_model = self_attention_model, args = args)
-                        plot_confusion_matrix(h5_file = h5_eval_file, set = "eval", self_attention_model = self_attention_model, args = args)
-                        plot_progress(h5_train_eval_file, "train", self_attention_model, args)
-                        plot_progress(h5_eval_file, "eval", self_attention_model, args)
-                else:
-                    if args.swa:
-                        plot_progress(h5_train_eval_file, "train", swa_model, args)
-                        plot_progress(h5_eval_file, "eval", swa_model, args)
-                        plot_confusion_matrix(h5_file = h5_train_eval_file, set = "train",self_attention_model = swa_model, args = args)
-                        plot_confusion_matrix(h5_file = h5_eval_file, set = "eval", self_attention_model = swa_model, args = args)
-                    else:
+                    plot_confusion_matrix(h5_file = h5_train_eval_file, set = "train",self_attention_model = self_attention_model, args = args)
+                    plot_confusion_matrix(h5_file = h5_eval_file, set = "eval", self_attention_model = self_attention_model, args = args)
+                    plot_progress(h5_train_eval_file, "train", self_attention_model, args)
+                    plot_progress(h5_eval_file, "eval", self_attention_model, args)
 
-                        plot_progress(h5_train_eval_file, "train", self_attention_model, args)
-                        plot_progress(h5_eval_file, "eval", self_attention_model, args)
-                        plot_confusion_matrix(h5_file = h5_train_eval_file,
-                                            set = "train",
-                                            self_attention_model = self_attention_model,
-                                            args = args)
-                        plot_confusion_matrix(h5_file = h5_eval_file,
-                                            set = "eval",
-                                            self_attention_model = self_attention_model,
-                                            args = args)
+                    # generate_rewind_data
+                    # list all pickle files
+                    for file in os.listdir("./"):
+                        if file.endswith(".pkl"):
+                            os.remove(file)
+                    confusion_matrix, all_seqs, tasks, text_list = generate_rewind_data(
+                        h5_path="eval_rewind/metaworld_dino_embeddings_eval.h5",
+                        json_path="new_task_v2.json",
+                        set_type="eval",
+                        rewind_model=self_attention_model,
+                        cache_path="final_rewind_cache_oxe_pos_end.pkl",
+                        args = args,
+                        one_step = False
+                    )
+                    os.remove("final_rewind_cache_oxe_pos_end.pkl")
+
+                    confusion_matrix_1, all_seqs1, _, _ = generate_rewind_data(
+                            h5_path="eval_rewind/metaworld_dino_embeddings_eval.h5",
+                            json_path="new_task_v2.json",
+                            set_type="eval",
+                            rewind_model=self_attention_model,
+                            cache_path="final_rewind_cache_oxe_pos_end_1.pkl",
+                            args = args,
+                            annotation = 1,
+                            one_step = False
+                        )
+                    os.remove("final_rewind_cache_oxe_pos_end_1.pkl")
+
+                    confusion_matrix_2, all_seqs2, _, _ = generate_rewind_data(
+                        h5_path="eval_rewind/metaworld_dino_embeddings_eval.h5",
+                        json_path="new_task_v2.json",
+                        set_type="eval",
+                        rewind_model=self_attention_model,
+                        cache_path="final_rewind_cache_oxe_pos_end_2.pkl",
+                        args = args,
+                        annotation = 2,
+                        one_step = False
+                    )
+                    os.remove("final_rewind_cache_oxe_pos_end_2.pkl")
+
+                    confusion_matrix_3, all_seqs3, _, _ = generate_rewind_data(
+                        h5_path="eval_rewind/metaworld_dino_embeddings_eval.h5",
+                        json_path="new_task_v2.json",
+                        set_type="eval",
+                        rewind_model=self_attention_model,
+                        cache_path="final_rewind_cache_oxe_pos_end_3.pkl",
+                        args = args,
+                        annotation = 3,
+                        one_step = False
+                    )
+                    os.remove("final_rewind_cache_oxe_pos_end_3.pkl")
+
+                    confusion_matrix_all_fail, _, _, _ = generate_rewind_data(
+                        h5_path="eval_rewind/metaworld_dino_embeddings_eval_fail.h5",
+                        json_path="new_task_v2.json",
+                        set_type="eval",
+                        rewind_model=self_attention_model,
+                        cache_path="final_rewind_cache_oxe_pos_end_fail.pkl",
+                        args = args,
+                        one_step = False
+                    )
+                    os.remove("final_rewind_cache_oxe_pos_end_fail.pkl")
+
+                    confusion_matrix_close_success, _, _, _ = generate_rewind_data(
+                        h5_path="eval_rewind/metaworld_dino_embeddings_eval_close_succ.h5",
+                        json_path="new_task_v2.json",
+                        set_type="eval",
+                        rewind_model=self_attention_model,
+                        cache_path="final_rewind_cache_oxe_pos_end_close_succ.pkl",
+                        args = args,
+                        one_step = False
+                    )
+                    os.remove("final_rewind_cache_oxe_pos_end_close_succ.pkl")
+
+
+                    compute_pearson_correlation_from_sequences(
+                        all_seqs=all_seqs,
+                        set_type="eval",
+                        project_name="roboclip-v2",
+                        env_names=tasks
+                    )
+
+                    plot_confusion_matrix_from_predictions(
+                        predicted_rewards=confusion_matrix,
+                        task_names=tasks,
+                        set_type="eval",
+                        text_instructions=text_list,
+                        fig_name="Rewind" 
+                    )
+
+
+                    # # ============ 4) 计算 MSE ============
+                    compute_mse_from_sequences(
+                        all_seqs=all_seqs,
+                        env_names=tasks,
+                        set_type="eval"
+                    )
+
+                    # ============ 5) 计算 Spearman 相关系数 ============
+                    compute_spearman_correlation_from_sequences(
+                        all_seqs=all_seqs,
+                        env_names=tasks,
+                        set_type="eval"
+                    )
+
+                    compute_spearman_correlation_from_sequences(
+                        all_seqs=all_seqs1,
+                        env_names=tasks,
+                        set_type="eval"
+                    )
+
+                    compute_spearman_correlation_from_sequences(
+                        all_seqs=all_seqs2,
+                        env_names=tasks,
+                        set_type="eval"
+                    )
+
+                    compute_spearman_correlation_from_sequences(
+                        all_seqs=all_seqs3,
+                        env_names=tasks,
+                        set_type="eval"
+                    )
+
+                    compute_spearman_correlation_multi_annotations(
+                        all_seqs_a=all_seqs1,
+                        all_seqs_b=all_seqs2,
+                        all_seqs_c=all_seqs3,
+                        all_seqs_d=all_seqs,
+                        env_names=tasks,
+                        set_type="eval"
+                    )
+
+                    rank_comparison(confusion_matrix_all_fail, confusion_matrix_close_success, confusion_matrix)
+
+
+                    if epoch % 2 == 1:
+
+                        generate_rewind_gif(
+                            h5_path="eval_rewind/metaworld_dino_embeddings_eval_close_succ_128.h5",
+                            json_path="new_task_v2.json",
+                            set_type="eval",
+                            rewind_model=self_attention_model,
+                            device="cuda",
+                            args=args,
+                        )
+
+
+
+                else:
+
+                    plot_progress(h5_train_eval_file, "train", self_attention_model, args)
+                    plot_progress(h5_eval_file, "eval", self_attention_model, args)
+                    plot_confusion_matrix(h5_file = h5_train_eval_file, set = "train", self_attention_model = self_attention_model, args = args)
+                    plot_confusion_matrix(h5_file = h5_eval_file, set = "eval", self_attention_model = self_attention_model, args = args)
 
             # save model
-            if args.swa:
-                save_dict = {
-                    "model": swa_model.state_dict(),
-                    "optimizer": base_optimizer.state_dict(),
-                    "epoch": epoch,
-                    "args": args
-                }
-            else:
-                save_dict = {
-                    "model": self_attention_model.state_dict(),
-                    "optimizer": base_optimizer.state_dict(),
-                    "epoch": epoch,
-                    "args": args
-                }
+
+                
+            save_dict = {
+                "model": self_attention_model.state_dict(),
+                "optimizer": base_optimizer.state_dict(),
+                "epoch": epoch,
+                "args": args
+            }
+
             save_folder = "saved_models"
             if not os.path.exists(save_folder):
                 os.makedirs(save_folder)
@@ -777,8 +889,7 @@ def main(args):
                 os.makedirs(save_path)
             save_path = os.path.join(save_path, f"epoch_{epoch}.pth")
             torch.save(save_dict, save_path)
-            if args.swa:
-                swa_model.train()
+
 
 
 
@@ -818,7 +929,7 @@ if __name__ == "__main__":
     argparser.add_argument('--rewind_ratio', type=float, default=0.5)
     argparser.add_argument('--progress_loss_weight', type=float, default=1)
     argparser.add_argument('--weighted_mse', action='store_true')
-    argparser.add_argument('--swa', action='store_true')
+    argparser.add_argument('--last_frame_pe', action='store_true')
 
 
 

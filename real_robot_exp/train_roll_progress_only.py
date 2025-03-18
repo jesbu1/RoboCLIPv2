@@ -12,7 +12,8 @@ import h5py
 from torch.nn.functional import mse_loss
 from torch.nn import CrossEntropyLoss, BCELoss
 import os
-from models import ClassProgressTransformer
+from models_pe import ClassProgressTransformer as pe_model
+from models import ClassProgressTransformer as no_pe_model
 # , RewardOneStepNewPositionEmbeddingPredictor
 from eval_confusion_matrix_progress_only import plot_confusion_matrix
 from eval_progress_progress_only import plot_progress
@@ -23,6 +24,9 @@ from sklearn.metrics import precision_score, recall_score, f1_score, accuracy_sc
 import math
 from datetime import date
 import pickle
+from eval_rewind.eval_rewind_new import generate_rewind_data, generate_rewind_gif, compute_pearson_correlation_from_sequences
+from eval_rewind.eval_rewind_new import plot_confusion_matrix_from_predictions, compute_mse_from_sequences, compute_spearman_correlation_from_sequences
+from eval_rewind.eval_rewind_new import compute_spearman_correlation_multi_annotations, rank_comparison
 
 os.environ["TOKENIZERS_PARALLELISM"] = "False"
 
@@ -78,7 +82,7 @@ def main(args):
     WANDB_PROJECT_NAME = "roboclip-v2"
 
     if args.extra_data_type == "metaworld":
-        experiment_name = "ProgressOnlyCrop_MetaWorld" 
+        experiment_name = "NewPE_ProgressOnlyCrop_MetaWorld" 
     else: 
         experiment_name = "RealWorld_Koch"
 
@@ -120,7 +124,7 @@ def main(args):
 
     
     if args.extra_data_type == "metaworld":
-        group_name = "Crop_MetaWorldNew"
+        group_name = "FixLogPE_2step_Crop_MetaWorldNew"
     else:
         group_name = "RealWorld_Koch"
     # get today date
@@ -165,7 +169,7 @@ def main(args):
         openx_batch_size = int(round(args.batch_size * (1 - args.extra_data_ratio)))
         extra_batch_size = int(round(args.batch_size * args.extra_data_ratio))
 
-        openx_dataloader = DataLoader(openx_dataset, batch_size=openx_batch_size, shuffle=True, num_workers=int(args.worker * 18), drop_last=True, pin_memory=True)
+        openx_dataloader = DataLoader(openx_dataset, batch_size=openx_batch_size, shuffle=True, num_workers=int(args.worker * 8), drop_last=True, pin_memory=True)
         extra_dataloader = DataLoader(extra_dataset, batch_size=extra_batch_size, shuffle=True, num_workers=args.worker, drop_last=True, pin_memory=True)
 
 
@@ -222,12 +226,20 @@ def main(args):
     else:
         raise ValueError("Invalid text embedding model")
 
-    self_attention_model = ClassProgressTransformer(
-        args=args,
-        video_dim=video_dim,  # Original video embedding dimension
-        text_dim=text_dim,   # Original text embedding dimension
-        hidden_dim=512  # Common dimension for transformer processing
-    ).to(device)
+    if args.positional_encoding:
+        self_attention_model = pe_model(
+            args=args,
+            video_dim=video_dim,  # Original video embedding dimension
+            text_dim=text_dim,   # Original text embedding dimension
+            hidden_dim=512  # Common dimension for transformer processing
+        ).to(device)
+    else:
+        self_attention_model = no_pe_model(
+            args=args,
+            video_dim=video_dim,  # Original video embedding dimension
+            text_dim=text_dim,   # Original text embedding dimension
+            hidden_dim=512  # Common dimension for transformer processing
+        ).to(device)
 
 
     print(self_attention_model)
@@ -360,45 +372,71 @@ def main(args):
                 }
                 wandb.log(wandb_log)
             
-        # else:
-        #     for extra_data in tqdm(extra_dataloader):
-        #         '''
-        #         data.keys:
-        #         ['video_array', 'text_array', 'progress', 'class_label']
-        #         video_array shape: torch.Size([batch_size, max_length, 1024])
-        #         text_array shape: torch.Size([batch_size, 1024])
-        #         progress shape: torch.Size([batch_size, max_length])
-        #         class_label shape: torch.Size([batch_size, 1])
+        else:
+            for extra_data in tqdm(extra_dataloader):
+                '''
+                data.keys:
+                ['video_array', 'text_array', 'progress', 'class_label']
+                video_array shape: torch.Size([batch_size, max_length, 1024])
+                text_array shape: torch.Size([batch_size, 1024])
+                progress shape: torch.Size([batch_size, max_length])
+                class_label shape: torch.Size([batch_size, 1])
 
-        #         '''
-        #         base_optimizer.zero_grad()
+                '''
+                base_optimizer.zero_grad()
 
-        #         extra_len = len(extra_data["video_array"])
+                extra_len = len(extra_data["video_array"])
 
-        #         video_array = extra_data["video_array"].to(device).float()
-        #         text_array = extra_data["text_array"].squeeze(1).to(device).float()
-        #         progress = extra_data["progress"].to(device).float()
-        #         progress_mask = torch.ones_like(progress).bool()
+                video_array = extra_data["video_array"].to(device).float()
+                text_array = extra_data["text_array"].squeeze(1).to(device).float()
+                progress = extra_data["progress"].to(device).float()
+                progress_mask = torch.ones_like(progress).bool()
 
 
-        #         video_embedding = video_array
+                video_embedding = video_array
 
-        #         # Binary classification targets
-        #         compressed_extra_class_label = extra_data["class_label"][:, 0].float()
-        #         extra_target = compressed_extra_class_label.to(device)
+                # Binary classification targets
+                compressed_extra_class_label = extra_data["class_label"][:, 0].float()
+                extra_target = compressed_extra_class_label.to(device)
 
-        #         # Get predictions from classifier
-        #         progress_pred, class_pred = self_attention_model(video_embedding, text_array)
-        #         extra_pred = class_pred
+                # Get predictions from classifier
+                progress_pred, class_pred = self_attention_model(video_embedding, text_array)
+                extra_pred = class_pred
 
-        #         # Calculate focal loss to handle class imbalance
-        #         extra_loss = focal_loss(extra_pred, extra_target)
+                extra_progress_pred = progress_pred
+                extra_progress_target = progress
 
-        #         extra_progress_pred = progress_pred
-        #         extra_progress_target = progress
+                valid_extra_progress_pred = extra_progress_pred[extra_target.bool()]
+                valid_extra_progress_target = extra_progress_target[extra_target.bool()]
 
-        #         valid_extra_progress_pred = extra_progress_pred[extra_target.bool()]
-        #         valid_extra_progress_target = extra_progress_target[extra_target.bool()]
+                rest_extra_progress_pred = extra_progress_pred[~extra_target.bool()]
+                rest_extra_progress_target = extra_progress_target[~extra_target.bool()]
+
+                total_len = len(extra_progress_pred) + len(rest_extra_progress_pred)
+
+                extra_progress_loss = progress_loss_function(valid_extra_progress_pred[:,1:].squeeze(), valid_extra_progress_target[:,1:])
+                rest_extra_progress_loss = progress_loss_function(rest_extra_progress_pred[:,1:].squeeze(), rest_extra_progress_target[:,1:])
+
+                loss = extra_progress_loss * len(extra_progress_pred) / total_len \
+                        + rest_extra_progress_loss * len(rest_extra_progress_pred) / total_len
+
+                loss.backward()
+                if args.clip_grad:
+                    torch.nn.utils.clip_grad_norm_(self_attention_model.parameters(), 1.0)
+                base_optimizer.step()
+                if scheduler is not None:
+                    scheduler.step()
+                # Log all metrics
+
+                wandb_log = {
+                    "train/progress_loss": loss.item(),
+                    "train/match_extra_progress_loss": extra_progress_loss.item(),
+                    "train/missmatch_extra_progress_loss": rest_extra_progress_loss.item(),
+                    "train/total_loss": loss.item(),
+                    "lr": base_optimizer.param_groups[0]["lr"],
+                }
+                wandb.log(wandb_log)                    
+
 
         #         # Add progress prediction loss if applicable
         #         if args.catagorical_progress:
@@ -695,13 +733,159 @@ def main(args):
                     plot_confusion_matrix(h5_file = h5_eval_file, set = "eval", self_attention_model = self_attention_model, args = args)
                     plot_progress(h5_train_eval_file, "train", self_attention_model, args)
                     plot_progress(h5_eval_file, "eval", self_attention_model, args)
-                # else:
+
+                    for file in os.listdir("./"):
+                        if file.endswith(".pkl"):
+                            os.remove(file)
+                    confusion_matrix, all_seqs, tasks, text_list = generate_rewind_data(
+                        h5_path="eval_rewind/metaworld_dino_embeddings_eval.h5",
+                        json_path="new_task_v2.json",
+                        set_type="eval",
+                        rewind_model=self_attention_model,
+                        cache_path="final_rewind_cache_oxe_pos_end.pkl",
+                        args = args,
+                        one_step = True
+                    )
+                    os.remove("final_rewind_cache_oxe_pos_end.pkl")
+
+                    confusion_matrix_1, all_seqs1, _, _ = generate_rewind_data(
+                            h5_path="eval_rewind/metaworld_dino_embeddings_eval.h5",
+                            json_path="new_task_v2.json",
+                            set_type="eval",
+                            rewind_model=self_attention_model,
+                            cache_path="final_rewind_cache_oxe_pos_end_1.pkl",
+                            args = args,
+                            annotation = 1,
+                            one_step = True
+                        )
+                    os.remove("final_rewind_cache_oxe_pos_end_1.pkl")
+
+                    confusion_matrix_2, all_seqs2, _, _ = generate_rewind_data(
+                        h5_path="eval_rewind/metaworld_dino_embeddings_eval.h5",
+                        json_path="new_task_v2.json",
+                        set_type="eval",
+                        rewind_model=self_attention_model,
+                        cache_path="final_rewind_cache_oxe_pos_end_2.pkl",
+                        args = args,
+                        annotation = 2,
+                        one_step = True
+                    )
+                    os.remove("final_rewind_cache_oxe_pos_end_2.pkl")                    
+
+                    confusion_matrix_3, all_seqs3, _, _ = generate_rewind_data(
+                        h5_path="eval_rewind/metaworld_dino_embeddings_eval.h5",
+                        json_path="new_task_v2.json",
+                        set_type="eval",
+                        rewind_model=self_attention_model,
+                        cache_path="final_rewind_cache_oxe_pos_end_3.pkl",
+                        args = args,
+                        annotation = 3,
+                        one_step = True
+                    )
+                    os.remove("final_rewind_cache_oxe_pos_end_3.pkl")
+
+                    confusion_matrix_all_fail, _, _, _ = generate_rewind_data(
+                        h5_path="eval_rewind/metaworld_dino_embeddings_eval_fail.h5",
+                        json_path="new_task_v2.json",
+                        set_type="eval",
+                        rewind_model=self_attention_model,
+                        cache_path="final_rewind_cache_oxe_pos_end_fail.pkl",
+                        args = args,
+                        one_step = True
+                    )
+                    os.remove("final_rewind_cache_oxe_pos_end_fail.pkl")
+
+                    confusion_matrix_close_success, _, _, _ = generate_rewind_data(
+                        h5_path="eval_rewind/metaworld_dino_embeddings_eval_close_succ.h5",
+                        json_path="new_task_v2.json",
+                        set_type="eval",
+                        rewind_model=self_attention_model,
+                        cache_path="final_rewind_cache_oxe_pos_end_close_succ.pkl",
+                        args = args,
+                        one_step = True
+                    )
+                    os.remove("final_rewind_cache_oxe_pos_end_close_succ.pkl")
 
 
-                #     plot_progress(h5_train_eval_file, "train", self_attention_model, args)
-                #     plot_progress(h5_eval_file, "eval", self_attention_model, args)
-                #     plot_confusion_matrix(h5_file = h5_train_eval_file, set = "train", self_attention_model = self_attention_model, args = args)
-                #     plot_confusion_matrix(h5_file = h5_eval_file, set = "eval", self_attention_model = self_attention_model, args = args)
+                    compute_pearson_correlation_from_sequences(
+                        all_seqs=all_seqs,
+                        set_type="eval",
+                        project_name="roboclip-v2",
+                        env_names=tasks
+                    )
+
+
+                    plot_confusion_matrix_from_predictions(
+                        predicted_rewards=confusion_matrix,
+                        task_names=tasks,
+                        set_type="eval",
+                        text_instructions=text_list,
+                        fig_name="Rewind" 
+                    )
+
+
+                    # # ============ 4) 计算 MSE ============
+                    compute_mse_from_sequences(
+                        all_seqs=all_seqs,
+                        env_names=tasks,
+                        set_type="eval"
+                    )
+
+                    # ============ 5) 计算 Spearman 相关系数 ============
+                    compute_spearman_correlation_from_sequences(
+                        all_seqs=all_seqs,
+                        env_names=tasks,
+                        set_type="eval"
+                    )
+
+                    compute_spearman_correlation_from_sequences(
+                        all_seqs=all_seqs1,
+                        env_names=tasks,
+                        set_type="eval"
+                    )
+
+                    compute_spearman_correlation_from_sequences(
+                        all_seqs=all_seqs2,
+                        env_names=tasks,
+                        set_type="eval"
+                    )
+
+                    compute_spearman_correlation_from_sequences(
+                        all_seqs=all_seqs3,
+                        env_names=tasks,
+                        set_type="eval"
+                    )
+
+                    compute_spearman_correlation_multi_annotations(
+                        all_seqs_a=all_seqs1,
+                        all_seqs_b=all_seqs2,
+                        all_seqs_c=all_seqs3,
+                        all_seqs_d=all_seqs,
+                        env_names=tasks,
+                        set_type="eval"
+                    )
+
+                    rank_comparison(confusion_matrix_all_fail, confusion_matrix_close_success, confusion_matrix)
+
+
+                    if epoch % 2 == 1:
+
+                        generate_rewind_gif(
+                            h5_path="eval_rewind/metaworld_dino_embeddings_eval_close_succ_128.h5",
+                            json_path="new_task_v2.json",
+                            set_type="eval",
+                            rewind_model=self_attention_model,
+                            device="cuda",
+                            args=args,
+                        )
+
+                else:
+
+
+                    plot_progress(h5_train_eval_file, "train", self_attention_model, args)
+                    plot_progress(h5_eval_file, "eval", self_attention_model, args)
+                    plot_confusion_matrix(h5_file = h5_train_eval_file, set = "train", self_attention_model = self_attention_model, args = args)
+                    plot_confusion_matrix(h5_file = h5_eval_file, set = "eval", self_attention_model = self_attention_model, args = args)
 
 
 
@@ -763,6 +947,7 @@ if __name__ == "__main__":
     argparser.add_argument('--rewind_ratio', type=float, default=0.5)
     argparser.add_argument('--progress_loss_weight', type=float, default=1)
     argparser.add_argument('--weighted_mse', action='store_true')
+    argparser.add_argument('--last_frame_pe', action='store_true')
 
 
 

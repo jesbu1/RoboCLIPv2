@@ -1,0 +1,27 @@
+wandb: Currently logged in as: yusenluo (clvr). Use `wandb login --relogin` to force relogin
+wandb: wandb version 0.19.4 is available!  To upgrade, please run:
+wandb:  $ pip install wandb --upgrade
+wandb: Tracking run with wandb version 0.16.1
+wandb: Run data is saved locally in /scr/yusenluo/RoboCLIP/visualization/decoder_only/wandb/run-20250125_061757-oodpju92
+wandb: Run `wandb offline` to turn off syncing.
+wandb: Syncing run eval_rewind
+wandb: ⭐️ View project at https://wandb.ai/clvr/roboclip-v2
+wandb: 🚀 View run at https://wandb.ai/clvr/roboclip-v2/runs/oodpju92
+✅ Model loaded successfully!
+wandb: 🚀 View run eval_rewind at: https://wandb.ai/clvr/roboclip-v2/runs/oodpju92
+wandb: ️⚡ View job at https://wandb.ai/clvr/roboclip-v2/jobs/QXJ0aWZhY3RDb2xsZWN0aW9uOjU0NjM0OTI2NQ==/version_details/v3
+wandb: Synced 7 W&B file(s), 0 media file(s), 0 artifact file(s) and 1 other file(s)
+wandb: Find logs at: ./wandb/run-20250125_061757-oodpju92/logs
+Traceback (most recent call last):
+  File "eval_rewind.py", line 517, in <module>
+    plot_progress_class(h5_eval_file, "train", rewind_model, args)
+  File "/scr/yusenluo/RoboCLIP/visualization/decoder_only/eval_utils_decoder_5_demos.py", line 60, in plot_progress_class
+    embedding_list.append(np.asarray(h5_file[env_name]))
+  File "h5py/_objects.pyx", line 54, in h5py._objects.with_phil.wrapper
+  File "h5py/_objects.pyx", line 55, in h5py._objects.with_phil.wrapper
+  File "/scr/yusenluo/anaconda3/envs/roboclip/lib/python3.8/site-packages/h5py/_hl/group.py", line 357, in __getitem__
+    oid = h5o.open(self.id, self._e(name), lapl=self._lapl)
+  File "h5py/_objects.pyx", line 54, in h5py._objects.with_phil.wrapper
+  File "h5py/_objects.pyx", line 55, in h5py._objects.with_phil.wrapper
+  File "h5py/h5o.pyx", line 189, in h5py.h5o.open
+KeyError: 'Unable to synchronously open object (component not found)'

@@ -1,0 +1,108 @@
+wandb_version: 1
+
+h5_embedding_path:
+  desc: null
+  value: metaworld_embedding_5_demo_dataset_v2.h5
+model_name:
+  desc: null
+  value: liv
+batch_size:
+  desc: null
+  value: 32
+epochs:
+  desc: null
+  value: 200
+seed:
+  desc: null
+  value: 42
+lr:
+  desc: null
+  value: 0.0001
+worker:
+  desc: null
+  value: 4
+attention_heads:
+  desc: null
+  value: 4
+dropout:
+  desc: null
+  value: 0.1
+sample_neg:
+  desc: null
+  value: true
+enlarge_embedding_space:
+  desc: null
+  value: false
+reverse_video:
+  desc: null
+  value: true
+normalize_embedding:
+  desc: null
+  value: true
+catagorical_progress:
+  desc: null
+  value: false
+subsample_video:
+  desc: null
+  value: false
+catagorical_progress_bins:
+  desc: null
+  value: 5
+max_length:
+  desc: null
+  value: 32
+cat_embedding:
+  desc: null
+  value: false
+fully_reverse_data:
+  desc: null
+  value: false
+two_step_training:
+  desc: null
+  value: false
+layer_norm:
+  desc: null
+  value: false
+positional_encoding:
+  desc: null
+  value: true
+_wandb:
+  desc: null
+  value:
+    code_path: code/visualization/decoder_only/reward_model_decoder_5_demos_training.py
+    python_version: 3.8.16
+    cli_version: 0.16.1
+    framework: huggingface
+    huggingface_version: 4.46.3
+    is_jupyter_run: false
+    is_kaggle_kernel: false
+    start_time: 1737159476.042402
+    t:
+      1:
+      - 1
+      - 5
+      - 11
+      - 41
+      - 49
+      - 50
+      - 53
+      - 55
+      2:
+      - 1
+      - 5
+      - 11
+      - 41
+      - 49
+      - 50
+      - 53
+      - 55
+      3:
+      - 13
+      - 16
+      - 23
+      4: 3.8.16
+      5: 0.16.1
+      6: 4.46.3
+      8:
+      - 5
+      13: linux-x86_64

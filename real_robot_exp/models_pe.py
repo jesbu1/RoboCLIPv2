@@ -256,7 +256,8 @@ class ClassProgressTransformer(nn.Module):
         # Position embeddings for video sequence
         if self.args.positional_encoding:
             self.first_pos_embed = nn.Parameter(torch.randn(1, hidden_dim))  # 32 is max_length
-            self.last_pos_embed = nn.Parameter(torch.randn(1, hidden_dim))
+            if self.args.last_frame_pe:
+                self.last_pos_embed = nn.Parameter(torch.randn(1, hidden_dim))
         
         # Class token embedding
         self.class_token = nn.Parameter(torch.randn(1, 1, hidden_dim))
@@ -314,7 +315,8 @@ class ClassProgressTransformer(nn.Module):
         # Add positional embeddings to video]
         if self.args.positional_encoding:
             video_embed[:,0] += self.first_pos_embed
-            video_embed[:,-1] += self.last_pos_embed
+            if self.args.last_frame_pe:
+                video_embed[:,-1] += self.last_pos_embed
         
         # Expand class token for batch
         class_tokens = self.class_token.expand(batch_size, -1, -1)
