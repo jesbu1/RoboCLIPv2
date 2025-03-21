@@ -237,24 +237,24 @@ def rank_comparison(cm1, cm2, cm3):
     # 7. 上传到W&B
     wandb.log({
         # 平均排名
-        "Average Rank/cm1": float(avg_ranks[0]),
-        "Average Rank/cm2": float(avg_ranks[1]),
-        "Average Rank/cm3": float(avg_ranks[2]),
+        "Average Rank/all_fail": float(avg_ranks[0]),
+        "Average Rank/close_success": float(avg_ranks[1]),
+        "Average Rank/GT": float(avg_ranks[2]),
 
         # rank=1 概率
-        "Rank1 Prob/cm1": float(rank1_probs[0]),
-        "Rank1 Prob/cm2": float(rank1_probs[1]),
-        "Rank1 Prob/cm3": float(rank1_probs[2]),
+        "Rank1 Prob/all_fail": float(rank1_probs[0]),
+        "Rank1 Prob/close_success": float(rank1_probs[1]),
+        "Rank1 Prob/GT": float(rank1_probs[2]),
 
         # rank=2 概率
-        "Rank2 Prob/cm1": float(rank2_probs[0]),
-        "Rank2 Prob/cm2": float(rank2_probs[1]),
-        "Rank2 Prob/cm3": float(rank2_probs[2]),
+        "Rank2 Prob/all_fail": float(rank2_probs[0]),
+        "Rank2 Prob/close_success": float(rank2_probs[1]),
+        "Rank2 Prob/GT": float(rank2_probs[2]),
 
         # rank=3 概率
-        "Rank3 Prob/cm1": float(rank3_probs[0]),
-        "Rank3 Prob/cm2": float(rank3_probs[1]),
-        "Rank3 Prob/cm3": float(rank3_probs[2]),
+        "Rank3 Prob/all_fail": float(rank3_probs[0]),
+        "Rank3 Prob/close_success": float(rank3_probs[1]),
+        "Rank3 Prob/GT": float(rank3_probs[2]),
 
         # 新增“GT 排名”成功率
         "GT Ranking Success Rate": float(gt_success_rate),
@@ -393,7 +393,7 @@ def normalize_embeddings(embeddings, return_tensor=True):
         return normalized_embeddings.detach().cpu().numpy()
 
 
-def compute_rewind_reward(rewind_model, args, episode_image_embeddings, lang_embeddings, pdf_path="incremental_reward_rewind.png"):
+def compute_rewind_reward(rewind_model, args, episode_image_embeddings, lang_embeddings, threshold=0.5, pdf_path="incremental_reward_rewind.png"):
     One_step = args.
     reward_seq = []
 
@@ -413,7 +413,7 @@ def compute_rewind_reward(rewind_model, args, episode_image_embeddings, lang_emb
             predicted_classes = np.array(pred_class.squeeze().detach().cpu().numpy())
             predicted_classes = predicted_classes[1:]  # Remove first frame prediction
         else:
-            two_step_class_prob = (two_step_class.squeeze() > args.binary_threshold).float()
+            two_step_class_prob = (two_step_class.squeeze() > threshold).float()
             pred_class = pred_class * two_step_class_prob
 
             # pred_class shape => [1, T] or [T], check your model output
@@ -443,7 +443,8 @@ def generate_rewind_data(
     cache_path="rewind_cache.pkl",
     args=None,
     annotation = None,
-    One_step = False
+    One_step = False,
+    threshold = 0.5
 ):
     """
     与 generate_gemini_data 类似，遍历 (环境, 文本) 组合，生成:
@@ -567,7 +568,7 @@ def generate_rewind_data(
                             predicted_classes = np.array(pred_class.squeeze().detach().cpu().numpy())
                             predicted_classes = predicted_classes[1:]  # Remove first frame prediction
                         else:
-                            two_step_class_prob = (two_step_class.squeeze() > args.binary_threshold).float()
+                            two_step_class_prob = (two_step_class.squeeze() > threshold).float()
                             pred_class = pred_class * two_step_class_prob
 
                             # pred_class shape => [1, T] or [T], check your model output
@@ -1030,8 +1031,8 @@ def compute_spearman_correlation_multi_annotations(
 
     # 把整体平均也上传wandb
     wandb.log({
-        f"{set_type}_spearman_correlation/overall_avg_corr": overall_avg_corr,
-        f"{set_type}_spearman_correlation/overall_avg_var": overall_avg_var
+        f"{set_type}_robustness/overall_avg_correlation_robustness": overall_avg_corr,
+        f"{set_type}_robustness/overall_avg_variance_robustness": overall_avg_var
     })
 
     print(f"[{set_type}] 所有环境的所有instruction得平均Spearman相关系数: {overall_avg_corr:.4f}")
@@ -1076,6 +1077,7 @@ def generate_rewind_gif(
     device: str = "cuda",
     args=None,
     annotation = None,
+    threshold = 0.5
 ):
 
     # 1) 从 new_task_v2.json 中读取 tasks
@@ -1136,7 +1138,7 @@ def generate_rewind_gif(
                 if i != j:
                     continue
                 for demo_id, video_embedding in enumerate(all_video_embeddings):
-                    compute_rewind_reward(rewind_model=rewind_model, args=args, episode_image_embeddings=video_embedding, lang_embeddings=text_embedding, pdf_path=f"rewind_progress_close_success/{env_video_name}_{demo_id}.png")
+                    compute_rewind_reward(rewind_model=rewind_model, args=args, episode_image_embeddings=video_embedding, lang_embeddings=text_embedding, threshold=threshold, pdf_path=f"rewind_progress_close_success/{env_video_name}_{demo_id}.png")
 
 if __name__ == "__main__":
     
@@ -1152,7 +1154,8 @@ if __name__ == "__main__":
         rewind_model=rewind_model,
         cache_path="final_rewind_cache_oxe_pos_end.pkl",
         args = model_args,
-        One_step=args.
+        One_step=args.,
+        threshold=
     )
 
     confusion_matrix_1, all_seqs1, _, _ = generate_rewind_data(
@@ -1163,7 +1166,8 @@ if __name__ == "__main__":
         cache_path="final_rewind_cache_oxe_pos_end_1.pkl",
         args = model_args,
         annotation = 1,
-        One_step=args.
+        One_step=args.,
+        threshold=
     )
 
     confusion_matrix_2, all_seqs2, _, _ = generate_rewind_data(
@@ -1174,7 +1178,8 @@ if __name__ == "__main__":
         cache_path="final_rewind_cache_oxe_pos_end_2.pkl",
         args = model_args,
         annotation = 2,
-        One_step=args.
+        One_step=args.,
+        threshold=
     )
 
     confusion_matrix_3, all_seqs3, _, _ = generate_rewind_data(
@@ -1185,7 +1190,8 @@ if __name__ == "__main__":
         cache_path="final_rewind_cache_oxe_pos_end_3.pkl",
         args = model_args,
         annotation = 3,
-        One_step=args.
+        One_step=args.,
+        threshold=
     )
 
 
@@ -1196,7 +1202,8 @@ if __name__ == "__main__":
         rewind_model=rewind_model,
         cache_path="final_rewind_cache_oxe_pos_end_fail.pkl",
         args = model_args,
-        One_step=args.
+        One_step=args.,
+        threshold=
     )
 
     confusion_matrix_close_success, _, _, _ = generate_rewind_data(
@@ -1206,7 +1213,8 @@ if __name__ == "__main__":
         rewind_model=rewind_model,
         cache_path="final_rewind_cache_oxe_pos_end_close_succ.pkl",
         args = model_args,
-        One_step=args.
+        One_step=args.,
+        threshold=
     )
 
 
@@ -1220,6 +1228,7 @@ if __name__ == "__main__":
         rewind_model=rewind_model,
         device="cuda",
         args=model_args,
+        threshold=
     )
 
     # ============ 2) 计算相关(只用对角线) ============
