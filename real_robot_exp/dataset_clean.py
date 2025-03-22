@@ -137,8 +137,11 @@ class LivRealVideoTrainDataset(Dataset):
 
         progress_dataset = np.asarray(data_group[random_name]) # all video data
 
-        start_idx = random.randint(0, len(progress_dataset)-3)
-        end_idx = random.randint(start_idx+3, len(progress_dataset))
+        start_idx = random.randint(0, len(progress_dataset)//2)
+        end_idx = random.randint(len(progress_dataset)//2, len(progress_dataset)) # end_idx start from len(progress_dataset)//2
+        while end_idx - start_idx < 3:
+            start_idx = random.randint(0, len(progress_dataset)//2)
+            end_idx = random.randint(len(progress_dataset)//2, len(progress_dataset))
 
         video_frames = np.array(progress_dataset)[start_idx:end_idx]
         full_frames = np.array(progress_dataset)[start_idx:]
@@ -157,9 +160,9 @@ class LivRealVideoTrainDataset(Dataset):
         # reverse_progress = progress[::-1][1:]
 
         # random start rewind
-        random_end = random.randint(2, len(full_frames))
-        reverse_frame = video_frames[::-1][1:random_end]
-        reverse_progress = progress[::-1][1:random_end]
+        selected_end_point = random.randint(2, len(video_frames))
+        reverse_frame = video_frames[::-1][1:selected_end_point]
+        reverse_progress = progress[::-1][1:selected_end_point]
 
         video_frames = np.concatenate([video_frames, reverse_frame], axis=0)
         progress = np.concatenate([progress, reverse_progress], axis=0)

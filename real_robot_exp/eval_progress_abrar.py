@@ -56,7 +56,7 @@ def sample_video_frames(frames, num_frames = 32):
 
     return frames
 
-def plot_progress(h5_file, set, self_attention_model, args):
+def plot_progress(h5_file, set, self_attention_model, args, epoch):
     device = next(self_attention_model.parameters()).device
     keys = list(h5_file.keys())
     eval_envs = keys
@@ -117,7 +117,7 @@ def plot_progress(h5_file, set, self_attention_model, args):
             plt.ylim(-1, 1)
         plt.grid(True, alpha=0.3)
         plt.legend(bbox_to_anchor=(1.05, 1), loc='upper left')
-        wandb.log({f"class_{set}/{key}": wandb.Image(figure)})
+        wandb.log({f"class_{set}/{key}": wandb.Image(figure, caption=f"Epoch: {epoch}")})
         plt.close()
 
 def sample_video_frames(frames, num_frames = 32):
