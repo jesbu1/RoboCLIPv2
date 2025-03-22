@@ -35,7 +35,7 @@ DINO_BATCH_SIZE = 128
 MAX_NUM_FRAMES_PER_EPISODE = 128
 
 
-def animate_incremental(frames_tensor, incremental_rewards, fps=15, fig_path="ax2_plot_rewind.png"):
+def animate_incremental(frames_tensor, incremental_rewards, fps=15, fig_path="ax2_plot_rewind.png", epoch=0):
     """
     Create an animation that shows frames on the left and the incremental reward curve on the right.
 
@@ -139,7 +139,7 @@ def animate_incremental(frames_tensor, incremental_rewards, fps=15, fig_path="ax
     buf.seek(0)  # 将光标移到缓冲区开头
     pil_image = Image.open(buf)
     # 4. 将缓冲区数据作为图片添加到 wandb
-    wandb.log({fig_path: wandb.Image(pil_image)})
+    wandb.log({fig_path: wandb.Image(pil_image),"epoch" : epoch}, step=epoch)
 
     # ---------------------------------------------------------------------
 
@@ -149,7 +149,7 @@ def animate_incremental(frames_tensor, incremental_rewards, fps=15, fig_path="ax
 
 
 
-def rank_comparison(cm1, cm2, cm3):
+def rank_comparison(cm1, cm2, cm3, threshold=0.5, epoch=0):
     """
     只比较混淆矩阵对角线上的值 (每个任务的正确预测数)，
     给出每个矩阵在各任务上的排名(1=最好,3=最差)，
@@ -237,31 +237,34 @@ def rank_comparison(cm1, cm2, cm3):
     # 7. 上传到W&B
     wandb.log({
         # 平均排名
-        "Average Rank/cm1": float(avg_ranks[0]),
-        "Average Rank/cm2": float(avg_ranks[1]),
-        "Average Rank/cm3": float(avg_ranks[2]),
+        f"Thrd_{threshold}_Average Rank/all_fail": float(avg_ranks[0]),
+        f"Thrd_{threshold}_Average Rank/close_success": float(avg_ranks[1]),
+        f"Thrd_{threshold}_Average Rank/GT": float(avg_ranks[2]),
 
         # rank=1 概率
-        "Rank1 Prob/cm1": float(rank1_probs[0]),
-        "Rank1 Prob/cm2": float(rank1_probs[1]),
-        "Rank1 Prob/cm3": float(rank1_probs[2]),
+        f"Thrd_{threshold}_Rank1 Prob/all_fail": float(rank1_probs[0]),
+        f"Thrd_{threshold}_Rank1 Prob/close_success": float(rank1_probs[1]),
+        f"Thrd_{threshold}_Rank1 Prob/GT": float(rank1_probs[2]),
 
         # rank=2 概率
-        "Rank2 Prob/cm1": float(rank2_probs[0]),
-        "Rank2 Prob/cm2": float(rank2_probs[1]),
-        "Rank2 Prob/cm3": float(rank2_probs[2]),
+        f"Thrd_{threshold}_Rank2 Prob/all_fail": float(rank2_probs[0]),
+        f"Thrd_{threshold}_Rank2 Prob/close_success": float(rank2_probs[1]),
+        f"Thrd_{threshold}_Rank2 Prob/GT": float(rank2_probs[2]),
 
         # rank=3 概率
-        "Rank3 Prob/cm1": float(rank3_probs[0]),
-        "Rank3 Prob/cm2": float(rank3_probs[1]),
-        "Rank3 Prob/cm3": float(rank3_probs[2]),
+        f"Thrd_{threshold}_Rank3 Prob/all_fail": float(rank3_probs[0]),
+        f"Thrd_{threshold}_Rank3 Prob/close_success": float(rank3_probs[1]),
+        f"Thrd_{threshold}_Rank3 Prob/GT": float(rank3_probs[2]),
 
         # 新增“GT 排名”成功率
-        "GT Ranking Success Rate": float(gt_success_rate),
+        f"Thrd_{threshold}_GT Ranking Success Rate": float(gt_success_rate),
 
         # 新增 Spearman 相关系数(平均)
-        "Spearman Average (GT=[3,2,1])": float(spearman_avg)
+        f"Thrd_{threshold}_Spearman Average (GT=[3,2,1])": float(spearman_avg),
+        "epoch": epoch
     })
+    
+
 
     # 可根据需要 return 结果
     return avg_ranks, rank1_probs, rank2_probs, rank3_probs, gt_success_rate, spearman_avg
@@ -294,12 +297,12 @@ def sample_embedding_frames(embeddings, num_frames = 32):
     return embeddings
 
 
-device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-dinov2_vits14 = torch.hub.load("facebookresearch/dinov2", "dinov2_vitb14", force_reload=True)
-dinov2_vits14 = dinov2_vits14.to(device)
-dino_transform_image = T.Compose(
-    [T.ToTensor(), T.Resize(244), T.CenterCrop(224), T.Normalize([0.5], [0.5])]
-)
+# device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+# dinov2_vits14 = torch.hub.load("facebookresearch/dinov2", "dinov2_vitb14", force_reload=True)
+# dinov2_vits14 = dinov2_vits14.to(device)
+# dino_transform_image = T.Compose(
+#     [T.ToTensor(), T.Resize(244), T.CenterCrop(224), T.Normalize([0.5], [0.5])]
+# )
 
 
 
@@ -318,7 +321,7 @@ def sample_embedding_frames(embeddings, num_frames = 32):
     return embeddings
 
 
-def plot_matrix_as_image(matrix, names, set, text, fig_name):
+def plot_matrix_as_image(matrix, names, set, text, fig_name, epoch):
     # Create a figure and axis
     # only keep 2 decimal points
     m_min = matrix.min()
@@ -378,7 +381,7 @@ def plot_matrix_as_image(matrix, names, set, text, fig_name):
     # plt.savefig(buf, format='png')
     # buf.seek(0)
     # image = Image.open(buf)
-    wandb.log({f"confusion_matrix/{fig_name}": wandb.Image(fig)})
+    wandb.log({f"confusion_matrix/{fig_name}": wandb.Image(fig), "epoch": epoch})
     plt.savefig(f"confusion_matrix_{fig_name}.pdf", bbox_inches="tight")
     plt.close(fig)  # Close the figure to free memory
 
@@ -392,9 +395,8 @@ def normalize_embeddings(embeddings, return_tensor=True):
     else:
         return normalized_embeddings.detach().cpu().numpy()
 
+def compute_rewind_reward(rewind_model, args, episode_image_embeddings, lang_embeddings, threshold=0.5, pdf_path="incremental_reward_rewind.png", one_step = True, epoch=0):
 
-def compute_rewind_reward(rewind_model, args, episode_image_embeddings, lang_embeddings, pdf_path="incremental_reward_rewind.png", one_step = True):
-    
     reward_seq = []
 
     if args.normalize_embedding:
@@ -413,7 +415,7 @@ def compute_rewind_reward(rewind_model, args, episode_image_embeddings, lang_emb
             predicted_classes = np.array(pred_class.squeeze().detach().cpu().numpy())
             predicted_classes = predicted_classes[1:]  # Remove first frame prediction
         else:
-            two_step_class_prob = (two_step_class.squeeze() > args.binary_threshold).float()
+            two_step_class_prob = (two_step_class.squeeze() > threshold).float()
             pred_class = pred_class * two_step_class_prob
 
             # pred_class shape => [1, T] or [T], check your model output
@@ -426,7 +428,7 @@ def compute_rewind_reward(rewind_model, args, episode_image_embeddings, lang_emb
         reward_seq.append(video_reward)
         # print(reward_seq)
 
-    gif_buffer = animate_incremental(None, reward_seq, fps=15, fig_path=pdf_path)
+    gif_buffer = animate_incremental(None, reward_seq, fps=15, fig_path=pdf_path, epoch=epoch)
     # with open(gif_path, 'wb') as f:
     #     f.write(gif_buffer.getvalue())
     # print(f"Saved incremental reversed GIF to {gif_path}")
@@ -443,7 +445,8 @@ def generate_rewind_data(
     cache_path="rewind_cache.pkl",
     args=None,
     annotation = None,
-    one_step = False
+    one_step = False,
+    threshold = 0.5
 ):
     """
     与 generate_gemini_data 类似，遍历 (环境, 文本) 组合，生成:
@@ -567,7 +570,7 @@ def generate_rewind_data(
                             predicted_classes = np.array(pred_class.squeeze().detach().cpu().numpy())
                             predicted_classes = predicted_classes[1:]  # Remove first frame prediction
                         else:
-                            two_step_class_prob = (two_step_class.squeeze() > args.binary_threshold).float()
+                            two_step_class_prob = (two_step_class.squeeze() > threshold).float()
                             pred_class = pred_class * two_step_class_prob
 
                             # pred_class shape => [1, T] or [T], check your model output
@@ -654,7 +657,9 @@ def compute_pearson_correlation_from_sequences(
     all_seqs,
     env_names,
     set_type: str,
-    project_name: str = "roboclip-v2"
+    project_name: str = "roboclip-v2",
+    threshold = 0.5,
+    epoch = 0
 ):
     """
     现在假设:
@@ -714,8 +719,9 @@ def compute_pearson_correlation_from_sequences(
 
         # 逐环境 log
         wandb.log({
-            f"{set_type}_pearson_correlation/{env_name}_avg": env_avg,
-            f"{set_type}_pearson_correlation/{env_name}_std": env_std
+            f"{set_type}_pearson_correlation_thrd_{threshold}/{env_name}_avg": env_avg,
+            f"{set_type}_pearson_correlation_thrd_{threshold}/{env_name}_std": env_std,
+            "epoch": epoch
         })
 
         env_avg_correlations.append(env_avg)
@@ -727,7 +733,7 @@ def compute_pearson_correlation_from_sequences(
         overall_avg = 0.0
 
     # log overall
-    wandb.log({f"{set_type}_pearson_correlation/overall_avg": overall_avg})
+    wandb.log({f"{set_type}_pearson_correlation_thrd_{threshold}/overall_avg": overall_avg, "epoch": epoch})
 
     print(f"[{set_type}] 所有环境的平均Pearson相关系数: {overall_avg:.4f}")
 
@@ -740,7 +746,9 @@ def plot_confusion_matrix_from_predictions(
     task_names: list,
     text_instructions: list,
     set_type: str,
-    fig_name: str
+    fig_name: str,
+    threshold = 0.5,
+    epoch = 0
 ):
     """
     将 NxN 矩阵 predicted_rewards 以混淆矩阵形式绘制。
@@ -755,13 +763,14 @@ def plot_confusion_matrix_from_predictions(
     # text_instructions 作为 text (列标签),
     # set_type 作为 set,
     # 传给你已定义的函数即可：
-
+    fig_name = f"{fig_name}_thrd_{threshold}"
     plot_matrix_as_image(
         matrix=predicted_rewards, 
         names=task_names,
         set=set_type,
         text=text_instructions,
-        fig_name=fig_name
+        fig_name=fig_name,
+        epoch=epoch
     )
 
 
@@ -769,6 +778,8 @@ def compute_mse_from_sequences(
     all_seqs,
     env_names,
     set_type: str,
+    threshold = 0.5,
+    epoch = 0
 ):
     """
     现在 all_seqs[i] => 一个“demo列表”，例如 5 条序列:
@@ -815,7 +826,8 @@ def compute_mse_from_sequences(
                 n = len(pred_array)
 
                 # 构造与之等长的 GT => [0..1]
-                gt_array = np.linspace(0, 1, n, dtype=np.float32)
+                gt_array = np.linspace(0, 1, n + 1, dtype=np.float32)[1:]
+
 
                 # 计算 Overall MSE
                 mse_val = mean_squared_error(gt_array, pred_array)
@@ -844,8 +856,8 @@ def compute_mse_from_sequences(
         final_mse_list.append(env_final_mse_val)
 
         # 上报到 wandb
-        wandb.log({f"{set_type}_overall_mse/{env_name}": env_mse_val})
-        wandb.log({f"{set_type}_final_mse/{env_name}": env_final_mse_val})
+        wandb.log({f"{set_type}_overall_mse_thrd_{threshold}/{env_name}": env_mse_val, "epoch": epoch})
+        wandb.log({f"{set_type}_final_mse_thrd_{threshold}/{env_name}": env_final_mse_val, "epoch": epoch})
 
         # 完善并上传图表
         ax.set_xlabel("Frame Number")
@@ -853,7 +865,7 @@ def compute_mse_from_sequences(
         ax.set_title(f"{env_name} Prediction vs. GT (Multiple Demos)")
         ax.legend()
         plt.tight_layout()
-        wandb.log({f"{set_type}_curve/{env_name}": wandb.Image(fig)})
+        wandb.log({f"{set_type}_curve_thrd_{threshold}/{env_name}": wandb.Image(fig, caption=f"Epoch {epoch}")})
         plt.close(fig)
 
     # 5) 计算所有环境的均值
@@ -861,8 +873,8 @@ def compute_mse_from_sequences(
     avg_final_mse = float(np.mean(final_mse_list)) if final_mse_list else 0.0
 
     # 全局记录
-    wandb.log({f"{set_type}_mse/average_overall_mse": avg_mse})
-    wandb.log({f"{set_type}_mse/average_final_mse": avg_final_mse})
+    wandb.log({f"{set_type}_mse_thrd_{threshold}/average_overall_mse": avg_mse, "epoch": epoch})
+    wandb.log({f"{set_type}_mse_thrd_{threshold}/average_final_mse": avg_final_mse, "epoch": epoch})
 
     print(f"[{set_type}] 平均 Overall MSE: {avg_mse:.4f}")
     print(f"[{set_type}] 平均 Final-frame MSE: {avg_final_mse:.4f}")
@@ -875,7 +887,9 @@ def compute_spearman_correlation_from_sequences(
     all_seqs,
     env_names,
     set_type: str,
-    project_name: str = "roboclip-v2"
+    project_name: str = "roboclip-v2",
+    threshold = 0.5,
+    epoch = 0
 ):
     """
     与上述 pearson 函数类似, 这里用 spearmanr().
@@ -918,9 +932,10 @@ def compute_spearman_correlation_from_sequences(
             env_std = 0.0
 
         wandb.log({
-            f"{set_type}_spearman_correlation/{env_name}_avg": env_avg,
-            f"{set_type}_spearman_correlation/{env_name}_std": env_std
-        })
+            f"{set_type}_spearman_correlation_thrd_{threshold}/{env_name}_avg": env_avg,
+            f"{set_type}_spearman_correlation_thrd_{threshold}/{env_name}_std": env_std,
+            "epoch": epoch})
+        
         env_avg_correlations.append(env_avg)
 
     if len(env_avg_correlations) > 0:
@@ -928,7 +943,7 @@ def compute_spearman_correlation_from_sequences(
     else:
         overall_avg = 0.0
 
-    wandb.log({f"{set_type}_spearman_correlation/overall_avg": overall_avg})
+    wandb.log({f"{set_type}_spearman_correlation_thrd_{threshold}/overall_avg": overall_avg, "epoch": epoch})
     print(f"[{set_type}] 所有环境的平均Spearman相关系数: {overall_avg:.4f}")
 
     return overall_avg, env_avg_correlations
@@ -969,6 +984,8 @@ def compute_spearman_correlation_multi_annotations(
     all_seqs_d,  # 第四个all_seqs
     env_names,   # 长度和 all_seqs_x 一致
     set_type: str,
+    threshold = 0.5,
+    epoch = 0
 ):
     """
     对于每个task i:
@@ -1013,9 +1030,10 @@ def compute_spearman_correlation_multi_annotations(
 
         # 将本task的avg_corr和avg_var记录到wandb
         wandb.log({
-            f"{set_type}_spearman_correlation/{env_name}_avg_corr": task_avg_corr,
-            f"{set_type}_spearman_correlation/{env_name}_avg_var": task_avg_var
-        })
+            f"{set_type}_spearman_correlation_thrd_{threshold}/{env_name}_avg_corr": task_avg_corr,
+            f"{set_type}_spearman_correlation_thrd_{threshold}/{env_name}_avg_var": task_avg_var,
+            "epoch": epoch})
+        
 
         task_corrs.append(task_avg_corr)
         task_vars.append(task_avg_var)
@@ -1030,9 +1048,11 @@ def compute_spearman_correlation_multi_annotations(
 
     # 把整体平均也上传wandb
     wandb.log({
-        f"{set_type}_spearman_correlation/overall_avg_corr": overall_avg_corr,
-        f"{set_type}_spearman_correlation/overall_avg_var": overall_avg_var
+        f"{set_type}_robustness_thrd_{threshold}/overall_avg_correlation_robustness": overall_avg_corr,
+        f"{set_type}_robustness_thrd_{threshold}/overall_avg_variance_robustness": overall_avg_var,
+        "epoch": epoch
     })
+    
 
     print(f"[{set_type}] 所有环境的所有instruction得平均Spearman相关系数: {overall_avg_corr:.4f}")
     print(f"[{set_type}] 所有环境的所有instruction平均方差: {overall_avg_var:.4f}")
@@ -1076,6 +1096,7 @@ def generate_rewind_gif(
     device: str = "cuda",
     args=None,
     annotation = None,
+    threshold = 0.5
 ):
 
     # 1) 从 new_task_v2.json 中读取 tasks
@@ -1136,7 +1157,7 @@ def generate_rewind_gif(
                 if i != j:
                     continue
                 for demo_id, video_embedding in enumerate(all_video_embeddings):
-                    compute_rewind_reward(rewind_model=rewind_model, args=args, episode_image_embeddings=video_embedding, lang_embeddings=text_embedding, pdf_path=f"rewind_progress_close_success/{env_video_name}_{demo_id}.png")
+                    compute_rewind_reward(rewind_model=rewind_model, args=args, episode_image_embeddings=video_embedding, lang_embeddings=text_embedding, pdf_path=f"rewind_progress_close_success/{env_video_name}_{demo_id}.png", threshold = threshold)
 
 if __name__ == "__main__":
     
