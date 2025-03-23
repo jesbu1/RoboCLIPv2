@@ -444,7 +444,7 @@ def generate_rewind_data(
     args=None,
     annotation = None,
     One_step = False,
-    threshold = 0.5
+    threshold = 0.5,
 ):
     """
     与 generate_gemini_data 类似，遍历 (环境, 文本) 组合，生成:
@@ -1077,7 +1077,8 @@ def generate_rewind_gif(
     device: str = "cuda",
     args=None,
     annotation = None,
-    threshold = 0.5
+    threshold = 0.5,
+    suboptimal_type = "close_success",
 ):
 
     # 1) 从 new_task_v2.json 中读取 tasks
@@ -1138,7 +1139,7 @@ def generate_rewind_gif(
                 if i != j:
                     continue
                 for demo_id, video_embedding in enumerate(all_video_embeddings):
-                    compute_rewind_reward(rewind_model=rewind_model, args=args, episode_image_embeddings=video_embedding, lang_embeddings=text_embedding, threshold=threshold, pdf_path=f"rewind_progress_close_success/{env_video_name}_{demo_id}.png")
+                    compute_rewind_reward(rewind_model=rewind_model, args=args, episode_image_embeddings=video_embedding, lang_embeddings=text_embedding, threshold=threshold, pdf_path=f"rewind_progress_{suboptimal_type}/{env_video_name}_{demo_id}.png")
 
 if __name__ == "__main__":
     
@@ -1228,7 +1229,19 @@ if __name__ == "__main__":
         rewind_model=rewind_model,
         device="cuda",
         args=model_args,
-        threshold=
+        threshold=,
+        suboptimal_type="close_success"
+    )
+
+    generate_rewind_gif(
+        h5_path="/scr/yusenluo/RoboCLIP/visualization/decoder_only/metaworld_dino_embeddings_eval_close_succ_128.h5",
+        json_path="new_task_v2.json",
+        set_type="eval",
+        rewind_model=rewind_model,
+        device="cuda",
+        args=model_args,
+        threshold=,
+        suboptimal_type="all_fail"
     )
 
     # ============ 2) 计算相关(只用对角线) ============
