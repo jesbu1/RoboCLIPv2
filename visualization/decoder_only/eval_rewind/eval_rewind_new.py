@@ -1234,7 +1234,7 @@ if __name__ == "__main__":
     )
 
     generate_rewind_gif(
-        h5_path="/scr/yusenluo/RoboCLIP/visualization/decoder_only/metaworld_dino_embeddings_eval_close_succ_128.h5",
+        h5_path="/scr/yusenluo/RoboCLIP/visualization/decoder_only/metaworld_dino_embeddings_eval_all_fail_128.h5",
         json_path="new_task_v2.json",
         set_type="eval",
         rewind_model=rewind_model,
