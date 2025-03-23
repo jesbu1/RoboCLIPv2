@@ -94,7 +94,7 @@ def main(args):
 
     
     if args.extra_data_type == "metaworld":
-        group_name = "FixRewindnewlog_2step_Crop_MetaWorldNew"
+        group_name = "EMA_newlog_2step_Crop_MetaWorldNew"
     else:
         group_name = "RealWorld_Koch"
     # get today date
@@ -234,9 +234,10 @@ def main(args):
     print("Starting training")
 
     trainer = Engine(train_step_fn)
-    ema_handler = EMAHandler(self_attention_model, momentum=0.0002)
+    # ema_handler = EMAHandler(self_attention_model, momentum=0.0002)
+    ema_handler = EMAHandler(self_attention_model, momentum=0.3)
     ema_model = ema_handler.ema_model
-    ema_handler.attach(trainer, name="ema_momentum", event=Events.ITERATION_COMPLETED(every=5))
+    ema_handler.attach(trainer, name="ema_momentum", event=Events.ITERATION_COMPLETED(every=1))
     
     pbar = ProgressBar()
     pbar.attach(trainer, output_transform=lambda x: {"loss": x})
@@ -253,6 +254,7 @@ def main(args):
 
             # extract the ema model
             ema_model.eval()
+            self_attention_model.eval()
             with torch.no_grad():
 
                 if args.extra_data_type == "metaworld":
@@ -274,10 +276,26 @@ def main(args):
                     else:
                         compute_gif = False
 
-                    compute_metrics_multi(args, self_attention_model, threshold=0.5, compute_gif = compute_gif, epoch = epoch)
-                    compute_metrics_multi(args, self_attention_model, threshold=0.4, compute_gif = compute_gif, epoch = epoch)
-                    compute_metrics_multi(args, self_attention_model, threshold=0.3, compute_gif = compute_gif, epoch = epoch)
+                    compute_metrics_multi(args, ema_model, threshold=0.5, compute_gif = compute_gif, epoch = epoch)
+                    compute_metrics_multi(args, ema_model, threshold=0.4, compute_gif = compute_gif, epoch = epoch)
+                    compute_metrics_multi(args, ema_model, threshold=0.3, compute_gif = compute_gif, epoch = epoch)
+
+                    save_dir = "saved_models"
+                    if not os.path.exists(save_dir):
+                        os.makedirs(save_dir)
+                    save_path = os.path.join(save_dir, experiment_name)
+                    if not os.path.exists(save_path):
+                        os.makedirs(save_path)
+                    save_path = os.path.join(save_path, f"epoch_{epoch}.pth")
+                    save_dict = {
+                        "model": ema_model.state_dict(),
+                        "optimizer": base_optimizer.state_dict(),
+                        "epoch": epoch,
+                        "args": args
+                    }
+                    torch.save(save_dict, save_path)
             ema_model.train()
+            self_attention_model.train()
 
  
  

@@ -381,7 +381,7 @@ def plot_matrix_as_image(matrix, names, set, text, fig_name, epoch):
     # plt.savefig(buf, format='png')
     # buf.seek(0)
     # image = Image.open(buf)
-    wandb.log({f"confusion_matrix/{fig_name}": wandb.Image(fig), "epoch": epoch})
+    wandb.log({f"confusion_matrix/{fig_name}": wandb.Image(fig, caption=f"EPOCH {epoch}")})
     plt.savefig(f"confusion_matrix_{fig_name}.pdf", bbox_inches="tight")
     plt.close(fig)  # Close the figure to free memory
 
@@ -1030,8 +1030,8 @@ def compute_spearman_correlation_multi_annotations(
 
         # 将本task的avg_corr和avg_var记录到wandb
         wandb.log({
-            f"{set_type}_spearman_correlation_thrd_{threshold}/{env_name}_avg_corr": task_avg_corr,
-            f"{set_type}_spearman_correlation_thrd_{threshold}/{env_name}_avg_var": task_avg_var,
+            f"{set_type}_multi_spearman_correlation_thrd_{threshold}/{env_name}_avg_corr": task_avg_corr,
+            f"{set_type}_multi_spearman_correlation_thrd_{threshold}/{env_name}_avg_var": task_avg_var,
             "epoch": epoch})
         
 
@@ -1048,8 +1048,8 @@ def compute_spearman_correlation_multi_annotations(
 
     # 把整体平均也上传wandb
     wandb.log({
-        f"{set_type}_robustness_thrd_{threshold}/overall_avg_correlation_robustness": overall_avg_corr,
-        f"{set_type}_robustness_thrd_{threshold}/overall_avg_variance_robustness": overall_avg_var,
+        f"{set_type}_multi_robustness_thrd_{threshold}/overall_avg_correlation_robustness": overall_avg_corr,
+        f"{set_type}_multi_robustness_thrd_{threshold}/overall_avg_variance_robustness": overall_avg_var,
         "epoch": epoch
     })
     
@@ -1096,7 +1096,8 @@ def generate_rewind_gif(
     device: str = "cuda",
     args=None,
     annotation = None,
-    threshold = 0.5
+    threshold = 0.5,
+    epoch = 0
 ):
 
     # 1) 从 new_task_v2.json 中读取 tasks
@@ -1157,7 +1158,7 @@ def generate_rewind_gif(
                 if i != j:
                     continue
                 for demo_id, video_embedding in enumerate(all_video_embeddings):
-                    compute_rewind_reward(rewind_model=rewind_model, args=args, episode_image_embeddings=video_embedding, lang_embeddings=text_embedding, pdf_path=f"rewind_progress_close_success/{env_video_name}_{demo_id}.png", threshold = threshold)
+                    compute_rewind_reward(rewind_model=rewind_model, args=args, episode_image_embeddings=video_embedding, lang_embeddings=text_embedding, pdf_path=f"rewind_progress_close_success/{env_video_name}_{demo_id}.png", threshold = threshold, epoch = epoch)
 
 if __name__ == "__main__":
     

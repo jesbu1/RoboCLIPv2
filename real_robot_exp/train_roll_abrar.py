@@ -191,29 +191,29 @@ def compute_metrics_multi(args, self_attention_model, threshold, compute_gif = F
         epoch=epoch
     )
 
-    compute_spearman_correlation_from_sequences(
-        all_seqs=all_seqs1,
-        env_names=tasks,
-        set_type="eval",
-        threshold=threshold,
-        epoch=epoch
-    )
+    # compute_spearman_correlation_from_sequences(
+    #     all_seqs=all_seqs1,
+    #     env_names=tasks,
+    #     set_type="eval",
+    #     threshold=threshold,
+    #     epoch=epoch
+    # )
 
-    compute_spearman_correlation_from_sequences(
-        all_seqs=all_seqs2,
-        env_names=tasks,
-        set_type="eval",
-        threshold=threshold,
-        epoch=epoch
-    )
+    # compute_spearman_correlation_from_sequences(
+    #     all_seqs=all_seqs2,
+    #     env_names=tasks,
+    #     set_type="eval",
+    #     threshold=threshold,
+    #     epoch=epoch
+    # )
 
-    compute_spearman_correlation_from_sequences(
-        all_seqs=all_seqs3,
-        env_names=tasks,
-        set_type="eval",
-        threshold=threshold,
-        epoch=epoch
-    )
+    # compute_spearman_correlation_from_sequences(
+    #     all_seqs=all_seqs3,
+    #     env_names=tasks,
+    #     set_type="eval",
+    #     threshold=threshold,
+    #     epoch=epoch
+    # )
 
     compute_spearman_correlation_multi_annotations(
         all_seqs_a=all_seqs1,
@@ -229,17 +229,17 @@ def compute_metrics_multi(args, self_attention_model, threshold, compute_gif = F
     rank_comparison(confusion_matrix_all_fail, confusion_matrix_close_success, confusion_matrix, threshold, epoch=epoch)
 
 
-    # if compute_gif:
-    #     generate_rewind_gif(
-    #         h5_path="eval_rewind/metaworld_dino_embeddings_eval_close_succ_128.h5",
-    #         json_path="new_task_v2.json",
-    #         set_type="eval",
-    #         rewind_model=self_attention_model,
-    #         device="cuda",
-    #         args=args,
-    #         threshold=threshold,
-    #         epoch=epoch
-    #     )
+    if compute_gif:
+        generate_rewind_gif(
+            h5_path="eval_rewind/metaworld_dino_embeddings_eval_close_succ_128.h5",
+            json_path="new_task_v2.json",
+            set_type="eval",
+            rewind_model=self_attention_model,
+            device="cuda",
+            args=args,
+            threshold=threshold,
+            epoch=epoch
+        )
 
 
 
