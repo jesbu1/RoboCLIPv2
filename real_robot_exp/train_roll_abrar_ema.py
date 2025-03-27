@@ -52,11 +52,16 @@ def main(args):
 
     WANDB_ENTITY_NAME = "clvr"
     WANDB_PROJECT_NAME = "roboclip-v2"
+    experiment_name = ""
+    if args.positional_encoding:
+        experiment_name += "_PosEmb"
+    if args.last_frame_pe:
+        experiment_name += "_LastFramePE"
 
     if args.extra_data_type == "metaworld":
-        experiment_name = "NewPE_Crop_MetaWorld" 
+        experiment_name = "_NewPE_Crop_MetaWorld" 
     else: 
-        experiment_name = "RealWorld_Koch"
+        experiment_name = "_RealWorld_Koch"
 
     experiment_name += "_binary_thrd_" + str(args.binary_threshold)
     experiment_name += "_Rewind_ratio_" + str(args.rewind_ratio)
@@ -78,10 +83,7 @@ def main(args):
     if args.subsample_video:
         experiment_name += "_SubVideo"
         experiment_name += "_MaxLen" + str(args.max_length)
-    if args.positional_encoding:
-        experiment_name += "_PosEmb"
-    if args.last_frame_pe:
-        experiment_name += "_LastFramePE"
+
 
     experiment_name += "_View_" + str(args.view)
     experiment_name += "_ExtraDataRatio_" + str(args.extra_data_ratio)
