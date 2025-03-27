@@ -179,7 +179,7 @@ def rank_comparison(cm1, cm2, cm3, threshold=0.5, epoch=0):
 
     avg_close_fail = np.mean(diff_close_fail)
     avg_success_close = np.mean(diff_success_close)
-    avg_total = (avg_close_fail + avg_success_close) / 2
+    avg_total = (avg_close_fail + avg_success_close) / 2 # this is also diag3 - diag1 ???
 
     normed_diff_close_fail = normed_diag2 - normed_diag1
     normed_diff_success_close = normed_diag3 - normed_diag2
