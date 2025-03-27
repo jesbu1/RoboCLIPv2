@@ -72,7 +72,7 @@ def compute_metrics(predictions, targets):
         'f1': f1
     }
 
-def compute_metrics_multi(args, self_attention_model, threshold, compute_gif = False, epoch = None):
+def compute_metrics_multi(args, self_attention_model, threshold, compute_gif = False, epoch = None, one_step = False):
 
     for file in os.listdir("./"):
         if file.endswith(".pkl"):
@@ -84,7 +84,7 @@ def compute_metrics_multi(args, self_attention_model, threshold, compute_gif = F
         rewind_model=self_attention_model,
         cache_path="final_rewind_cache_oxe_pos_end.pkl",
         args = args,
-        one_step = False,
+        one_step = one_step,
         threshold = threshold
     )
     os.remove("final_rewind_cache_oxe_pos_end.pkl")
@@ -97,7 +97,7 @@ def compute_metrics_multi(args, self_attention_model, threshold, compute_gif = F
             cache_path="final_rewind_cache_oxe_pos_end_1.pkl",
             args = args,
             annotation = 1,
-            one_step = False,
+            one_step = one_step,
             threshold = threshold
         )
     os.remove("final_rewind_cache_oxe_pos_end_1.pkl")
@@ -110,7 +110,7 @@ def compute_metrics_multi(args, self_attention_model, threshold, compute_gif = F
         cache_path="final_rewind_cache_oxe_pos_end_2.pkl",
         args = args,
         annotation = 2,
-        one_step = False,
+        one_step = one_step,
         threshold = threshold
     )
     os.remove("final_rewind_cache_oxe_pos_end_2.pkl")
@@ -123,7 +123,7 @@ def compute_metrics_multi(args, self_attention_model, threshold, compute_gif = F
         cache_path="final_rewind_cache_oxe_pos_end_3.pkl",
         args = args,
         annotation = 3,
-        one_step = False,
+        one_step = one_step,
         threshold = threshold
     )
     os.remove("final_rewind_cache_oxe_pos_end_3.pkl")
@@ -135,7 +135,7 @@ def compute_metrics_multi(args, self_attention_model, threshold, compute_gif = F
         rewind_model=self_attention_model,
         cache_path="final_rewind_cache_oxe_pos_end_fail.pkl",
         args = args,
-        one_step = False,
+        one_step = one_step,
         threshold = threshold
     )
     os.remove("final_rewind_cache_oxe_pos_end_fail.pkl")
@@ -147,7 +147,7 @@ def compute_metrics_multi(args, self_attention_model, threshold, compute_gif = F
         rewind_model=self_attention_model,
         cache_path="final_rewind_cache_oxe_pos_end_close_succ.pkl",
         args = args,
-        one_step = False,
+        one_step = one_step,
         threshold = threshold
     )
     os.remove("final_rewind_cache_oxe_pos_end_close_succ.pkl")
@@ -191,30 +191,6 @@ def compute_metrics_multi(args, self_attention_model, threshold, compute_gif = F
         epoch=epoch
     )
 
-    # compute_spearman_correlation_from_sequences(
-    #     all_seqs=all_seqs1,
-    #     env_names=tasks,
-    #     set_type="eval",
-    #     threshold=threshold,
-    #     epoch=epoch
-    # )
-
-    # compute_spearman_correlation_from_sequences(
-    #     all_seqs=all_seqs2,
-    #     env_names=tasks,
-    #     set_type="eval",
-    #     threshold=threshold,
-    #     epoch=epoch
-    # )
-
-    # compute_spearman_correlation_from_sequences(
-    #     all_seqs=all_seqs3,
-    #     env_names=tasks,
-    #     set_type="eval",
-    #     threshold=threshold,
-    #     epoch=epoch
-    # )
-
     compute_spearman_correlation_multi_annotations(
         all_seqs_a=all_seqs1,
         all_seqs_b=all_seqs2,
@@ -238,7 +214,22 @@ def compute_metrics_multi(args, self_attention_model, threshold, compute_gif = F
             device="cuda",
             args=args,
             threshold=threshold,
-            epoch=epoch
+            epoch=epoch,
+            suboptimal_type="close_success",
+            one_step=one_step
+        )
+
+        generate_rewind_gif(
+            h5_path="eval_rewind/metaworld_dino_embeddings_eval_all_fail_128.h5",
+            json_path="new_task_v2.json",
+            set_type="eval",
+            rewind_model=self_attention_model,
+            device="cuda",
+            args=args,
+            threshold=threshold,
+            epoch=epoch,
+            suboptimal_type="all_fail",
+            one_step=one_step
         )
 
 

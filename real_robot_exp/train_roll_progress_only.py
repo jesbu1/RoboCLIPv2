@@ -734,158 +734,158 @@ def main(args):
                     plot_progress(h5_train_eval_file, "train", self_attention_model, args)
                     plot_progress(h5_eval_file, "eval", self_attention_model, args)
 
-                    for file in os.listdir("./"):
-                        if file.endswith(".pkl"):
-                            os.remove(file)
-                    confusion_matrix, all_seqs, tasks, text_list = generate_rewind_data(
-                        h5_path="eval_rewind/metaworld_dino_embeddings_eval.h5",
-                        json_path="new_task_v2.json",
-                        set_type="eval",
-                        rewind_model=self_attention_model,
-                        cache_path="final_rewind_cache_oxe_pos_end.pkl",
-                        args = args,
-                        one_step = True
-                    )
-                    os.remove("final_rewind_cache_oxe_pos_end.pkl")
+                #     for file in os.listdir("./"):
+                #         if file.endswith(".pkl"):
+                #             os.remove(file)
+                #     confusion_matrix, all_seqs, tasks, text_list = generate_rewind_data(
+                #         h5_path="eval_rewind/metaworld_dino_embeddings_eval.h5",
+                #         json_path="new_task_v2.json",
+                #         set_type="eval",
+                #         rewind_model=self_attention_model,
+                #         cache_path="final_rewind_cache_oxe_pos_end.pkl",
+                #         args = args,
+                #         one_step = True
+                #     )
+                #     os.remove("final_rewind_cache_oxe_pos_end.pkl")
 
-                    confusion_matrix_1, all_seqs1, _, _ = generate_rewind_data(
-                            h5_path="eval_rewind/metaworld_dino_embeddings_eval.h5",
-                            json_path="new_task_v2.json",
-                            set_type="eval",
-                            rewind_model=self_attention_model,
-                            cache_path="final_rewind_cache_oxe_pos_end_1.pkl",
-                            args = args,
-                            annotation = 1,
-                            one_step = True
-                        )
-                    os.remove("final_rewind_cache_oxe_pos_end_1.pkl")
+                #     confusion_matrix_1, all_seqs1, _, _ = generate_rewind_data(
+                #             h5_path="eval_rewind/metaworld_dino_embeddings_eval.h5",
+                #             json_path="new_task_v2.json",
+                #             set_type="eval",
+                #             rewind_model=self_attention_model,
+                #             cache_path="final_rewind_cache_oxe_pos_end_1.pkl",
+                #             args = args,
+                #             annotation = 1,
+                #             one_step = True
+                #         )
+                #     os.remove("final_rewind_cache_oxe_pos_end_1.pkl")
 
-                    confusion_matrix_2, all_seqs2, _, _ = generate_rewind_data(
-                        h5_path="eval_rewind/metaworld_dino_embeddings_eval.h5",
-                        json_path="new_task_v2.json",
-                        set_type="eval",
-                        rewind_model=self_attention_model,
-                        cache_path="final_rewind_cache_oxe_pos_end_2.pkl",
-                        args = args,
-                        annotation = 2,
-                        one_step = True
-                    )
-                    os.remove("final_rewind_cache_oxe_pos_end_2.pkl")                    
+                #     confusion_matrix_2, all_seqs2, _, _ = generate_rewind_data(
+                #         h5_path="eval_rewind/metaworld_dino_embeddings_eval.h5",
+                #         json_path="new_task_v2.json",
+                #         set_type="eval",
+                #         rewind_model=self_attention_model,
+                #         cache_path="final_rewind_cache_oxe_pos_end_2.pkl",
+                #         args = args,
+                #         annotation = 2,
+                #         one_step = True
+                #     )
+                #     os.remove("final_rewind_cache_oxe_pos_end_2.pkl")                    
 
-                    confusion_matrix_3, all_seqs3, _, _ = generate_rewind_data(
-                        h5_path="eval_rewind/metaworld_dino_embeddings_eval.h5",
-                        json_path="new_task_v2.json",
-                        set_type="eval",
-                        rewind_model=self_attention_model,
-                        cache_path="final_rewind_cache_oxe_pos_end_3.pkl",
-                        args = args,
-                        annotation = 3,
-                        one_step = True
-                    )
-                    os.remove("final_rewind_cache_oxe_pos_end_3.pkl")
+                #     confusion_matrix_3, all_seqs3, _, _ = generate_rewind_data(
+                #         h5_path="eval_rewind/metaworld_dino_embeddings_eval.h5",
+                #         json_path="new_task_v2.json",
+                #         set_type="eval",
+                #         rewind_model=self_attention_model,
+                #         cache_path="final_rewind_cache_oxe_pos_end_3.pkl",
+                #         args = args,
+                #         annotation = 3,
+                #         one_step = True
+                #     )
+                #     os.remove("final_rewind_cache_oxe_pos_end_3.pkl")
 
-                    confusion_matrix_all_fail, _, _, _ = generate_rewind_data(
-                        h5_path="eval_rewind/metaworld_dino_embeddings_eval_fail.h5",
-                        json_path="new_task_v2.json",
-                        set_type="eval",
-                        rewind_model=self_attention_model,
-                        cache_path="final_rewind_cache_oxe_pos_end_fail.pkl",
-                        args = args,
-                        one_step = True
-                    )
-                    os.remove("final_rewind_cache_oxe_pos_end_fail.pkl")
+                #     confusion_matrix_all_fail, _, _, _ = generate_rewind_data(
+                #         h5_path="eval_rewind/metaworld_dino_embeddings_eval_fail.h5",
+                #         json_path="new_task_v2.json",
+                #         set_type="eval",
+                #         rewind_model=self_attention_model,
+                #         cache_path="final_rewind_cache_oxe_pos_end_fail.pkl",
+                #         args = args,
+                #         one_step = True
+                #     )
+                #     os.remove("final_rewind_cache_oxe_pos_end_fail.pkl")
 
-                    confusion_matrix_close_success, _, _, _ = generate_rewind_data(
-                        h5_path="eval_rewind/metaworld_dino_embeddings_eval_close_succ.h5",
-                        json_path="new_task_v2.json",
-                        set_type="eval",
-                        rewind_model=self_attention_model,
-                        cache_path="final_rewind_cache_oxe_pos_end_close_succ.pkl",
-                        args = args,
-                        one_step = True
-                    )
-                    os.remove("final_rewind_cache_oxe_pos_end_close_succ.pkl")
-
-
-                    compute_pearson_correlation_from_sequences(
-                        all_seqs=all_seqs,
-                        set_type="eval",
-                        project_name="roboclip-v2",
-                        env_names=tasks
-                    )
+                #     confusion_matrix_close_success, _, _, _ = generate_rewind_data(
+                #         h5_path="eval_rewind/metaworld_dino_embeddings_eval_close_succ.h5",
+                #         json_path="new_task_v2.json",
+                #         set_type="eval",
+                #         rewind_model=self_attention_model,
+                #         cache_path="final_rewind_cache_oxe_pos_end_close_succ.pkl",
+                #         args = args,
+                #         one_step = True
+                #     )
+                #     os.remove("final_rewind_cache_oxe_pos_end_close_succ.pkl")
 
 
-                    plot_confusion_matrix_from_predictions(
-                        predicted_rewards=confusion_matrix,
-                        task_names=tasks,
-                        set_type="eval",
-                        text_instructions=text_list,
-                        fig_name="Rewind" 
-                    )
+                #     compute_pearson_correlation_from_sequences(
+                #         all_seqs=all_seqs,
+                #         set_type="eval",
+                #         project_name="roboclip-v2",
+                #         env_names=tasks
+                #     )
 
 
-                    # # ============ 4) 计算 MSE ============
-                    compute_mse_from_sequences(
-                        all_seqs=all_seqs,
-                        env_names=tasks,
-                        set_type="eval"
-                    )
-
-                    # ============ 5) 计算 Spearman 相关系数 ============
-                    compute_spearman_correlation_from_sequences(
-                        all_seqs=all_seqs,
-                        env_names=tasks,
-                        set_type="eval"
-                    )
-
-                    compute_spearman_correlation_from_sequences(
-                        all_seqs=all_seqs1,
-                        env_names=tasks,
-                        set_type="eval"
-                    )
-
-                    compute_spearman_correlation_from_sequences(
-                        all_seqs=all_seqs2,
-                        env_names=tasks,
-                        set_type="eval"
-                    )
-
-                    compute_spearman_correlation_from_sequences(
-                        all_seqs=all_seqs3,
-                        env_names=tasks,
-                        set_type="eval"
-                    )
-
-                    compute_spearman_correlation_multi_annotations(
-                        all_seqs_a=all_seqs1,
-                        all_seqs_b=all_seqs2,
-                        all_seqs_c=all_seqs3,
-                        all_seqs_d=all_seqs,
-                        env_names=tasks,
-                        set_type="eval"
-                    )
-
-                    rank_comparison(confusion_matrix_all_fail, confusion_matrix_close_success, confusion_matrix)
+                #     plot_confusion_matrix_from_predictions(
+                #         predicted_rewards=confusion_matrix,
+                #         task_names=tasks,
+                #         set_type="eval",
+                #         text_instructions=text_list,
+                #         fig_name="Rewind" 
+                #     )
 
 
-                    if epoch % 2 == 1:
+                #     # # ============ 4) 计算 MSE ============
+                #     compute_mse_from_sequences(
+                #         all_seqs=all_seqs,
+                #         env_names=tasks,
+                #         set_type="eval"
+                #     )
 
-                        generate_rewind_gif(
-                            h5_path="eval_rewind/metaworld_dino_embeddings_eval_close_succ_128.h5",
-                            json_path="new_task_v2.json",
-                            set_type="eval",
-                            rewind_model=self_attention_model,
-                            device="cuda",
-                            args=args,
-                        )
+                #     # ============ 5) 计算 Spearman 相关系数 ============
+                #     compute_spearman_correlation_from_sequences(
+                #         all_seqs=all_seqs,
+                #         env_names=tasks,
+                #         set_type="eval"
+                #     )
 
-                else:
+                #     compute_spearman_correlation_from_sequences(
+                #         all_seqs=all_seqs1,
+                #         env_names=tasks,
+                #         set_type="eval"
+                #     )
+
+                #     compute_spearman_correlation_from_sequences(
+                #         all_seqs=all_seqs2,
+                #         env_names=tasks,
+                #         set_type="eval"
+                #     )
+
+                #     compute_spearman_correlation_from_sequences(
+                #         all_seqs=all_seqs3,
+                #         env_names=tasks,
+                #         set_type="eval"
+                #     )
+
+                #     compute_spearman_correlation_multi_annotations(
+                #         all_seqs_a=all_seqs1,
+                #         all_seqs_b=all_seqs2,
+                #         all_seqs_c=all_seqs3,
+                #         all_seqs_d=all_seqs,
+                #         env_names=tasks,
+                #         set_type="eval"
+                #     )
+
+                #     rank_comparison(confusion_matrix_all_fail, confusion_matrix_close_success, confusion_matrix)
 
 
-                    plot_progress(h5_train_eval_file, "train", self_attention_model, args)
-                    plot_progress(h5_eval_file, "eval", self_attention_model, args)
-                    plot_confusion_matrix(h5_file = h5_train_eval_file, set = "train", self_attention_model = self_attention_model, args = args)
-                    plot_confusion_matrix(h5_file = h5_eval_file, set = "eval", self_attention_model = self_attention_model, args = args)
+                #     if epoch % 2 == 1:
+
+                #         generate_rewind_gif(
+                #             h5_path="eval_rewind/metaworld_dino_embeddings_eval_close_succ_128.h5",
+                #             json_path="new_task_v2.json",
+                #             set_type="eval",
+                #             rewind_model=self_attention_model,
+                #             device="cuda",
+                #             args=args,
+                #         )
+
+                # else:
+
+
+                #     plot_progress(h5_train_eval_file, "train", self_attention_model, args)
+                #     plot_progress(h5_eval_file, "eval", self_attention_model, args)
+                #     plot_confusion_matrix(h5_file = h5_train_eval_file, set = "train", self_attention_model = self_attention_model, args = args)
+                #     plot_confusion_matrix(h5_file = h5_eval_file, set = "eval", self_attention_model = self_attention_model, args = args)
 
 
 

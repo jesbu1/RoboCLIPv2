@@ -48,7 +48,7 @@ def normalize_embeddings(embeddings, return_tensor=True):
     else:
         return normalized_embeddings.detach().cpu().numpy()
 
-def plot_matrix_as_image(matrix, names, set, text, prob = False, org_progress = False):
+def plot_matrix_as_image(matrix, names, set, text, prob = False, org_progress = False, epoch = None):
     # Create a figure and axis
     # only keep 2 decimal points
     matrix = np.round(matrix, 2)
@@ -88,11 +88,11 @@ def plot_matrix_as_image(matrix, names, set, text, prob = False, org_progress = 
     # buf.seek(0)
     # image = Image.open(buf)
     if prob:
-        wandb.log({f"confusion_matrix_same_class_prob/{set}_prob_confusion_matrix": wandb.Image(fig)})
+        wandb.log({f"confusion_matrix_same_class_prob/{set}_prob_confusion_matrix": wandb.Image(fig, caption=f"Epoch {epoch}")})
     elif org_progress:
-        wandb.log({f"confusion_matrix_org_progress_no_two_step/{set}_original_progress_confusion_matrix": wandb.Image(fig)})
+        wandb.log({f"confusion_matrix_org_progress_no_two_step/{set}_original_progress_confusion_matrix": wandb.Image(fig, caption=f"Epoch {epoch}")})
     else:
-        wandb.log({f"confusion_matrix/{set}_confusion_matrix": wandb.Image(fig)})
+        wandb.log({f"confusion_matrix/{set}_confusion_matrix": wandb.Image(fig, caption=f"Epoch {epoch}")})
     # plt.savefig(f"confusion_matrix_{set}.pdf", bbox_inches="tight")
     plt.close(fig)  # Close the figure to free memory
 
@@ -101,7 +101,7 @@ def plot_matrix_as_image(matrix, names, set, text, prob = False, org_progress = 
 
 
 
-def plot_confusion_matrix(h5_file, set, self_attention_model, args):
+def plot_confusion_matrix(h5_file, set, self_attention_model, args, epoch = None):
     device = next(self_attention_model.parameters()).device
 
     keys = list(h5_file.keys())
@@ -163,7 +163,7 @@ def plot_confusion_matrix(h5_file, set, self_attention_model, args):
     #     pred_two_step_prob_list = np.array(pred_two_step_prob_list)
     #     img = plot_matrix_as_image(predicted_progress_row, eval_envs, set, text_list, prob = False)
     #     img1 = plot_matrix_as_image(pred_two_step_prob_list, eval_envs, set, text_list, prob = True)
-    img2 = plot_matrix_as_image(pred_org_progress_list, eval_envs, set, text_list, prob = False, org_progress = True)
+    img2 = plot_matrix_as_image(pred_org_progress_list, eval_envs, set, text_list, prob = False, org_progress = True, epoch = epoch)
  
 
 

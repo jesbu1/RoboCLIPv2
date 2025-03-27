@@ -276,9 +276,9 @@ def main(args):
                     else:
                         compute_gif = False
 
-                    compute_metrics_multi(args, ema_model, threshold=0.5, compute_gif = compute_gif, epoch = epoch)
-                    compute_metrics_multi(args, ema_model, threshold=0.4, compute_gif = compute_gif, epoch = epoch)
-                    compute_metrics_multi(args, ema_model, threshold=0.3, compute_gif = compute_gif, epoch = epoch)
+                    compute_metrics_multi(args, ema_model, threshold=0.5, compute_gif = compute_gif, epoch = epoch, one_step=False)
+                    compute_metrics_multi(args, ema_model, threshold=0.4, compute_gif = compute_gif, epoch = epoch, one_step=False)
+                    compute_metrics_multi(args, ema_model, threshold=0.3, compute_gif = compute_gif, epoch = epoch, one_step=False)
 
                     save_dir = "saved_models"
                     if not os.path.exists(save_dir):

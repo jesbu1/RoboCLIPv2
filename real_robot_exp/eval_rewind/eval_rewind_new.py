@@ -35,7 +35,7 @@ DINO_BATCH_SIZE = 128
 MAX_NUM_FRAMES_PER_EPISODE = 128
 
 
-def animate_incremental(frames_tensor, incremental_rewards, fps=15, fig_path="ax2_plot_rewind.png", epoch=0):
+def animate_incremental(frames_tensor, incremental_rewards, fps=15, fig_path="ax2_plot_rewind.png", epoch=0, suboptimal_type="all_fail"):
     """
     Create an animation that shows frames on the left and the incremental reward curve on the right.
 
@@ -139,6 +139,7 @@ def animate_incremental(frames_tensor, incremental_rewards, fps=15, fig_path="ax
     buf.seek(0)  # 将光标移到缓冲区开头
     pil_image = Image.open(buf)
     # 4. 将缓冲区数据作为图片添加到 wandb
+    fig_path = fig_path.split(".")[0] + f"_{suboptimal_type}"
     wandb.log({fig_path: wandb.Image(pil_image),"epoch" : epoch}, step=epoch)
 
     # ---------------------------------------------------------------------
@@ -395,7 +396,8 @@ def normalize_embeddings(embeddings, return_tensor=True):
     else:
         return normalized_embeddings.detach().cpu().numpy()
 
-def compute_rewind_reward(rewind_model, args, episode_image_embeddings, lang_embeddings, threshold=0.5, pdf_path="incremental_reward_rewind.png", one_step = True, epoch=0):
+def compute_rewind_reward(rewind_model, args, episode_image_embeddings, lang_embeddings, threshold=0.5, pdf_path="incremental_reward_rewind.png", one_step = False, epoch=0, suboptimal_type = "all_fail"):
+    
 
     reward_seq = []
 
@@ -428,7 +430,7 @@ def compute_rewind_reward(rewind_model, args, episode_image_embeddings, lang_emb
         reward_seq.append(video_reward)
         # print(reward_seq)
 
-    gif_buffer = animate_incremental(None, reward_seq, fps=15, fig_path=pdf_path, epoch=epoch)
+    gif_buffer = animate_incremental(None, reward_seq, fps=15, fig_path=pdf_path, epoch=epoch, suboptimal_type=suboptimal_type)
     # with open(gif_path, 'wb') as f:
     #     f.write(gif_buffer.getvalue())
     # print(f"Saved incremental reversed GIF to {gif_path}")
@@ -1097,7 +1099,9 @@ def generate_rewind_gif(
     args=None,
     annotation = None,
     threshold = 0.5,
-    epoch = 0
+    epoch = 0,
+    suboptimal_type = "close_success",
+    one_step = False
 ):
 
     # 1) 从 new_task_v2.json 中读取 tasks
@@ -1158,150 +1162,14 @@ def generate_rewind_gif(
                 if i != j:
                     continue
                 for demo_id, video_embedding in enumerate(all_video_embeddings):
-                    compute_rewind_reward(rewind_model=rewind_model, args=args, episode_image_embeddings=video_embedding, lang_embeddings=text_embedding, pdf_path=f"rewind_progress_close_success/{env_video_name}_{demo_id}.png", threshold = threshold, epoch = epoch)
-
-if __name__ == "__main__":
-    
-    # rewind_model, model_args = load_rewind_model(ckpt_path="/scr/yusenluo/RoboCLIP/visualization/decoder_only/saved_models_final/Crop_MetaWorld_binary_thrd_0.5_Rewind_ratio_0.5_MiniLM_AddOpenXData_ReWind_SubVideo_MaxLen16_CosScheduler_ClipGrad_View_side_ExtraDataRatio_0.2_epochs_20_lr_0.0001_progress_loss_weight_2.0_weighted_mse/epoch_15.pth")
-    rewind_model, model_args = load_rewind_model(ckpt_path="/scr/yusenluo/RoboCLIP/visualization/decoder_only/NewPE_Crop_MetaWorld_binary_thrd_0.5_Rewind_ratio_0.5_MiniLM_AddOpenXData_ReWind_SubVideo_MaxLen16_PosEmb_CosScheduler_ClipGrad_View_side_ExtraDataRatio_0.2_epochs_20_lr_0.0001_progress_loss_weight_2.0/epoch_14.pth")
-    print(model_args)
-    # h5_eval_file = h5py.File("/scr/yusenluo/RoboCLIP/visualization/decoder_only/metaworld_embedding_1_demo_dataset_v2.h5", "r")
-     # ============ 1) 生成 NxN 预测矩阵 =============
-    confusion_matrix, all_seqs, tasks, text_list = generate_rewind_data(
-        h5_path="/scr/yusenluo/RoboCLIP/visualization/decoder_only/metaworld_dino_embeddings_eval.h5",
-        json_path="new_task_v2.json",
-        set_type="eval",
-        rewind_model=rewind_model,
-        cache_path="final_rewind_cache_oxe_pos_end.pkl",
-        args = model_args,
-        # One_step=args.
-    )
-
-    confusion_matrix_1, all_seqs1, _, _ = generate_rewind_data(
-        h5_path="/scr/yusenluo/RoboCLIP/visualization/decoder_only/metaworld_dino_embeddings_eval.h5",
-        json_path="new_task_v2.json",
-        set_type="eval",
-        rewind_model=rewind_model,
-        cache_path="final_rewind_cache_oxe_pos_end_1.pkl",
-        args = model_args,
-        annotation = 1,
-        # One_step=args.
-    )
-
-    confusion_matrix_2, all_seqs2, _, _ = generate_rewind_data(
-        h5_path="/scr/yusenluo/RoboCLIP/visualization/decoder_only/metaworld_dino_embeddings_eval.h5",
-        json_path="new_task_v2.json",
-        set_type="eval",
-        rewind_model=rewind_model,
-        cache_path="final_rewind_cache_oxe_pos_end_2.pkl",
-        args = model_args,
-        annotation = 2,
-        # One_step=args.
-    )
-
-    confusion_matrix_3, all_seqs3, _, _ = generate_rewind_data(
-        h5_path="/scr/yusenluo/RoboCLIP/visualization/decoder_only/metaworld_dino_embeddings_eval.h5",
-        json_path="new_task_v2.json",
-        set_type="eval",
-        rewind_model=rewind_model,
-        cache_path="final_rewind_cache_oxe_pos_end_3.pkl",
-        args = model_args,
-        annotation = 3,
-        # One_step=args.
-    )
-
-
-    confusion_matrix_all_fail, _, _, _ = generate_rewind_data(
-        h5_path="/scr/yusenluo/RoboCLIP/visualization/decoder_only/metaworld_dino_embeddings_eval_fail.h5",
-        json_path="new_task_v2.json",
-        set_type="eval",
-        rewind_model=rewind_model,
-        cache_path="final_rewind_cache_oxe_pos_end_fail.pkl",
-        args = model_args,
-        # One_step=args.
-    )
-
-    confusion_matrix_close_success, _, _, _ = generate_rewind_data(
-        h5_path="/scr/yusenluo/RoboCLIP/visualization/decoder_only/metaworld_dino_embeddings_eval_close_succ.h5",
-        json_path="new_task_v2.json",
-        set_type="eval",
-        rewind_model=rewind_model,
-        cache_path="final_rewind_cache_oxe_pos_end_close_succ.pkl",
-        args = model_args,
-        # One_step=args.
-    )
-
-
-
-    wandb.init(project="roboclip-v2", name=f"eval_rewind_new")
-    
-    generate_rewind_gif(
-        h5_path="/scr/yusenluo/RoboCLIP/visualization/decoder_only/metaworld_dino_embeddings_eval_close_succ_128.h5",
-        json_path="new_task_v2.json",
-        set_type="eval",
-        rewind_model=rewind_model,
-        device="cuda",
-        args=model_args,
-    )
-
-    # ============ 2) 计算相关(只用对角线) ============
-    compute_pearson_correlation_from_sequences(
-        all_seqs=all_seqs,
-        set_type="eval",
-        project_name="roboclip-v2",
-        env_names=tasks
-    )
-
-    # ============ 3) 绘制混淆矩阵 =============
-    plot_confusion_matrix_from_predictions(
-        predicted_rewards=confusion_matrix,
-        task_names=tasks,
-        set_type="eval",
-        text_instructions=text_list,
-        fig_name="Rewind" 
-    )
-
-
-    # # ============ 4) 计算 MSE ============
-    compute_mse_from_sequences(
-        all_seqs=all_seqs,
-        env_names=tasks,
-        set_type="eval"
-    )
-
-    # ============ 5) 计算 Spearman 相关系数 ============
-    compute_spearman_correlation_from_sequences(
-        all_seqs=all_seqs,
-        env_names=tasks,
-        set_type="eval"
-    )
-
-    compute_spearman_correlation_from_sequences(
-        all_seqs=all_seqs1,
-        env_names=tasks,
-        set_type="eval"
-    )
-
-    compute_spearman_correlation_from_sequences(
-        all_seqs=all_seqs2,
-        env_names=tasks,
-        set_type="eval"
-    )
-
-    compute_spearman_correlation_from_sequences(
-        all_seqs=all_seqs3,
-        env_names=tasks,
-        set_type="eval"
-    )
-
-    compute_spearman_correlation_multi_annotations(
-        all_seqs_a=all_seqs1,
-        all_seqs_b=all_seqs2,
-        all_seqs_c=all_seqs3,
-        all_seqs_d=all_seqs,
-        env_names=tasks,
-        set_type="eval"
-    )
-
-    rank_comparison(confusion_matrix_all_fail, confusion_matrix_close_success, confusion_matrix)
-    wandb.finish()
+                    compute_rewind_reward(
+                        rewind_model=rewind_model, 
+                        args=args, 
+                        episode_image_embeddings=video_embedding, 
+                        lang_embeddings=text_embedding, 
+                        pdf_path=f"rewind_progress_{suboptimal_type}/{env_video_name}_{demo_id}.png", 
+                        threshold = threshold, 
+                        epoch = epoch, 
+                        suboptimal_type = suboptimal_type,
+                        one_step=one_step,
+                        )
