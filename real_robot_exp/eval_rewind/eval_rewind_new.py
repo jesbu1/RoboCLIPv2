@@ -167,6 +167,27 @@ def rank_comparison(cm1, cm2, cm3, threshold=0.5, epoch=0):
     diag2 = np.diag(cm2)
     diag3 = np.diag(cm3)
 
+    total_max = np.maximum(diag1, np.maximum(diag2, diag3))
+    total_min = np.minimum(diag1, np.minimum(diag2, diag3))
+
+    normed_diag1 = (diag1 - total_min) / (total_max - total_min)
+    normed_diag2 = (diag2 - total_min) / (total_max - total_min)
+    normed_diag3 = (diag3 - total_min) / (total_max - total_min)
+
+    diff_close_fail = diag2 - diag1 # difference close_succ - all_fail
+    diff_success_close = diag3 - diag2 # difference success - close_succ
+
+    avg_close_fail = np.mean(diff_close_fail)
+    avg_success_close = np.mean(diff_success_close)
+    avg_total = (avg_close_fail + avg_success_close) / 2
+
+    normed_diff_close_fail = normed_diag2 - normed_diag1
+    normed_diff_success_close = normed_diag3 - normed_diag2
+
+    normed_avg_close_fail = np.mean(normed_diff_close_fail)
+    normed_avg_success_close = np.mean(normed_diff_success_close)
+    normed_avg_total = (normed_avg_close_fail + normed_avg_success_close) / 2
+
     num_tasks = len(diag1)
 
     # ranks[i, j] 表示第 i 个任务下，第 j 个矩阵的排名(1/2/3)
@@ -262,6 +283,15 @@ def rank_comparison(cm1, cm2, cm3, threshold=0.5, epoch=0):
 
         # 新增 Spearman 相关系数(平均)
         f"Thrd_{threshold}_Spearman Average (GT=[3,2,1])": float(spearman_avg),
+
+        f"no_norm_self_collected_{threshold}/avg_close_fail_diff": avg_close_fail,
+        f"no_norm_self_collected_{threshold}/avg_success_close_diff": avg_success_close,
+        f"no_norm_self_collected_{threshold}/avg_total_diff": avg_total,
+
+        f"norm_self_collected_{threshold}/avg_close_fail_diff": normed_avg_close_fail,
+        f"norm_self_collected_{threshold}/avg_success_close_diff": normed_avg_success_close,
+        f"norm_self_collected_{threshold}/avg_total_diff": normed_avg_total,
+
         "epoch": epoch
     })
     
@@ -507,8 +537,10 @@ def generate_rewind_data(
 
         def save_cache():
             """将 cache_dict 写回 pkl 文件"""
-            with open(cache_path, "wb") as cf:
-                pickle.dump(cache_dict, cf)
+            # not doing anythin
+            pass
+            # with open(cache_path, "wb") as cf:
+            #     pickle.dump(cache_dict, cf)
 
         # 5) 遍历所有 (i, j)
         for i, env_video_name in enumerate(tasks):

@@ -91,7 +91,7 @@ def main(args):
         experiment_name += "_weighted_mse"
 
     experiment_name = "OneStep_" + experiment_name
-    
+
     if args.extra_data_type == "metaworld":
         group_name = "ProgressOnlyTest"
     else:
@@ -102,7 +102,7 @@ def main(args):
     
 
     # group_name = "Dino_Koch_v2"
-    group_name = args.extra_data_type + "_NewAblate_" + group_name
+    group_name = "EMA_OneStep_" + args.extra_data_type 
     run = wandb.init(
         entity=WANDB_ENTITY_NAME,
         project=WANDB_PROJECT_NAME,

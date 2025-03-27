@@ -74,9 +74,9 @@ def compute_metrics(predictions, targets):
 
 def compute_metrics_multi(args, self_attention_model, threshold, compute_gif = False, epoch = None, one_step = False):
 
-    for file in os.listdir("./"):
-        if file.endswith(".pkl"):
-            os.remove(file)
+    # for file in os.listdir("./"):
+    #     if file.endswith(".pkl"):
+    #         os.remove(file)
     confusion_matrix, all_seqs, tasks, text_list = generate_rewind_data(
         h5_path="eval_rewind/metaworld_dino_embeddings_eval.h5",
         json_path="new_task_v2.json",
@@ -87,7 +87,7 @@ def compute_metrics_multi(args, self_attention_model, threshold, compute_gif = F
         one_step = one_step,
         threshold = threshold
     )
-    os.remove("final_rewind_cache_oxe_pos_end.pkl")
+    # os.remove("final_rewind_cache_oxe_pos_end.pkl")
 
     confusion_matrix_1, all_seqs1, _, _ = generate_rewind_data(
             h5_path="eval_rewind/metaworld_dino_embeddings_eval.h5",
@@ -100,7 +100,7 @@ def compute_metrics_multi(args, self_attention_model, threshold, compute_gif = F
             one_step = one_step,
             threshold = threshold
         )
-    os.remove("final_rewind_cache_oxe_pos_end_1.pkl")
+    # os.remove("final_rewind_cache_oxe_pos_end_1.pkl")
 
     confusion_matrix_2, all_seqs2, _, _ = generate_rewind_data(
         h5_path="eval_rewind/metaworld_dino_embeddings_eval.h5",
@@ -113,7 +113,7 @@ def compute_metrics_multi(args, self_attention_model, threshold, compute_gif = F
         one_step = one_step,
         threshold = threshold
     )
-    os.remove("final_rewind_cache_oxe_pos_end_2.pkl")
+    # os.remove("final_rewind_cache_oxe_pos_end_2.pkl")
 
     confusion_matrix_3, all_seqs3, _, _ = generate_rewind_data(
         h5_path="eval_rewind/metaworld_dino_embeddings_eval.h5",
@@ -126,7 +126,7 @@ def compute_metrics_multi(args, self_attention_model, threshold, compute_gif = F
         one_step = one_step,
         threshold = threshold
     )
-    os.remove("final_rewind_cache_oxe_pos_end_3.pkl")
+    # os.remove("final_rewind_cache_oxe_pos_end_3.pkl")
 
     confusion_matrix_all_fail, _, _, _ = generate_rewind_data(
         h5_path="eval_rewind/metaworld_dino_embeddings_eval_fail.h5",
@@ -138,7 +138,7 @@ def compute_metrics_multi(args, self_attention_model, threshold, compute_gif = F
         one_step = one_step,
         threshold = threshold
     )
-    os.remove("final_rewind_cache_oxe_pos_end_fail.pkl")
+    # os.remove("final_rewind_cache_oxe_pos_end_fail.pkl")
 
     confusion_matrix_close_success, _, _, _ = generate_rewind_data(
         h5_path="eval_rewind/metaworld_dino_embeddings_eval_close_succ.h5",
@@ -150,7 +150,7 @@ def compute_metrics_multi(args, self_attention_model, threshold, compute_gif = F
         one_step = one_step,
         threshold = threshold
     )
-    os.remove("final_rewind_cache_oxe_pos_end_close_succ.pkl")
+    # os.remove("final_rewind_cache_oxe_pos_end_close_succ.pkl")
 
 
     compute_pearson_correlation_from_sequences(

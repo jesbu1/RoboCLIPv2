@@ -93,17 +93,17 @@ def main(args):
         experiment_name += "_weighted_mse"
 
     experiment_name = "TwoStep_" + experiment_name
-    if args.extra_data_type == "metaworld":
-        group_name = "EMA_newlog_2step_Crop_MetaWorldNew"
-    else:
-        group_name = "RealWorld_Koch"
+    # if args.extra_data_type == "metaworld":
+    #     group_name = "EMA_newlog_2step_Crop_MetaWorldNew"
+    # else:
+    #     group_name = "RealWorld_Koch"
     # get today date
 
 
     
 
     # group_name = "Dino_Koch_v2"
-    group_name = args.extra_data_type + "_NewAblate_" + group_name 
+    group_name = "EMA_TwoStep_" + args.extra_data_type 
     run = wandb.init(
         entity=WANDB_ENTITY_NAME,
         project=WANDB_PROJECT_NAME,
