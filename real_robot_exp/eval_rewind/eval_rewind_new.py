@@ -189,7 +189,7 @@ def rank_comparison(cm1, cm2, cm3, threshold=0.5, epoch=0):
         ranks[i, sorted_indices[2]] = 1  # 最大值 => rank 1
 
         # 检查“GT 排名”条件： cm1 < cm2 < cm3
-        if d1 <= d2 < d3:
+        if d1 < d2 < d3:
             gt_count += 1
 
     # 3. 计算平均排名 (axis=0 => 对每列求平均)
