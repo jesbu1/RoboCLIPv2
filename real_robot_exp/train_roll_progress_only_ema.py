@@ -90,6 +90,7 @@ def main(args):
     if args.weighted_mse:
         experiment_name += "_weighted_mse"
 
+    experiment_name = "OneStep_" + experiment_name
     
     if args.extra_data_type == "metaworld":
         group_name = "ProgressOnlyTest"
