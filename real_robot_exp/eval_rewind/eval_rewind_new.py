@@ -150,7 +150,7 @@ def animate_incremental(frames_tensor, incremental_rewards, fps=15, fig_path="ax
 
 
 
-def rank_comparison(cm1, cm2, cm3, threshold=0.5, epoch=0):
+def rank_comparison(cm1, cm2, cm3, tasks, threshold=0.5, epoch=0):
     """
     只比较混淆矩阵对角线上的值 (每个任务的正确预测数)，
     给出每个矩阵在各任务上的排名(1=最好,3=最差)，
@@ -187,6 +187,12 @@ def rank_comparison(cm1, cm2, cm3, threshold=0.5, epoch=0):
     normed_avg_close_fail = np.mean(normed_diff_close_fail)
     normed_avg_success_close = np.mean(normed_diff_success_close)
     normed_avg_total = (normed_avg_close_fail + normed_avg_success_close) / 2
+
+    for i, env_name in enumerate(tasks):
+        wandb.log({f"""suboptimal_reward_{threshold}/{env_name}_all_fail""": diag1[i], f"""suboptimal_reward_{threshold}/{env_name}_close_success""": diag2[i], f"""suboptimal_reward_{threshold}/{env_name}_success""": diag3[i], "epoch": epoch})
+        wandb.log({f"""no_norm_self_collected_{threshold}/{env_name}_close_fail_difference""": diff_close_fail[i], f"""no_norm_self_collected_{threshold}/{env_name}_success_close_difference""": diff_success_close[i], f"""no_norm_self_collected_{threshold}/{env_name}_avg_diff""": avg_total[i],  "epoch": epoch})
+        wandb.log({f"""norm_self_collected_{threshold}/{env_name}_close_fail_difference""": normed_avg_close_fail[i], f"""norm_self_collected_{threshold}/{env_name}_success_close_difference""": normed_avg_success_close[i], f"""norm_self_collected_{threshold}/{env_name}_avg_diff""": normed_avg_total[i], "epoch": epoch})
+
 
     num_tasks = len(diag1)
 
