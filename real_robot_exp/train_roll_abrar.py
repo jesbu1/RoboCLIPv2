@@ -206,6 +206,7 @@ def compute_metrics_multi(args, self_attention_model, threshold, compute_gif = F
 
 
     if compute_gif:
+        print("Generating GIFs,generate_rewind_gif", epoch)
         generate_rewind_gif(
             h5_path="eval_rewind/metaworld_dino_embeddings_eval_close_succ_128.h5",
             json_path="new_task_v2.json",
@@ -216,7 +217,7 @@ def compute_metrics_multi(args, self_attention_model, threshold, compute_gif = F
             threshold=threshold,
             epoch=epoch,
             suboptimal_type="close_success",
-            one_step=one_step
+            one_step=one_step,
         )
 
         generate_rewind_gif(

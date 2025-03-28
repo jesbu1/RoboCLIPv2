@@ -35,7 +35,7 @@ DINO_BATCH_SIZE = 128
 MAX_NUM_FRAMES_PER_EPISODE = 128
 
 
-def animate_incremental(frames_tensor, incremental_rewards, fps=15, fig_path="ax2_plot_rewind.png", epoch=0, suboptimal_type="all_fail"):
+def animate_incremental(frames_tensor, incremental_rewards, fps=15, fig_path="ax2_plot_rewind.png", epoch=0, suboptimal_type="all_fail", threshold=0.5):
     """
     Create an animation that shows frames on the left and the incremental reward curve on the right.
 
@@ -129,18 +129,15 @@ def animate_incremental(frames_tensor, incremental_rewards, fps=15, fig_path="ax
     # 先构建不放大的正方形 bbox
     square_extent = Bbox.from_extents(x0, y0, x1, y1)
     
-    # fig.savefig(
-    #     fig_path,         # 你想要保存的文件名
-    #     bbox_inches=square_extent.expanded(1.2, 1.2)  # 适当放大 1.2 倍，以免标签被裁切
-    # )
     
     buf = io.BytesIO()
     fig.savefig(buf, format="png", bbox_inches=square_extent.expanded(1.2, 1.2))
     buf.seek(0)  # 将光标移到缓冲区开头
     pil_image = Image.open(buf)
+    pil_image.save("output.png", format="PNG")
     # 4. 将缓冲区数据作为图片添加到 wandb
-    fig_path = fig_path.split(".")[0] + f"_{suboptimal_type}"
-    wandb.log({fig_path: wandb.Image(pil_image),"epoch" : epoch}, step=epoch)
+    fig_path = fig_path.split(".pn")[0] + f"_{suboptimal_type}"
+    wandb.log({fig_path: wandb.Image(pil_image, caption=f"EPOCH {epoch}")})
 
     # ---------------------------------------------------------------------
 
@@ -459,8 +456,8 @@ def compute_rewind_reward(rewind_model, args, episode_image_embeddings, lang_emb
         video_reward = predicted_classes[-1] if len(predicted_classes) > 0 else 0.0
         reward_seq.append(video_reward)
         # print(reward_seq)
-
-    gif_buffer = animate_incremental(None, reward_seq, fps=15, fig_path=pdf_path, epoch=epoch, suboptimal_type=suboptimal_type)
+    
+    gif_buffer = animate_incremental(None, reward_seq, fps=15, fig_path=pdf_path, epoch=epoch, suboptimal_type=suboptimal_type, threshold=threshold)
     # with open(gif_path, 'wb') as f:
     #     f.write(gif_buffer.getvalue())
     # print(f"Saved incremental reversed GIF to {gif_path}")
@@ -1199,7 +1196,7 @@ def generate_rewind_gif(
                         args=args, 
                         episode_image_embeddings=video_embedding, 
                         lang_embeddings=text_embedding, 
-                        pdf_path=f"rewind_progress_{suboptimal_type}/{env_video_name}_{demo_id}.png", 
+                        pdf_path=f"rewind_progress_{suboptimal_type}_{threshold}/{env_video_name}_{demo_id}.png", 
                         threshold = threshold, 
                         epoch = epoch, 
                         suboptimal_type = suboptimal_type,
