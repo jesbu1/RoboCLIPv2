@@ -202,7 +202,7 @@ def compute_metrics_multi(args, self_attention_model, threshold, compute_gif = F
         epoch=epoch
     )
 
-    rank_comparison(confusion_matrix_all_fail, confusion_matrix_close_success, confusion_matrix, threshold, epoch=epoch)
+    rank_comparison(confusion_matrix_all_fail, confusion_matrix_close_success, confusion_matrix, tasks, threshold, epoch=epoch)
 
 
     if compute_gif:
