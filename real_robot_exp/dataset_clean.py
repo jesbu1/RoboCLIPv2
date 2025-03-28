@@ -190,7 +190,8 @@ class LivRealVideoTrainDataset(Dataset):
             # first_frame = video_frames[0].unsqueeze(0)
             last_frame = video_frames[-1].unsqueeze(0)
             padding_frames = last_frame.repeat(padding_length, 1)
-            video_frames = th.cat([padding_frames, video_frames], dim=0)
+            video_frames = th.cat([video_frames, padding_frames], dim=0)
+            # video_frames = th.cat([padding_frames, video_frames], dim=0)
         
         elif video_length > max_length:
             frame_idx = np.linspace(0, video_length-1, max_length).astype(int)

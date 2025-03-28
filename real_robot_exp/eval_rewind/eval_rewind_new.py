@@ -187,8 +187,8 @@ def rank_comparison(cm1, cm2, cm3, tasks, threshold=0.5, epoch=0):
 
     for i, env_name in enumerate(tasks):
         wandb.log({f"suboptimal_reward_{threshold}/{env_name}_all_fail": diag1[i], f"suboptimal_reward_{threshold}/{env_name}_close_success": diag2[i], f"suboptimal_reward_{threshold}/{env_name}_success": diag3[i], "epoch": epoch})
-        wandb.log({f"no_norm_self_collected_{threshold}/{env_name}_close_fail_difference": diff_close_fail[i], f"no_norm_self_collected_{threshold}/{env_name}_success_close_difference": diff_success_close[i], f"no_norm_self_collected_{threshold}/{env_name}_avg_diff": avg_total[i],  "epoch": epoch})
-        wandb.log({f"norm_self_collected_{threshold}/{env_name}_close_fail_difference": normed_avg_close_fail[i], f"norm_self_collected_{threshold}/{env_name}_success_close_difference": normed_avg_success_close[i], f"norm_self_collected_{threshold}/{env_name}_avg_diff": normed_avg_total[i], "epoch": epoch})
+        wandb.log({f"no_norm_self_collected_{threshold}/{env_name}_close_fail_difference": diff_close_fail[i], f"no_norm_self_collected_{threshold}/{env_name}_success_close_difference": diff_success_close[i], f"no_norm_self_collected_{threshold}/{env_name}_avg_diff": (diff_success_close[i] +diff_close_fail[i]) / 2,  "epoch": epoch})
+        wandb.log({f"norm_self_collected_{threshold}/{env_name}_close_fail_difference": normed_diff_close_fail[i], f"norm_self_collected_{threshold}/{env_name}_success_close_difference": normed_diff_success_close[i], f"norm_self_collected_{threshold}/{env_name}_avg_diff": (normed_diff_close_fail[i] + normed_diff_success_close[i]) / 2 , "epoch": epoch})
 
 
     num_tasks = len(diag1)
