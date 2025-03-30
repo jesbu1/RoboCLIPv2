@@ -138,10 +138,22 @@ class LivRealVideoTrainDataset(Dataset):
         progress_dataset = np.asarray(data_group[random_name]) # all video data
 
         start_idx = random.randint(0, len(progress_dataset)//2)
-        end_idx = random.randint(len(progress_dataset)//2, len(progress_dataset)) # end_idx start from len(progress_dataset)//2
+
+        close_succ_sanple = False
+        if self.args.end_rewind_ratio == 0:
+            end_idx = random.randint(len(progress_dataset)//2, len(progress_dataset)) # end_idx start from len(progress_dataset)//2
+            
+        else:
+            if random.random() < self.args.end_rewind_ratio:
+                    end_idx = len(progress_dataset) - random.randint(0, 2)
+                    close_succ_sanple = True
+            else:
+                end_idx = random.randint(len(progress_dataset)//2, len(progress_dataset))
         while end_idx - start_idx < 3:
             start_idx = random.randint(0, len(progress_dataset)//2)
             end_idx = random.randint(len(progress_dataset)//2, len(progress_dataset))
+            close_succ_sanple = False
+
 
         video_frames = np.array(progress_dataset)[start_idx:end_idx]
         full_frames = np.array(progress_dataset)[start_idx:]
@@ -160,7 +172,10 @@ class LivRealVideoTrainDataset(Dataset):
         # reverse_progress = progress[::-1][1:]
 
         # random start rewind
-        selected_end_point = random.randint(2, len(video_frames))
+        if close_succ_sanple:
+            selected_end_point = random.randint(1, min(3, len(video_frames)))
+        else:
+            selected_end_point = random.randint(2, len(video_frames))
         reverse_frame = video_frames[::-1][1:selected_end_point]
         reverse_progress = progress[::-1][1:selected_end_point]
 

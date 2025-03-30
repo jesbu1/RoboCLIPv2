@@ -52,49 +52,53 @@ def main(args):
 
     WANDB_ENTITY_NAME = "clvr"
     WANDB_PROJECT_NAME = "roboclip-v2"
-    experiment_name = ""
+    experiment_name = "Metaworld"
     if args.positional_encoding:
         experiment_name += "_PosEmb"
     if args.last_frame_pe:
         experiment_name += "_LastFramePE"
 
-    if args.extra_data_type == "metaworld":
-        experiment_name = "_NewPE_Crop_MetaWorld" 
-    else: 
-        experiment_name = "_RealWorld_Koch"
+    # if args.extra_data_type == "metaworld":
+    #     experiment_name = "_NewPE_Crop_MetaWorld" 
+    # else: 
+    #     experiment_name = "_RealWorld_Koch"
 
-    experiment_name += "_binary_thrd_" + str(args.binary_threshold)
+    # experiment_name += "_binary_thrd_" + str(args.binary_threshold)
     experiment_name += "_Rewind_ratio_" + str(args.rewind_ratio)
+    experiment_name += "_EMA_momentum_" + str(args.ema_momentum)
+    if args.end_rewind_ratio > 0:
+        experiment_name += "_End_Rewind_ratio_" + str(args.end_rewind_ratio)
+
+
+    # if args.text_embedding_model == "minilm":
+    #     experiment_name += "_MiniLM"
+    # elif args.text_embedding_model == "liv":
+    #     experiment_name += "_Liv"
 
 
 
-    if args.text_embedding_model == "minilm":
-        experiment_name += "_MiniLM"
-    elif args.text_embedding_model == "liv":
-        experiment_name += "_Liv"
+    # if args.openx_data:
+    #     experiment_name += "_AddOpenXData"
+
+    # if args.rewind:
+    #     experiment_name += "_ReWind"
+    # if args.subsample_video:
+    #     experiment_name += "_SubVideo"
+    #     experiment_name += "_MaxLen" + str(args.max_length)
 
 
-
-    if args.openx_data:
-        experiment_name += "_AddOpenXData"
-
-    if args.rewind:
-        experiment_name += "_ReWind"
-    if args.subsample_video:
-        experiment_name += "_SubVideo"
-        experiment_name += "_MaxLen" + str(args.max_length)
-
-
-    experiment_name += "_View_" + str(args.view)
-    experiment_name += "_ExtraDataRatio_" + str(args.extra_data_ratio)
+    # experiment_name += "_View_" + str(args.view)
+    # experiment_name += "_ExtraDataRatio_" + str(args.extra_data_ratio)
     
-    experiment_name += "_epochs_" + str(args.epochs)
-    experiment_name += "_lr_" + str(args.lr)
-    experiment_name += "_progress_loss_weight_" + str(args.progress_loss_weight)
-    if args.weighted_mse:
-        experiment_name += "_weighted_mse"
+    # experiment_name += "_epochs_" + str(args.epochs)
+    # experiment_name += "_lr_" + str(args.lr)
+    # experiment_name += "_progress_loss_weight_" + str(args.progress_loss_weight)
+    # if args.weighted_mse:
+    #     experiment_name += "_weighted_mse"
 
-    experiment_name = "TwoStep_" + experiment_name
+    # experiment_name = "TwoStep_" + experiment_name
+
+
     # if args.extra_data_type == "metaworld":
     #     group_name = "EMA_newlog_2step_Crop_MetaWorldNew"
     # else:
@@ -105,7 +109,7 @@ def main(args):
     
 
     # group_name = "Dino_Koch_v2"
-    group_name = "EMA_TwoStep_" + args.extra_data_type 
+    group_name = "Mar_29"
     run = wandb.init(
         entity=WANDB_ENTITY_NAME,
         project=WANDB_PROJECT_NAME,
@@ -237,7 +241,7 @@ def main(args):
 
     trainer = Engine(train_step_fn)
     # ema_handler = EMAHandler(self_attention_model, momentum=0.0002)
-    ema_handler = EMAHandler(self_attention_model, momentum=0.3)
+    ema_handler = EMAHandler(self_attention_model, momentum=args.ema_momentum)
     ema_model = ema_handler.ema_model
     ema_handler.attach(trainer, name="ema_momentum", event=Events.ITERATION_COMPLETED(every=1))
     
@@ -279,8 +283,9 @@ def main(args):
                         compute_gif = False
 
                     compute_metrics_multi(args, ema_model, threshold=0.5, compute_gif = compute_gif, epoch = epoch, one_step=False)
-                    compute_metrics_multi(args, ema_model, threshold=0.4, compute_gif = compute_gif, epoch = epoch, one_step=False)
+                    # compute_metrics_multi(args, ema_model, threshold=0.4, compute_gif = compute_gif, epoch = epoch, one_step=False)
                     compute_metrics_multi(args, ema_model, threshold=0.3, compute_gif = compute_gif, epoch = epoch, one_step=False)
+                    compute_metrics_multi(args, ema_model, threshold=0.2, compute_gif = compute_gif, epoch = epoch, one_step=False)
 
                     save_dir = "saved_models"
                     if not os.path.exists(save_dir):
@@ -685,6 +690,8 @@ if __name__ == "__main__":
     argparser.add_argument('--progress_loss_weight', type=float, default=1)
     argparser.add_argument('--weighted_mse', action='store_true')
     argparser.add_argument('--last_frame_pe', action='store_true')
+    argparser.add_argument('--ema_momentum', type=float, default=0.3)
+    argparser.add_argument('--end_rewind_ratio', type=float, default=0.0)
 
 
 

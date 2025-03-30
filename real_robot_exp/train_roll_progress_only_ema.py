@@ -49,60 +49,41 @@ def main(args):
     WANDB_ENTITY_NAME = "clvr"
     WANDB_PROJECT_NAME = "roboclip-v2"
 
-    if args.extra_data_type == "metaworld":
-        experiment_name = "NewPE_ProgressOnlyCrop_MetaWorld" 
-    else: 
-        experiment_name = "RealWorld_Koch"
-
-
-    experiment_name += "_Rewind_ratio_" + str(args.rewind_ratio)
-
-
-
-    if args.text_embedding_model == "minilm":
-        experiment_name += "_MiniLM"
-    elif args.text_embedding_model == "liv":
-        experiment_name += "_Liv"
-
-
-
-    if args.openx_data:
-        experiment_name += "_AddOpenXData"
-
-    if args.rewind:
-        experiment_name += "_ReWind"
-    if args.subsample_video:
-        experiment_name += "_SubVideo"
-        experiment_name += "_MaxLen" + str(args.max_length)
+    experiment_name = "Metaworld_OneStep"
     if args.positional_encoding:
         experiment_name += "_PosEmb"
+    if args.last_frame_pe:
+        experiment_name += "_LastFramePE"
 
-    if args.cosine_scheduler:
-        experiment_name += "_CosScheduler"
-    if args.clip_grad:
-        experiment_name += "_ClipGrad"
-    experiment_name += "_View_" + str(args.view)
-    experiment_name += "_ExtraDataRatio_" + str(args.extra_data_ratio)
-    
-    experiment_name += "_epochs_" + str(args.epochs)
-    experiment_name += "_lr_" + str(args.lr)
-    experiment_name += "_progress_loss_weight_" + str(args.progress_loss_weight)
-    if args.weighted_mse:
-        experiment_name += "_weighted_mse"
+    # if args.extra_data_type == "metaworld":
+    #     experiment_name = "_NewPE_Crop_MetaWorld" 
+    # else: 
+    #     experiment_name = "_RealWorld_Koch"
 
-    experiment_name = "OneStep_" + experiment_name
+    experiment_name += "_binary_thrd_" + str(args.binary_threshold)
+    experiment_name += "_Rewind_ratio_" + str(args.rewind_ratio)
+    experiment_name += "_EMA_momentum_" + str(args.ema_momentum)
+    if args.end_rewind_ratio > 0:
+        experiment_name += "_End_Rewind_ratio_" + str(args.end_rewind_ratio)
 
-    if args.extra_data_type == "metaworld":
-        group_name = "ProgressOnlyTest"
-    else:
-        group_name = "RealWorld_Koch"
-    # get today date
+
+
+    # if args.weighted_mse:
+    #     experiment_name += "_weighted_mse"
+
+    # experiment_name = "OneStep_" + experiment_name
+
+    # if args.extra_data_type == "metaworld":
+    #     group_name = "ProgressOnlyTest"
+    # else:
+    #     group_name = "RealWorld_Koch"
+    # # get today date
 
 
     
 
     # group_name = "Dino_Koch_v2"
-    group_name = "EMA_OneStep_" + args.extra_data_type 
+    group_name = "Mar_29"
     run = wandb.init(
         entity=WANDB_ENTITY_NAME,
         project=WANDB_PROJECT_NAME,
@@ -138,8 +119,8 @@ def main(args):
         openx_batch_size = int(round(args.batch_size * (1 - args.extra_data_ratio)))
         extra_batch_size = int(round(args.batch_size * args.extra_data_ratio))
 
-        openx_dataloader = DataLoader(openx_dataset, batch_size=openx_batch_size, shuffle=True, num_workers=int(args.worker * 8), drop_last=True, pin_memory=True)
-        extra_dataloader = DataLoader(extra_dataset, batch_size=extra_batch_size, shuffle=True, num_workers=args.worker, drop_last=True, pin_memory=True)
+        openx_dataloader = DataLoader(openx_dataset, batch_size=openx_batch_size, shuffle=True, num_workers=int(args.worker * 8), drop_last=True, pin_memory=False)
+        extra_dataloader = DataLoader(extra_dataset, batch_size=extra_batch_size, shuffle=True, num_workers=args.worker, drop_last=True, pin_memory=False)
 
 
         h5_openx_eval_file = h5py.File("/home/jzhang96/full_openx_embeddings_v2_test.h5", "r")
@@ -224,7 +205,7 @@ def main(args):
 
     trainer = Engine(train_step_fn)
     # ema_handler = EMAHandler(self_attention_model, momentum=0.0002)
-    ema_handler = EMAHandler(self_attention_model, momentum=0.3)
+    ema_handler = EMAHandler(self_attention_model, momentum=args.ema_momentum)
     ema_model = ema_handler.ema_model
     ema_handler.attach(trainer, name="ema_momentum", event=Events.ITERATION_COMPLETED(every=1))
     
@@ -295,6 +276,8 @@ if __name__ == "__main__":
     argparser.add_argument('--progress_loss_weight', type=float, default=1)
     argparser.add_argument('--weighted_mse', action='store_true')
     argparser.add_argument('--last_frame_pe', action='store_true')
+    argparser.add_argument('--ema_momentum', type=float, default=0.3)
+    argparser.add_argument('--end_rewind_ratio', type=float, default=0.0)
 
 
 
