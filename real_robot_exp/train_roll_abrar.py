@@ -129,7 +129,7 @@ def compute_metrics_multi(args, self_attention_model, threshold, compute_gif = F
     # os.remove("final_rewind_cache_oxe_pos_end_3.pkl")
 
     confusion_matrix_all_fail, _, _, _ = generate_rewind_data(
-        h5_path="eval_rewind/metaworld_dino_embeddings_eval_fail.h5",
+        h5_path="eval_rewind/metaworld_dino_embeddings_eval_all_fail.h5",
         json_path="new_task_v2.json",
         set_type="eval",
         rewind_model=self_attention_model,
@@ -338,7 +338,7 @@ def main(args):
         extra_dataloader = DataLoader(extra_dataset, batch_size=extra_batch_size, shuffle=True, num_workers=args.worker, drop_last=True, pin_memory=True)
 
 
-        h5_openx_eval_file = h5py.File("/home/jzhang96/full_openx_embeddings_v2_test.h5", "r")
+        h5_openx_eval_file = h5py.File("/home/yusenluo/full_openx_embeddings_v2_test.h5", "r")
         # h5_openx_eval_file = h5py.File("/mnt/ssd_a_4tb/jzhang96/full_openx_embeddings_dino_test_backup.h5", "r")
         # h5_openx_eval_file = h5py.File("/data/shared/roboclip/data/h5_buffers/openx_embeddings/full_openx_embeddings_dino_test.h5", "r")
 
@@ -877,8 +877,8 @@ def main(args):
                     plot_confusion_matrix(h5_file = h5_train_eval_file, set = "train",self_attention_model = self_attention_model, args = args, binary_threshold = 0.5)
                     plot_confusion_matrix(h5_file = h5_eval_file, set = "eval", self_attention_model = self_attention_model, args = args, binary_threshold = 0.5)
                     if args.two_step_training:
-                        plot_confusion_matrix(h5_file = h5_train_eval_file, set = "train",self_attention_model = self_attention_model, args = args, binary_threshold = 0.4)
-                        plot_confusion_matrix(h5_file = h5_eval_file, set = "eval", self_attention_model = self_attention_model, args = args, binary_threshold = 0.4)
+                        plot_confusion_matrix(h5_file = h5_train_eval_file, set = "train",self_attention_model = self_attention_model, args = args, binary_threshold = 0.2)
+                        plot_confusion_matrix(h5_file = h5_eval_file, set = "eval", self_attention_model = self_attention_model, args = args, binary_threshold = 0.2)
                         plot_confusion_matrix(h5_file = h5_train_eval_file, set = "train",self_attention_model = self_attention_model, args = args, binary_threshold = 0.3)
                         plot_confusion_matrix(h5_file = h5_eval_file, set = "eval", self_attention_model = self_attention_model, args = args, binary_threshold = 0.3)
                     plot_progress(h5_train_eval_file, "train", self_attention_model, args)
@@ -892,7 +892,7 @@ def main(args):
                         compute_gif = False
 
                     compute_metrics_multi(args, self_attention_model, threshold=0.5, compute_gif = compute_gif)
-                    compute_metrics_multi(args, self_attention_model, threshold=0.4, compute_gif = compute_gif)
+                    compute_metrics_multi(args, self_attention_model, threshold=0.2, compute_gif = compute_gif)
                     compute_metrics_multi(args, self_attention_model, threshold=0.3, compute_gif = compute_gif)
  
 
@@ -933,7 +933,7 @@ def main(args):
 if __name__ == "__main__":
     argparser = argparse.ArgumentParser()
     # argparser.add_argument('--h5_embedding_path', type=str, default='/data/shared/roboclip/data/h5_buffers/openx_embeddings/full_openx_embeddings_droid_dino_train.h5')
-    argparser.add_argument('--h5_embedding_path', type=str, default='/home/jzhang96/full_openx_embeddings_v2_train.h5')
+    argparser.add_argument('--h5_embedding_path', type=str, default='/home/yusenluo/full_openx_embeddings_v2_train.h5')
     # argparser.add_argument('--h5_embedding_path', type=str, default='/mnt/ssd_a_4tb/jzhang96/openx_embeddings_full_uncompressed_with_langtable_processed.h5')
     argparser.add_argument('--extra_data_type', type=str, choices=["metaworld", "real_world"], default="real_world")
     argparser.add_argument('--batch_size', type=int, default=1024)
