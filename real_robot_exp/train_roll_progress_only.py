@@ -390,8 +390,6 @@ def main(args):
                 video_array = extra_data["video_array"].to(device).float()
                 text_array = extra_data["text_array"].squeeze(1).to(device).float()
                 progress = extra_data["progress"].to(device).float()
-                progress_mask = torch.ones_like(progress).bool()
-
 
                 video_embedding = video_array
 

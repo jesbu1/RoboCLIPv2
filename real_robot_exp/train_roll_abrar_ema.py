@@ -53,6 +53,8 @@ def main(args):
     WANDB_ENTITY_NAME = "clvr"
     WANDB_PROJECT_NAME = "roboclip-v2"
     experiment_name = "Metaworld"
+    if not args.openx_data:
+        experiment_name += "_NoOpenXData"
     if args.positional_encoding:
         experiment_name += "_PosEmb"
     if args.last_frame_pe:

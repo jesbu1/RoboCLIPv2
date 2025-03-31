@@ -217,6 +217,8 @@ class LivRealVideoTrainDataset(Dataset):
     def __len__(self):
         # if self.split:
         #     return self.args.batch_size * 100
+        if self.args.extra_data_ratio == 1:
+            return self.args.batch_size * 100
         return int(self.args.batch_size * 100 * (1 - self.args.extra_data_ratio)) + 1
 
 

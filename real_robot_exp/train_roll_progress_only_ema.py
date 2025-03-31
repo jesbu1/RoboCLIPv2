@@ -60,7 +60,6 @@ def main(args):
     # else: 
     #     experiment_name = "_RealWorld_Koch"
 
-    experiment_name += "_binary_thrd_" + str(args.binary_threshold)
     experiment_name += "_Rewind_ratio_" + str(args.rewind_ratio)
     experiment_name += "_EMA_momentum_" + str(args.ema_momentum)
     if args.end_rewind_ratio > 0:
@@ -83,7 +82,7 @@ def main(args):
     
 
     # group_name = "Dino_Koch_v2"
-    group_name = "Mar_29"
+    group_name = "Mar_30_Debug"
     run = wandb.init(
         entity=WANDB_ENTITY_NAME,
         project=WANDB_PROJECT_NAME,
@@ -140,25 +139,18 @@ def main(args):
         # if args.extra_data_type == "metaworld":
         #     extra_dataset = LivRealVideoTrainDataset(args, extra_data_path, split = False, sample_neg=True)
         # else:
+        args.extra_data_ratio = 1
         extra_dataset = LivRealVideoTrainDataset(args, extra_data_path, split = False, sample_neg=True)
 
         extra_dataloader = DataLoader(extra_dataset, batch_size=args.batch_size, shuffle=True, num_workers=args.worker, drop_last=True, pin_memory=True)
         positive_eval_openx_dataset = None
         negative_eval_openx_dataset = None
-        openx_positive_eval_dataloader = None
-        openx_negative_eval_dataloader = None
+
 
     extra_eval_eval_pos_dataset = LivRealVideoEvalDataset(args, h5_eval_file, label = "positive", dataset = "extra")
     extra_eval_eval_neg_dataset = LivRealVideoEvalDataset(args, h5_eval_file, label = "negative", dataset = "extra")
 
-    if args.openx_data:
-        extra_eval_eval_pos_dataloader = DataLoader(extra_eval_eval_pos_dataset, batch_size=5, shuffle=True, num_workers=1, drop_last=True)
-        extra_eval_eval_neg_dataloader = DataLoader(extra_eval_eval_neg_dataset, batch_size=5, shuffle=True, num_workers=1, drop_last=True)
-    else:
-        extra_eval_eval_pos_dataloader = DataLoader(extra_eval_eval_pos_dataset, batch_size=5, shuffle=True, num_workers=0, drop_last=True)
-        extra_eval_eval_neg_dataloader = DataLoader(extra_eval_eval_neg_dataset, batch_size=5, shuffle=True, num_workers=0, drop_last=True)
 
-    progress_loss_function = mse_loss
 
 
     video_dim = 768
@@ -221,6 +213,31 @@ def main(args):
             training_loader = zip(openx_dataloader, extra_dataloader)
             # call the ema trainer
             trainer.run(training_loader, max_epochs=1, epoch_length=len(openx_dataloader))
+
+            ema_model.eval()
+            self_attention_model.eval()
+            with torch.no_grad():
+
+                if args.extra_data_type == "metaworld":
+
+                    plot_confusion_matrix(h5_file = h5_train_eval_file, set = "train",self_attention_model = self_attention_model, args = args, epoch = epoch)
+                    plot_confusion_matrix(h5_file = h5_eval_file, set = "eval", self_attention_model = self_attention_model, args = args, epoch = epoch)
+                    plot_progress(h5_train_eval_file, "train", self_attention_model, args, epoch = epoch)
+                    plot_progress(h5_eval_file, "eval", self_attention_model, args, epoch = epoch)
+
+                    if epoch % 2 == 0:
+                        compute_gif = True
+                    else:
+                        compute_gif = False
+
+                    compute_metrics_multi(args, ema_model, threshold=0.5, compute_gif = compute_gif, epoch = epoch, one_step=True)
+            ema_model.train()
+            self_attention_model.train()
+
+        else:
+            training_loader = extra_dataloader
+            # call the ema trainer
+            trainer.run(training_loader, max_epochs=1, epoch_length=len(extra_dataloader))
 
             ema_model.eval()
             self_attention_model.eval()
