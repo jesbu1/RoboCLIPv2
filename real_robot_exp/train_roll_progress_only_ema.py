@@ -49,7 +49,7 @@ def main(args):
     WANDB_ENTITY_NAME = "clvr"
     WANDB_PROJECT_NAME = "roboclip-v2"
 
-    experiment_name = "Metaworld_OneStep"
+    experiment_name = str(args.extra_data_type)
     if args.positional_encoding:
         experiment_name += "_PosEmb"
     if args.last_frame_pe:
@@ -82,7 +82,7 @@ def main(args):
     
 
     # group_name = "Dino_Koch_v2"
-    group_name = "Mar_30_Debug"
+    group_name = "Mar_31_Koch_Rewind"
     run = wandb.init(
         entity=WANDB_ENTITY_NAME,
         project=WANDB_PROJECT_NAME,
@@ -231,6 +231,28 @@ def main(args):
                         compute_gif = False
 
                     compute_metrics_multi(args, ema_model, threshold=0.5, compute_gif = compute_gif, epoch = epoch, one_step=True)
+
+                else: # real world data
+                    plot_confusion_matrix(h5_file = h5_train_eval_file, set = "train",self_attention_model = self_attention_model, args = args, epoch = epoch, ema=False)
+                    plot_confusion_matrix(h5_file = h5_eval_file, set = "eval", self_attention_model = self_attention_model, args = args, epoch = epoch, ema=False)
+                    plot_confusion_matrix(h5_file = h5_train_eval_file, set = "train",self_attention_model = ema_model, args = args, epoch = epoch, ema=True)
+                    plot_confusion_matrix(h5_file = h5_eval_file, set = "eval", self_attention_model = ema_model, args = args, epoch = epoch, ema=True)
+                    plot_progress(h5_train_eval_file, "train", self_attention_model, args, epoch = epoch)
+                    plot_progress(h5_eval_file, "eval", self_attention_model, args, epoch = epoch)
+
+                    # save the model
+                    model_dict = {
+                        "model": self_attention_model.state_dict(),
+                        "ema_model": ema_model.state_dict(),
+                        "epoch": epoch,
+                        "args": args
+                    }
+                    folder_name = "models/" + experiment_name
+                    if not os.path.exists(folder_name):
+                        os.makedirs(folder_name)
+                    torch.save(model_dict, folder_name + "/model_" + str(epoch) + ".pth")
+
+
             ema_model.train()
             self_attention_model.train()
 

@@ -1,11 +1,8 @@
-from models import ClassProgressTransformer
+from models_pe import ClassProgressTransformer
 import os 
 import torch
 # Load the model
-path = os.path.join("saved_models", 
-                    "ProgressOnlyCrop_MetaWorld_Rewind_ratio_0.5_MiniLM_AddOpenXData_ReWind_SubVideo_MaxLen16_CosScheduler_ClipGrad_View_side_ExtraDataRatio_0.2_epochs_50_lr_0.0001_progress_loss_weight_1",
-                    "epoch_35.pth")
-
+model_path = os.path.join('/home/jzhang96/RoboCLIPv2/real_robot_exp','models', 'real_world_PosEmb_Rewind_ratio_0.8_EMA_momentum_0.3_End_Rewind_ratio_0.1', 'model_5.pth')
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 video_dim = 768
@@ -20,10 +17,20 @@ model = ClassProgressTransformer(
         hidden_dim=512  # Common dimension for transformer processing
     ).to(device)
 
+# load original model
 model.load_state_dict(model_dict['model'])
 model.eval()
 
-# Load the data
+# load ema model
+model.load_state_dict(model_dict['ema_model'])
+model.eval()
+
+traj_data = torch.rand(1, 16, 768).to(device)
+text_embeddings = torch.rand(1, 384).to(device)
+pred_reward, _ = model(traj_data, text_embeddings)
+pred_reward = pred_reward.squeeze(-1) # reward shape (1, 16, 1) -> (1, 16)
+pred_reward = pred_reward[:, 1:] # remove the first element
+print(pred_reward.shape) # shape: [1, 15]
 
 
 
