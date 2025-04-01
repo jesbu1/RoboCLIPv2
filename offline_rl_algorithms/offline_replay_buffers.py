@@ -134,6 +134,14 @@ class H5ReplayBuffer(ReplayBuffer):
 
             if sparsify_rewards:
                 rewards = f["done"][()]
+
+                # for each 1 in rewards, make the 3 previous frames also 1
+                for i in range(len(rewards)):
+                    if rewards[i] == 1:
+                        for j in range(3):
+                            if i - j >= 0:
+                                rewards[i - j] = 1
+                
                 rewards = rewards.astype(np.float32)
             else:
                 rewards = f["rewards"][()]

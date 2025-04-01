@@ -95,3 +95,4 @@ environment:
   ignore_language: false
   is_state_based: false
   use_proprio: true
+  robot_disabled: false

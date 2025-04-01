@@ -22,11 +22,11 @@ dataset_ids = glob.glob(path + "/*")
 DATASET_IDS = [f"usc_koch_rewind/{os.path.basename(x)}" for x in dataset_ids]
 
 SAVE_H5_NAME = (
-    "usc_koch_rewind_reward_concat.h5"  # name of the h5 file it'll be saved to
+    "usc_koch_rewind_reward_side_main.h5"  # name of the h5 file it'll be saved to
 )
 DEBUG = False  # will use DROID_100
 MAX_NUM_FRAMES_PER_EPISODE = 32
-PRIMARY_IMAGE_KEY = "observation.images.main"
+# PRIMARY_IMAGE_KEY = "observation.images.main"
 # PRIMARY_IMAGE_KEY = "observation.images.side"
 
 model, processor, tokenizer = load_model("liv")
@@ -116,10 +116,7 @@ with h5py.File(SAVE_H5_NAME, "w") as f:
             # process task name to not have a period at the end and strip other punctuation
             task = task.strip(" .,!?-_")
             # episode_images = episode_images_list[PRIMARY_IMAGE_KEY]
-            img_key = PRIMARY_IMAGE_KEY
-            episode_images = episode_images_list[img_key]
-            for _ in range(1):  # placeholder
-                # for _, (img_key, episode_images) in enumerate(episode_images_list.items()):
+            for _, (img_key, episode_images) in enumerate(episode_images_list.items()):
                 if task not in tasks_seen:
                     tasks_seen[task] = 1
                     if random.random() < 0.1:
@@ -150,6 +147,7 @@ with h5py.File(SAVE_H5_NAME, "w") as f:
                 # convert length to string
                 task_group_len_str = str(task_group_len)
 
+                embedding_list = []
                 # linspace to get the indices of the frames to sample
                 indices = np.linspace(
                     0, len(episode_images) - 1, MAX_NUM_FRAMES_PER_EPISODE, dtype=int
@@ -157,35 +155,27 @@ with h5py.File(SAVE_H5_NAME, "w") as f:
                 # make sure there are no duplicates
                 indices = list(set(indices))
 
-                concat_embeddings = []
+                episode_images = [episode_images[i] for i in indices]
 
-                for k, episode_images in episode_images_list.items():
-                    episode_images = [episode_images[i] for i in indices]
-                    embedding_list = []
-
-                    # center crop 224x224
-                    for ep_img in episode_images:
-                        # NOTE: The transpose is for lerobot images only. Change if you are not using LeRobot
-                        image_embeddings = (
-                            embedding_image(
-                                model,
-                                processor,
-                                Image.fromarray(
-                                    (ep_img * 255).astype(np.uint8).transpose(1, 2, 0)
-                                ),
-                            )
-                            .squeeze()
-                            .detach()
-                            .cpu()
-                            .numpy()
+                # center crop 224x224
+                for ep_img in episode_images:
+                    # NOTE: The transpose is for lerobot images only. Change if you are not using LeRobot
+                    image_embeddings = (
+                        embedding_image(
+                            model,
+                            processor,
+                            Image.fromarray(
+                                (ep_img * 255).astype(np.uint8).transpose(1, 2, 0)
+                            ),
                         )
-                        embedding_list.append(image_embeddings)
-                    concat_embeddings.append(np.array(embedding_list))
+                        .squeeze()
+                        .detach()
+                        .cpu()
+                        .numpy()
+                    )
+                    embedding_list.append(image_embeddings)
 
-                    # concat_embeddings[-1] = np.array(embedding_list)
-
-                # episode_image_embeddings = np.array(embedding_list)
-                episode_image_embeddings = np.array(concat_embeddings)
+                episode_image_embeddings = np.array(embedding_list)
 
                 # create a dataset with the embeddings
                 task_group.create_dataset(

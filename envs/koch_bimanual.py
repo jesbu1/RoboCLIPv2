@@ -202,8 +202,9 @@ class KochBimanualEnv(Env):
         for key in self.image_keys:
             obs[key] = observation[key]
 
-        reward = compute_debug_reward(state.numpy())
-        print(reward)
+        # reward = compute_debug_reward(state.numpy())
+        # print(reward)
+        reward = 0
 
         return obs, reward, done, info
 
@@ -423,6 +424,7 @@ def create_wrapped_env(
     dense_rewards_at_end=False,
     action_chunk_size=1,
     camera_kwargs=None,
+    robot_disabled=False,
 ):
     """
     Creates a wrapped MetaWorld environment with the given options.
@@ -449,6 +451,7 @@ def create_wrapped_env(
             "/home/abrar/koch_arms/lerobot/lerobot/configs/robot/koch_bimanual.yaml",
             image_keys=image_keys,
             reward_image_key=reward_image_key,
+            fake_robot=robot_disabled,
         )
 
         if pca_model is not None:
@@ -472,8 +475,8 @@ def create_wrapped_env(
         )
 
         # This is all for koch, so this is fine.
-        # if reward_model.name == "sparse" or reward_model.name == "dense":
-        #     base_env = ManualRewardWrapper(base_env)
+        if reward_model.name == "sparse":
+            base_env = ManualRewardWrapper(base_env)
 
         # This adds the language features to the observation
         if language_features is not None:

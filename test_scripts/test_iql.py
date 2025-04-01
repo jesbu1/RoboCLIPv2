@@ -216,7 +216,8 @@ def main(cfg: DictConfig):
     # Set eval freq and video freq if not set
 
     # if it's rlpd, video_freq should be never
-    if training_config.algo == "rlpd":
+    # if training_config.algo == "rlpd":
+    if False:
         video_freq = 0
         eval_freq = 0
         # video_freq = offline_config.offline_training_steps * env_config.n_envs // (10)
@@ -484,6 +485,7 @@ def create_envs(cfg: DictConfig, reward_model: BaseRewardModel):
         dense_rewards_at_end=cfg.general_training.dense_rewards_at_end,
         action_chunk_size=cfg.general_training.action_chunk_size,
         camera_kwargs=camera_kwargs,
+        robot_disabled=env_config.robot_disabled,
     )
 
     # Define envs (dummy example for illustration)
@@ -522,6 +524,7 @@ def create_envs(cfg: DictConfig, reward_model: BaseRewardModel):
                         goal_observable=True,
                         is_state_based=env_config.is_state_based,
                         mode="eval",
+                        robot_disabled=env_config.robot_disabled,
                         use_proprio=env_config.use_proprio,
                     )
                 ]

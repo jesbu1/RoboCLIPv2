@@ -1,0 +1,205 @@
+from reward_model import BaseRewardModel
+import os
+import torch
+import abc
+import numpy as np
+import joblib
+from typing import List, Union
+import torch.nn.functional as F
+import clip
+
+from reward_model.models.rewind_one_step_transformer import ClassProgressTransformer
+from reward_model.clip_utils import dino_load_image, mean_pooling
+from transformers import AutoTokenizer, AutoModel
+
+
+def normalize_embeddings(embeddings, return_tensor=True):
+    if isinstance(embeddings, np.ndarray):
+        embeddings = torch.from_numpy(embeddings)
+    normalized_embeddings = F.normalize(embeddings, p=2, dim=1)
+    if return_tensor:
+        return normalized_embeddings
+    else:
+        return normalized_embeddings.detach().cpu().numpy()
+
+
+class ReWiNDRewardModel(BaseRewardModel):
+    def __init__(
+        self,
+        model_load_path: str,
+        device: str = "cuda",
+        batch_size=64,
+        reward_at_every_step: bool = False,
+    ):
+        """
+        Initializes the ReWiNDRewardModel.
+        :param model_load_path: Path to the model checkpoint.
+        :param device: Device to run the model on (default: 'cuda').
+        :param batch_size: Batch size to use for encoding data (default: 64).
+        :param reward_at_every_step: Whether to calculate rewards at every step (default: False).
+        """
+        super().__init__(device, batch_size)
+        self.reward_at_every_step = reward_at_every_step
+
+        self.rewind_model = self._load_model(model_load_path)
+
+        # for the text embedding, we use minilm
+        self.minilm_tokenizer = AutoTokenizer.from_pretrained(
+            "sentence-transformers/all-MiniLM-L12-v2"
+        )
+        self.minilm_model = AutoModel.from_pretrained(
+            "sentence-transformers/all-MiniLM-L12-v2"
+        ).to(device)
+
+        # for the image embedding, we use dino
+        self.dino_vits14 = torch.hub.load(
+            "facebookresearch/dinov2", "dinov2_vitb14"
+        ).to(device)
+
+        self.dino_batch_size = 64
+
+    def _load_model(self, model_load_path: str):
+        """
+        Loads the pretrained ClassProgressTransformer model from the provided path.
+        :param model_load_path: Path to the pretrained model file.
+        :return: Loaded model.
+        """
+
+        model_dict = torch.load(model_load_path)
+        args = model_dict["args"]
+        self.args = args
+        model = ClassProgressTransformer(
+            args=args,
+            video_dim=self.img_output_dim,  # Original video embedding dimension
+            text_dim=self.text_output_dim,  # Original text embedding dimension
+            hidden_dim=512,  # Common dimension for transformer processing
+        ).to(self.device)
+
+        model.load_state_dict(model_dict["model"])
+        model.eval()
+
+        # load ema model
+        model.load_state_dict(model_dict["ema_model"])
+        model.eval()
+        return model
+
+    def _encode_text_batch(self, text: List[str]) -> np.ndarray:
+        """
+        Encodes a batch of text data into a representation.
+        :param text: A list of text data to be encoded.
+        :return: Encoded representation of the text.
+        """
+        with torch.no_grad():
+            encoded_input = self.minilm_tokenizer(
+                text, padding=False, truncation=True, return_tensors="pt"
+            ).to(self.device)
+            model_output = self.minilm_model(**encoded_input)
+            text_embeddings = (
+                mean_pooling(model_output, encoded_input["attention_mask"])
+                .cpu()
+                .numpy()
+            )
+
+        return text_embeddings
+
+    def _encode_image_batch(self, images: torch.Tensor) -> torch.Tensor:
+        """
+        Encodes a batch of video frames into an image representation.
+        :param images: A batch of video frames to be encoded. The shape of the input should be (batch_size, num_images, height, width, channels).
+        :return: Encoded representation of each frame.
+        """
+        # TODO: this can probably handle multiple batches but untested
+        assert images.shape[0] == 1, "LIV doesn't support batch > 1"
+        images = images.squeeze(0)
+
+        with torch.inference_mode():
+            episode_images_dino = [
+                dino_load_image(
+                    (img.to("cpu").numpy().transpose(1, 2, 0) * 255).astype(np.uint8)
+                )
+                for img in images
+            ]
+            episode_images_dino = [
+                torch.concatenate(episode_images_dino[i : i + self.dino_batch_size])
+                for i in range(0, len(episode_images_dino), self.dino_batch_size)
+            ]
+            embedding_list = []
+            for batch in episode_images_dino:
+                episode_image_embeddings = (
+                    self.dino_vits14(batch.to(self.device)).squeeze().detach().cpu()
+                )
+                embedding_list.append(episode_image_embeddings)
+            episode_image_embeddings = torch.concat(embedding_list)
+
+        return episode_image_embeddings.unsqueeze(0)
+
+    def _calculate_reward_batch(
+        self, encoded_texts: torch.Tensor, encoded_videos: torch.Tensor
+    ) -> torch.Tensor:
+        """
+        Calculates the rewards for a batch of text and video representations.
+        :param encoded_texts: Encoded text representations.
+        :param encoded_videos: Encoded video representations. Shape: (batch_size, num_images, embedding_dim).
+        :return: Reward values for each text-video pair.
+        """
+
+        with torch.no_grad():
+            # remove batch dimension for video_encoding_model not supported and then only
+            # encoded_texts = encoded_texts.squeeze(0)
+            encoded_videos = encoded_videos.squeeze(0)
+
+            # do padding here
+            encoded_videos = self.padding_video(
+                encoded_videos, self.args.max_length
+            ).unsqueeze(0)
+            # TODO: add the processing for downsampling if needed @Yusen @Jiahui
+            reward = (
+                self.rewind_model(encoded_videos.float(), encoded_texts.float())[0]
+                .cpu()
+                .numpy()
+            )
+
+        print(reward)
+        # return the last reward
+        reward = reward[:, -1, 0]
+        return reward
+
+    @property
+    def img_output_dim(self) -> int:
+        """
+        Returns the output dimension of the image encoder. Used to determine the observation space of a policy.
+        """
+        return 768
+
+    @property
+    def text_output_dim(self) -> int:
+        """
+        Returns the output dimension of the text encoder. Used to determine the observation space of a policy.
+        """
+        return 384
+
+    @property
+    def name(self) -> str:
+        """
+        Returns the name of the encoder class.
+        """
+        return "ReWiNDRewardModel"
+
+    def padding_video(self, video_frames, max_length):
+        video_length = len(video_frames)
+        if isinstance(video_frames, np.ndarray):
+            video_frames = torch.tensor(video_frames)
+        if video_length < max_length:
+            # padding last frame
+            padding_length = max_length - video_length
+            # first_frame = video_frames[0].unsqueeze(0)
+            last_frame = video_frames[-1].unsqueeze(0)
+            padding_frames = last_frame.repeat(padding_length, 1)
+            video_frames = torch.cat([video_frames, padding_frames], dim=0)
+            # video_frames = th.cat([padding_frames, video_frames], dim=0)
+
+        elif video_length > max_length:
+            frame_idx = np.linspace(0, video_length - 1, max_length).astype(int)
+            video_frames = video_frames[frame_idx]
+
+        return video_frames

@@ -19,6 +19,35 @@ import joblib
 device = "cuda" if torch.cuda.is_available() else "cpu"
 
 
+dino_transform_image = T.Compose(
+    [T.ToTensor(), T.Resize(244), T.CenterCrop(224), T.Normalize([0.5], [0.5])]
+)
+
+
+# Mean Pooling - Take attention mask into account for correct averaging
+def mean_pooling(model_output, attention_mask):
+    token_embeddings = model_output[
+        0
+    ]  # First element of model_output contains all token embeddings
+    input_mask_expanded = (
+        attention_mask.unsqueeze(-1).expand(token_embeddings.size()).float()
+    )
+    return torch.sum(token_embeddings * input_mask_expanded, 1) / torch.clamp(
+        input_mask_expanded.sum(1), min=1e-9
+    )
+
+
+def dino_load_image(img: np.ndarray) -> torch.Tensor:
+    """
+    Load an image and return a tensor that can be used as an input to DINOv2.
+    """
+    img = Image.fromarray(img)
+
+    transformed_img = dino_transform_image(img)[:3].unsqueeze(0)
+
+    return transformed_img
+
+
 def load_model(model_name="liv"):
     if model_name == "clip":
         model = CLIPModel.from_pretrained("openai/clip-vit-large-patch14")
@@ -110,6 +139,158 @@ def normalize_embeddings(embeddings, return_tensor=True):
         return normalized_embeddings
     else:
         return normalized_embeddings.detach().cpu().numpy()
+
+
+class SingleLayerMLP(torch.nn.Module):
+    def __init__(self, input_dim, output_dim):
+        super(SingleLayerMLP, self).__init__()
+        self.linear = torch.nn.Linear(input_dim, output_dim)
+
+    def forward(self, x):
+        x = self.linear(x)
+        return x
+
+
+class TwoLayerMLP(torch.nn.Module):
+    def __init__(self, input_dim):
+        super(TwoLayerMLP, self).__init__()
+        self.linear1 = torch.nn.Linear(input_dim, input_dim // 2)
+        self.linear2 = torch.nn.Linear(input_dim // 2, 1)
+
+    def forward(self, x):
+        x = F.relu(self.linear1(x))
+        x = self.linear2(x)
+        x = F.tanh(x)
+        return x
+
+
+class TwoLayerMLPClass(torch.nn.Module):
+    def __init__(self, input_dim, num_classes):
+        super(TwoLayerMLPClass, self).__init__()
+        self.linear1 = torch.nn.Linear(input_dim, input_dim // 2)
+        self.linear2 = torch.nn.Linear(input_dim // 2, num_classes)
+
+    def forward(self, x):
+        x = F.relu(self.linear1(x))
+        x = self.linear2(x)
+        return x
+
+
+class ThreeLayerMLP(torch.nn.Module):
+    def __init__(self, input_dim):
+        super(ThreeLayerMLP, self).__init__()
+        self.linear1 = torch.nn.Linear(input_dim, input_dim)
+        self.linear2 = torch.nn.Linear(input_dim, input_dim // 2)
+        self.linear3 = torch.nn.Linear(input_dim // 2, 1)
+
+    def forward(self, x):
+        x = F.relu(self.linear1(x))
+        x = F.relu(self.linear2(x))
+        x = self.linear3(x)
+        x = F.tanh(x)
+        return x
+
+
+class TwoLayerClassMLP(torch.nn.Module):
+    def __init__(self, input_dim, num_classes):
+        super(TwoLayerClassMLP, self).__init__()
+        self.linear1 = torch.nn.Linear(input_dim, input_dim // 2)
+        self.linear2 = torch.nn.Linear(input_dim // 2, num_classes)
+
+    def forward(self, x):
+        x = F.relu(self.linear1(x))
+        x = self.linear2(x)
+        return x
+
+
+# class ThreeLayerMLP(torch.nn.Module):
+#     def __init__(self, input_dim):
+#         super(ThreeLayerMLP, self).__init__()
+#         self.linear1 = torch.nn.Linear(input_dim, input_dim // 2)
+#         self.linear2 = torch.nn.Linear(input_dim // 2, input_dim // 4)
+#         self.linear3 = torch.nn.Linear(input_dim // 4, 1)
+
+#     def forward(self, x):
+#         x = F.relu(self.linear1(x))
+#         x = F.relu(self.linear2(x))
+#         x = self.linear3(x)
+#         x = F.normalize(x, p=2, dim=1)
+#         return x
+
+
+def pca_learner(
+    h5_file, model_name, only_goal_image=True, pca_var=0.95, experiment_name=None
+):
+    folder_path = "pca_models"
+    if not os.path.exists(folder_path):
+        os.makedirs(folder_path)
+
+    # text_file_name = f"{folder_path}/{model_name}_text_pca_model_var" + str(pca_var)
+    # image_file_name = f"{folder_path}/{model_name}_image_pca_model_var" + str(pca_var)
+
+    # if only_goal_image:
+    #     text_file_name = text_file_name + "_goal"
+    #     image_file_name = image_file_name + "_goal"
+
+    # text_file_name = text_file_name + ".pkl"
+    # image_file_name = image_file_name + ".pkl"
+
+    text_file_name = f"{folder_path}/{experiment_name}_text.pkl"
+    image_file_name = f"{folder_path}/{experiment_name}_image.pkl"
+
+    if os.path.exists(text_file_name) and os.path.exists(image_file_name):
+        text_pca_model = joblib.load(text_file_name)
+        image_pca_model = joblib.load(image_file_name)
+
+    else:
+        train_envs = json.load(open("task_subset.json"))["subset_6"]
+        text_embeddings = []
+        image_embeddings = []
+        for env in train_envs:
+            text_env_name = f"{env}_text"
+            text_array = h5_file[model_name][text_env_name][:]
+            text_embeddings.append(np.array(text_array))
+
+            image_dataset = h5_file[model_name][env]
+
+            for key in sorted(image_dataset.keys(), key=int)[:15]:
+                image_array = image_dataset[key][:]
+                if only_goal_image:
+                    image_array = image_array[-1:]
+                image_embeddings.append(np.array(image_array))
+
+        text_embeddings = np.concatenate(text_embeddings, axis=0)
+        image_embeddings = np.concatenate(image_embeddings, axis=0)
+        text_embeddings = normalize_embeddings(
+            torch.from_numpy(text_embeddings).to(device)
+        )
+        image_embeddings = normalize_embeddings(
+            torch.from_numpy(image_embeddings).to(device)
+        )
+        print("text_embeddings shape", text_embeddings.shape)
+        print("image_embeddings shape", image_embeddings.shape)
+
+        if pca_var < 1:
+            text_pca_model = PCA(n_components=pca_var)
+        else:
+            text_pca_model = PCA(n_components=text_embeddings.shape[0])
+        text_pca_model.fit(text_embeddings.cpu())
+        print("Text PCA Model Fitted", text_pca_model.n_components_)
+        joblib.dump(text_pca_model, text_file_name)
+
+        image_pca_model = PCA(n_components=text_pca_model.n_components_)
+        image_pca_model.fit(image_embeddings.cpu())
+        print("Image PCA Model Fitted", image_pca_model.n_components_)
+        joblib.dump(image_pca_model, image_file_name)
+
+    return text_pca_model, image_pca_model
+
+
+def compute_M(X_S, X_T):
+    M = np.dot(X_S, X_T.T)  # 35 35
+    M_tensor = torch.from_numpy(M).float()
+
+    return M_tensor
 
 
 if __name__ == "__main__":

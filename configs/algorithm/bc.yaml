@@ -24,4 +24,4 @@ offline_training:
   offline_training_steps: 20000
 
 online_training:
-  total_time_steps: 10000
+  total_time_steps: 0

@@ -7,12 +7,14 @@ from lerobot.common.datasets.lerobot_dataset import LeRobotDataset, MultiLeRobot
 from lerobot.common.datasets.transforms import get_image_transforms
 from reward_model import VLCRewardModel, RoboclipV2RewardModel
 from reward_model.env_reward_model import EnvRewardModel
+from reward_model.rewind_reward_model import ReWiNDRewardModel
+import glob
+from usc_episode_rescaling import rescaling_dict
 
 
 def lerobot_to_reward_hdf5(
     dataset_id,
     output_path,
-    task_string,
     reward_model_type="roboclipv2",
     encoder_path=None,
     reward_model_path=None,
@@ -38,6 +40,7 @@ def lerobot_to_reward_hdf5(
             delta_timestamps=None,
             image_transforms=None,
             video_backend="pyav",
+            local_files_only=True,
         )
 
     print("Saving to", output_path)
@@ -58,92 +61,237 @@ def lerobot_to_reward_hdf5(
         )
     elif reward_model_type in ["sparse", "dense"]:
         reward_model = EnvRewardModel(model_path=None)  # LIV encoder
+    elif reward_model_type == "rewind":
+        reward_model = ReWiNDRewardModel(
+            model_load_path=reward_model_path,
+            device=device,
+            batch_size=batch_size,
+        )
 
     reward_image_idx = image_keys.index(reward_image_key)
 
+    # Get total size and shapes from first item
+    total_size = len(dataset)
+    sample_item = dataset[0]
+    sample_task = dataset._datasets[0].meta.episodes[0]["tasks"][0]
+
+    state_shape = sample_item["observation.state"].numpy()[None, :].shape[1:]
+    action_shape = sample_item["action"].numpy()[None, :].shape[1:]
+
+    # Get embedding dimensions from reward model
+    text_embedding_shape = reward_model.encode_text(sample_task)[0].shape
+    policy_embedding_shape = reward_model.encode_text_for_policy(sample_task)[0].shape
+
+    # Get image embedding shape by encoding a sample image
+    sample_image = sample_item[image_keys[0]].numpy()[None, None, :, :, :]
+    img_embedding_shape = reward_model.encode_images(sample_image).squeeze().shape
+
+    print(f"Total dataset size: {total_size}")
+    print(f"State shape: {state_shape}")
+    print(f"Action shape: {action_shape}")
+    print(f"Text embedding shape: {text_embedding_shape}")
+    print(f"Policy embedding shape: {policy_embedding_shape}")
+    print(f"Image embedding shape: {img_embedding_shape}")
+
     with h5py.File(output_path, "w") as h5_file:
-        demo_number = 0
-        prev_demo_number = 0
-
-        states, next_states, actions, rewards, dones = [], [], [], [], []
-        images_dict = {key: [] for key in image_keys}
-
-        lang_embeddings = []
-        policy_lang_embeddings = []
-
-        for idx in tqdm(range(len(dataset)), total=len(dataset)):
-            item = dataset[idx]
-            demo_number = item["episode_index"].item()
-            reward = 0  # Initial reward is 0
-            done = False
-
-            if (idx + 1) < len(dataset):
-                next_item = dataset[idx + 1]
-            else:
-                break
-
-            # Save trajectory data
-            if demo_number != prev_demo_number:
-                dones[-1] = True
-                rewards[-1] = 1
-
-                group = h5_file.create_group(str(demo_number))
-                group["state"] = np.array(states)
-                group["next_state"] = np.array(next_states)
-                group["action"] = np.array(actions)
-                group["reward"] = np.array(rewards)
-                group["done"] = np.array(dones)
-
-                for key in image_keys:
-                    group[key] = np.array(images_dict[key])
-
-                string_list = np.array([task_string] * len(states))
-                group["string"] = string_list.astype("S")
-                group["env_id"] = string_list.astype("S")
-
-                # Reset for next demo
-                states, next_states, actions, rewards, dones = [], [], [], [], []
-                images_dict = {key: [] for key in image_keys}
-                prev_demo_number = demo_number
-
-            # Process rewards
-            # instruction = item["string"].decode("utf-8")
-            instruction = task_string
-            text_embedding = reward_model.encode_text(instruction)[0]
-            policy_lang_embedding = reward_model.encode_text_for_policy(instruction)[0]
-
-            lang_embeddings.append(text_embedding)
-            policy_lang_embeddings.append(policy_lang_embedding)
-
-            states.append(item["observation.state"].numpy()[None, :])
-            next_states.append(next_item["observation.state"].numpy()[None, :])
-            actions.append(item["action"].numpy()[None, :])
-            rewards.append(reward)
-            dones.append(done)
-
-            for key in image_keys:
-                images_dict[key].append(item[key].numpy())
-
-        # Save embeddings to HDF5
-        h5_file.create_dataset(
-            "lang_embedding", data=np.array(lang_embeddings), dtype="float32"
+        # Create fixed-size datasets with chunks and maxshape for resizing
+        states_dataset = h5_file.create_dataset(
+            "state",
+            shape=(total_size, *state_shape),
+            maxshape=(None, *state_shape),
+            chunks=True,
+            dtype=np.float32,
         )
-        h5_file.create_dataset(
+        actions_dataset = h5_file.create_dataset(
+            "action",
+            shape=(total_size, *action_shape),
+            maxshape=(None, *action_shape),
+            chunks=True,
+            dtype=np.float32,
+        )
+        rewards_dataset = h5_file.create_dataset(
+            "rewards",
+            shape=(total_size,),
+            maxshape=(None,),
+            chunks=True,
+            dtype=np.float32,
+        )
+        dones_dataset = h5_file.create_dataset(
+            "done", shape=(total_size,), maxshape=(None,), chunks=True, dtype=np.bool_
+        )
+
+        # Create embedding datasets for each image source
+        image_embeds_datasets = {}
+        for i, key in enumerate(image_keys):
+            image_embeds_datasets[key] = h5_file.create_dataset(
+                f"img_embedding_{i}",
+                shape=(total_size, *img_embedding_shape),
+                maxshape=(None, *img_embedding_shape),
+                chunks=True,
+                dtype=np.float32,
+            )
+
+        # Create embedding datasets
+        lang_embedding_dataset = h5_file.create_dataset(
+            "lang_embedding",
+            shape=(total_size, *text_embedding_shape),
+            maxshape=(None, *text_embedding_shape),
+            chunks=True,
+            dtype=np.float32,
+        )
+        policy_lang_embedding_dataset = h5_file.create_dataset(
             "policy_lang_embedding",
-            data=np.array(policy_lang_embeddings),
-            dtype="float32",
+            shape=(total_size, *policy_embedding_shape),
+            maxshape=(None, *policy_embedding_shape),
+            chunks=True,
+            dtype=np.float32,
         )
+
+        # Create string dataset for task descriptions
+        string_dataset = h5_file.create_dataset(
+            "string",
+            shape=(total_size,),
+            maxshape=(None,),
+            chunks=True,
+            dtype=h5py.string_dtype(),
+        )
+        env_id_dataset = h5_file.create_dataset(
+            "env_id",
+            shape=(total_size,),
+            maxshape=(None,),
+            chunks=True,
+            dtype=h5py.string_dtype(),
+        )
+
+        # Process episodes
+        current_idx = 0
+        prev_task = None
+        episode_start_idx = 0
+        episode_items = []
+        prev_episode_idx = None
+
+        for idx in tqdm(range(total_size)):
+            item = dataset[idx]
+
+            # Get task string
+            task = dataset._datasets[item["dataset_index"]].meta.episodes[
+                item["episode_index"]
+            ]["tasks"][0]
+
+            episode_index = item["episode_index"]
+
+            # Check if we're at a new task/episode boundary
+            new_episode = (
+                (idx > 0 and task != prev_task)
+                or (idx == total_size - 1)
+                or (episode_index != prev_episode_idx)
+            )
+
+            if new_episode and episode_items:
+                # Process the completed episode
+                episode_len = len(episode_items)
+
+                # Apply rescaling based on dataset ID
+                repo_id = (
+                    dataset_id
+                    if isinstance(dataset_id, str)
+                    else dataset_id[item["dataset_index"]]
+                )
+                rescaling_factor = rescaling_dict[repo_id]
+                keep_frames = int(episode_len * rescaling_factor)
+
+                # Sample frames uniformly
+                if keep_frames < episode_len:
+                    indices = np.linspace(0, episode_len - 1, keep_frames, dtype=int)
+                    episode_items = [episode_items[i] for i in indices]
+
+                image_embeddings = []
+
+                # Process the episode items
+                for ep_idx, ep_item in enumerate(episode_items):
+                    # Only compute text embeddings once per episode
+                    if ep_idx == 0:
+                        text_embedding = reward_model.encode_text(task)[0]
+                        policy_lang_embedding = reward_model.encode_text_for_policy(
+                            task
+                        )[0]
+
+                    # Write to datasets
+                    states_dataset[current_idx] = ep_item["observation.state"].numpy()[
+                        None, :
+                    ][0]
+                    actions_dataset[current_idx] = ep_item["action"].numpy()[None, :][0]
+                    rewards_dataset[current_idx] = 0  # Initial reward is 0
+                    dones_dataset[current_idx] = False
+
+                    # Compute and write image embeddings
+                    for key in image_keys:
+                        image = ep_item[key].numpy()[None, None, :, :, :]
+                        image_embedding = reward_model.encode_images(image).squeeze()
+                        image_embeds_datasets[key][current_idx] = image_embedding
+
+                        if key == reward_image_key:
+                            image_embeddings.append(image_embedding)
+
+                    # Write embeddings and strings
+                    lang_embedding_dataset[current_idx] = text_embedding
+                    policy_lang_embedding_dataset[current_idx] = policy_lang_embedding
+                    string_dataset[current_idx] = task.encode("utf-8")
+                    env_id_dataset[current_idx] = task.encode("utf-8")
+
+                    current_idx += 1
+
+                # Set reward and done for the last frame of the episode
+                if current_idx > 0:
+                    rewards_dataset[current_idx - 1] = 1
+                    dones_dataset[current_idx - 1] = True
+
+                    image_embeddings = np.array(image_embeddings)
+                    # Compute the rewards
+                    reward = reward_model.calculate_rewards(
+                        text_embedding[None, :], image_embeddings[None, :]
+                    )
+                    rewards_dataset[current_idx] = reward
+                    print(f"Reward: {reward} for task: {task}")
+
+                # Reset for next episode
+                episode_items = [item]
+            else:
+                episode_items.append(item)
+
+            prev_task = task
+            prev_episode_idx = episode_index
+
+        # Update total size to actual number of frames saved
+        if current_idx < total_size:
+            states_dataset.resize((current_idx, *state_shape))
+            actions_dataset.resize((current_idx, *action_shape))
+            rewards_dataset.resize((current_idx,))
+            dones_dataset.resize((current_idx,))
+            lang_embedding_dataset.resize((current_idx, *text_embedding_shape))
+            policy_lang_embedding_dataset.resize((current_idx, *policy_embedding_shape))
+            string_dataset.resize((current_idx,))
+            env_id_dataset.resize((current_idx,))
+            for key in image_keys:
+                image_embeds_datasets[key].resize((current_idx, *img_embedding_shape))
 
 
 if __name__ == "__main__":
-    dataset_id = "test/orange_left_right_handover"
-    reward_model_type = "dense"
-    output_path = f"./data/real_robot/updated_trajs/orange_left_right_handover_{reward_model_type}.h5"
-    task_string = "pick the orange cup and move it to the right"
+    path = "/home/abrar/.cache/huggingface/lerobot/usc_koch_rewind/"
+    dataset_ids = glob.glob(path + "/*")
+    dataset_ids = [f"usc_koch_rewind/{os.path.basename(x)}" for x in dataset_ids]
+
+    reward_model_path = "weights/rewind/one_step_transformer.pth"
+    reward_model_path = "weights/rewind/real_world_PosEmb_Rewind_ratio_0.8_EMA_momentum_0.3_End_Rewind_ratio_0.1/model_20.pth"
+
+    # dataset_id = "test/orange_left_right_handover"
+    reward_model_type = "rewind"
+    output_path = (
+        f"./data/real_robot/updated_trajs/usc_koch_rewind_{reward_model_type}2.h5"
+    )
     lerobot_to_reward_hdf5(
-        dataset_id=dataset_id,
+        dataset_id=dataset_ids,
         output_path=output_path,
-        task_string=task_string,
         reward_model_type=reward_model_type,
-        reward_model_path="/data/shared/roboclip/clip_liv_models/RegressionRandom_liv_subtract_before_heads_4/model_74.pt",
+        reward_model_path=reward_model_path,
     )

@@ -1,0 +1,23 @@
+
+rescaling_dict = {
+    "usc_koch_rewind/fold_the_blue_towel": 1.0,
+    "usc_koch_rewind/move_the_orange_cup_from_the_left_to_the_right": .7,
+    "usc_koch_rewind/move_the_orange_cup_from_the_right_to_the_left": .7,
+    "usc_koch_rewind/open_the_blue_trash_bin": .7,
+    "usc_koch_rewind/open_the_green_trash_bin": .7,
+    "usc_koch_rewind/open_the_red_trash_bin": .7,
+    "usc_koch_rewind/put_the_banana_in_the_box": .5,
+    "usc_koch_rewind/put_the_blue_cup_on_the_red_plate": .5,
+    "usc_koch_rewind/put_the_blue_tape_in_the_box_on_the_left": .7,
+    "usc_koch_rewind/put_the_orange_cup_in_the_box": .5,
+    "usc_koch_rewind/put_the_orange_cup_on_the_red_plate": .5,
+    "usc_koch_rewind/put_the_pink_marker_in_the_green_trash_can": .8,
+    "usc_koch_rewind/put_the_red_cup_on_the_red_plate": .5,
+    "usc_koch_rewind/put_the_red_marker_in_the_red_trash_can": .8,
+    "usc_koch_rewind/put_the_red_tape_in_the_box_on_the_right": .5,
+    "usc_koch_rewind/separate_the_blue_and_red_cups": .5,
+    "usc_koch_rewind/separate_the_orange_and_blue_cups": .5,
+    "usc_koch_rewind/throw_the_banana_away_in_the_blue_trash_bin": .7,
+    "usc_koch_rewind/throw_the_banana_away_in_the_green_trash_bin": .7,
+    "usc_koch_rewind/throw_the_banana_away_in_the_red_trash_bin": .7,
+}

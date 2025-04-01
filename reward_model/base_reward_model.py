@@ -137,9 +137,9 @@ class BaseRewardModel(abc.ABC):
         :param encoded_videos: Encoded video representations.
         :return: Reward values for each text-video pair.
         """
-        assert len(encoded_texts) == len(
-            encoded_videos
-        ), "The number of text and video representations should be the same."
+        assert len(encoded_texts) == len(encoded_videos), (
+            "The number of text and video representations should be the same."
+        )
         for i in range(0, len(encoded_videos), self.batch_size):
             batch_texts = encoded_texts[i : i + self.batch_size]
             batch_videos = encoded_videos[i : i + self.batch_size]
