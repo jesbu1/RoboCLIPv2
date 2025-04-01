@@ -33,7 +33,7 @@ pred_reward = pred_reward.squeeze(-1) # reward shape (1, 16, 1) -> (1, 16)
 pred_reward = pred_reward[:, 1:] # remove the first element
 print(pred_reward.shape) # shape: [1, 15]
 
-h5_file = h5py.File('usc_koch_rewind_dino_reward_side_train.h5', 'r')
+h5_file = h5py.File('/home/jzhang96/RoboCLIPv2/real_robot_exp/usc_koch_rewind_dino_reward_side_train.h5', 'r')
 
 traj_data = h5_file[list(h5_file.keys())[0]]
 video_emb = torch.tensor(traj_data['8']).to(device)
