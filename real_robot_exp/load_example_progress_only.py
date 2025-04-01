@@ -1,6 +1,7 @@
 from models_pe import ClassProgressTransformer
 import os 
 import torch
+import h5py
 # Load the model
 model_path = os.path.join('/home/jzhang96/RoboCLIPv2/real_robot_exp','models', 'real_world_PosEmb_Rewind_ratio_0.8_EMA_momentum_0.3_End_Rewind_ratio_0.1', 'model_5.pth')
 
@@ -31,6 +32,17 @@ pred_reward, _ = model(traj_data, text_embeddings)
 pred_reward = pred_reward.squeeze(-1) # reward shape (1, 16, 1) -> (1, 16)
 pred_reward = pred_reward[:, 1:] # remove the first element
 print(pred_reward.shape) # shape: [1, 15]
+
+h5_file = h5py.File('usc_koch_rewind_dino_reward_side_train.h5', 'r')
+
+traj_data = h5_file[list(h5_file.keys())[0]]
+video_emb = torch.tensor(traj_data['8']).to(device)
+text_emb = torch.tensor(traj_data["minilm_lang_embedding"]).to(device)
+video_emb = video_emb[::2].unsqueeze(0)
+# video_emb = video_emb[:].unsqueeze(0)
+
+pred_reward, _ = model(video_emb, text_emb)
+print(pred_reward)
 
 
 
