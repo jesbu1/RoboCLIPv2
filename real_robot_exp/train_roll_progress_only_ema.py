@@ -54,6 +54,7 @@ def main(args):
         experiment_name += "_PosEmb"
     if args.last_frame_pe:
         experiment_name += "_LastFramePE"
+    experiment_name += "_View_" + args.view
 
     # if args.extra_data_type == "metaworld":
     #     experiment_name = "_NewPE_Crop_MetaWorld" 

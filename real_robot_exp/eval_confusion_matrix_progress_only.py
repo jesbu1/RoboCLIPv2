@@ -51,7 +51,16 @@ def normalize_embeddings(embeddings, return_tensor=True):
 def plot_matrix_as_image(matrix, names, set, text, prob = False, org_progress = False, epoch = None, ema = False):
     # Create a figure and axis
     # only keep 2 decimal points
+
+    diagonal = np.diag(matrix)
+    diagonal_sum = np.sum(diagonal)
+    total_sum = np.sum(matrix)
+    rest_sum = total_sum - diagonal_sum
+    score = rest_sum / diagonal_sum
     matrix = np.round(matrix, 2)
+
+
+
     # fig, ax = plt.subplots(figsize=(len(matrix), len(matrix)))
     fig, ax = plt.subplots(figsize=(len(matrix) * 1.1, len(matrix)))
     
@@ -94,14 +103,14 @@ def plot_matrix_as_image(matrix, names, set, text, prob = False, org_progress = 
             wandb.log({f"confusion_matrix_same_class_prob/{set}_prob_confusion_matrix": wandb.Image(fig, caption=f"Epoch {epoch}")})
     elif org_progress:
         if ema:
-            wandb.log({f"EMA_confusion_matrix_org_progress_no_two_step/{set}_original_progress_confusion_matrix": wandb.Image(fig, caption=f"Epoch {epoch}")})
+            wandb.log({f"EMA_confusion_matrix_org_progress_no_two_step/{set}_original_progress_confusion_matrix": wandb.Image(fig, caption=f"Epoch {epoch}_Score: {score:.2f}")})
         else:
-            wandb.log({f"confusion_matrix_org_progress_no_two_step/{set}_original_progress_confusion_matrix": wandb.Image(fig, caption=f"Epoch {epoch}")})
+            wandb.log({f"confusion_matrix_org_progress_no_two_step/{set}_original_progress_confusion_matrix": wandb.Image(fig, caption=f"Epoch {epoch}_Score: {score:.2f}")})
     else:
         if ema:
-            wandb.log({f"EMA_confusion_matrix/{set}_confusion_matrix": wandb.Image(fig, caption=f"Epoch {epoch}")})
+            wandb.log({f"EMA_confusion_matrix/{set}_confusion_matrix": wandb.Image(fig, caption=f"Epoch {epoch}_Score: {score:.2f}")})
         else:
-            wandb.log({f"confusion_matrix/{set}_confusion_matrix": wandb.Image(fig, caption=f"Epoch {epoch}")})
+            wandb.log({f"confusion_matrix/{set}_confusion_matrix": wandb.Image(fig, caption=f"Epoch {epoch}_Score: {score:.2f}")})
     # plt.savefig(f"confusion_matrix_{set}.pdf", bbox_inches="tight")
     plt.close(fig)  # Close the figure to free memory
 
