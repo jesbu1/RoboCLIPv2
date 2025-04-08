@@ -25,7 +25,7 @@ minilm_model = AutoModel.from_pretrained("sentence-transformers/all-MiniLM-L12-v
     device
 )
 
-h5_file_name = "metaworld_dino_embeddings_224.h5"
+h5_file_name = "metaworld_dino_embeddings_224_fix.h5"
 h5_file = h5py.File(h5_file_name, 'a')
 
 

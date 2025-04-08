@@ -50,11 +50,17 @@ def main(args):
     WANDB_PROJECT_NAME = "roboclip-v2"
 
     experiment_name = str(args.extra_data_type)
+    if args.full_set:
+        experiment_name += "_FullSet"
     if args.positional_encoding:
         experiment_name += "_PosEmb"
     if args.last_frame_pe:
         experiment_name += "_LastFramePE"
     experiment_name += "_View_" + args.view
+    if args.openx_data:
+        experiment_name += "_OpenX"
+    else:
+        experiment_name += "_NoOpenX"
 
     # if args.extra_data_type == "metaworld":
     #     experiment_name = "_NewPE_Crop_MetaWorld" 
@@ -83,7 +89,7 @@ def main(args):
     
 
     # group_name = "Dino_Koch_v2"
-    group_name = "Mar_31_Koch_Rewind"
+    group_name = "April_8_Metaworld_Rewind_Fix"
     run = wandb.init(
         entity=WANDB_ENTITY_NAME,
         project=WANDB_PROJECT_NAME,
@@ -93,9 +99,15 @@ def main(args):
     )
 
     if args.extra_data_type == "metaworld":
-        h5_train_eval_file = h5py.File("metaworld_dino_embeddings_train.h5", "r")
-        h5_eval_file = h5py.File("metaworld_dino_embeddings_eval.h5", "r")
-        extra_data_path = "metaworld_dino_embeddings_train.h5"
+        if args.text_embedding_model == "minilm":
+            h5_train_eval_file = h5py.File("metaworld_dino_embeddings_train_fix.h5", "r")
+            h5_eval_file = h5py.File("metaworld_dino_embeddings_eval_fix.h5", "r")
+            extra_data_path = "metaworld_dino_embeddings_train_fix.h5"
+        else:
+            h5_train_eval_file = h5py.File("metaworld_liv_embeddings_train.h5", "r")
+            h5_eval_file = h5py.File("metaworld_liv_embeddings_eval.h5", "r")
+            extra_data_path = "metaworld_liv_embeddings_train.h5"
+
     else:
         # h5_eval_file = h5py.File("jesse_collect_dataset_new_token.h5", "r")
         # extra_data_path = "jesse_collect_dataset_new_token.h5"
@@ -106,7 +118,10 @@ def main(args):
         elif args.view == "top":
             h5_train_eval_file = h5py.File("usc_koch_rewind_dino_reward_main_train.h5", "r")
             h5_eval_file = h5py.File("usc_koch_rewind_dino_reward_main_eval.h5", "r")
-            extra_data_path = "usc_koch_rewind_dino_reward_main_train.h5"
+            if args.full_set:
+                extra_data_path = "usc_koch_rewind_dino_reward_main_full.h5"
+            else:
+                extra_data_path = "usc_koch_rewind_dino_reward_main_train.h5"
     embedding_dim = 768
 
     if args.openx_data:
@@ -123,19 +138,19 @@ def main(args):
         extra_dataloader = DataLoader(extra_dataset, batch_size=extra_batch_size, shuffle=True, num_workers=args.worker, drop_last=True, pin_memory=False)
 
 
-        h5_openx_eval_file = h5py.File("/home/jzhang96/full_openx_embeddings_v2_test.h5", "r")
-        # h5_openx_eval_file = h5py.File("/mnt/ssd_a_4tb/jzhang96/full_openx_embeddings_dino_test_backup.h5", "r")
-        # h5_openx_eval_file = h5py.File("/data/shared/roboclip/data/h5_buffers/openx_embeddings/full_openx_embeddings_dino_test.h5", "r")
+        # h5_openx_eval_file = h5py.File("/home/jzhang96/full_openx_embeddings_v2_test.h5", "r")
+        # # h5_openx_eval_file = h5py.File("/mnt/ssd_a_4tb/jzhang96/full_openx_embeddings_dino_test_backup.h5", "r")
+        # # h5_openx_eval_file = h5py.File("/data/shared/roboclip/data/h5_buffers/openx_embeddings/full_openx_embeddings_dino_test.h5", "r")
 
-        positive_eval_openx_dataset = LivRealVideoEvalDataset(args, 
-                                                        h5_openx_eval_file,
-                                                        label = "positive")
-        negative_eval_openx_dataset = LivRealVideoEvalDataset(args,
-                                                        h5_openx_eval_file,
-                                                        label = "negative")
+        # positive_eval_openx_dataset = LivRealVideoEvalDataset(args, 
+        #                                                 h5_openx_eval_file,
+        #                                                 label = "positive")
+        # negative_eval_openx_dataset = LivRealVideoEvalDataset(args,
+        #                                                 h5_openx_eval_file,
+        #                                                 label = "negative")
         
-        openx_positive_eval_dataloader = DataLoader(positive_eval_openx_dataset, batch_size=args.batch_size // 8, shuffle=True, num_workers=2, drop_last=False, pin_memory=True)
-        openx_negative_eval_dataloader = DataLoader(negative_eval_openx_dataset, batch_size=args.batch_size // 8, shuffle=True, num_workers=2, drop_last=False, pin_memory=True)
+        # openx_positive_eval_dataloader = DataLoader(positive_eval_openx_dataset, batch_size=args.batch_size // 8, shuffle=True, num_workers=2, drop_last=False, pin_memory=True)
+        # openx_negative_eval_dataloader = DataLoader(negative_eval_openx_dataset, batch_size=args.batch_size // 8, shuffle=True, num_workers=2, drop_last=False, pin_memory=True)
     else:
         # if args.extra_data_type == "metaworld":
         #     extra_dataset = LivRealVideoTrainDataset(args, extra_data_path, split = False, sample_neg=True)
@@ -144,8 +159,8 @@ def main(args):
         extra_dataset = LivRealVideoTrainDataset(args, extra_data_path, split = False, sample_neg=True)
 
         extra_dataloader = DataLoader(extra_dataset, batch_size=args.batch_size, shuffle=True, num_workers=args.worker, drop_last=True, pin_memory=True)
-        positive_eval_openx_dataset = None
-        negative_eval_openx_dataset = None
+        # positive_eval_openx_dataset = None
+        # negative_eval_openx_dataset = None
 
 
     extra_eval_eval_pos_dataset = LivRealVideoEvalDataset(args, h5_eval_file, label = "positive", dataset = "extra")
@@ -281,6 +296,18 @@ def main(args):
                     compute_metrics_multi(args, ema_model, threshold=0.5, compute_gif = compute_gif, epoch = epoch, one_step=True)
             ema_model.train()
             self_attention_model.train()
+        
+        if args.extra_data_type == "metaworld":
+            model_dict = {
+                "model": self_attention_model.state_dict(),
+                "ema_model": ema_model.state_dict(),
+                "epoch": epoch,
+                "args": args
+            }
+            folder_name = "models/" + experiment_name
+            if not os.path.exists(folder_name):
+                os.makedirs(folder_name)
+            torch.save(model_dict, folder_name + "/model_" + str(epoch) + ".pth")
 
                     
 
@@ -318,6 +345,7 @@ if __name__ == "__main__":
     argparser.add_argument('--last_frame_pe', action='store_true')
     argparser.add_argument('--ema_momentum', type=float, default=0.3)
     argparser.add_argument('--end_rewind_ratio', type=float, default=0.0)
+    argparser.add_argument('--full_set', action='store_true')
 
 
 
