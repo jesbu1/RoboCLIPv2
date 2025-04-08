@@ -53,6 +53,7 @@ class BaseEncoder(abc.ABC):
         assert len(images.shape) == 5, "The input should be a sequence of video frames."
         # ensure the channels are first
         if images.shape[-1] == 3 and not images.shape[2] == 3:
+            # print(f"images.shape before transpose: {images.shape}") # (1, 1, 480, 640, 3)
             images = np.transpose(images, (0, 1, 4, 2, 3))
             # print("shape after transpose", images.shape) # (num_vids, num_frames, 3, H, W) (1,1,3,480,640)
         for i in range(0, len(images), self.batch_size):
@@ -61,7 +62,7 @@ class BaseEncoder(abc.ABC):
                 self.device
             )
             # print("batch_images shape", batch_images.shape) # (1,1,3,480,640)
-            encoded_images = self._encode_image_batch(batch_images).cpu().numpy()
+            encoded_images = self._encode_image_batch(batch_images)
             if i == 0:
                 encoded_images_all = encoded_images
             else:

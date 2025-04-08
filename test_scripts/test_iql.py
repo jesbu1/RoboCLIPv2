@@ -11,7 +11,7 @@ from stable_baselines3.common.vec_env.subproc_vec_env import SubprocVecEnv
 import torch as th
 import numpy as np
 import os
-
+from memory_profiler import profile
 os.environ["TOKENIZERS_PARALLELISM"] = "false"  # to get rid of the warning message
 from stable_baselines3.common.vec_env import DummyVecEnv
 from stable_baselines3.common.vec_env.base_vec_env import VecEnv
@@ -57,7 +57,7 @@ from models.reward_model.roboclip_reward_model import RoboclipRewardModel
 from models.reward_model.vlc_reward_model import VLCRewardModel
 from models.reward_model.roboclipv2_reward_model import RoboclipV2RewardModel
 from models.reward_model.gvl_reward_model import GVLRewardModel
-
+from models.encoders.dino_miniLM_encoder import Dino_miniLM_Encoder
 from models.reward_model.env_reward_model import EnvRewardModel
 
 from envs.metaworld_envs.metaworld import (
@@ -125,7 +125,7 @@ def create_exp_name(cfg: DictConfig):
         exp_name += "use_proprio_"
 
     exp_name += f"_seed_{cfg.environment.env_id}"
-    exp_name += f"_seed_{cfg.general_training.seed}"
+    exp_name += f"_seed_{cfg.general_training.seed}_debug"
     
 
     # if the last character is an underscore, remove it
@@ -190,11 +190,18 @@ def parse_reward_model(reward_cfg: DictConfig) -> BaseRewardModel:
 
 
     # Also set default image encoder to be a LIVEncoder
-    image_encoder = LIVEncoder(
-        model_load_path="",
+    # image_encoder = LIVEncoder(
+    #     model_load_path="",
+    #     use_pca=False,
+    #     attention_heads=4,
+    #     device="cuda",
+    #     batch_size=64,
+    # )
+    image_encoder = Dino_miniLM_Encoder(
         use_pca=False,
-        attention_heads=4,
         device="cuda",
+        dino_batch_size=128,
+        max_num_frames_per_episode=128,
         batch_size=64,
     )
 
@@ -202,6 +209,7 @@ def parse_reward_model(reward_cfg: DictConfig) -> BaseRewardModel:
 
 
 # Define the function to initialize Hydra
+# @profile
 @hydra.main(config_path="../configs", config_name="base_config")
 def main(cfg: DictConfig):
     print(OmegaConf.to_yaml(cfg))
@@ -431,7 +439,7 @@ def create_envs(cfg: DictConfig, reward_model: BaseRewardModel, image_encoder):
         else:
             lang_feat_reward = text_instruction
 
-    # print("Lang feat policy shape", lang_feat_policy.shape)
+    # print("Lang feat policy shape", lang_feat_policy.shape) # 384
     # 
     ignore_language = env_config.ignore_language
 

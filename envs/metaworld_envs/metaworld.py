@@ -9,7 +9,7 @@ from metaworld.envs import (
     ALL_V2_ENVIRONMENTS_GOAL_HIDDEN,
     ALL_V2_ENVIRONMENTS_GOAL_OBSERVABLE,
 )
-
+from memory_profiler import profile
 from envs.metaworld_envs.wrappers import *
 from models.reward_model.env_reward_model import EnvRewardModel
 
@@ -18,54 +18,53 @@ environment_to_instruction = {
     "basketball-v2": "playing basketball",
     "bin-picking-v2": "picking bin",
     "box-close-v2": "closing box",
-    "button-press-topdown-v2": "pressing button from top",
+    "button-press-topdown-v2": "Pressing button from top",
     "button-press-topdown-wall-v2": "pressing button",
-    "button-press-v2": "pressing button from side",
-    "button-press-wall-v2": "pressing button from side",
-    "coffee-button-v2": "pressing coffee button",
+    "button-press-v2": "Pressing button from side",
+    "button-press-wall-v2": "Pressing button from side",
+    "coffee-button-v2": "Pressing the coffee button",
     "coffee-pull-v2": "pulling cup",
-    "coffee-push-v2": "pushing coffee cup",
+    "coffee-push-v2": "pushing the coffee cup",
     "dial-turn-v2": "turning dial",
     "disassemble-v2": "disassembling",
-    "door-close-v2": "closing door",
-    "door-lock-v2": "locking door",
+    "door-close-v2": "Closing the door",
+    "door-lock-v2": "Turning door lock counter-clockwise",
     "door-open-v2": "opening door",
-    "door-unlock-v2": "unlocking door",
+    "door-unlock-v2": "Turning door lock clockwise",
     "hand-insert-v2": "inserting bin",
     "drawer-close-v2": "closing drawer",
     "drawer-open-v2": "opening drawer",
     "faucet-open-v2": "opening faucet",
-    "faucet-close-v2": "closing faucet",
+    "faucet-close-v2": "Closing the faucet",
     "hammer-v2": "hammering nail",
-    "handle-press-side-v2": "pressing handle from side",
+    "handle-press-side-v2": "Pressing the handle from side",
     "handle-press-v2": "pressing handle",
     "handle-pull-side-v2": "pulling handle",
-    "handle-pull-v2": "pulling handle",
+    "handle-pull-v2": "Pulling the handle",
     "lever-pull-v2": "pulling lever",
     "peg-insert-side-v2": "inserting peg",
-    "pick-place-wall-v2": "placing bin to shelf",
+    "pick-place-wall-v2": "Picking up the block and placing it to the goal position",
     "pick-out-of-hole-v2": "picking bin",
     "reach-v2": "reaching red",
-    "push-back-v2": "pulling bin back",
+    "push-back-v2": "Pushing the block back to the goal",
     "push-v2": "pushing block",
     "pick-place-v2": "placing bin to shelf",
     "plate-slide-v2": "sliding plate",
-    "plate-slide-side-v2": "sliding plate",
-    "plate-slide-back-v2": "sliding plate",
+    "plate-slide-side-v2": "Sliding the plate into the gate from the side",
+    "plate-slide-back-v2": "Sliding the plate out of the gate",
     "plate-slide-back-side-v2": "sliding plate",
     "peg-unplug-side-v2": "unpluging peg",
-    "soccer-v2": "kicking soccer ball",
+    "soccer-v2": "Sliding the ball into the gate",
     "stick-push-v2": "pushing stick",
     "stick-pull-v2": "pulling stick",
     "push-wall-v2": "pushing bin",
-    "reach-wall-v2": "reaching red",
+    "reach-wall-v2": "Reaching the goal",
     "shelf-place-v2": "placing bin to shelf",
-    "sweep-into-v2": "sweep blocks into hole",
+    "sweep-into-v2": "Sweeping the block into the hole",
     "sweep-v2": "sweeping block",
     "window-open-v2": "opening window",
-    "window-close-v2": "closing window",
+    "window-close-v2": "Closing the window",
 }
-
 instruction_to_environment = {v: k for k, v in environment_to_instruction.items()}
 
 
@@ -155,7 +154,7 @@ class MetaworldBase(Env):
             observation (object): agent's observation of the current environment
         """
         return self.base_env._get_obs(self.base_env.prev_time_step)
-
+    # @profile
     def reset(self):
         """
         Resets the environment and optionally resets the underlying environment with a random seed.
@@ -163,6 +162,7 @@ class MetaworldBase(Env):
         Returns:
             observation (object): the initial observation
         """
+        self.close()
         if self.random_reset == "train":
             self.rank = random.randint(100, 400)
             self.base_env = self.all_env_types[self.env_id](seed=self.rank)
@@ -181,8 +181,12 @@ class MetaworldBase(Env):
             self.base_env = TimeLimit(
                 self.base_env, max_episode_steps=self.max_episode_steps
             )
-
-        return self.base_env.reset()
+            
+        outs = self.base_env.reset()
+        import gc
+        gc.collect()
+        return outs
+        # return self.base_env.reset()
 
     def render(self, mode="rgb_array"):
         """

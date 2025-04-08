@@ -4,7 +4,7 @@ import torch as th
 import torch.nn.functional as F
 from gym import spaces
 from typing import List
-
+from memory_profiler import profile
 from models.reward_model.base_reward_model import BaseRewardModel
 from models.encoders.base_encoder import BaseEncoder
 
@@ -113,7 +113,7 @@ class TimeWrapper(gym.Wrapper):
 
     def step(self, action):
         obs, reward, done, info = self.env.step(action)
-        t = self.counter / 500  # Assuming max steps is 500
+        t = self.counter / 128  # Assuming max steps is 500
         obs = np.concatenate([obs, [t]])
         self.counter += 1
         return obs, reward, done, info
@@ -145,8 +145,9 @@ class LanguageWrapper(gym.Wrapper):
     def step(self, action):
         obs, reward, done, info = self.env.step(action)
         obs = np.concatenate([obs, self.language_features])
+        # print(f"obs after language wrapper: {obs.shape}")
         return obs, reward, done, info
-
+    # @profile
     def reset(self):
         obs = self.env.reset()
         return np.concatenate([obs, self.language_features])
@@ -201,7 +202,7 @@ class LearnedRewardWrapper(gym.Wrapper):
             print(
                 "This may be valid if the user is using sparse/dense reward in a single task"
             )
-
+    # @profile #not here
     def step(self, action):
         self.counter += 1
         obs, original_reward, done, info = self.env.step(action)
@@ -243,7 +244,7 @@ class LearnedRewardWrapper(gym.Wrapper):
 
             if info.get("success", False):
                 reward += self.reward_model.success_bonus
-
+            # print(f"obs: {obs.shape}") # 772 = 768 + 4
             return obs, reward, done, info
         # Check if this is sparse/dense reward
         elif self.reward_model.name == "sparse":
@@ -323,9 +324,10 @@ class LearnedRewardWrapper(gym.Wrapper):
         if info.get("success", False):
             reward += self.reward_model.success_bonus
         return obs, reward, done, info
-
+    # @profile
     def reset(self):
         self.past_observations = []
+        print(len(self.raw_observations))
         self.raw_observations = []
         self.counter = 0
 
@@ -334,6 +336,7 @@ class LearnedRewardWrapper(gym.Wrapper):
         # This is for the reward function
         image = self.env.render()
         image_for_model = image[None, None, :, :, :]
+        # print(image_for_model.shape)
         encoded_image = self.image_encoder.encode_images(image_for_model).squeeze()
 
         if self.is_state_based is False:
