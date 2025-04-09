@@ -12,5 +12,7 @@ source /home/yusenluo/anaconda3/etc/profile.d/conda.sh  # 这里需要替换成�
 conda activate roboclip      # 替换 myenv 为你的 Conda 环境名
 
 python test_scripts/test_iql.py metaworld=some_tasks_15 algorithm=sac reward=dense
+python test_scripts/test_iql.py metaworld=some_tasks_15 algorithm=sac reward=rewind
+python test_scripts/test_iql.py metaworld=some_tasks_15 algorithm=sac reward=gvl
 # bash /home/yusenluo/rewind/RoboCLIPv2/docker/run_singularity_slurm_script.sh ' python test_scripts/test_iql.py metaworld=some_tasks_15 algorithm=sac reward=dense'
 done
