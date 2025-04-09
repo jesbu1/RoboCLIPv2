@@ -89,7 +89,7 @@ def main(args):
     
 
     # group_name = "Dino_Koch_v2"
-    group_name = "April_8_Metaworld_Rewind_Fix_Back"
+    group_name = "April_9_Metaworld_Rewind_Fix_Back"
     run = wandb.init(
         entity=WANDB_ENTITY_NAME,
         project=WANDB_PROJECT_NAME,
