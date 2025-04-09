@@ -89,7 +89,7 @@ def main(args):
     
 
     # group_name = "Dino_Koch_v2"
-    group_name = "April_8_Metaworld_Rewind_Fix"
+    group_name = "April_8_Metaworld_Rewind_Fix_Back"
     run = wandb.init(
         entity=WANDB_ENTITY_NAME,
         project=WANDB_PROJECT_NAME,
@@ -100,9 +100,9 @@ def main(args):
 
     if args.extra_data_type == "metaworld":
         if args.text_embedding_model == "minilm":
-            h5_train_eval_file = h5py.File("metaworld_dino_embeddings_train_fix.h5", "r")
-            h5_eval_file = h5py.File("metaworld_dino_embeddings_eval_fix.h5", "r")
-            extra_data_path = "metaworld_dino_embeddings_train_fix.h5"
+            h5_train_eval_file = h5py.File("metaworld_dino_embeddings_train.h5", "r")
+            h5_eval_file = h5py.File("metaworld_dino_embeddings_eval.h5", "r")
+            extra_data_path = "metaworld_dino_embeddings_train.h5"
         else:
             h5_train_eval_file = h5py.File("metaworld_liv_embeddings_train.h5", "r")
             h5_eval_file = h5py.File("metaworld_liv_embeddings_eval.h5", "r")
