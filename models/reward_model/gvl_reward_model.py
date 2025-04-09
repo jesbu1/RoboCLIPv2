@@ -19,7 +19,7 @@ class GVLRewardModel(BaseRewardModel):
         max_frames: int = 15,
         offset: float = 0.5,
         batch_size: int = 64,
-        success_bonus: float = 10.0,
+        success_bonus: float = 50.0,
         reward_at_every_step: bool = False
     ):
         super().__init__(device, batch_size=batch_size, success_bonus=success_bonus)
@@ -223,21 +223,3 @@ class GVLRewardModel(BaseRewardModel):
         """
         return 'GVLRewardModel'
 
-if __name__ == "__main__":
-    import h5py
-
-    # 假设你的 h5 文件路径
-    h5_path = "/scr/yusenluo/RoboCLIP/visualization/decoder_only/metaworld_GT_eval_v2.h5"
-    dataset_name = "button-press-v2"  # 例如
-
-    with h5py.File(h5_path, 'r') as f:
-        # 取到 (N, 224, 224, 3) 的 uint8 数据
-        frames_data = f[dataset_name][:]
-        # 取文本描述
-        task_bytes = f["text_annotations"][f"{dataset_name}_text"][()]
-        # decode bytes to str
-        task_text = task_bytes.decode("utf-8")
-    
-    reward_model = GVLRewardModel(max_frames=5)
-    reward = reward_model.calculate_rewards(frames_data, task_text)
-    print(reward)

@@ -79,11 +79,12 @@ class Dino_miniLM_Encoder(BaseEncoder):
         """
         # videos.shape = (128, 224, 224, 3), dtype=uint8
         # Convert input from (1,3,480,640) to (1,480,640,3)
-        images = images.cpu().numpy()
+        if isinstance(images, torch.Tensor):
+            images = images.cpu().numpy()
         # print(f"images.shape before transpose: {images.shape}") # (1,1,3,480,640)
-        
+        if images.shape[2] == 3:
         # Adjust channel order from (1,3,480,640) to (1,480,640,3)
-        images = np.transpose(images, (0, 1, 3, 4, 2)).squeeze(0)
+            images = np.transpose(images, (0, 1, 3, 4, 2)).squeeze(0)
         # print(f"images.shape after transpose: {images.shape}") # (1,480,640,3)
         
         # Ensure data type is uint8, range 0-255
@@ -94,7 +95,7 @@ class Dino_miniLM_Encoder(BaseEncoder):
             else:
                 # For other types, try direct conversion to uint8
                 images = images.astype(np.uint8)
-        
+        # print(f"images.shape: {images.shape}")
         # Process all images directly, without downsampling
         with torch.inference_mode():
             episode_images_dino = [self.dino_load_image(img) for img in images]

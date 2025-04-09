@@ -4,4 +4,6 @@ reward_model:
   name: 'gvl'
   batch_size: 64
   api_key: null
-  success_bonus: 10.0
+  success_bonus: 50.0
+  general_training:
+    dense_rewards_at_end: false

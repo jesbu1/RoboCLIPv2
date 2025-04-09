@@ -2,7 +2,7 @@
 
 reward_model: 
   name: 'dense'
-  encoder: 'liv' # default and only option is vlc
-  success_bonus: 0.0
+  encoder: 'dino' # default and only option is vlc
+  success_bonus: 50.0
   general_training:
     dense_rewards_at_end: false

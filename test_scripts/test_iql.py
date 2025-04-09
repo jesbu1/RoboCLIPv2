@@ -55,7 +55,7 @@ from models.encoders.liv_encoder import LIVEncoder
 from models.reward_model.base_reward_model import BaseRewardModel
 from models.reward_model.roboclip_reward_model import RoboclipRewardModel
 from models.reward_model.vlc_reward_model import VLCRewardModel
-from models.reward_model.roboclipv2_reward_model import RoboclipV2RewardModel
+from models.reward_model.rewind_reward_model import RewindRewardModel
 from models.reward_model.gvl_reward_model import GVLRewardModel
 from models.encoders.dino_miniLM_encoder import Dino_miniLM_Encoder
 from models.reward_model.env_reward_model import EnvRewardModel
@@ -156,8 +156,8 @@ def parse_reward_model(reward_cfg: DictConfig) -> BaseRewardModel:
             batch_size=reward_cfg.batch_size,
             success_bonus=reward_cfg.success_bonus,
         )
-    elif reward_string == "roboclipv2":
-        reward_model = RoboclipV2RewardModel(
+    elif reward_string == "rewind":
+        reward_model = RewindRewardModel(
             model_load_path=reward_cfg.model_path,
             use_pca=reward_cfg.use_pca,
             attention_heads=4,

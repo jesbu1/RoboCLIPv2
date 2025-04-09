@@ -1,12 +1,14 @@
 # @package _global_
 
 reward_model: 
-  name: 'roboclipv2'
+  name: 'rewind'
   batch_size: 64
-  model_path: '/data/shared/roboclip/clip_liv_models/RegressionRandom_liv_subtract_before_heads_4/model_74.pt'
+  model_path: '/home/yusenluo/RoboCLIP_offline/RoboCLIPv2/models/reward_model/model_0.pth'
   use_pca: false
-  success_bonus: 10.0
+  success_bonus: 50.0
 
+  general_training:
+    dense_rewards_at_end: false
 # environment:
 #   is_state_based: false
 

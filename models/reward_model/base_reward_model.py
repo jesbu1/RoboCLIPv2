@@ -46,7 +46,7 @@ class BaseRewardModel(abc.ABC):
         )
         self.model = AutoModel.from_pretrained(
             "sentence-transformers/all-MiniLM-L12-v2"
-        )
+        ).to(self.device)
 
     def encode_text(self, text: Union[str, List]) -> np.ndarray:
         """
@@ -77,10 +77,11 @@ class BaseRewardModel(abc.ABC):
         :param text: Text data to be encoded. If a list of strings is provided, it will be batch encoded.
         :return: Encoded representation of the text.
         """
-
+        if isinstance(text, str):
+            text = [text]
         encoded_input = self.tokenizer(
             text, padding=True, truncation=True, return_tensors="pt"
-        )
+        ).to(self.device)
 
         with torch.no_grad():
             model_output = self.model(**encoded_input)
@@ -89,7 +90,7 @@ class BaseRewardModel(abc.ABC):
             )
 
         # normalize the embeddings
-        text_embeddings = F.normalize(text_embeddings, p=2, dim=1)
+        # text_embeddings = F.normalize(text_embeddings, p=2, dim=1)
 
         return text_embeddings.detach().cpu().numpy()
 
@@ -140,6 +141,7 @@ class BaseRewardModel(abc.ABC):
         :return: Reward values for each text-video pair.
         """
         print(encoded_texts.shape, encoded_videos.shape)
+        print(len(encoded_texts), len(encoded_videos))
         assert len(encoded_texts) == len(
             encoded_videos
         ), "The number of text and video representations should be the same."

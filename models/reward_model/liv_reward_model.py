@@ -64,8 +64,10 @@ class LIVRewardModel(BaseRewardModel):
         :param encoded_videos: Encoded video representations.
         :return: Reward values for each text-video pair.
         """
-        pass
-
+        final_reward = F.cosine_similarity(encoded_videos, encoded_texts, dim=1)
+        final_reward = float(final_reward.detach().cpu().item())
+        return final_reward
+    
     @property
     def img_output_dim(self) -> int:
         """

@@ -195,7 +195,6 @@ class LearnedRewardWrapper(gym.Wrapper):
                 .float()
                 .to(self.reward_model.device)
                 .unsqueeze(0)
-                .unsqueeze(0)
             )
         else:
             print("Language features are not provided in the reward model")
@@ -306,12 +305,12 @@ class LearnedRewardWrapper(gym.Wrapper):
                     ]
                 frames = np.stack(frames, axis=1).squeeze(2)
                 # print(f"frames shape: {frames.shape}") # (1, 128, 224, 224, 3)
-                frames_embeddings = self.reward_model.encode_images(
+                frames_embeddings = th.from_numpy(self.reward_model.encode_images(
                     frames
-                ).squeeze()
-                # print(f"frames_embeddings shape: {frames_embeddings.shape}")
+                )).unsqueeze(0)
+                print(f"frames_embeddings shape: {frames_embeddings.shape}")
                 reward = self.reward_model.calculate_rewards(
-                    self.reward_language_features, frames_embeddings.unsqueeze(0)
+                    self.reward_language_features, frames_embeddings
                 )
                 self.past_observations = []
                 self.raw_observations = []
@@ -365,7 +364,7 @@ class VLC_GVL_RewardWrapper(gym.Wrapper):
         self.use_proprio = use_proprio
         self.language_features = language_features_reward  # raw text
 
-        # VLC needs raw image and text，不需要 state-based 处理
+        # VLC and GVL needs raw image and text
         self.past_observations: List[np.ndarray] = []
         self.counter = 0
 
