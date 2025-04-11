@@ -49,7 +49,7 @@ def main(args):
     WANDB_ENTITY_NAME = "clvr"
     WANDB_PROJECT_NAME = "roboclip-v2"
 
-    experiment_name = str(args.extra_data_type)
+    experiment_name = str(args.extra_data_type) + "_5_Demo"
     if args.full_set:
         experiment_name += "_FullSet"
     if args.positional_encoding:
@@ -100,13 +100,10 @@ def main(args):
 
     if args.extra_data_type == "metaworld":
         if args.text_embedding_model == "minilm":
-            h5_train_eval_file = h5py.File("metaworld_dino_embeddings_train.h5", "r")
-            h5_eval_file = h5py.File("metaworld_dino_embeddings_eval.h5", "r")
-            extra_data_path = "metaworld_dino_embeddings_train.h5"
-        else:
-            h5_train_eval_file = h5py.File("metaworld_liv_embeddings_train.h5", "r")
-            h5_eval_file = h5py.File("metaworld_liv_embeddings_eval.h5", "r")
-            extra_data_path = "metaworld_liv_embeddings_train.h5"
+            h5_train_eval_file = h5py.File("metaworld_dino_embeddings_train_5_demos.h5", "r")
+            h5_eval_file = h5py.File("metaworld_dino_embeddings_eval_5_demos.h5", "r")
+            extra_data_path = "metaworld_dino_embeddings_train_5_demos.h5"
+
 
     else:
         # h5_eval_file = h5py.File("jesse_collect_dataset_new_token.h5", "r")
