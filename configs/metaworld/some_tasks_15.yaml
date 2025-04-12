@@ -21,7 +21,6 @@ environment:
   train_freq_num: 1
   train_freq_type: 'step'
   env_id: "button-press-topdown-v2" # eval task
-  ignore_language: True
 
 # Reward divisor is environment-dependent
 reward_model:

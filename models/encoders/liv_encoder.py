@@ -37,6 +37,8 @@ class LIVEncoder(BaseEncoder):
         """
         #TODO: add support for loading the finetuned model
         model = load_liv()
+        state_dict = torch.load(model_load_path)["liv"]
+        model.module.load_state_dict(state_dict)
         return model.to(self.device)
 
     def _encode_text_batch(self, text: List[str]) -> np.ndarray:
@@ -62,7 +64,8 @@ class LIVEncoder(BaseEncoder):
         with torch.no_grad():
             image_embeddings = self.pretrained_liv_model(input=images, modality="vision")
         # image_embeddings = normalize_embeddings(image_embeddings, return_tensor=True)
-        return image_embeddings.unsqueeze(0)
+        image_embeddings = image_embeddings.cpu().numpy()
+        return image_embeddings
 
     @property
     def img_output_dim(self) -> int:

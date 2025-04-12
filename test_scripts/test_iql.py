@@ -59,6 +59,7 @@ from models.reward_model.rewind_reward_model import RewindRewardModel
 from models.reward_model.gvl_reward_model import GVLRewardModel
 from models.encoders.dino_miniLM_encoder import Dino_miniLM_Encoder
 from models.reward_model.env_reward_model import EnvRewardModel
+from models.reward_model.liv_reward_model import LIVRewardModel
 
 from envs.metaworld_envs.metaworld import (
     create_wrapped_env,
@@ -158,6 +159,16 @@ def parse_reward_model(reward_cfg: DictConfig) -> BaseRewardModel:
         )
     elif reward_string == "rewind":
         reward_model = RewindRewardModel(
+            model_load_path=reward_cfg.model_path,
+            use_pca=reward_cfg.use_pca,
+            attention_heads=4,
+            pca_model_dir=None,
+            batch_size=reward_cfg.batch_size,
+            success_bonus=reward_cfg.success_bonus,
+            sum_reward=reward_cfg.sum_reward,
+        )
+    elif reward_string == "liv":
+        reward_model = LIVRewardModel(
             model_load_path=reward_cfg.model_path,
             use_pca=reward_cfg.use_pca,
             attention_heads=4,
@@ -536,11 +547,18 @@ def get_policy_algorithm(cfg: DictConfig, envs: VecEnv, log_dir: str):
     else:
         action_noise = None
 
-    policy_kwargs = {
-        "net_arch": dict(pi=model_config.pi_net_arch, qf=model_config.qf_net_arch),
-        "policy_layer_norm": model_config.policy_layer_norm,
-        "critic_layer_norm": model_config.critic_layer_norm,
-    }
+    if args.algo.lower() == "ppo":
+        policy_kwargs = {
+            "net_arch": dict(pi=model_config.pi_net_arch, vf=model_config.vf_net_arch),
+            "policy_layer_norm": model_config.policy_layer_norm,
+            "critic_layer_norm": model_config.critic_layer_norm,
+        }
+    else:
+        policy_kwargs = {
+            "net_arch": dict(pi=model_config.pi_net_arch, qf=model_config.qf_net_arch),
+            "policy_layer_norm": model_config.policy_layer_norm,
+            "critic_layer_norm": model_config.critic_layer_norm,
+        }
 
     # everything except BC, SAC, and PPO require n_critics
     if (
@@ -559,16 +577,24 @@ def get_policy_algorithm(cfg: DictConfig, envs: VecEnv, log_dir: str):
 
     if algo == "ppo":
         model_class = PPO
+
+        policy_kwargs = {
+            "net_arch": policy_kwargs["net_arch"],
+        }
+
         if not args.pretrained:
             model = model_class(
-                "MlpPolicy",
-                envs,
-                verbose=1,
-                tensorboard_log=log_dir,
-                n_steps=args.n_steps,
-                batch_size=args.n_steps * cfg.environment.n_envs,
-                n_epochs=1,
-                ent_coef=args.entropy_term,
+                "MlpPolicy",                        # 策略类型，与 SAC 一致
+                envs,                              # 环境对象，与 SAC 一致
+                verbose=1,                         # 日志详细程度，与 SAC 一致
+                tensorboard_log=log_dir,           # TensorBoard 日志目录，与 SAC 一致
+                n_steps=args.n_steps,              # PPO 特有，每个更新周期的步数
+                batch_size=args.n_steps * env_config.n_envs,  # PPO 特有，批次大小
+                n_epochs=10,                        # PPO 特有，训练 epoch 数
+                ent_coef=args.entropy_term,        # 熵系数，与 SAC 一致
+                learning_rate=args.learning_rate,  # 学习率，与 SAC 一致
+                seed=args.seed,                    # 随机种子，与 SAC 一致
+                policy_kwargs=policy_kwargs,       # 策略网络参数，与 SAC 一致
             )
         else:
             model = model_class.load(args.pretrained, env=envs, tensorboard_log=log_dir)
