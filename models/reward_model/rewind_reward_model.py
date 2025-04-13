@@ -229,7 +229,7 @@ class RewindRewardModel(BaseRewardModel):
         :param encoded_videos: Encoded video representations. Shape: (batch_size, num_images, embedding_dim).
         :return: Reward values for each text-video pair.
         """
-        print(f"encoded_texts.shape: {encoded_texts.shape}, encoded_videos.shape: {encoded_videos.shape}")
+        # print(f"encoded_texts.shape: {encoded_texts.shape}, encoded_videos.shape: {encoded_videos.shape}")
         # TODO: add the processing for downsampling if needed @Yusen @Jiahui
         if self.model_args.normalize_embedding:
             encoded_videos = self.normalize_embeddings(encoded_videos)
@@ -237,12 +237,12 @@ class RewindRewardModel(BaseRewardModel):
             processed_video_embedding = self.sample_embedding_frames(
                 encoded_videos.squeeze(0), self.model_args.max_length
             ).unsqueeze(0)
-        print(f"processed_video_embedding.shape: {processed_video_embedding.shape}")
+        # print(f"processed_video_embedding.shape: {processed_video_embedding.shape}")
         pred_class, _ = self.model(processed_video_embedding.float(), encoded_texts.float())
         pred_class = pred_class.squeeze(-1) # reward shape (1, 16, 1) -> (1, 16)
         pred_class = pred_class[:, 1:] # remove the first element
         reward = pred_class[:, -1]
-        print(f"reward: {reward}")
+        # print(f"reward: {reward}")
         return reward
 
     @property

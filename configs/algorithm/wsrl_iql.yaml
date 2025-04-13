@@ -26,11 +26,11 @@ general_training:
 model:
   policy_layer_norm: true
   critic_layer_norm: true
-  pi_net_arch: [1024, 768, 512]
-  qf_net_arch: [1024, 1024, 512]
+  pi_net_arch: [512, 512, 256]
+  qf_net_arch: [512, 512, 256]
 
 offline_training:
-  offline_training_steps: 500000
+  offline_training_steps: 50000
   ckpt_path: null  # Path to load checkpoint from, if provided will skip offline training
   critic_update_ratio: 1
 
