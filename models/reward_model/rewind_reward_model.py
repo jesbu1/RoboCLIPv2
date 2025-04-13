@@ -127,7 +127,7 @@ class ClassProgressTransformer(nn.Module):
 
 
 class RewindRewardModel(BaseRewardModel):
-    def __init__(self, model_load_path: str, use_pca: bool, attention_heads: int, pca_model_dir: str = None, device: str = 'cuda', batch_size=64, reward_at_every_step: bool = False, success_bonus: int = 10, dino_batch_size: int = 32, max_num_frames_per_episode: int = 32) -> None:
+    def __init__(self, model_load_path: str, use_pca: bool, attention_heads: int, pca_model_dir: str = None, device: str = 'cuda', batch_size=64, reward_at_every_step: bool = False, success_bonus: int = 10, dino_batch_size: int = 32, max_num_frames_per_episode: int = 32, sum_reward: bool = False) -> None:
         """
         Initializes the RoboclipV2 reward model.
         :param model_load_path: Path to the model checkpoint.
@@ -146,7 +146,7 @@ class RewindRewardModel(BaseRewardModel):
         self.dino_encoder = Dino_miniLM_Encoder(use_pca, device, dino_batch_size=dino_batch_size, max_num_frames_per_episode=max_num_frames_per_episode, batch_size=batch_size)
         self.max_num_frames_per_episode = max_num_frames_per_episode
         self.dino_batch_size = dino_batch_size
-        
+        self.sum_reward = sum_reward
     def _load_model(self, model_load_path: str, pca_model_path: str = None):
         video_dim = 768
         text_dim = 384
@@ -241,8 +241,11 @@ class RewindRewardModel(BaseRewardModel):
         pred_class, _ = self.model(processed_video_embedding.float(), encoded_texts.float())
         pred_class = pred_class.squeeze(-1) # reward shape (1, 16, 1) -> (1, 16)
         pred_class = pred_class[:, 1:] # remove the first element
-        reward = pred_class[:, -1]
-        # print(f"reward: {reward}")
+        if self.sum_reward:
+            reward = torch.sum(pred_class, dim=1)
+        else:
+            reward = pred_class[:, -1]
+        print(f"reward before divisor: {reward}")
         return reward
 
     @property

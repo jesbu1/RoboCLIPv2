@@ -7,7 +7,7 @@ from typing import List
 from memory_profiler import profile
 from models.reward_model.base_reward_model import BaseRewardModel
 from models.encoders.base_encoder import BaseEncoder
-
+import wandb
 
 class SingleLayerMLP(th.nn.Module):
     def __init__(self, input_dim, output_dim, normalize=True):
@@ -239,17 +239,25 @@ class LearnedRewardWrapper(gym.Wrapper):
                 obs = np.concatenate([obs, proprio])
 
         if self.reward_model.name == "dense" or self.dense_eval:
-            reward = original_reward / self.reward_divisor
-
+            # reward = original_reward / self.reward_divisor
+            reward = original_reward
             if info.get("success", False):
                 reward += self.reward_model.success_bonus
+                if self.dense_eval:
+                    print(f"eval success reward: {reward}")
             # print(f"obs: {obs.shape}") # 772 = 768 + 4
+            if self.dense_eval:
+                wandb.log({
+                    "eval/eval_original_reward": original_reward,
+                    "eval/eval_reward_with_success_bonus": reward
+                })
             return obs, reward, done, info
         # Check if this is sparse/dense reward
         elif self.reward_model.name == "sparse":
             sparse_reward = (
                 self.reward_model.success_bonus if info.get("success", False) else 0.0
             )
+            wandb.log({"train/sparse_reward": sparse_reward})
             # Note: No reward divisor for sparse reward.
 
             return obs, sparse_reward, done, info
@@ -308,25 +316,34 @@ class LearnedRewardWrapper(gym.Wrapper):
                 frames_embeddings = th.from_numpy(self.reward_model.encode_images(
                     frames
                 )).unsqueeze(0)
-                print(f"frames_embeddings shape: {frames_embeddings.shape}")
+                # print(f"frames_embeddings shape: {frames_embeddings.shape}") # (1, 32, 768)
                 reward = self.reward_model.calculate_rewards(
                     self.reward_language_features, frames_embeddings
                 )
+                if isinstance(reward, th.Tensor):
+                    reward = reward.detach().cpu().numpy().item()
+                wandb.log({"train/learned_reward": reward})
                 self.past_observations = []
                 self.raw_observations = []
             else:
                 reward = 0
-
+        
+        wandb_reward = reward
         reward /= self.reward_divisor
-
+        if done:
+            print(f"reward after divisor: {reward}")
         # Success bonus
         if info.get("success", False):
             reward += self.reward_model.success_bonus
+            wandb_reward += self.reward_model.success_bonus
+            print(f"train success reward: {reward}")
+        if done:
+            wandb.log({"train/learned_reward_with_success_bonus": wandb_reward})
         return obs, reward, done, info
     # @profile
     def reset(self):
         self.past_observations = []
-        print(len(self.raw_observations))
+        # print(len(self.raw_observations))
         self.raw_observations = []
         self.counter = 0
 
@@ -413,10 +430,11 @@ class RewardAtEndWrapper(gym.Wrapper):
         obs, reward, done, info = self.env.step(action)
         self.total_reward += reward
         if done:
-            self.total_reward = 0
-            return obs, self.total_reward, done, info
+            final_reward = self.total_reward
+            self.total_reward = 0  # 重置为下一个episode做准备
+            return obs, final_reward, done, info
         else:
-            return obs, reward, done, info
+            return obs, 0, done, info  # 在episode未结束时返回0
 
 
 class RewardScaleWrapper(gym.Wrapper):

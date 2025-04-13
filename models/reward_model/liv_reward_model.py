@@ -22,7 +22,7 @@ def normalize_embeddings(embeddings, return_tensor=True):
         return normalized_embeddings.detach().cpu().numpy()
 
 class LIVRewardModel(BaseRewardModel):
-    def __init__(self, model_load_path: str, use_pca: bool, attention_heads: int, pca_model_dir: str = None, device: str = 'cuda', batch_size=64, success_bonus: float = 10.0):
+    def __init__(self, model_load_path: str, use_pca: bool, attention_heads: int, pca_model_dir: str = None, device: str = 'cuda', batch_size=64, reward_at_every_step: bool = False, success_bonus: int = 10):
         """
         Initializes the LIV reward model.
         :param model_load_path: Path to the model checkpoint.
@@ -36,7 +36,7 @@ class LIVRewardModel(BaseRewardModel):
         # self.use_pca = use_pca
         # self.attention_heads = attention_heads
         # self.pretrained_liv_model = self._load_model(model_load_path)
-
+        self.reward_at_every_step = reward_at_every_step
         self.liv_encoder = LIVEncoder(model_load_path, use_pca, attention_heads, device, batch_size)
 
     def _encode_text_batch(self, text: List[str]) -> np.ndarray:
@@ -45,7 +45,6 @@ class LIVRewardModel(BaseRewardModel):
         :param text: A list of text data to be encoded.
         :return: Encoded representation of the text.
         """
-
         return self.liv_encoder.encode_text(text)
 
     def _encode_image_batch(self, images: torch.Tensor) -> np.ndarray:
@@ -54,7 +53,7 @@ class LIVRewardModel(BaseRewardModel):
         :param images: A batch of video frames to be encoded. The shape of the input should be (batch_size, num_frames, height, width, channels).
         :return: Encoded representation of each frame.
         """
-
+        print(f"LIV images shape: {images.shape}")
         return self.liv_encoder.encode_images(images)
 
     def _calculate_reward_batch(self, encoded_texts: np.ndarray, encoded_videos: np.ndarray) -> np.ndarray:
@@ -64,7 +63,10 @@ class LIVRewardModel(BaseRewardModel):
         :param encoded_videos: Encoded video representations.
         :return: Reward values for each text-video pair.
         """
-        final_reward = F.cosine_similarity(encoded_videos, encoded_texts, dim=1)
+        print(f"encoded_texts shape: {encoded_texts.shape}")
+        print(f"encoded_videos shape: {encoded_videos.shape}")
+        similarities = F.cosine_similarity(encoded_videos.squeeze(0), encoded_texts, dim=1)
+        final_reward = similarities[-1]
         final_reward = float(final_reward.detach().cpu().item())
         return final_reward
     

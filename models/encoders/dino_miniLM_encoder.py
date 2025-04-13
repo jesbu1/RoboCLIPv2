@@ -40,7 +40,7 @@ class Dino_miniLM_Encoder(BaseEncoder):
         self.dinov2_vits14 = torch.hub.load("facebookresearch/dinov2", "dinov2_vitb14", force_reload=True)
         self.dinov2_vits14 = self.dinov2_vits14.to(self.device)
         self.dino_transform_image = T.Compose(
-            [T.ToTensor(), T.CenterCrop(224), T.Normalize([0.5], [0.5])]
+            [T.ToTensor(), T.CenterCrop(224), T.Resize(244), T.CenterCrop(224), T.Normalize([0.5], [0.5])]
         )
         self.minilm_tokenizer = AutoTokenizer.from_pretrained(
             "sentence-transformers/all-MiniLM-L12-v2"
@@ -88,6 +88,8 @@ class Dino_miniLM_Encoder(BaseEncoder):
         # print(f"images.shape after transpose: {images.shape}") # (1,480,640,3)
         
         # Ensure data type is uint8, range 0-255
+        # print("TODO: check if images is between 0-255 already or not")
+        # breakpoint()
         if images.dtype != np.uint8:
             # If data is float type, assume range 0-1, convert to 0-255
             if images.dtype == np.float32 or images.dtype == np.float64:
@@ -95,6 +97,11 @@ class Dino_miniLM_Encoder(BaseEncoder):
             else:
                 # For other types, try direct conversion to uint8
                 images = images.astype(np.uint8)
+        # print(images)
+        assert images.dtype == np.uint8, "must be uint8"
+        assert np.min(images) >= 0 and np.max(images) <= 255, "must be between 0 and 255"
+        assert not (np.max(images) <= 1 and np.min(images) >= 0), "must not be between 0 and 1"
+        
         # print(f"images.shape: {images.shape}")
         # Process all images directly, without downsampling
         with torch.inference_mode():

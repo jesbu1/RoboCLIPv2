@@ -21,7 +21,7 @@ general_training:
   seed: 42
   pretrained: false
   action_noise: null
-  learning_rate: 1e-3
+  learning_rate: 1e-4
   dense_rewards_at_end: true
   entropy_term: "auto"
 
@@ -74,7 +74,7 @@ reward_model:
 
 environment:
   text_string: null # Set to null so you must set environment yaml
-  n_envs: 3
+  n_envs: 1
   train_freq_num: 1
   train_freq_type: 'step'
   dir_add: ""
