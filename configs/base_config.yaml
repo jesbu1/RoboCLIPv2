@@ -22,7 +22,7 @@ general_training:
   pretrained: false
   action_noise: null
   learning_rate: 1e-3
-  dense_rewards_at_end: false
+  dense_rewards_at_end: true
   entropy_term: "auto"
 
   # offline rl parameters

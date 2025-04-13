@@ -21,13 +21,13 @@ flip = False  # if True, flips output image 180 degrees
 
 config = [
     # env, action noise pct, cycles, quit on success
-    ("button-press-topdown-wall-v2", np.zeros(4), 3, True),
+    
     ("assembly-v2", np.zeros(4), 3, True),
     ("basketball-v2", np.zeros(4), 3, True),
     ("bin-picking-v2", np.zeros(4), 3, True),
     ("box-close-v2", np.zeros(4), 3, True),
     ("button-press-topdown-v2", np.zeros(4), 3, True),
-    
+    ("button-press-topdown-wall-v2", np.zeros(4), 3, True),
     ("button-press-v2", np.zeros(4), 3, True),
     ("button-press-wall-v2", np.zeros(4), 3, True),
     ("coffee-button-v2", np.zeros(4), 3, True),

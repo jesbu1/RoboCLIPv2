@@ -258,8 +258,8 @@ def main(cfg: DictConfig):
         eval_freq = 0
         # eval_freq = offline_config.offline_training_steps * env_config.n_envs // (2)
     else:
-        video_freq = offline_config.offline_training_steps * env_config.n_envs // 20
-        eval_freq = offline_config.offline_training_steps * env_config.n_envs // (20)
+        video_freq = offline_config.offline_training_steps * env_config.n_envs // 2
+        eval_freq = offline_config.offline_training_steps * env_config.n_envs // (2)
 
     # Use deterministic actions for evaluation
     eval_callback = OfflineEvalCallback(
