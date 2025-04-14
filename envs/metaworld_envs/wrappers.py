@@ -8,6 +8,10 @@ from memory_profiler import profile
 from models.reward_model.base_reward_model import BaseRewardModel
 from models.encoders.base_encoder import BaseEncoder
 import wandb
+import imageio
+import os
+from datetime import datetime
+from gym.wrappers.normalize import NormalizeReward
 
 class SingleLayerMLP(th.nn.Module):
     def __init__(self, input_dim, output_dim, normalize=True):
@@ -169,6 +173,11 @@ class LearnedRewardWrapper(gym.Wrapper):
         self.image_encoder = encoder
         self.is_state_based = is_state_based
         self.use_proprio = use_proprio
+        # Use absolute path
+        self.video_dir = os.path.abspath("videos")
+        if not os.path.exists(self.video_dir):
+            os.makedirs(self.video_dir)
+            print(f"Created video directory at: {self.video_dir}")
 
         if self.is_state_based is False:
             self.observation_space = spaces.Box(
@@ -183,8 +192,9 @@ class LearnedRewardWrapper(gym.Wrapper):
         self.past_observations = []
         self.raw_observations = []
         self.counter = 0
-
+        self.episode_counter = 0
         self.dense_eval = dense_eval
+        self.total_success_bonus = 0
 
         self.reward_at_every_step = self.reward_model.reward_at_every_step
         self.reward_divisor = self.reward_model.reward_divisor
@@ -202,6 +212,32 @@ class LearnedRewardWrapper(gym.Wrapper):
                 "This may be valid if the user is using sparse/dense reward in a single task"
             )
     # @profile #not here
+    def save_video(self, frames, reward):
+        if not frames:
+            print("No frames to save")
+            return
+            
+        # Ensure frames are numpy arrays
+        frames = [frame if isinstance(frame, np.ndarray) else frame.cpu().numpy() for frame in frames]
+        
+        # Ensure data type is uint8
+        frames = [frame.astype(np.uint8) for frame in frames]
+        
+        # Ensure channel order is RGB
+        frames = [frame[..., :3] for frame in frames]  # Only take the first 3 channels
+        
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        video_path = os.path.join(self.video_dir, f"episode_{self.episode_counter}_{reward}.mp4")
+        print(f"Attempting to save video to: {video_path}")
+        try:
+            with imageio.get_writer(video_path, fps=20) as writer:
+                for frame in frames:
+                    writer.append_data(frame)
+            print(f"Video successfully saved to: {video_path} with reward: {reward}")
+        except Exception as e:
+            print(f"Error saving video: {e}")
+            print(f"Current working directory: {os.getcwd()}")
+
     def step(self, action):
         self.counter += 1
         obs, original_reward, done, info = self.env.step(action)
@@ -311,6 +347,8 @@ class LearnedRewardWrapper(gym.Wrapper):
                         ]
                         for frame in self.raw_observations
                     ]
+                self.episode_counter += 1
+                
                 frames = np.stack(frames, axis=1).squeeze(2)
                 # print(f"frames shape: {frames.shape}") # (1, 128, 224, 224, 3)
                 frames_embeddings = th.from_numpy(self.reward_model.encode_images(
@@ -320,6 +358,10 @@ class LearnedRewardWrapper(gym.Wrapper):
                 reward = self.reward_model.calculate_rewards(
                     self.reward_language_features, frames_embeddings
                 )
+                if self.episode_counter % 350 == 0:
+                    # Convert raw_observations to numpy array and save as video
+                    frames_np = [frame.squeeze() for frame in self.raw_observations]
+                    self.save_video(frames_np, reward)
                 if isinstance(reward, th.Tensor):
                     reward = reward.detach().cpu().numpy().item()
                 wandb.log({"train/learned_reward": reward})
@@ -336,7 +378,8 @@ class LearnedRewardWrapper(gym.Wrapper):
         if info.get("success", False):
             reward += self.reward_model.success_bonus
             wandb_reward += self.reward_model.success_bonus
-            print(f"train success reward: {reward}")
+            self.total_success_bonus += self.reward_model.success_bonus
+            print(f"The {self.episode_counter}th episode {self.counter}th step, train success reward: {reward}")
         if done:
             wandb.log({"train/learned_reward_with_success_bonus": wandb_reward})
         return obs, reward, done, info
@@ -346,7 +389,6 @@ class LearnedRewardWrapper(gym.Wrapper):
         # print(len(self.raw_observations))
         self.raw_observations = []
         self.counter = 0
-
         obs = self.env.reset()
 
         # This is for the reward function
@@ -363,7 +405,8 @@ class LearnedRewardWrapper(gym.Wrapper):
             else:
                 obs = encoded_image
         # self.past_observations.append(encoded_image)
-
+        wandb.log({"train/total_success_bonus": self.total_success_bonus})
+        self.total_success_bonus = 0
         return obs
 
 
@@ -431,10 +474,10 @@ class RewardAtEndWrapper(gym.Wrapper):
         self.total_reward += reward
         if done:
             final_reward = self.total_reward
-            self.total_reward = 0  # 重置为下一个episode做准备
+            self.total_reward = 0  # Reset for the next episode
             return obs, final_reward, done, info
         else:
-            return obs, 0, done, info  # 在episode未结束时返回0
+            return obs, 0, done, info  # Return 0 when episode is not finished
 
 
 class RewardScaleWrapper(gym.Wrapper):
@@ -445,3 +488,14 @@ class RewardScaleWrapper(gym.Wrapper):
     def step(self, action):
         obs, reward, done, info = self.env.step(action)
         return obs, reward / self.divisor, done, info
+
+class RecordRewardWrapper(gym.Wrapper):
+    def __init__(self, env):
+        super(RecordRewardWrapper, self).__init__(env)
+
+    def step(self, action):
+        obs, reward, done, info = self.env.step(action)
+        if done:
+            wandb.log({"train/normalized_reward": reward})
+        
+        return obs, reward, done, info

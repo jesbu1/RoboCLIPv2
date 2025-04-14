@@ -12,6 +12,7 @@ from metaworld.envs import (
 from memory_profiler import profile
 from envs.metaworld_envs.wrappers import *
 from models.reward_model.env_reward_model import EnvRewardModel
+from gym.wrappers.normalize import NormalizeReward
 
 environment_to_instruction = {
     # "assembly-v2": "assembling",
@@ -97,6 +98,7 @@ class MetaworldBase(Env):
         goal_observable=False,
         random_reset="train",
         max_episode_steps=128,
+        terminate_on_success=False,
     ):
         """
         Parameters
@@ -136,6 +138,7 @@ class MetaworldBase(Env):
         self.rank = seed
         self.env_id = env_id
         self.random_reset = random_reset
+        self.terminate_on_success = terminate_on_success
 
     def step(self, action):
         """
@@ -159,7 +162,7 @@ class MetaworldBase(Env):
         # if success, we add "is_success" to the info
         if "success" in info and info["success"]:
             info["is_success"] = True
-            if self.random_reset == "eval":
+            if self.terminate_on_success:   #if self.random_reset == "eval":
                 done = True
         else:
             info["is_success"] = False
@@ -264,6 +267,8 @@ def create_wrapped_env(
     mode="train",
     use_proprio=False,
     dense_rewards_at_end=False,
+    normalize_reward=False,
+    terminate_on_success=False,
 ):
     """
     Creates a wrapped MetaWorld environment with the given options.
@@ -284,15 +289,15 @@ def create_wrapped_env(
     def _init():
         if mode == "eval":
             base_env = MetaworldBase(
-                env_id, goal_observable=goal_observable, random_reset="eval"
+                env_id, goal_observable=goal_observable, random_reset="eval", terminate_on_success=True
             )
         elif mode == "train":
             base_env = MetaworldBase(
-                env_id, goal_observable=goal_observable, random_reset="train"
+                env_id, goal_observable=goal_observable, random_reset="train", terminate_on_success=terminate_on_success
             )
         elif mode == "demo":
             base_env = MetaworldBase(
-                env_id, goal_observable=goal_observable, random_reset="demo"
+                env_id, goal_observable=goal_observable, random_reset="demo", terminate_on_success=True
             )
         else:
             raise ValueError("Invalid mode")
@@ -334,6 +339,10 @@ def create_wrapped_env(
         # Environment keeps an aggregate reward at each step and outputs it only when the episode ends
         if dense_rewards_at_end:
             base_env = RewardAtEndWrapper(base_env)
+        
+        if normalize_reward:
+            base_env = NormalizeReward(base_env)
+            base_env = RecordRewardWrapper(base_env)
 
         # else:
         #     # Then we are an EnvRewardModel

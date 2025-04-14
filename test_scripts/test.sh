@@ -13,6 +13,7 @@ conda activate roboclip      # 替换 myenv 为你的 Conda 环境名
 
 python test_scripts/test_iql.py metaworld=some_tasks_15 algorithm=sac reward=dense
 python test_scripts/test_iql.py metaworld=some_tasks_15 algorithm=sac reward=rewind > test_scripts/slurm_out/rewind_debug.txt
+python test_scripts/test_iql.py metaworld=some_tasks_15 algorithm=wsrl_iql reward=rewind > test_scripts/slurm_out/rewind_wsrl_iql_debug.txt
 python test_scripts/test_iql.py metaworld=some_tasks_15 algorithm=sac reward=gvl
 python test_scripts/test_iql.py metaworld=some_tasks_15 algorithm=sac reward=liv > test_scripts/slurm_out/liv_debug.txt
 python test_scripts/test_iql.py metaworld=some_tasks_15 algorithm=sac reward=sparse > test_scripts/slurm_out/sparse_debug.txt
