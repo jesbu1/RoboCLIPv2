@@ -1,19 +1,9 @@
-# python test_scripts/test_iql.py koch=single_task algorithm=rlpd_iql reward=dense environment.ignore_language=True general_training.n_critics=10 general_training.action_chunk_size=60
+# Status:
+python test_scripts/test_iql.py koch=multi_task algorithm=wsrl_iql reward=rewind_two_cam general_training.action_chunk_size=60 environment.robot_disabled=True offline_training.offline_training_steps=150000 online_training.total_time_steps=0 logging.video_freq=0 general_training.awr_advantage_temp=1.0
 
-# python test_scripts/test_iql.py koch=single_task algorithm=rlpd_iql reward=dense environment.ignore_language=True general_training.n_critics=10 general_training.action_chunk_size=30
-
-# python test_scripts/test_iql.py koch=single_task algorithm=rlpd_iql reward=dense environment.ignore_language=True general_training.n_critics=10 general_training.action_chunk_size=15
-
-
-python test_scripts/test_iql.py koch=single_task algorithm=wsrl_iql reward=debug environment.ignore_language=True general_training.n_critics=10 general_training.action_chunk_size=60
-
-python test_scripts/test_iql.py koch=single_task algorithm=wsrl_iql reward=debug environment.ignore_language=True general_training.n_critics=10 general_training.action_chunk_size=30
-
-python test_scripts/test_iql.py koch=single_task algorithm=wsrl_iql reward=debug environment.ignore_language=True general_training.n_critics=10 general_training.action_chunk_size=15
-
-# python test_scripts/test_iql.py koch=single_task algorithm=rlpd_iql reward=dense environment.ignore_language=True general_training.n_critics=2 general_training.action_chunk_size=30
-
-# python test_scripts/test_iql.py koch=single_task algorithm=rlpd_iql reward=dense environment.ignore_language=True general_training.n_critics=5 general_training.action_chunk_size=15
+# Status: Running
+python test_scripts/test_iql.py koch=multi_task algorithm=wsrl_iql reward=rewind_two_cam general_training.action_chunk_size=60 environment.robot_disabled=True offline_training.offline_training_steps=150000 online_training.total_time_steps=0 logging.video_freq=0 general_training.awr_advantage_temp=0.5
 
 
-# "/home/abrar/projects/RoboCLIPv2/outputs/2025-01-17/18-33-16/logs/rlpd"
+# Status: Running
+python test_scripts/test_iql.py koch=multi_task algorithm=wsrl_iql reward=rewind_two_cam general_training.action_chunk_size=60 environment.robot_disabled=True offline_training.offline_training_steps=150000 online_training.total_time_steps=0 logging.video_freq=0 general_training.awr_advantage_temp=2.5

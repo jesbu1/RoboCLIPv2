@@ -264,17 +264,17 @@ class ActionSequenceActor(CustomActor):
 
         self.action_dist = SquashedDiagGaussianDistribution(action_dim)  # type: ignore[assignment]
         decoder_layer = nn.TransformerDecoderLayer(
-            d_model=512, nhead=8, batch_first=True
+            d_model=last_layer_dim, nhead=8, batch_first=True
         )
         self.action_transformer = nn.TransformerDecoder(
-            decoder_layer, num_layers=1, norm=nn.LayerNorm(512)
+            decoder_layer, num_layers=1, norm=nn.LayerNorm(last_layer_dim)
         )
         self.triangular_mask = th.triu(
             th.ones(action_sequence_length, action_sequence_length) * float("-inf"),
             diagonal=1,
         )
         self.position_embedding = PositionalEncoding(
-            512, max_len=action_sequence_length
+            last_layer_dim, max_len=action_sequence_length
         )
         # self.mu = GRU(last_layer_dim, last_layer_dim, num_layers=1, batch_first=True)
         # self.mu_processor = nn.Linear(last_layer_dim, action_dim)

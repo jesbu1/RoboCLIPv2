@@ -12,7 +12,8 @@ offline_training:
 environment:
   cfg_name: "koch_single_task"
   # text_instruction: "separate the orange and blue cups" # seen task
-  text_instruction: "open the red trash bin"
+  # text_instruction: "open the red trash bin"
+  text_instruction: "Put the blue cup in the box"
   # text_instruction: "separate the red and green cups" # unseen task
   n_envs: 1
   train_freq_num: 1

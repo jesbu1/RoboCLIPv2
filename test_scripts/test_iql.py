@@ -16,7 +16,11 @@ from typing import Any, Dict
 
 import os
 import argparse
-from stable_baselines3.common.callbacks import CallbackList, EvalCallback
+from stable_baselines3.common.callbacks import (
+    CallbackList,
+    EvalCallback,
+    CheckpointCallback,
+)
 
 
 # from kitchen_env_wrappers import readGif
@@ -36,6 +40,7 @@ from offline_rl_algorithms.rlpd import RLPD
 from offline_rl_algorithms.base_offline_rl_algorithm import OfflineRLAlgorithm
 from offline_rl_algorithms.wandb_logger import WandBLogger
 from offline_rl_algorithms.callbacks import CustomWandbCallback, OfflineEvalCallback
+from offline_rl_algorithms.custom_feature_extractors import FlatRangeFeaturesExtractor
 
 # from reward_model.xclip_encoder import XCLIPEncoder
 # from reward_model import image_encoders
@@ -359,8 +364,14 @@ def main(cfg: DictConfig):
                 # model.load(
                 #     offline_config.ckpt_path, offline_algo=model.offline_algo, env=envs
                 # )
+                # NOTE: assuming that the offline algo has the same observation space as the env
                 new_offline_algo = model.offline_algo.load(
-                    offline_config.ckpt_path + "_rlpd_offline", env=envs
+                    offline_config.ckpt_path + "_rlpd_offline",
+                    env=envs,
+                    custom_objects={
+                        "observation_space": envs.observation_space,
+                        "action_space": envs.action_space,
+                    },
                 )
                 model.offline_algo = new_offline_algo
                 model.set_policies_with_offline(offline_algo=new_offline_algo)
@@ -369,14 +380,29 @@ def main(cfg: DictConfig):
                     "policy_kwargs": policy_kwargs,
                 }
 
-                model = model.load(offline_config.ckpt_path, env=envs, **kwargs)
+                model = model.load(
+                    offline_config.ckpt_path,
+                    env=envs,
+                    **kwargs,
+                    custom_objects={
+                        "observation_space": envs.observation_space,
+                        "action_space": envs.action_space,
+                    },
+                )
                 model.offline_algo = new_offline_algo
                 model.set_logger(wandb_logger)
                 model.learned_offline = True
                 model.set_policies_with_offline(offline_algo=new_offline_algo)
 
             else:
-                model.load(offline_config.ckpt_path, env=envs)
+                model.load(
+                    offline_config.ckpt_path,
+                    env=envs,
+                    custom_objects={
+                        "observation_space": envs.observation_space,
+                        "action_space": envs.action_space,
+                    },
+                )
 
             print("Setting chunk size and all")
             # Replace action chunked buffer again since loading it may not always work
@@ -397,6 +423,18 @@ def main(cfg: DictConfig):
             model._convert_train_freq()
 
         else:
+            # checkpoint callback. only save 5 times
+            save_freq = int(offline_config.offline_training_steps / 5)
+            checkpoint_callback = CheckpointCallback(
+                save_freq=save_freq,
+                save_path="./logs/",
+                name_prefix="offline_training",
+                save_replay_buffer=True,
+                save_vecnormalize=True,
+                verbose=2,
+            )
+            callback_list.append(checkpoint_callback)
+
             model.learn_offline(
                 offline_replay_buffer=buffer,
                 train_steps=offline_config.offline_training_steps,
@@ -440,18 +478,33 @@ def main(cfg: DictConfig):
 
     if cfg.online_training.total_time_steps > 0:
         # logger only exists for offline algorithms
+
+        online_callback_list = callback_list
+
+        # checkpoint callback. only save 10 times
+        save_freq = 5000
+        checkpoint_callback = CheckpointCallback(
+            save_freq=save_freq,
+            save_path="./logs/",
+            name_prefix="online_training",
+            save_replay_buffer=True,
+            save_vecnormalize=True,
+            verbose=2,
+        )
+        online_callback_list.append(checkpoint_callback)
+
         try:
             if isinstance(model, OfflineRLAlgorithm):
                 model.learn(
                     total_timesteps=int(cfg.online_training.total_time_steps),
-                    callback=callback_list,
+                    callback=online_callback_list,
                     logger=logger,
                     progress_bar=True,
                 )
             else:
                 model.learn(
                     total_timesteps=int(cfg.online_training.total_time_steps),
-                    callback=callback_list,
+                    callback=online_callback_list,
                     progress_bar=True,
                 )
         except Exception as e:
@@ -624,10 +677,43 @@ def get_policy_algorithm(cfg: DictConfig, envs: VecEnv, log_dir: str):
     else:
         action_noise = None
 
+    dim_ranges = []
+    projection_dims = []
+
+    if hasattr(envs, "orig_obs_keys"):
+        orig_obs_keys = getattr(envs, "orig_obs_keys")
+    elif hasattr(envs.envs[0], "orig_obs_keys"):  # if vecenv
+        orig_obs_keys = getattr(envs.envs[0], "orig_obs_keys")
+    else:
+        raise ValueError(
+            "envs does not have orig_obs_keys attribute. Use a FlattenDictObservationWrapper"
+        )
+
+    # if language, it's first
+    if "language_feature" in orig_obs_keys:
+        dim_ranges.append(384)
+        projection_dims.append(128)
+    # then images
+    for key in orig_obs_keys:
+        if "image_feature" in key:
+            dim_ranges.append(768)
+            projection_dims.append(512)
+
+    # then proprio
+    if "proprio" in orig_obs_keys:
+        dim_ranges.append(12)
+        projection_dims.append(128)
+
     policy_kwargs = {
         "net_arch": dict(pi=model_config.pi_net_arch, qf=model_config.qf_net_arch),
         "policy_layer_norm": model_config.policy_layer_norm,
         "critic_layer_norm": model_config.critic_layer_norm,
+        "features_extractor_class": FlatRangeFeaturesExtractor,
+        "features_extractor_kwargs": {
+            "dim_ranges": dim_ranges,
+            "projection_dims": projection_dims,
+            "normalize_images": True,
+        },
     }
 
     if (
@@ -826,10 +912,10 @@ def get_policy_algorithm(cfg: DictConfig, envs: VecEnv, log_dir: str):
 def generate_callback_list(args: DictConfig, eval_callback: EvalCallback):
     if args.wandb:
         customwandbcallback = CustomWandbCallback()
-        callback = CallbackList([eval_callback, customwandbcallback])
+        callbacks = [eval_callback, customwandbcallback]
     else:
-        callback = eval_callback
-    return callback
+        callbacks = [eval_callback]
+    return callbacks
 
 
 def custom_save_model(model, path):

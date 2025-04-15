@@ -22,7 +22,7 @@ general_training:
   rlpd_train_critic_with_entropy: true
   # Note: RLPD's offline step uses default params defined in base_config.yaml
   rlpd_offline_algo: iql
-  action_chunk_size: 30
+  action_chunk_size: 60
 
   # IQL-specific parameters
   policy_extraction: 'awr' # awr or ddpg
@@ -31,8 +31,8 @@ general_training:
 model:
   policy_layer_norm: true
   critic_layer_norm: true
-  pi_net_arch: [1024, 768, 512]
-  qf_net_arch: [1024, 1024, 512]
+  pi_net_arch: [512, 256]
+  qf_net_arch: [512, 256]
 
 offline_training:
   offline_training_steps: 100000

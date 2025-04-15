@@ -296,6 +296,16 @@ class LearnedRewardWrapper(gym.Wrapper):
                 "This may be valid if the user is using sparse/dense reward in a single task"
             )
 
+        # update the observation space to have image_feature_*
+        self.observation_space = self.env.observation_space
+        for i, key in enumerate(self.image_keys):
+            self.observation_space.spaces[f"image_feature_{i}"] = spaces.Box(
+                low=-np.inf,
+                high=np.inf,
+                shape=(reward_model.img_output_dim,),
+                dtype=np.float32,
+            )
+
     def __getstate__(self):
         state = self.__dict__.copy()
         del state["reward_model"]
@@ -430,6 +440,8 @@ class FlattenDictObservationWrapper(gym.Wrapper):
 
         obs_space = self.env.observation_space
         total_concat_size = 0
+
+        self.orig_obs_keys = obs_space.spaces.keys()
 
         image_feature_keys = [
             key for key in obs_space.spaces.keys() if "image_feature" in key
