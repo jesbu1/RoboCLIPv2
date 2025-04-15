@@ -5,9 +5,8 @@ import numpy as np
 from stable_baselines3 import PPO, SAC
 import torch as th
 from stable_baselines3.common.vec_env.subproc_vec_env import SubprocVecEnv
-import torch as th
-import numpy as np
 import os
+import json
 
 os.environ["TOKENIZERS_PARALLELISM"] = "false"  # to get rid of the warning message
 from stable_baselines3.common.vec_env import DummyVecEnv
@@ -15,11 +14,9 @@ from stable_baselines3.common.vec_env.base_vec_env import VecEnv
 
 from typing import Any, Dict
 
-import torch as th
-
 import os
 import argparse
-from stable_baselines3.common.callbacks import EvalCallback, CallbackList
+from stable_baselines3.common.callbacks import CallbackList, EvalCallback
 
 
 # from kitchen_env_wrappers import readGif
@@ -46,6 +43,7 @@ from reward_model.base_reward_model import BaseRewardModel
 from reward_model.roboclip_reward_model import RoboclipRewardModel
 from reward_model.vlc_reward_model import VLCRewardModel
 from reward_model.roboclipv2_reward_model import RoboclipV2RewardModel
+from reward_model.rewind_reward_model import ReWiNDRewardModel
 
 from reward_model.env_reward_model import EnvRewardModel
 
@@ -58,9 +56,6 @@ import hydra
 from hydra.core.config_store import ConfigStore
 from hydra.utils import to_absolute_path
 from omegaconf import DictConfig, OmegaConf
-from stable_baselines3.common.callbacks import EvalCallback
-
-import torch as th
 
 th.set_float32_matmul_precision("high")
 
@@ -139,6 +134,34 @@ def parse_reward_model(reward_cfg: DictConfig) -> BaseRewardModel:
             batch_size=reward_cfg.batch_size,
             success_bonus=reward_cfg.success_bonus,
         )
+    elif reward_string == "rewind":
+        # turn from local to absolute path
+        model_path = to_absolute_path(reward_cfg.model_path)
+        reward_model = ReWiNDRewardModel(
+            model_path,
+            camera_names=reward_cfg.camera_names,
+            batch_size=reward_cfg.batch_size,
+            success_bonus=reward_cfg.success_bonus,
+            reward_at_every_step=reward_cfg.reward_at_every_step,
+        )
+
+    elif reward_string == "rewind_two_cam":
+        # turn from local to absolute path
+        from omegaconf import ListConfig
+
+        assert isinstance(reward_cfg.model_path, ListConfig) or isinstance(
+            reward_cfg.model_path, list
+        )
+        model_paths = []
+        for i, path in enumerate(reward_cfg.model_path):
+            model_paths.append(to_absolute_path(path))
+        reward_model = ReWiNDRewardModel(
+            model_paths,
+            camera_names=reward_cfg.camera_names,
+            batch_size=reward_cfg.batch_size,
+            success_bonus=reward_cfg.success_bonus,
+            reward_at_every_step=reward_cfg.reward_at_every_step,
+        )
 
     # TODO: get these models up
     elif reward_string == "sparse":
@@ -209,15 +232,16 @@ def main(cfg: DictConfig):
 
     reward_model = parse_reward_model(cfg.reward_model)
 
+    wandb_logger = WandBLogger()
     ### Create environment and callbacks ###
-    envs, eval_env = create_envs(cfg, reward_model)
+    envs, eval_env = create_envs(cfg, reward_model, logger=wandb_logger)
     model, model_class, policy_kwargs = get_policy_algorithm(cfg, envs, log_dir)
 
     # Set eval freq and video freq if not set
 
     # if it's rlpd, video_freq should be never
-    # if training_config.algo == "rlpd":
-    if False:
+    if training_config.algo == "rlpd":
+        # if False:
         video_freq = 0
         eval_freq = 0
         # video_freq = offline_config.offline_training_steps * env_config.n_envs // (10)
@@ -246,7 +270,6 @@ def main(cfg: DictConfig):
     callback_list = generate_callback_list(logging_config, eval_callback)
 
     # Create the logger
-    wandb_logger = WandBLogger()
     model.set_logger(wandb_logger)
 
     use_language = not env_config.ignore_language
@@ -260,9 +283,17 @@ def main(cfg: DictConfig):
     # offline_task_strings =
 
     try:
-        h5_path = offline_config.offline_h5_path.format(cfg.reward_model.name)
+        if cfg.reward_model.name == "rewind_two_cam":
+            cfg.reward_model.name = "rewind"
+
+        h5_path = offline_config.offline_h5_path.format(
+            cfg.reward_model.name, cfg.reward_model.reward_at_every_step
+        )
         h5_path = to_absolute_path(h5_path)
-        print(h5_path)
+        print("Offline h5 path:", h5_path)
+        from time import sleep
+
+        sleep(1)
         # check if file exists
         with open(h5_path, "r") as f:
             pass
@@ -404,6 +435,9 @@ def main(cfg: DictConfig):
     eval_callback.eval_freq = online_eval_freq
     eval_callback.video_freq = online_video_freq
 
+    if cfg.online_training.warm_start_online_rl:
+        model.warm_start_online_rl = True
+
     if cfg.online_training.total_time_steps > 0:
         # logger only exists for offline algorithms
         try:
@@ -440,7 +474,7 @@ def main(cfg: DictConfig):
         wandb.finish()
 
 
-def create_envs(cfg: DictConfig, reward_model: BaseRewardModel):
+def create_envs(cfg: DictConfig, reward_model: BaseRewardModel, logger=None):
     env_config = cfg.environment
 
     if "metaworld" in env_config.cfg_name:
@@ -463,39 +497,34 @@ def create_envs(cfg: DictConfig, reward_model: BaseRewardModel):
         env_id = "koch_bimanual"  # Doesn't matter
 
     with th.no_grad():
-        lang_feat = reward_model.encode_text_for_policy(text_instruction).squeeze()
-        # lang_feat = th.from_numpy(lang_feat).squeeze()
+        policy_lang_feat = reward_model.encode_text_for_policy(
+            text_instruction
+        ).squeeze()
+        lang_feat = reward_model.encode_text(text_instruction).squeeze()
 
     ignore_language = env_config.ignore_language
 
-    camera_kwargs = {
-        "image_keys": env_config.image_keys,
-        "reward_image_key": env_config.reward_image_key,
-    }
-
-    wrapped_env_func = create_wrapped_env(
-        env_id,
-        language_features=lang_feat if not ignore_language else None,
-        reward_model=reward_model,
-        goal_observable=True,
-        success_bonus=cfg.reward_model.success_bonus,
-        is_state_based=env_config.is_state_based,
-        use_proprio=env_config.use_proprio,
-        mode="train",
-        dense_rewards_at_end=cfg.general_training.dense_rewards_at_end,
-        action_chunk_size=cfg.general_training.action_chunk_size,
-        camera_kwargs=camera_kwargs,
-        robot_disabled=env_config.robot_disabled,
-    )
-
-    # Define envs (dummy example for illustration)
-    if env_config.n_envs > 1:
-        envs = SubprocVecEnv([wrapped_env_func for _ in range(env_config.n_envs)])
-    else:
-        envs = DummyVecEnv([wrapped_env_func])
-
     if "metaworld" in env_config.cfg_name:
         if env_config.n_envs > 1:
+            envs = SubprocVecEnv(
+                [
+                    create_wrapped_env(
+                        env_id,
+                        reward_model=reward_model,
+                        language_features=lang_feat if not ignore_language else None,
+                        success_bonus=cfg.reward_model.success_bonus,
+                        monitor=True,
+                        goal_observable=True,
+                        is_state_based=env_config.is_state_based,
+                        mode="train",
+                        use_proprio=env_config.use_proprio,
+                        dense_rewards_at_end=cfg.general_training.dense_rewards_at_end,
+                        action_chunk_size=cfg.general_training.action_chunk_size,
+                    )
+                    for _ in range(env_config.n_envs)
+                ]
+            )
+
             eval_env = SubprocVecEnv(
                 [
                     create_wrapped_env(
@@ -508,11 +537,29 @@ def create_envs(cfg: DictConfig, reward_model: BaseRewardModel):
                         is_state_based=env_config.is_state_based,
                         mode="eval",
                         use_proprio=env_config.use_proprio,
+                        action_chunk_size=cfg.general_training.action_chunk_size,
                     )
-                    for i in range(env_config.n_envs)
+                    for _ in range(env_config.n_envs)
                 ]
             )  # KitchenEnvDenseOriginalReward(time=True)
         else:
+            envs = DummyVecEnv(
+                [
+                    create_wrapped_env(
+                        env_id,
+                        reward_model=reward_model,
+                        language_features=lang_feat if not ignore_language else None,
+                        success_bonus=cfg.reward_model.success_bonus,
+                        monitor=True,
+                        goal_observable=True,
+                        is_state_based=env_config.is_state_based,
+                        mode="train",
+                        use_proprio=env_config.use_proprio,
+                        dense_rewards_at_end=cfg.general_training.dense_rewards_at_end,
+                        action_chunk_size=cfg.general_training.action_chunk_size,
+                    )
+                ]
+            )
             eval_env = DummyVecEnv(
                 [
                     create_wrapped_env(
@@ -524,12 +571,39 @@ def create_envs(cfg: DictConfig, reward_model: BaseRewardModel):
                         goal_observable=True,
                         is_state_based=env_config.is_state_based,
                         mode="eval",
-                        robot_disabled=env_config.robot_disabled,
                         use_proprio=env_config.use_proprio,
+                        action_chunk_size=cfg.general_training.action_chunk_size,
                     )
                 ]
             )  # KitchenEnvDenseOriginalReward(time=True)
-    else:
+    elif "koch" in env_config.cfg_name:
+        camera_kwargs = {
+            "image_keys": env_config.image_keys,
+            "reward_image_key": env_config.reward_image_key,
+        }
+        wrapped_env_func = create_wrapped_env(
+            env_id,
+            language_features=lang_feat,
+            policy_language_features=policy_lang_feat if not ignore_language else None,
+            reward_model=reward_model,
+            goal_observable=True,
+            success_bonus=cfg.reward_model.success_bonus,
+            is_state_based=env_config.is_state_based,
+            use_proprio=env_config.use_proprio,
+            mode="train",
+            dense_rewards_at_end=cfg.general_training.dense_rewards_at_end,
+            action_chunk_size=cfg.general_training.action_chunk_size,
+            camera_kwargs=camera_kwargs,
+            robot_disabled=env_config.robot_disabled,
+            max_episode_steps=env_config.max_episode_steps,
+            logger=logger,
+        )
+
+        # Define envs (dummy example for illustration)
+        if env_config.n_envs > 1:
+            envs = SubprocVecEnv([wrapped_env_func for _ in range(env_config.n_envs)])
+        else:
+            envs = DummyVecEnv([wrapped_env_func])
         eval_env = envs
 
     return envs, eval_env
@@ -756,6 +830,62 @@ def generate_callback_list(args: DictConfig, eval_callback: EvalCallback):
     else:
         callback = eval_callback
     return callback
+
+
+def custom_save_model(model, path):
+    """
+    Custom save function that excludes large components like reward models and replay buffers.
+
+    Args:
+        model: The model to save
+        path: Path where to save the model
+    """
+    print(f"Custom saving model to {path}")
+
+    # Create directory if it doesn't exist
+    os.makedirs(path, exist_ok=True)
+
+    # Save policy weights only
+    if hasattr(model, "policy") and hasattr(model.policy, "state_dict"):
+        policy_path = os.path.join(path, "policy.pth")
+        th.save(model.policy.state_dict(), policy_path)
+        print(f"Saved policy weights to {policy_path}")
+
+    # Save actor weights if available
+    if hasattr(model, "actor") and hasattr(model.actor, "state_dict"):
+        actor_path = os.path.join(path, "actor.pth")
+        th.save(model.actor.state_dict(), actor_path)
+        print(f"Saved actor weights to {actor_path}")
+
+    # Save critic weights if available
+    if hasattr(model, "critic") and hasattr(model.critic, "state_dict"):
+        critic_path = os.path.join(path, "critic.pth")
+        th.save(model.critic.state_dict(), critic_path)
+        print(f"Saved critic weights to {critic_path}")
+
+    # Save value network weights for IQL
+    if hasattr(model, "v_net") and hasattr(model.v_net, "state_dict"):
+        v_net_path = os.path.join(path, "v_net.pth")
+        th.save(model.v_net.state_dict(), v_net_path)
+        print(f"Saved value network weights to {v_net_path}")
+
+    # Save some basic parameters in a JSON file
+    params = {
+        "algorithm": model.__class__.__name__,
+        "action_space": str(model.action_space),
+        "observation_space": str(model.observation_space),
+        "gamma": model.gamma if hasattr(model, "gamma") else None,
+        "learning_rate": model.learning_rate
+        if hasattr(model, "learning_rate")
+        else None,
+    }
+
+    params_path = os.path.join(path, "params.json")
+    with open(params_path, "w") as f:
+        json.dump(params, f, indent=4)
+
+    print("Saved model parameters to", params_path)
+    print("Custom model saving complete")
 
 
 if __name__ == "__main__":

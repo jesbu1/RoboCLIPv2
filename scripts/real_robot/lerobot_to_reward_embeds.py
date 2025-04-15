@@ -29,6 +29,16 @@ MAX_NUM_FRAMES_PER_EPISODE = 32
 # PRIMARY_IMAGE_KEY = "observation.images.main"
 # PRIMARY_IMAGE_KEY = "observation.images.side"
 
+
+# eval set. we will ignore these instructions
+EVAL_TASKS = [
+    "Put the blue cup on the red plate",
+    "Separate the orange and blue cups",
+    "Open the red trash bin",
+    "Throw the banana away in the red trash bin",
+    "Put the red tape in the box on the right",
+]
+
 model, processor, tokenizer = load_model("liv")
 model = model.cuda()
 

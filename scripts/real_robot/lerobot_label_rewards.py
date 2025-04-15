@@ -23,7 +23,8 @@ def lerobot_to_reward_hdf5(
     resolution=(640, 480),
     max_episodes=50,
     image_keys=["observation.images.main", "observation.images.side"],
-    reward_image_key="observation.images.main",
+    reward_image_key="observation.images.side",
+    reward_at_every_step=False,
 ):
     # Initialize the dataset
     if isinstance(dataset_id, str):
@@ -66,6 +67,7 @@ def lerobot_to_reward_hdf5(
             model_load_path=reward_model_path,
             device=device,
             batch_size=batch_size,
+            camera_names=image_keys,
         )
 
     reward_image_idx = image_keys.index(reward_image_key)
@@ -200,10 +202,17 @@ def lerobot_to_reward_hdf5(
                 rescaling_factor = rescaling_dict[repo_id]
                 keep_frames = int(episode_len * rescaling_factor)
 
+                # Rescale frames
+                print(
+                    f"Rescaling episode {episode_index} from {episode_len} to {keep_frames}"
+                )
+                episode_items = episode_items[:keep_frames]
+                print(f"New episode length: {len(episode_items)}")
+
                 # Sample frames uniformly
-                if keep_frames < episode_len:
-                    indices = np.linspace(0, episode_len - 1, keep_frames, dtype=int)
-                    episode_items = [episode_items[i] for i in indices]
+                # if keep_frames < episode_len:
+                #     indices = np.linspace(0, episode_len - 1, keep_frames, dtype=int)
+                #     episode_items = [episode_items[i] for i in indices]
 
                 image_embeddings = []
 
@@ -221,7 +230,6 @@ def lerobot_to_reward_hdf5(
                         None, :
                     ][0]
                     actions_dataset[current_idx] = ep_item["action"].numpy()[None, :][0]
-                    rewards_dataset[current_idx] = 0  # Initial reward is 0
                     dones_dataset[current_idx] = False
 
                     # Compute and write image embeddings
@@ -239,6 +247,17 @@ def lerobot_to_reward_hdf5(
                     string_dataset[current_idx] = task.encode("utf-8")
                     env_id_dataset[current_idx] = task.encode("utf-8")
 
+                    if not reward_at_every_step or ep_idx == 0:
+                        rewards_dataset[current_idx] = 0
+                    else:
+                        embeddings = np.array(image_embeddings)
+                        # Compute the rewards
+
+                        reward = reward_model.calculate_rewards(
+                            text_embedding[None, None, :], embeddings[None, :]
+                        )
+                        rewards_dataset[current_idx] = reward
+
                     current_idx += 1
 
                 # Set reward and done for the last frame of the episode
@@ -249,7 +268,7 @@ def lerobot_to_reward_hdf5(
                     image_embeddings = np.array(image_embeddings)
                     # Compute the rewards
                     reward = reward_model.calculate_rewards(
-                        text_embedding[None, :], image_embeddings[None, :]
+                        text_embedding[None, None, :], image_embeddings[None, :]
                     )
                     rewards_dataset[current_idx] = reward
                     print(f"Reward: {reward} for task: {task}")
@@ -281,17 +300,31 @@ if __name__ == "__main__":
     dataset_ids = glob.glob(path + "/*")
     dataset_ids = [f"usc_koch_rewind/{os.path.basename(x)}" for x in dataset_ids]
 
-    reward_model_path = "weights/rewind/one_step_transformer.pth"
-    reward_model_path = "weights/rewind/real_world_PosEmb_Rewind_ratio_0.8_EMA_momentum_0.3_End_Rewind_ratio_0.1/model_20.pth"
+    eval_tasks = [
+        "usc_koch_rewind/put_the_blue_cup_on_the_red_plate",
+        "usc_koch_rewind/separate_the_orange_and_blue_cups",
+        "usc_koch_rewind/open_the_red_trash_bin",
+        "usc_koch_rewind/throw_the_banana_away_in_the_red_trash_bin",
+        "usc_koch_rewind/put_the_red_tape_in_the_box_on_the_right",
+    ]
 
+    # remove eval tasks from dataset_ids
+    dataset_ids = [x for x in dataset_ids if x not in eval_tasks]
+
+    reward_model_path = "weights/rewind/one_step_transformer.pth"
+    # reward_model_path = "weights/rewind/real_world_PosEmb_Rewind_ratio_0.8_EMA_momentum_0.3_End_Rewind_ratio_0.1/model_30.pth"
+
+    reward_image_key = "observation.images.main"
+
+    reward_at_every_step = True
     # dataset_id = "test/orange_left_right_handover"
     reward_model_type = "rewind"
-    output_path = (
-        f"./data/real_robot/updated_trajs/usc_koch_rewind_{reward_model_type}2.h5"
-    )
+    output_path = f"./data/real_robot/updated_trajs/usc_koch_rewind_{reward_model_type}_{reward_at_every_step}.h5"
     lerobot_to_reward_hdf5(
         dataset_id=dataset_ids,
         output_path=output_path,
         reward_model_type=reward_model_type,
         reward_model_path=reward_model_path,
+        reward_at_every_step=reward_at_every_step,
+        reward_image_key=reward_image_key,
     )

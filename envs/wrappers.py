@@ -67,6 +67,20 @@ class PCAReducerWrapper(gym.Wrapper):
             dtype=np.float32,
         )
 
+    def __getstate__(self):
+        """Custom method for pickling - exclude pca_model which might contain unpicklable objects"""
+        state = self.__dict__.copy()
+        # Remove the pca_model which might not be picklable
+        if "pca_model" in state:
+            del state["pca_model"]
+        return state
+
+    def __setstate__(self, state):
+        """Custom method for unpickling"""
+        self.__dict__.update(state)
+        # Set pca_model to None - it will need to be set again after unpickling
+        self.pca_model = None
+
     def step(self, action):
         obs, reward, done, info = self.env.step(action)
         obs_pca = self.pca_model.transform(obs.reshape(1, -1)).flatten()
@@ -157,6 +171,15 @@ class LanguageWrapper(gym.Wrapper):
 
         self.observation_space = spaces.Dict(new_spaces)
 
+    def __getstate__(self):
+        """Custom method for pickling"""
+        state = self.__dict__.copy()
+        return state
+
+    def __setstate__(self, state):
+        """Custom method for unpickling"""
+        self.__dict__.update(state)
+
     def _observation(self, observation):
         observation["language_feature"] = self.language_features
         return observation
@@ -201,6 +224,20 @@ class ImageEmbeddingWrapper(gym.Wrapper):
         # Set the updated observation space
         self.observation_space = spaces.Dict(new_spaces)
 
+    def __getstate__(self):
+        """Custom method for pickling - exclude reward_model which might contain unpicklable objects"""
+        state = self.__dict__.copy()
+        # Remove the reward_model which might not be picklable
+        if "reward_model" in state:
+            del state["reward_model"]
+        return state
+
+    def __setstate__(self, state):
+        """Custom method for unpickling"""
+        self.__dict__.update(state)
+        # Set reward_model to None - it will need to be set again after unpickling
+        self.reward_model = None
+
     def _observation(self, observation):
         for i, key in enumerate(self.image_keys):
             image = observation[key]
@@ -234,7 +271,10 @@ class LearnedRewardWrapper(gym.Wrapper):
         self.reward_model = reward_model
         self.is_state_based = is_state_based
 
-        self.past_observations = []
+        self.past_observations = {}
+
+        for key in self.image_keys:
+            self.past_observations[key] = []
         self.counter = 0
 
         self.dense_eval = dense_eval
@@ -256,6 +296,57 @@ class LearnedRewardWrapper(gym.Wrapper):
                 "This may be valid if the user is using sparse/dense reward in a single task"
             )
 
+    def __getstate__(self):
+        state = self.__dict__.copy()
+        del state["reward_model"]
+        del state["reward_language_features"]
+        del state["past_observations"]
+        del state["counter"]
+
+        return state
+
+    def __setstate__(self, state):
+        self.__dict__.update(state)
+
+    def _compute_reward(self):
+        if not hasattr(self.reward_model, "multiple_cameras"):
+            stacked_sequence = np.stack(
+                self.past_observations[self.image_keys[self.image_reward_idx]],
+                axis=0,
+            )
+            stacked_sequence = (
+                th.from_numpy(stacked_sequence).float().to(self.reward_model.device)
+            )
+
+            reward = self.reward_model.calculate_rewards(
+                self.reward_language_features, stacked_sequence.unsqueeze(0)
+            )
+        else:
+            stacked_sequence = {
+                key: np.stack(self.past_observations[key], axis=0)
+                for key in self.image_keys
+            }
+            stacked_sequence = {
+                key: th.from_numpy(stacked_sequence[key])
+                .float()
+                .to(self.reward_model.device)
+                for key in self.image_keys
+            }
+            reward_sum = 0
+            rewards = []
+            for key in self.image_keys:
+                rewards.append(
+                    self.reward_model.calculate_rewards(
+                        self.reward_language_features,
+                        stacked_sequence[key].unsqueeze(0),
+                        key,
+                    )
+                )
+            print(rewards)
+            reward = sum(rewards) / len(self.image_keys)
+
+        return reward
+
     def step(self, action):
         self.counter += 1
         obs, original_reward, done, info = self.env.step(action)
@@ -265,6 +356,10 @@ class LearnedRewardWrapper(gym.Wrapper):
 
         if f"image_feature_{self.image_reward_idx}" in obs:
             encoded_image = obs[f"image_feature_{self.image_reward_idx}"]
+
+        encoded_images = {}
+        for i, key in enumerate(self.image_keys):
+            encoded_images[key] = obs[f"image_feature_{i}"]
 
         if self.reward_model.name == "dense" or self.dense_eval:
             reward = original_reward / self.reward_divisor
@@ -283,33 +378,23 @@ class LearnedRewardWrapper(gym.Wrapper):
             return obs, sparse_reward, done, info
 
         if encoded_image is not None:
-            self.past_observations.append(encoded_image)
+            for key, value in encoded_images.items():
+                self.past_observations[key].append(value)
 
         assert self.reward_language_features is not None, (
             "Language features are None in the reward model"
         )
 
         if self.reward_at_every_step:
-            stacked_sequence = np.stack(self.past_observations, axis=1)
-            stacked_sequence = (
-                th.from_numpy(stacked_sequence).float().to(self.reward_model.device)
-            )
-
-            reward = self.reward_model.calculate_rewards(
-                self.reward_language_features, stacked_sequence
-            )
+            reward = self._compute_reward()
 
         else:
             if done:
-                stacked_sequence = np.stack(self.past_observations, axis=0)
-                stacked_sequence = (
-                    th.from_numpy(stacked_sequence).float().to(self.reward_model.device)
-                )
+                reward = self._compute_reward()
 
-                reward = self.reward_model.calculate_rewards(
-                    self.reward_language_features, stacked_sequence.unsqueeze(0)
-                )
-                self.past_observations = []
+                self.past_observations = {}
+                for key in self.image_keys:
+                    self.past_observations[key] = []
             else:
                 reward = 0
 
@@ -322,19 +407,100 @@ class LearnedRewardWrapper(gym.Wrapper):
         return obs, reward, done, info
 
     def reset(self):
-        self.past_observations = []
+        self.past_observations = {}
+        for key in self.image_keys:
+            self.past_observations[key] = []
         self.counter = 0
 
         obs = self.env.reset()
 
-        encoded_image = None
-
-        if f"image_feature_{self.image_reward_idx}" in obs:
-            encoded_image = obs[f"image_feature_{self.image_reward_idx}"]
-
-        self.past_observations.append(encoded_image)
+        for i, key in enumerate(self.image_keys):
+            self.past_observations[key].append(obs[f"image_feature_{i}"])
 
         return obs
+
+
+class FlattenDictObservationWrapper(gym.Wrapper):
+    def __init__(self, env, use_proprio=True):
+        super().__init__(env)
+        self.env = env
+
+        # Concatenation will be done in the order of the keys
+        # Proprio, text_vector, image_vectors
+
+        obs_space = self.env.observation_space
+        total_concat_size = 0
+
+        image_feature_keys = [
+            key for key in obs_space.spaces.keys() if "image_feature" in key
+        ]
+
+        # Sort the images keys in case there are multiple images
+        image_feature_keys = sorted(image_feature_keys)
+
+        # Get text keys "language_feature"
+        lang_feature_key = (
+            "language_feature"
+            if "language_feature" in obs_space.spaces.keys()
+            else None
+        )
+
+        self.use_proprio = use_proprio
+
+        if use_proprio and "proprio" in obs_space.spaces.keys():
+            proprio_key = "proprio"
+        else:
+            proprio_key = None
+
+        # Get total size
+        if proprio_key is not None:
+            total_concat_size += obs_space[proprio_key].shape[0]
+
+        if lang_feature_key is not None:
+            total_concat_size += obs_space[lang_feature_key].shape[0]
+
+        for key in image_feature_keys:
+            total_concat_size += obs_space[key].shape[0]
+
+        self.lang_feature_key = lang_feature_key
+        self.proprio_key = proprio_key
+        self.image_feature_keys = sorted(image_feature_keys)
+
+        self.observation_space = gym.spaces.Box(
+            low=-1, high=1, shape=(total_concat_size,), dtype=np.float32
+        )
+
+    def _observation(self, obs: dict):
+        flattened_obs = []
+
+        # Lang
+        if "language_feature" in obs:
+            lang = obs["language_feature"]
+            lang = lang.reshape(-1)
+            flattened_obs.append(lang)
+
+        # Get image in order
+        for key in self.image_feature_keys:
+            if key in obs:
+                image = obs[key]
+                image = image.reshape(-1)
+                flattened_obs.append(image)
+
+        # Proprio
+        if "proprio" in obs and self.use_proprio:
+            proprio = obs["proprio"]
+            proprio = proprio.reshape(-1)
+            flattened_obs.append(proprio)
+
+        return np.concatenate(flattened_obs)
+
+    def step(self, action):
+        obs, reward, done, info = self.env.step(action)
+        return self._observation(obs), reward, done, info
+
+    def reset(self):
+        obs = self.env.reset()
+        return self._observation(obs)
 
 
 # Environment keeps an aggregate reward at each step and outputs it only when the episode ends
@@ -364,12 +530,68 @@ class RewardScaleWrapper(gym.Wrapper):
         return obs, reward / self.divisor, done, info
 
 
+class LoggingWrapper(gym.Wrapper):
+    def __init__(self, env: gym.Env, logger):
+        super(LoggingWrapper, self).__init__(env)
+        self.logger = logger
+        self.episode_reward = 0
+
+        self.episode_number = 0
+        self.step_number = 0
+
+    def __getstate__(self):
+        """Custom method for pickling - exclude logger which might contain unpicklable objects"""
+        state = self.__dict__.copy()
+        # Remove the logger which might not be picklable
+        if "logger" in state:
+            del state["logger"]
+        return state
+
+    def __setstate__(self, state):
+        """Custom method for unpickling"""
+        self.__dict__.update(state)
+        # Set logger to None - it will need to be set again after unpickling
+        self.logger = None
+
+    def step(self, action):
+        # We want to log the reward at each step
+        obs, reward, done, info = self.env.step(action)
+        print(reward)
+        if self.logger is not None:
+            self.logger.record("reward", reward)
+        self.episode_reward += reward
+
+        # if it is a done and a success, we want to log it
+        if done:
+            if self.logger is not None:
+                if info.get("success", False):
+                    self.logger.record("success", 1)
+                else:
+                    self.logger.record("success", 0)
+
+                # also log the episode reward
+                self.logger.record("episode_reward", self.episode_reward)
+            self.episode_reward = 0
+
+        return obs, reward, done, info
+
+
 class ActionChunkingWrapper(gym.Wrapper):
-    def __init__(self, env, chunk_size=15):
+    def __init__(self, env, chunk_size=15, n_action_steps=15):
         super(ActionChunkingWrapper, self).__init__(env)
         self.chunk_size = chunk_size
+        self.n_action_steps = n_action_steps
 
         self.chunk = []
+
+    def __getstate__(self):
+        """Custom method for pickling"""
+        state = self.__dict__.copy()
+        return state
+
+    def __setstate__(self, state):
+        """Custom method for unpickling"""
+        self.__dict__.update(state)
 
     def step(self, chunked_action: np.ndarray):
         # Unpack action
@@ -388,9 +610,10 @@ class ActionChunkingWrapper(gym.Wrapper):
         if self.is_chunk_empty:
             # Then let the action replace the chunk
             self.chunk = chunked_action
-        else:
-            # If chunk is not empty, we will assert that chunked_action is None
-            assert chunked_action is None
+        # else:
+        #     # If chunk is not empty, we will assert that chunked_action is None
+        #     breakpoint()
+        #     assert chunked_action is None
 
         popped_action = self.chunk[0]
         self.chunk = self.chunk[1:]
@@ -398,6 +621,11 @@ class ActionChunkingWrapper(gym.Wrapper):
         obs, reward, done, info = self.env.step(popped_action)
 
         info["action"] = popped_action
+
+        # check if we have n_action_steps used
+        actions_taken = self.chunk_size - len(self.chunk)
+        if actions_taken >= self.n_action_steps:
+            self.chunk = []
 
         return obs, reward, done, info
 
@@ -408,3 +636,164 @@ class ActionChunkingWrapper(gym.Wrapper):
     def reset(self):
         self.chunk = []
         return self.env.reset()
+
+
+class ACTTemporalEnsemblerWrapper(gym.Wrapper):
+    def __init__(
+        self, env: gym.Env, temporal_ensemble_coeff: float, chunk_size: int
+    ) -> None:
+        """Temporal ensembling as described in Algorithm 2 of https://arxiv.org/abs/2304.13705.
+
+        The weights are calculated as wᵢ = exp(-temporal_ensemble_coeff * i) where w₀ is the oldest action.
+        They are then normalized to sum to 1 by dividing by Σwᵢ. Here's some intuition around how the
+        coefficient works:
+            - Setting it to 0 uniformly weighs all actions.
+            - Setting it positive gives more weight to older actions.
+            - Setting it negative gives more weight to newer actions.
+        NOTE: The default value for `temporal_ensemble_coeff` used by the original ACT work is 0.01. This
+        results in older actions being weighed more highly than newer actions (the experiments documented in
+        https://github.com/huggingface/lerobot/pull/319 hint at why highly weighing new actions might be
+        detrimental: doing so aggressively may diminish the benefits of action chunking).
+
+        Here we use an online method for computing the average rather than caching a history of actions in
+        order to compute the average offline. For a simple 1D sequence it looks something like:
+
+        ```
+        import torch
+
+        seq = torch.linspace(8, 8.5, 100)
+        print(seq)
+
+        m = 0.01
+        exp_weights = torch.exp(-m * torch.arange(len(seq)))
+        print(exp_weights)
+
+        # Calculate offline
+        avg = (exp_weights * seq).sum() / exp_weights.sum()
+        print("offline", avg)
+
+        # Calculate online
+        for i, item in enumerate(seq):
+            if i == 0:
+                avg = item
+                continue
+            avg *= exp_weights[:i].sum()
+            avg += item * exp_weights[i]
+            avg /= exp_weights[:i+1].sum()
+        print("online", avg)
+        ```
+        """
+        super().__init__(env)
+        self.chunk_size = chunk_size
+        self.ensemble_weights = th.exp(-temporal_ensemble_coeff * th.arange(chunk_size))
+        self.ensemble_weights_cumsum = th.cumsum(self.ensemble_weights, dim=0)
+
+        self.chunk = None
+        self.chunk_count = None
+
+    def reset(self):
+        """Resets the online computation variables."""
+        self.chunk = None
+        # (chunk_size,) count of how many actions are in the ensemble for each time step in the sequence.
+        self.chunk_count = None
+        return self.env.reset()
+
+    def ensure_safeish_goal_position(
+        self,
+        goal_pos: th.Tensor,
+        present_pos: th.Tensor,
+        max_relative_target: float | list[float],
+    ):
+        # convert everything to tensors
+        goal_pos = th.tensor(goal_pos)
+        present_pos = th.tensor(present_pos)
+        max_relative_target = th.tensor(max_relative_target)
+
+        # Cap relative action target magnitude for safety.
+        diff = goal_pos - present_pos
+        safe_diff = th.minimum(diff, max_relative_target)
+        safe_diff = th.maximum(safe_diff, -max_relative_target)
+
+        safe_goal_pos = present_pos + safe_diff
+
+        return safe_goal_pos.numpy()
+
+    def step(self, actions: th.Tensor) -> th.Tensor:
+        """
+        Takes a (batch, chunk_size, action_dim) sequence of actions, update the temporal ensemble for all
+        time steps, and pop/return the next batch of actions in the sequence.
+        """
+
+        if actions is not None and actions.ndim == 1:
+            print("**" * 10)
+            print()
+            print("THE ACTION IS NOT CHUNKED")
+            print("This may be okay if random exploration from SB3 is used")
+            print()
+            print("**" * 10)
+            obs, reward, done, info = self.env.step(actions)
+            info["action"] = actions[None, :]
+            return obs, reward, done, info
+
+        # self.ensemble_weights = self.ensemble_weights.to(device=actions.device)
+        # self.ensemble_weights_cumsum = self.ensemble_weights_cumsum.to(
+        #     device=actions.device
+        # )
+        # let us also clip the actions to be between ensure_safeish_goal_position
+        # current_state = self.env.current_observation["observation.state"].numpy()
+        # actions = self.ensure_safeish_goal_position(
+        #     goal_pos=actions, present_pos=current_state, max_relative_target=12.0
+        # )
+        actions = actions[None, ...]
+        if self.chunk is None:
+            # Initializes `self._ensembled_action` to the sequence of actions predicted during the first
+            # time step of the episode.
+            # actions is of shape (chunk_size, action_dim). chunks should be (batch_size, chunk_size, action_dim)
+            self.chunk = actions.copy()
+
+            # Note: The last dimension is unsqueeze to make sure we can broadcast properly for tensor
+            # operations later.
+            self.chunk_count = np.ones(
+                (self.chunk_size, 1),
+                dtype=np.int32,
+            )
+        else:
+            # self.chunk will have shape (batch_size, chunk_size - 1, action_dim). Compute
+            # the online update for those entries.
+            self.chunk *= self.ensemble_weights_cumsum[self.chunk_count - 1].numpy()
+            self.chunk += (
+                actions[:, :-1] * self.ensemble_weights[self.chunk_count].numpy()
+            )
+            self.chunk /= self.ensemble_weights_cumsum[self.chunk_count].numpy()
+            self.chunk_count = np.clip(
+                self.chunk_count + 1, a_min=None, a_max=self.chunk_size
+            )
+            # The last action, which has no prior online average, needs to get concatenated onto the end.
+            self.chunk = np.concatenate([self.chunk, actions[:, -1:]], axis=1)
+            self.chunk_count = np.concatenate(
+                [
+                    self.chunk_count,
+                    np.ones_like(self.chunk_count[-1:]),
+                ]
+            )
+        # "Consume" the first action.
+        action, self.chunk, self.chunk_count = (
+            self.chunk[:, 0],
+            self.chunk[:, 1:],
+            self.chunk_count[1:],
+        )
+        obs, reward, done, info = self.env.step(action.squeeze())
+
+        info["action"] = action.squeeze()
+
+        # print(action.shape, actions.shape)
+        return obs, reward, done, info
+
+    def __getstate__(self):
+        """Custom method for pickling"""
+        state = self.__dict__.copy()
+        return state
+
+    def __setstate__(self, state):
+        """Custom method for unpickling"""
+        self.__dict__.update(state)

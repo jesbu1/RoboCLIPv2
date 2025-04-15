@@ -5,24 +5,28 @@ defaults:
 
 # tentatively unused
 offline_training:
-  offline_h5_path: "data/real_robot/updated_trajs/usc_koch_rewind_{}2.h5"
-  
+  offline_h5_path: "data/real_robot/updated_trajs/usc_koch_rewind_{0}_{1}.h5"
+  reward_at_every_step: false
   offline_tasks: null
 
 environment:
   cfg_name: "koch_single_task"
-  text_instruction: "separate the orange and blue cups" # seen task
+  # text_instruction: "separate the orange and blue cups" # seen task
+  text_instruction: "open the red trash bin"
   # text_instruction: "separate the red and green cups" # unseen task
   n_envs: 1
   train_freq_num: 1
   train_freq_type: 'episode'
   ignore_language: false
   image_keys: ['observation.images.main', 'observation.images.side']
-  reward_image_key: 'observation.images.main'
+  max_episode_steps: 500
+  use_proprio: true
 
 online_training:
-  gradient_steps: 500
+  gradient_steps: 50000
 
+general_training:
+  gamma: 0.99 # gamma should be (1/(1-gamma) = 250 steps
 
 # Reward divisor is environment-dependent
 reward_model:

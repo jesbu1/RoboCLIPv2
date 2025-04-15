@@ -119,7 +119,7 @@ with h5py.File(SAVE_H5_NAME, "w") as f:
                 repo_id = dataset._datasets[step["dataset_index"]].meta.repo_id
                 for key in image_keys:
                     episode_images_list[key].append(step[key].numpy())
-                
+
                 dataset_idx += 1
                 if dataset_idx >= len_of_dataset:
                     break
@@ -209,7 +209,9 @@ with h5py.File(SAVE_H5_NAME, "w") as f:
 
                 # rescale temporally with rescaling_dict
                 rescaling_dict_key = repo_id
-                episode_images = episode_images[: int(len(episode_images) * rescaling_dict[rescaling_dict_key])]
+                episode_images = episode_images[
+                    : int(len(episode_images) * rescaling_dict[rescaling_dict_key])
+                ]
 
                 embedding_list = []
                 # linspace to get the indices of the frames to sample
@@ -224,28 +226,30 @@ with h5py.File(SAVE_H5_NAME, "w") as f:
                 # # After collecting all frames for an episode, display the PRIMARY_IMAGE_KEY frames in a grid
                 primary_frames = episode_images
                 num_frames = len(primary_frames)
-                
+
                 # Convert frames to correct format
-                primary_frames = [(frame.transpose(1, 2, 0) * 255).astype(np.uint8) for frame in primary_frames]
-                
+                primary_frames = [
+                    (frame.transpose(1, 2, 0) * 255).astype(np.uint8)
+                    for frame in primary_frames
+                ]
+
                 # Create a grid layout (e.g., 4x8 for 32 frames)
                 rows, cols = 4, 8
                 fig, axes = plt.subplots(rows, cols, figsize=(20, 10))
-                fig.suptitle(f'All frames for episode {prev_episode_idx}')
-                
+                fig.suptitle(f"All frames for episode {prev_episode_idx}")
+
                 # Plot each frame
                 for idx in range(rows * cols):
                     ax = axes[idx // cols, idx % cols]
                     if idx < num_frames:
                         ax.imshow(primary_frames[idx])
-                    ax.axis('off')
+                    ax.axis("off")
                     # if idx < num_frames:
                     #     ax.set_title(f'Frame {idx}')
-                
+
                 plt.tight_layout()
                 plt.pause(2)
                 plt.close()
-
 
                 if EMBEDDING_MODEL == "dinov2":
                     # batch it
@@ -292,7 +296,6 @@ with h5py.File(SAVE_H5_NAME, "w") as f:
                         )
                     embedding_list.append(image_embeddings)
                     episode_image_embeddings = np.array(embedding_list)
-
 
                 # Check for embedding differences over time. We want to find the cutoff point where the embeddings stop changing
                 # offset_embeddings = episode_image_embeddings[1:] - episode_image_embeddings[:-1]

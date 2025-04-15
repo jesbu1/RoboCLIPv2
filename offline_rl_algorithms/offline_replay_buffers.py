@@ -141,7 +141,7 @@ class H5ReplayBuffer(ReplayBuffer):
                         for j in range(3):
                             if i - j >= 0:
                                 rewards[i - j] = 1
-                
+
                 rewards = rewards.astype(np.float32)
             else:
                 rewards = f["rewards"][()]

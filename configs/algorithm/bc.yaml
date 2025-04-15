@@ -11,7 +11,7 @@ general_training:
   algo: bc
   name: bc
   action_noise: 0 # sigma
-  learning_rate: 1e-3
+  learning_rate: 1e-4
   action_chunk_size: 60
 
 model:
@@ -21,7 +21,7 @@ model:
   qf_net_arch: [1024, 1024, 512]
 
 offline_training:
-  offline_training_steps: 20000
+  offline_training_steps: 10000
 
 online_training:
   total_time_steps: 0

@@ -372,7 +372,9 @@ class RLPD(OfflineRLAlgorithm):
         q_next_values_list = []
         reward_values = []
 
-        print(f"Going to take {gradient_steps} training steps")
+        if gradient_steps != 1:
+            # only so if we are doing per-step training, we don't overprint
+            print(f"Going to take {gradient_steps} training steps")
 
         for gradient_step in range(gradient_steps):
             # We need to sample because `log_std` may have changed between two gradient steps
@@ -554,10 +556,12 @@ class RLPD(OfflineRLAlgorithm):
 
     def _excluded_save_params(self) -> List[str]:
         return super()._excluded_save_params() + [
-            "actor",
-            "critic",
-            "critic_target",
-            "env",
+            "offline_algo",  # Exclude the offline algorithm
+            "reward_model",  # Exclude the reward model
+            "combined_buffer",  # Exclude the combined buffer
+            "online_buffer",  # Exclude the online buffer
+            "offline_buffer",  # Exclude the offline buffer
+            "logger",  # Exclude the logger
         ]  # noqa: RUF005
 
     def _get_torch_save_params(self) -> Tuple[List[str], List[str]]:

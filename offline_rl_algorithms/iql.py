@@ -370,11 +370,15 @@ class IQL(OfflineRLAlgorithm):
                 # Optimize the critic Q
                 self.critic.optimizer.zero_grad()
                 q_loss.backward()
+                # Apply gradient clipping to improve stability
+                th.nn.utils.clip_grad_norm_(self.critic.parameters(), max_norm=10.0)
                 self.critic.optimizer.step()
 
                 # Optimize the value function
                 self.v_net.optimizer.zero_grad()
                 vf_loss.backward()
+                # Apply gradient clipping to improve stability
+                th.nn.utils.clip_grad_norm_(self.v_net.parameters(), max_norm=10.0)
                 self.v_net.optimizer.step()
 
                 # Target network update

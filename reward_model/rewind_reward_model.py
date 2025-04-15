@@ -26,10 +26,12 @@ def normalize_embeddings(embeddings, return_tensor=True):
 class ReWiNDRewardModel(BaseRewardModel):
     def __init__(
         self,
-        model_load_path: str,
+        model_load_path: Union[str, List[str]],
+        camera_names: List[str],
         device: str = "cuda",
         batch_size=64,
         reward_at_every_step: bool = False,
+        success_bonus: float = 10.0,
     ):
         """
         Initializes the ReWiNDRewardModel.
@@ -38,10 +40,18 @@ class ReWiNDRewardModel(BaseRewardModel):
         :param batch_size: Batch size to use for encoding data (default: 64).
         :param reward_at_every_step: Whether to calculate rewards at every step (default: False).
         """
-        super().__init__(device, batch_size)
+        super().__init__(device, batch_size, success_bonus=success_bonus)
         self.reward_at_every_step = reward_at_every_step
 
-        self.rewind_model = self._load_model(model_load_path)
+        self.camera_names = camera_names
+        if isinstance(model_load_path, list):
+            self.multiple_cameras = True
+            self.model_load_path = model_load_path
+            self.rewind_model = [self._load_model(path) for path in model_load_path]
+        else:
+            self.multiple_cameras = False
+            self.model_load_path = model_load_path
+            self.rewind_model = self._load_model(model_load_path)
 
         # for the text embedding, we use minilm
         self.minilm_tokenizer = AutoTokenizer.from_pretrained(
@@ -133,8 +143,42 @@ class ReWiNDRewardModel(BaseRewardModel):
 
         return episode_image_embeddings.unsqueeze(0)
 
+    def calculate_rewards(
+        self,
+        encoded_texts: Union[np.ndarray, torch.Tensor],
+        encoded_videos: Union[np.ndarray, torch.Tensor],
+        camera_name: str = None,
+    ) -> np.ndarray:
+        """
+        Calculates the rewards for given text and video representations.
+        :param encoded_texts: Encoded text representations.
+        :param encoded_videos: Encoded video representations.
+        :return: Reward values for each text-video pair.
+        """
+        assert len(encoded_texts) == len(encoded_videos), (
+            "The number of text and video representations should be the same."
+        )
+        for i in range(0, len(encoded_videos), self.batch_size):
+            batch_texts = encoded_texts[i : i + self.batch_size]
+            batch_videos = encoded_videos[i : i + self.batch_size]
+            if isinstance(encoded_texts, np.ndarray):
+                batch_texts = torch.tensor(batch_texts, dtype=torch.float32)
+            if isinstance(encoded_videos, np.ndarray):
+                batch_videos = torch.tensor(batch_videos, dtype=torch.float32)
+            rewards = self._calculate_reward_batch(
+                batch_texts.to(self.device), batch_videos.to(self.device), camera_name
+            )
+            if i == 0:
+                rewards_all = rewards
+            else:
+                rewards_all = np.concatenate((rewards_all, rewards))
+        return rewards_all
+
     def _calculate_reward_batch(
-        self, encoded_texts: torch.Tensor, encoded_videos: torch.Tensor
+        self,
+        encoded_texts: torch.Tensor,
+        encoded_videos: torch.Tensor,
+        camera_name: str = None,
     ) -> torch.Tensor:
         """
         Calculates the rewards for a batch of text and video representations.
@@ -142,24 +186,25 @@ class ReWiNDRewardModel(BaseRewardModel):
         :param encoded_videos: Encoded video representations. Shape: (batch_size, num_images, embedding_dim).
         :return: Reward values for each text-video pair.
         """
+        if self.multiple_cameras:
+            model = self.rewind_model[self.camera_names.index(camera_name)]
+        else:
+            model = self.rewind_model
 
         with torch.no_grad():
             # remove batch dimension for video_encoding_model not supported and then only
-            # encoded_texts = encoded_texts.squeeze(0)
+            encoded_texts = encoded_texts.squeeze(0)
             encoded_videos = encoded_videos.squeeze(0)
 
-            # do padding here
             encoded_videos = self.padding_video(
                 encoded_videos, self.args.max_length
             ).unsqueeze(0)
             # TODO: add the processing for downsampling if needed @Yusen @Jiahui
             reward = (
-                self.rewind_model(encoded_videos.float(), encoded_texts.float())[0]
-                .cpu()
-                .numpy()
+                model(encoded_videos.float(), encoded_texts.float())[0].cpu().numpy()
             )
 
-        print(reward)
+        # print(reward)
         # return the last reward
         reward = reward[:, -1, 0]
         return reward

@@ -81,6 +81,7 @@ reward_model:
   batch_size: 128
   model_path: null
   success_bonus: 10.0
+  reward_at_every_step: false
 
 environment:
   text_string: null # Set to null so you must set environment yaml
@@ -96,3 +97,13 @@ environment:
   is_state_based: false
   use_proprio: true
   robot_disabled: false
+
+evaluation:
+  # Evaluation configuration for RoboCLIPv2
+  model_path: null  # Path to the model directory
+  model_type: rlpd  # Type of model to evaluate (rlpd, iql, bc, cql)
+  n_episodes: 10    # Number of episodes to evaluate
+  deterministic: true  # Whether to use deterministic actions
+  render: false     # Whether to render the environment
+  seed: 42          # Random seed
+  wandb: true      # Whether to log to wandb

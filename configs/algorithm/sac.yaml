@@ -25,4 +25,4 @@ offline_training:
 
 online_training:
   total_time_steps: 500000
-  learning_starts: 500
+  learning_starts: 0

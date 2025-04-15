@@ -175,7 +175,8 @@ class OfflineRLAlgorithm(OffPolicyAlgorithm):
         self.ent_coef_optimizer: Optional[th.optim.Adam] = None
 
         self.warm_start_online_rl = warm_start_online_rl
-        self.learned_offline = False
+        # self.learned_offline = False
+        self.learned_offline = True
 
         self.action_chunk_size = action_chunk_size
 
@@ -422,15 +423,15 @@ class OfflineRLAlgorithm(OffPolicyAlgorithm):
             if episode_start[0] is True:
                 self.env.set_attr("chunk", [])
             elif self.env.get_attr("is_chunk_empty")[0]:
-                print("calling predict")
+                # print("calling predict")
                 action, _ = super().predict(
                     observation, state, episode_start, deterministic
                 )
                 return action[None, :], _
             else:
-                print("not calling predict")
+                # print("not calling predict")
                 return [None], None
-        print("calling predict")
+        # print("calling predict")
         action, _ = super().predict(observation, state, episode_start, deterministic)
         return action, _
 
@@ -496,12 +497,12 @@ class OfflineRLAlgorithm(OffPolicyAlgorithm):
         while should_collect_more_steps(
             train_freq, num_collected_steps, num_collected_episodes
         ):
-            print(
-                train_freq.unit,
-                train_freq.frequency,
-                num_collected_steps,
-                num_collected_episodes,
-            )
+            # print(
+            #     train_freq.unit,
+            #     train_freq.frequency,
+            #     num_collected_steps,
+            #     num_collected_episodes,
+            # )
 
             if (
                 self.use_sde
@@ -523,6 +524,8 @@ class OfflineRLAlgorithm(OffPolicyAlgorithm):
             # Rescale and perform action
             new_obs, rewards, dones, infos = env.step(actions)
 
+            env.render()
+
             # If done, then set first_step to True
             if dones[0]:
                 first_step = True
@@ -535,7 +538,6 @@ class OfflineRLAlgorithm(OffPolicyAlgorithm):
                 actual_action = infos[0].get("action")[None, :]
 
                 buffer_actions = self.policy.scale_action(actual_action)
-                # TODO, CHECK THIS SCALING HERE
 
             self.num_timesteps += env.num_envs
             num_collected_steps += 1

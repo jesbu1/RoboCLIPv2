@@ -3,6 +3,8 @@ import random
 import numpy as np
 import torch as th
 from gym import Env
+import gym
+from gym import spaces
 from gym.wrappers.time_limit import TimeLimit
 from stable_baselines3.common.monitor import Monitor
 from metaworld.envs import (
@@ -115,6 +117,18 @@ class MetaworldBase(Env):
 
         self.action_space = self.base_env.action_space
         self.observation_space = self.base_env.observation_space
+        self.image_keys = ["image"]
+        self.image_reward_idx = 0
+
+        self.observation_space = gym.spaces.Dict(
+            {
+                "proprio": gym.spaces.Box(low=-1, high=1, shape=(4,), dtype=np.float32),
+                "image": gym.spaces.Box(
+                    low=0, high=255, shape=(480, 640, 3), dtype=np.uint8
+                ),
+            }
+        )
+
         self.rank = seed
         self.env_id = env_id
         self.random_reset = random_reset
@@ -138,11 +152,9 @@ class MetaworldBase(Env):
             done (boolean): whether the episode has ended, in which case further step() calls will return undefined results
             info (dict): contains auxiliary diagnostic information (helpful for debugging, and sometimes for learning)
         """
-        obs, reward, done, info = self.base_env.step(action)
+        state, reward, done, info = self.base_env.step(action)
 
-        if self.use_proprio:
-            # Remove state info and use only first 4 elements
-            obs = obs[:4]
+        obs = self.get_obs(state)
 
         # if success, we add "is_success" to the info
         if "success" in info and info["success"]:
@@ -152,14 +164,23 @@ class MetaworldBase(Env):
 
         return obs, reward, done, info
 
-    def get_obs(self):
+    def get_obs(self, state):
         """
         Get the current observation of the environment.
 
         Returns:
             observation (object): agent's observation of the current environment
         """
-        return self.base_env._get_obs(self.base_env.prev_time_step)
+        # state = self.base_env._get_obs(self.base_env.prev_time_step)
+        obs = {}
+        if self.use_proprio:
+            obs["proprio"] = state[:4]
+
+        if self.image_keys:
+            image = self.render(mode="rgb_array")
+            obs["image"] = image
+
+        return obs
 
     def reset(self):
         """
@@ -187,7 +208,11 @@ class MetaworldBase(Env):
                 self.base_env, max_episode_steps=self.max_episode_steps
             )
 
-        return self.base_env.reset()
+        state = self.base_env.reset()
+
+        obs = self.get_obs(state)
+
+        return obs
 
     def render(self, mode="rgb_array"):
         """
@@ -196,7 +221,7 @@ class MetaworldBase(Env):
         Returns:
             observation (object): the current observation
         """
-        return self.base_env.render()
+        return self.base_env.render(mode)
 
     # def warm_up_run(self):
     #     self.env.reset()
@@ -229,6 +254,72 @@ class MetaworldBase(Env):
         return self.base_env.close()
 
 
+class MetaworldImageEmbeddingWrapper(gym.Wrapper):
+    def __init__(self, env, reward_model):
+        super(MetaworldImageEmbeddingWrapper, self).__init__(env)
+        self.reward_model = reward_model
+
+        # The observation space is a dict
+        # Let us add image_feature to the observation space
+
+        current_obs_space = self.env.observation_space
+        assert isinstance(current_obs_space, spaces.Dict), (
+            "Observation space must be a Dict."
+        )
+
+        image_keys = self.env.image_keys
+
+        # Define the new observation space
+        new_spaces = current_obs_space.spaces.copy()
+        # Add a new key for the image feature corresponding to each image key
+        new_spaces["image_feature_0"] = spaces.Box(
+            low=-np.inf,
+            high=np.inf,
+            shape=(reward_model.img_output_dim,),
+            dtype=np.float32,
+        )
+
+        # Set the updated observation space
+        self.observation_space = spaces.Dict(new_spaces)
+
+    def __getstate__(self):
+        """Custom method for pickling - exclude reward_model which might contain unpicklable objects"""
+        state = self.__dict__.copy()
+        # Remove the reward_model which might not be picklable
+        if "reward_model" in state:
+            del state["reward_model"]
+        return state
+
+    def __setstate__(self, state):
+        """Custom method for unpickling"""
+        self.__dict__.update(state)
+        # Set reward_model to None - it will need to be set again after unpickling
+        self.reward_model = None
+
+    def _observation(self, observation):
+        # image = observation["image"]
+        # observation["image"] = image
+        image = observation["image"]
+        image = image[None, None, :, :, :]
+        image_feature = self.reward_model.encode_images(image).squeeze()
+        observation["image_feature_0"] = image_feature
+
+        return observation
+
+    def reset(self):
+        obs = self.env.reset()
+        obs = self._observation(obs)
+        return obs
+
+    def step(self, action):
+        obs, reward, done, info = self.env.step(action)
+        obs = self._observation(obs)
+        return obs, reward, done, info
+
+    def seed(self, seed=None):
+        pass
+
+
 # Example usage of the base environment and wrappers
 def create_wrapped_env(
     env_id,
@@ -243,6 +334,7 @@ def create_wrapped_env(
     mode="train",
     use_proprio=False,
     dense_rewards_at_end=False,
+    action_chunk_size=1,
 ):
     """
     Creates a wrapped MetaWorld environment with the given options.
@@ -296,13 +388,14 @@ def create_wrapped_env(
 
         dense_eval = True if (mode == "eval" or mode == "demo") else False
 
+        base_env = MetaworldImageEmbeddingWrapper(base_env, reward_model)
+
         base_env = LearnedRewardWrapper(
             base_env,
             reward_model,
             is_state_based=is_state_based,
             language_features=language_features,
             dense_eval=dense_eval,
-            use_proprio=use_proprio,
         )
 
         # This adds the language features to the observation
@@ -312,6 +405,13 @@ def create_wrapped_env(
         # Environment keeps an aggregate reward at each step and outputs it only when the episode ends
         if dense_rewards_at_end:
             base_env = RewardAtEndWrapper(base_env)
+
+        if action_chunk_size > 1:
+            base_env = ActionChunkingWrapper(
+                base_env, chunk_size=action_chunk_size, n_action_steps=action_chunk_size
+            )
+
+        base_env = FlattenDictObservationWrapper(base_env, use_proprio=use_proprio)
 
         # else:
         #     # Then we are an EnvRewardModel

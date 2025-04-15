@@ -264,7 +264,7 @@ class ActionSequenceActor(CustomActor):
 
         self.action_dist = SquashedDiagGaussianDistribution(action_dim)  # type: ignore[assignment]
         decoder_layer = nn.TransformerDecoderLayer(
-            d_model=512, nhead=4, batch_first=True
+            d_model=512, nhead=8, batch_first=True
         )
         self.action_transformer = nn.TransformerDecoder(
             decoder_layer, num_layers=1, norm=nn.LayerNorm(512)
@@ -277,11 +277,21 @@ class ActionSequenceActor(CustomActor):
             512, max_len=action_sequence_length
         )
         # self.mu = GRU(last_layer_dim, last_layer_dim, num_layers=1, batch_first=True)
-        self.mu_processor = nn.Linear(last_layer_dim, action_dim)
+        # self.mu_processor = nn.Linear(last_layer_dim, action_dim)
+
+        self.mu_processor = nn.Sequential(
+            nn.Linear(last_layer_dim, last_layer_dim // 2),
+            activation_fn(),
+            nn.Linear(last_layer_dim // 2, action_dim),
+        )
         # self.log_std = nn.GRU(
         #    last_layer_dim, last_layer_dim, num_layers=1, batch_first=True
         # )
-        self.log_std_processor = nn.Linear(last_layer_dim, action_dim)
+        self.log_std_processor = nn.Sequential(
+            nn.Linear(last_layer_dim, last_layer_dim // 2),
+            activation_fn(),
+            nn.Linear(last_layer_dim // 2, action_dim),
+        )
         self.action_sequence_length = action_sequence_length
 
         # Print action transformer parameter count
@@ -321,9 +331,7 @@ class ActionSequenceActor(CustomActor):
         mean_actions_intermediate = mean_actions_intermediate.reshape(
             -1, mean_actions_intermediate.shape[-1]
         )
-        mean_actions = self.mu_processor(
-            self.activation_fn()(mean_actions_intermediate)
-        )
+        mean_actions = self.mu_processor(mean_actions_intermediate)
 
         # Add batch back
         # mean_actions = mean_actions.reshape(
@@ -339,7 +347,7 @@ class ActionSequenceActor(CustomActor):
         # log_std = self.log_std_processor(self.activation_fn()(log_std_intermediate))
 
         log_std_intermediate = mean_actions_intermediate  # Adjust as needed
-        log_std = self.log_std_processor(self.activation_fn()(log_std_intermediate))
+        log_std = self.log_std_processor(log_std_intermediate)
 
         # Add batch back
         # log_std = log_std.reshape(-1, self.action_sequence_length, log_std.shape[-1])
@@ -469,7 +477,7 @@ class RecurrentQNetwork(nn.Module):
         # self.downprojector = nn.Linear(features_dim, 128)
 
         encoder_layer = nn.TransformerEncoderLayer(
-            d_model=128, nhead=4, batch_first=True
+            d_model=128, nhead=8, batch_first=True
         )
         self.transformer_action_processor = nn.TransformerEncoder(
             encoder_layer, num_layers=1, norm=nn.LayerNorm(128)
