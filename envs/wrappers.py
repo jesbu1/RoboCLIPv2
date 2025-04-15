@@ -607,7 +607,7 @@ class ActionChunkingWrapper(gym.Wrapper):
             info["action"] = chunked_action[None, :]
             return obs, reward, done, info
 
-        if self.is_chunk_empty:
+        if self.is_chunk_empty or self.chunk is None:
             # Then let the action replace the chunk
             self.chunk = chunked_action
         # else:
@@ -617,6 +617,8 @@ class ActionChunkingWrapper(gym.Wrapper):
 
         popped_action = self.chunk[0]
         self.chunk = self.chunk[1:]
+        # print("Chunk is empty")
+        # return self.env.step(None)
 
         obs, reward, done, info = self.env.step(popped_action)
 
@@ -631,7 +633,7 @@ class ActionChunkingWrapper(gym.Wrapper):
 
     @property
     def is_chunk_empty(self):
-        return len(self.chunk) == 0
+        return len(self.chunk) == 0 or self.chunk is None
 
     def reset(self):
         self.chunk = []

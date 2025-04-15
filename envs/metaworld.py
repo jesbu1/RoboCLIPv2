@@ -406,12 +406,12 @@ def create_wrapped_env(
         if dense_rewards_at_end:
             base_env = RewardAtEndWrapper(base_env)
 
+        base_env = FlattenDictObservationWrapper(base_env, use_proprio=use_proprio)
+
         if action_chunk_size > 1:
             base_env = ActionChunkingWrapper(
                 base_env, chunk_size=action_chunk_size, n_action_steps=action_chunk_size
             )
-
-        base_env = FlattenDictObservationWrapper(base_env, use_proprio=use_proprio)
 
         # else:
         #     # Then we are an EnvRewardModel

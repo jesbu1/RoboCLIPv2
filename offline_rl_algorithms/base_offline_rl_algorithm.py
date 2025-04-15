@@ -422,7 +422,10 @@ class OfflineRLAlgorithm(OffPolicyAlgorithm):
             assert episode_start is not None, "Need episode_start for action chunking"
             if episode_start[0] is True:
                 self.env.set_attr("chunk", [])
-            elif self.env.get_attr("is_chunk_empty")[0]:
+            elif (
+                self.env.get_attr("is_chunk_empty")
+                or self.env.get_attr("is_chunk_empty")[0]
+            ):
                 # print("calling predict")
                 action, _ = super().predict(
                     observation, state, episode_start, deterministic
