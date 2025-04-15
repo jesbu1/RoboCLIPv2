@@ -376,12 +376,12 @@ class LearnedRewardWrapper(gym.Wrapper):
             print(f"reward after divisor: {reward}")
         # Success bonus
         if info.get("success", False):
-            reward += self.reward_model.success_bonus
-            wandb_reward += self.reward_model.success_bonus
+            #reward += self.reward_model.success_bonus
+            #wandb_reward += self.reward_model.success_bonus
             self.total_success_bonus += self.reward_model.success_bonus
             print(f"The {self.episode_counter}th episode {self.counter}th step, train success reward: {reward}")
-        if done:
-            wandb.log({"train/learned_reward_with_success_bonus": wandb_reward})
+        # if done:
+        #     wandb.log({"train/learned_reward_with_success_bonus": wandb_reward})
         return obs, reward, done, info
     # @profile
     def reset(self):
@@ -490,12 +490,17 @@ class RewardScaleWrapper(gym.Wrapper):
         return obs, reward / self.divisor, done, info
 
 class RecordRewardWrapper(gym.Wrapper):
-    def __init__(self, env):
+    def __init__(self, env, reward_model):
         super(RecordRewardWrapper, self).__init__(env)
+        self.reward_model = reward_model
 
     def step(self, action):
         obs, reward, done, info = self.env.step(action)
         if done:
             wandb.log({"train/normalized_reward": reward})
+        if info.get("success", False):
+            reward += self.reward_model.success_bonus
+        if done:
+            wandb.log({"train/normalized_reward_with_success_bonus": reward})
         
         return obs, reward, done, info

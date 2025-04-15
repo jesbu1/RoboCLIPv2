@@ -340,9 +340,9 @@ def create_wrapped_env(
         if dense_rewards_at_end:
             base_env = RewardAtEndWrapper(base_env)
         
-        if normalize_reward:
+        if normalize_reward and mode == "train":
             base_env = NormalizeReward(base_env)
-            base_env = RecordRewardWrapper(base_env)
+            base_env = RecordRewardWrapper(base_env, reward_model)
 
         # else:
         #     # Then we are an EnvRewardModel

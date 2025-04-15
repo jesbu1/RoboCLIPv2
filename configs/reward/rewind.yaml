@@ -12,7 +12,7 @@ reward_model:
   
   general_training:
     dense_rewards_at_end: false
-    learning_rate: 1e-4
+    learning_rate: 1e-3
     entropy_term: "auto_0.1"
     normalize_reward: true
     terminate_on_success: false
