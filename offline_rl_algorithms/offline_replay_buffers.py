@@ -191,6 +191,8 @@ class H5ReplayBuffer(ReplayBuffer):
             self.indices_to_keep = np.array(indices_to_keep, dtype=int)
 
         # Use the reward divisor
+        # print(f"Using reward divisor: {reward_divisor}", rewards)
+        # import pdb ; pdb.set_trace()
         rewards /= reward_divisor
 
         if dense_rewards_at_end:

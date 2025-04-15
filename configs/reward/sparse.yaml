@@ -2,12 +2,17 @@
 
 reward_model: 
   name: 'sparse'
+<<<<<<< HEAD
+  encoder: null # default and only option is vlc
+  success_bonus: 120.0
+=======
   encoder: 'dino' # default and only option is vlc
   success_bonus: 50.0
 
   general_training:
     dense_rewards_at_end: false
     entropy_term: "auto"
+>>>>>>> refs/remotes/origin/offline_rl
 
 environment:
   is_state_based: false

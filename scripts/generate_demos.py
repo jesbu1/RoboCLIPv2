@@ -21,6 +21,7 @@ flip = False  # if True, flips output image 180 degrees
 
 config = [
     # env, action noise pct, cycles, quit on success
+    
     ("assembly-v2", np.zeros(4), 3, True),
     ("basketball-v2", np.zeros(4), 3, True),
     ("bin-picking-v2", np.zeros(4), 3, True),
@@ -107,10 +108,10 @@ def writer_for_gif(tag, fps, res):
 
 
 def main():
-    collect_num = 15
+    collect_num = 100
     config_range = (0, len(config))
 
-    base_path = "./data/h5_buffers/orig/"
+    base_path = "./"
     if not os.path.exists(base_path):
         os.makedirs(base_path)
 
@@ -205,7 +206,7 @@ def main():
                 temp_next_state_list.append(o)
                 temp_action_list.append(a)
                 temp_string_list.append(environment_to_instruction[env_name])
-
+                print("step", step, "reward", r, "done", done)
                 if info["success"]:
                     print("success")
                     rollout_success = True

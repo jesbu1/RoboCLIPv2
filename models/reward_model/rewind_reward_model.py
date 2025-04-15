@@ -245,7 +245,7 @@ class RewindRewardModel(BaseRewardModel):
             reward = torch.sum(pred_class, dim=1)
         else:
             reward = pred_class[:, -1]
-        print(f"reward before divisor: {reward}")
+        # print(f"reward before divisor: {reward}")
         return reward
 
     @property

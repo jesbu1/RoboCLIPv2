@@ -263,15 +263,14 @@ def main(cfg: DictConfig):
     model, model_class, policy_kwargs = get_policy_algorithm(cfg, envs, log_dir)
 
     # Set eval freq and video freq if not set
-
     # if it's rlpd, video_freq should be never
     if training_config.algo == "rlpd":
         video_freq = 0
         eval_freq = 0
         # eval_freq = offline_config.offline_training_steps * env_config.n_envs // (2)
     else:
-        video_freq = offline_config.offline_training_steps * env_config.n_envs // 10
-        eval_freq = offline_config.offline_training_steps * env_config.n_envs // (10)
+        video_freq = offline_config.offline_training_steps * env_config.n_envs // 2
+        eval_freq = offline_config.offline_training_steps * env_config.n_envs // (2)
 
     # Use deterministic actions for evaluation
     eval_callback = OfflineEvalCallback(
@@ -282,7 +281,7 @@ def main(cfg: DictConfig):
         video_freq=video_freq,
         deterministic=True,
         render=False,
-        n_eval_episodes=25,
+        n_eval_episodes=10,
     )
 
     callback_list = generate_callback_list(logging_config, eval_callback)
