@@ -426,7 +426,7 @@ class H5ReplayBuffer(ReplayBuffer):
             valid_lengths[valid_lengths == 0] = window_size
 
             # Create masks for valid actions, rewards, and dones
-            valid_masks = np.arange(window_size)[None, :] < valid_lengths[:, None]
+            valid_masks = np.arange(window_size)[None, :] <= valid_lengths[:, None]
 
             # Apply masks to compute padded actions, rewards, and dones
             padded_actions = np.where(valid_masks[:, :, None], actions_chunked, 0)

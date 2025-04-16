@@ -327,6 +327,9 @@ def main(cfg: DictConfig):
         is_metaworld="metaworld" in env_config.cfg_name,
         normalize_actions_koch="koch" in env_config.cfg_name,
         action_chunk_size=cfg.general_training.action_chunk_size,
+        pad_action_chunk_with_last_action=(
+            True if "koch" in env_config.cfg_name else False
+        ),
     )
 
     ### Learn offline
