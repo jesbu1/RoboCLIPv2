@@ -600,80 +600,74 @@ class ActionChunkedReplayBuffer(ReplayBuffer):
                 env,
             )
 
-        # Vectorized implementation for action chunking
-        batch_inds = np.array(batch_inds)
-        env_indices = np.array(env_indices)
+        if self.action_chunk_size > 1:
+            # Create sliding window views for actions, rewards, and dones
+            max_len = len(
+                self.rewards
+            )  # Assuming rewards, actions, and dones are of the same length
+            window_size = self.action_chunk_size
 
-        # Compute start and end indices for chunks
-        offsets = np.arange(self.action_chunk_size)
-        start_indices = batch_inds[:, None] + offsets[None, :]
-        end_indices = (batch_inds + self.action_chunk_size) % self.buffer_size
+            # Batch indices
+            batch_inds = np.array(batch_inds)
 
-        # Mask to ensure indices are within buffer bounds
-        valid_mask = start_indices < self.buffer_size
+            # Compute sliding window indices for each batch index
+            start_indices = batch_inds[:, None] + np.arange(window_size)
 
-        # Fetch dones and timeouts using advanced indexing
-        dones_chunked = np.zeros((len(batch_inds), self.action_chunk_size), dtype=bool)
-        timeouts_chunked = np.zeros(
-            (len(batch_inds), self.action_chunk_size), dtype=bool
-        )
-        valid_indices = np.where(valid_mask, start_indices, 0)
+            # Mask indices that go out of bounds
+            valid_mask = (start_indices >= 0) & (start_indices < max_len)
 
-        dones_chunked[:] = self.dones[valid_indices].squeeze(-1)
-        timeouts_chunked[:] = self.timeouts[valid_indices].squeeze(-1)
-
-        # Compute combined dones and find first done index
-        dones_combined = dones_chunked | timeouts_chunked
-        done_cumsum = np.cumsum(dones_combined, axis=1)
-        first_done_indices = np.argmax(done_cumsum > 0, axis=1)
-
-        # Determine effective chunk sizes
-        chunk_sizes = np.where(
-            np.all(dones_combined == 0, axis=1),
-            self.action_chunk_size,
-            first_done_indices + 1,
-        )
-        chunk_sizes = np.minimum(chunk_sizes, self.action_chunk_size)
-
-        # Fetch actions, rewards, and dones based on chunk sizes
-        actions_chunked = np.zeros(
-            (len(batch_inds), self.action_chunk_size, self.actions.shape[2]),
-            dtype=np.float32,
-        )
-        rewards_chunked = np.zeros(
-            (len(batch_inds), self.action_chunk_size), dtype=np.float32
-        )
-
-        for i in range(self.action_chunk_size):
-            valid_i = i < chunk_sizes[:, None]
-            actions_chunked[:, i] = np.where(
-                valid_i,
-                self.actions[valid_indices[:, i], env_indices[:]],
-                0,
+            # Fetch the data using advanced indexing
+            actions_chunked = np.zeros(
+                (len(batch_inds), window_size, self.actions.shape[-1])
             )
-            rewards_chunked[:, i] = np.where(
-                valid_i, self.rewards[valid_indices[:, i]], 0
-            ).squeeze(-1)
+            rewards_chunked = np.zeros((len(batch_inds), window_size))
+            dones_chunked = np.zeros((len(batch_inds), window_size), dtype=bool)
 
-        # Pad actions if needed
-        if self.pad_action_chunk_with_last_action:
-            for i in range(len(chunk_sizes)):
-                padding_start = chunk_sizes[i]
-                if padding_start < self.action_chunk_size:
-                    actions_chunked[i, padding_start:] = actions_chunked[
-                        i, padding_start - 1
-                    ]
+            valid_indices = np.where(valid_mask, start_indices, 0)
+            actions_chunked[:] = self.actions.squeeze()[valid_indices]
+            rewards_chunked[:] = self.rewards[valid_indices].squeeze(-1)
+            dones_chunked[:] = self.dones[valid_indices].squeeze(-1)
+
+            # Find the valid length for each chunk based on dones
+            done_cumsum = np.cumsum(dones_chunked, axis=1)
+            valid_lengths = np.argmax(done_cumsum > 0, axis=1)
+            valid_lengths[valid_lengths == 0] = window_size
+
+            # Create masks for valid actions, rewards, and dones
+            valid_masks = np.arange(window_size)[None, :] <= valid_lengths[:, None]
+
+            # Apply masks to compute padded actions, rewards, and dones
+            padded_actions = np.where(valid_masks[:, :, None], actions_chunked, 0)
+            summed_rewards = np.sum(np.where(valid_masks, rewards_chunked, 0), axis=1)
+            any_dones = np.any(np.where(valid_masks, dones_chunked, 0), axis=1)
+
+            # Handle padding for actions
+            if self.pad_action_chunk_with_last_action:
+                last_valid_actions = actions_chunked[
+                    np.arange(len(valid_lengths)), valid_lengths - 1
+                ]
+                for i in range(len(valid_lengths)):
+                    invalid_mask = ~valid_masks[i]
+                    padded_actions[i][invalid_mask] = last_valid_actions[i]
+
+            actions = padded_actions.astype(np.float32)
+            rewards = summed_rewards.reshape(-1, 1).astype(np.float32)
+            dones = any_dones.astype(np.float32).reshape(-1, 1)
+
+        else:
+            rewards = self.rewards[batch_inds].reshape(-1, 1).astype(np.float32)
+            dones = self.dones[batch_inds].reshape(-1, 1).astype(np.float32)
+            actions = self.actions[batch_inds, :].astype(np.float32)
 
         # Compute final results
-        all_actions = actions_chunked
-        all_rewards = np.sum(rewards_chunked, axis=1)
-        all_dones = np.any(dones_chunked & ~timeouts_chunked, axis=1).astype(np.float32)
-
+        all_actions = actions
+        all_rewards = rewards
+        all_dones = dones
         data = (
             self._normalize_obs(self.observations[batch_inds, env_indices, :], env),
             all_actions,
             next_obs,
-            all_dones.reshape(-1, 1),
+            all_dones,
             self._normalize_reward(all_rewards.reshape(-1, 1), env),
         )
         return ReplayBufferSamples(*tuple(map(self.to_torch, data)))

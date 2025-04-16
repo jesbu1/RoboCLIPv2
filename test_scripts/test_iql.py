@@ -240,7 +240,7 @@ def main(cfg: DictConfig):
     wandb_logger = WandBLogger()
     ### Create environment and callbacks ###
     envs, eval_env = create_envs(cfg, reward_model, logger=wandb_logger)
-    model, model_class, policy_kwargs = get_policy_algorithm(cfg, envs, log_dir)
+    model, model_class, policy_kwargs = get_policy_algorithm(cfg, envs, log_dir, reward_model)
 
     # Set eval freq and video freq if not set
 
@@ -287,50 +287,53 @@ def main(cfg: DictConfig):
     # Map the tasks to their strings
     # offline_task_strings =
 
-    try:
-        if cfg.reward_model.name == "rewind_two_cam":
-            cfg.reward_model.name = "rewind"
+    if cfg.offline_training.offline_training_steps > 0 or cfg.online_training.mix_buffers_ratio > 0:
+        
 
-        h5_path = offline_config.offline_h5_path.format(
-            cfg.reward_model.name, cfg.reward_model.reward_at_every_step
-        )
-        h5_path = to_absolute_path(h5_path)
-        print("Offline h5 path:", h5_path)
-        from time import sleep
+        try:
+            if cfg.reward_model.name == "rewind_two_cam":
+                cfg.reward_model.name = "rewind"
 
-        sleep(1)
-        # check if file exists
-        with open(h5_path, "r") as f:
-            pass
-    except FileNotFoundError:
-        print(
-            "File {} not found. This file likely does not have the correct reward preprocessed.".format(
-                h5_path
+            h5_path = offline_config.offline_h5_path.format(
+                cfg.reward_model.name, cfg.reward_model.reward_at_every_step
             )
-        )
-        raise FileNotFoundError
+            h5_path = to_absolute_path(h5_path)
+            print("Offline h5 path:", h5_path)
+            from time import sleep
 
-    sparse_only = True if reward_model.name == "sparse" else False
-    buffer = H5ReplayBuffer(
-        h5_path,
-        use_language_embeddings=use_language,
-        success_bonus=cfg.reward_model.success_bonus,
-        sparsify_rewards=sparse_only,
-        filter_instructions=offline_tasks,
-        reward_model=reward_model,
-        is_state_based=env_config.is_state_based,
-        use_proprio=env_config.use_proprio,
-        calculate_mc_returns=training_config.use_calibrated_q,  # only used for cal-ql
-        mc_return_gamma=training_config.gamma,
-        dense_rewards_at_end=training_config.dense_rewards_at_end,
-        reward_divisor=cfg.reward_model.reward_divisor,
-        is_metaworld="metaworld" in env_config.cfg_name,
-        normalize_actions_koch="koch" in env_config.cfg_name,
-        action_chunk_size=cfg.general_training.action_chunk_size,
-        pad_action_chunk_with_last_action=(
-            True if "koch" in env_config.cfg_name else False
-        ),
-    )
+            sleep(1)
+            # check if file exists
+            with open(h5_path, "r") as f:
+                pass
+        except FileNotFoundError:
+            print(
+                "File {} not found. This file likely does not have the correct reward preprocessed.".format(
+                    h5_path
+                )
+            )
+            raise FileNotFoundError
+
+        sparse_only = True if reward_model.name == "sparse" else False
+        buffer = H5ReplayBuffer(
+            h5_path,
+            use_language_embeddings=use_language,
+            success_bonus=cfg.reward_model.success_bonus,
+            sparsify_rewards=sparse_only,
+            filter_instructions=offline_tasks,
+            reward_model=reward_model,
+            is_state_based=env_config.is_state_based,
+            use_proprio=env_config.use_proprio,
+            calculate_mc_returns=training_config.use_calibrated_q,  # only used for cal-ql
+            mc_return_gamma=training_config.gamma,
+            dense_rewards_at_end=training_config.dense_rewards_at_end,
+            reward_divisor=cfg.reward_model.reward_divisor,
+            is_metaworld="metaworld" in env_config.cfg_name,
+            normalize_actions_koch="koch" in env_config.cfg_name,
+            action_chunk_size=cfg.general_training.action_chunk_size,
+            pad_action_chunk_with_last_action=(
+                True if "koch" in env_config.cfg_name else False
+            ),
+        )
 
     ### Learn offline
     if offline_config.offline_training_steps > 0 and isinstance(
@@ -485,16 +488,16 @@ def main(cfg: DictConfig):
         online_callback_list = callback_list
 
         # checkpoint callback. only save 10 times
-        save_freq = 5000
-        checkpoint_callback = CheckpointCallback(
-            save_freq=save_freq,
-            save_path="./logs/",
-            name_prefix="online_training",
-            save_replay_buffer=True,
-            save_vecnormalize=True,
-            verbose=2,
-        )
-        online_callback_list.append(checkpoint_callback)
+        # save_freq = 5000
+        # checkpoint_callback = CheckpointCallback(
+        #     save_freq=save_freq,
+        #     save_path="./logs/",
+        #     name_prefix="online_training",
+        #     save_replay_buffer=True,
+        #     save_vecnormalize=True,
+        #     verbose=2,
+        # )
+        # online_callback_list.append(checkpoint_callback)
 
         try:
             if isinstance(model, OfflineRLAlgorithm):
@@ -665,7 +668,7 @@ def create_envs(cfg: DictConfig, reward_model: BaseRewardModel, logger=None):
     return envs, eval_env
 
 
-def get_policy_algorithm(cfg: DictConfig, envs: VecEnv, log_dir: str):
+def get_policy_algorithm(cfg: DictConfig, envs: VecEnv, log_dir: str, reward_model):
     env_config = cfg.environment
     model_config = cfg.model
 
@@ -683,28 +686,30 @@ def get_policy_algorithm(cfg: DictConfig, envs: VecEnv, log_dir: str):
     dim_ranges = []
     projection_dims = []
 
-    if hasattr(envs, "orig_obs_keys"):
-        orig_obs_keys = getattr(envs, "orig_obs_keys")
-    elif hasattr(envs.envs[0], "orig_obs_keys"):  # if vecenv
-        orig_obs_keys = getattr(envs.envs[0], "orig_obs_keys")
+    if hasattr(envs, "orig_obs_space"):
+        orig_obs_space = getattr(envs, "orig_obs_space")
+    elif hasattr(envs.envs[0], "orig_obs_space"):  # if vecenv
+        orig_obs_space = getattr(envs.envs[0], "orig_obs_space")
     else:
         raise ValueError(
             "envs does not have orig_obs_keys attribute. Use a FlattenDictObservationWrapper"
         )
 
+    orig_obs_keys = orig_obs_space.spaces.keys()
+
     # if language, it's first
     if "language_feature" in orig_obs_keys:
-        dim_ranges.append(384)
+        dim_ranges.append(orig_obs_space['language_feature'].shape[0])
         projection_dims.append(128)
     # then images
     for key in orig_obs_keys:
         if "image_feature" in key:
-            dim_ranges.append(768)
+            dim_ranges.append(orig_obs_space['image_feature_0'].shape[0])
             projection_dims.append(512)
 
     # then proprio
     if "proprio" in orig_obs_keys:
-        dim_ranges.append(12)
+        dim_ranges.append(dim_ranges.append(orig_obs_space['proprio'].shape[0]))
         projection_dims.append(128)
 
     policy_kwargs = {

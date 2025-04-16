@@ -12,10 +12,10 @@ general_training:
   algo: rlpd
   name: rlpd_scratch
   action_noise: 0.0 # sigma
-  learning_rate: 3e-4
+  learning_rate: 1e-4
 
   # offline rl parameters
-  n_critics: 4
+  n_critics: 2
   n_critics_to_sample: 2
 
   # RLPD-specific parameters

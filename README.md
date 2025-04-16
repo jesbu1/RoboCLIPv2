@@ -8,10 +8,17 @@ We recommend using conda for installation and provide a `.yml` file for installa
 Might need to `rm -rf Metaworld` and then replace with `git clone git@github.com:sumedh7/Metaworld.git`
 
 ```sh
-git clone https://github.com/sumedh7/RoboCLIP.git --recursive
-cd RoboCLIP
-conda env create -f environment_roboclip.yml
-conda activate roboclip
+# git clone https://github.com/sumedh7/RoboCLIP.git --recursive
+# cd RoboCLIP
+
+
+conda env create -f lerobot_rl.yml
+conda activate lerobot_rl
+
+pip install -r requirements.txt
+
+# Install torch with pip with your cuda version!
+pip install torch...
 
 # Get mjrl
 git clone https://github.com/aravindr93/mjrl.git
@@ -32,7 +39,9 @@ pip install -e reward_model/LIV
 pip install -e reward_model/LIV/liv/models/clip
 
 # Reinstall pytorch>=2.0. https://pytorch.org/
-pip install torch # look at instructions at URL
+pip install torch... # look at instructions at URL
+pip install stable_baselines3==1.8.0 --no-deps
+pip install stable-baselines3==1.8.0[extra] --no-deps
 
 pip install -e .
 ```

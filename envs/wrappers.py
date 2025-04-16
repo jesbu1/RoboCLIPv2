@@ -441,7 +441,7 @@ class FlattenDictObservationWrapper(gym.Wrapper):
         obs_space = self.env.observation_space
         total_concat_size = 0
 
-        self.orig_obs_keys = obs_space.spaces.keys()
+        self.orig_obs_space = obs_space
 
         image_feature_keys = [
             key for key in obs_space.spaces.keys() if "image_feature" in key
