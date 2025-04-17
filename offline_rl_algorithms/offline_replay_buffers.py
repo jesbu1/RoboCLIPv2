@@ -626,6 +626,7 @@ class ActionChunkedReplayBuffer(ReplayBuffer):
                 env,
             )
 
+        valid_lengths = np.ones(len(batch_inds))
         if self.action_chunk_size > 1:
             # Create sliding window views for actions, rewards, and dones
             max_len = len(

@@ -11,7 +11,7 @@ logging:
 general_training:
   algo: rlpd
   name: rlpd_scratch
-  action_noise: 0.1 # sigma
+  action_noise: 0.9 # sigma
   learning_rate: 1e-4
 
   # offline rl parameters

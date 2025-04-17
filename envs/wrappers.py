@@ -543,9 +543,10 @@ class RewardScaleWrapper(gym.Wrapper):
 
 
 class LoggingWrapper(gym.Wrapper):
-    def __init__(self, env: gym.Env, logger):
+    def __init__(self, env: gym.Env, logger, prefix=""):
         super(LoggingWrapper, self).__init__(env)
         self.logger = logger
+        self.prefix = prefix
         self.episode_reward = 0
 
         self.episode_number = 0
@@ -568,21 +569,21 @@ class LoggingWrapper(gym.Wrapper):
     def step(self, action):
         # We want to log the reward at each step
         obs, reward, done, info = self.env.step(action)
-        print(reward)
+
         if self.logger is not None:
-            self.logger.record("reward", reward)
+            self.logger.record(self.prefix + "/reward", reward)
         self.episode_reward += reward
 
         # if it is a done and a success, we want to log it
         if done:
             if self.logger is not None:
                 if info.get("success", False):
-                    self.logger.record("success", 1)
+                    self.logger.record(self.prefix + "/success", 1)
                 else:
-                    self.logger.record("success", 0)
+                    self.logger.record(self.prefix + "/success", 0)
 
                 # also log the episode reward
-                self.logger.record("episode_reward", self.episode_reward)
+                self.logger.record(self.prefix + "/episode_reward", self.episode_reward)
             self.episode_reward = 0
 
         return obs, reward, done, info

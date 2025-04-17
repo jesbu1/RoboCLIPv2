@@ -425,9 +425,11 @@ class RLPD(OfflineRLAlgorithm):
 
                     # td error + entropy term
                     
-                    valid_lengths = replay_data.valid_length
-                    discount = (self.gamma ** valid_lengths).unsqueeze(1)
-                    # discount = self.gamma
+                    if hasattr(replay_data, "valid_length"):
+                        valid_lengths = replay_data.valid_length
+                        discount = (self.gamma ** valid_lengths).unsqueeze(1)
+                    else:
+                        discount = self.gamma
                     
                     target_q_values = (
                         replay_data.rewards

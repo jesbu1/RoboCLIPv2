@@ -335,6 +335,7 @@ def create_wrapped_env(
     use_proprio=False,
     dense_rewards_at_end=False,
     action_chunk_size=1,
+    logger=None,
 ):
     """
     Creates a wrapped MetaWorld environment with the given options.
@@ -423,6 +424,9 @@ def create_wrapped_env(
 
         if monitor:
             base_env = Monitor(base_env)
+
+        if logger is not None:
+            base_env = LoggingWrapper(base_env, logger, prefix=mode)
 
         return base_env
 

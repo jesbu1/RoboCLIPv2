@@ -290,8 +290,9 @@ def main(cfg: DictConfig):
     # offline_task_strings =
 
     if (
-        cfg.offline_training.offline_training_steps > 0
-        or cfg.online_training.mix_buffers_ratio > 0
+        (cfg.offline_training.offline_training_steps > 0
+        or cfg.online_training.mix_buffers_ratio > 0) and
+        isinstance(model, OfflineRLAlgorithm)
     ):
         try:
             if cfg.reward_model.name == "rewind_two_cam":
@@ -583,6 +584,7 @@ def create_envs(cfg: DictConfig, reward_model: BaseRewardModel, logger=None):
                         use_proprio=env_config.use_proprio,
                         dense_rewards_at_end=cfg.general_training.dense_rewards_at_end,
                         action_chunk_size=cfg.general_training.action_chunk_size,
+                        logger=logger,
                     )
                     for _ in range(env_config.n_envs)
                 ]
@@ -601,6 +603,7 @@ def create_envs(cfg: DictConfig, reward_model: BaseRewardModel, logger=None):
                         mode="eval",
                         use_proprio=env_config.use_proprio,
                         action_chunk_size=cfg.general_training.action_chunk_size,
+                        logger=logger,
                     )
                     for _ in range(env_config.n_envs)
                 ]
@@ -620,6 +623,7 @@ def create_envs(cfg: DictConfig, reward_model: BaseRewardModel, logger=None):
                         use_proprio=env_config.use_proprio,
                         dense_rewards_at_end=cfg.general_training.dense_rewards_at_end,
                         action_chunk_size=cfg.general_training.action_chunk_size,
+                        logger=logger,
                     )
                 ]
             )
@@ -636,6 +640,7 @@ def create_envs(cfg: DictConfig, reward_model: BaseRewardModel, logger=None):
                         mode="eval",
                         use_proprio=env_config.use_proprio,
                         action_chunk_size=cfg.general_training.action_chunk_size,
+                        logger=logger,
                     )
                 ]
             )  # KitchenEnvDenseOriginalReward(time=True)

@@ -506,7 +506,7 @@ def create_wrapped_env(
         if monitor:
             base_env = Monitor(base_env)
 
-        base_env = LoggingWrapper(base_env, logger)
+        base_env = LoggingWrapper(base_env, logger, prefix=mode)
 
         return base_env
 
