@@ -424,9 +424,14 @@ class RLPD(OfflineRLAlgorithm):
                         )
 
                     # td error + entropy term
+                    
+                    valid_lengths = replay_data.valid_length
+                    discount = (self.gamma ** valid_lengths).unsqueeze(1)
+                    # discount = self.gamma
+                    
                     target_q_values = (
                         replay_data.rewards
-                        + (1 - replay_data.dones) * self.gamma * next_q_values
+                        + (1 - replay_data.dones) * discount * next_q_values
                     )
 
                 # Get current Q-values estimates for each critic network
@@ -434,7 +439,7 @@ class RLPD(OfflineRLAlgorithm):
                 current_q_values = th.cat(
                     self.critic(replay_data.observations, replay_data.actions), dim=1
                 )
-                breakpoint()
+
                 # Compute critic loss
                 critic_loss = F.mse_loss(
                     current_q_values, target_q_values.expand_as(current_q_values)

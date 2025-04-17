@@ -728,10 +728,7 @@ def get_policy_algorithm(cfg: DictConfig, envs: VecEnv, log_dir: str, reward_mod
         },
     }
 
-    if (
-        cfg.general_training.action_chunk_size > 1
-        and cfg.model.policy_type == "RnnMlpPolicy"
-    ):
+    if cfg.model.policy_type == "RnnMlpPolicy":
         policy_kwargs["action_sequence_length"] = cfg.general_training.action_chunk_size
 
     # everything except BC, SAC, and PPO require n_critics
