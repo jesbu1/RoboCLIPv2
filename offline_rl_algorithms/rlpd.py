@@ -434,7 +434,7 @@ class RLPD(OfflineRLAlgorithm):
                 current_q_values = th.cat(
                     self.critic(replay_data.observations, replay_data.actions), dim=1
                 )
-
+                breakpoint()
                 # Compute critic loss
                 critic_loss = F.mse_loss(
                     current_q_values, target_q_values.expand_as(current_q_values)
@@ -544,6 +544,7 @@ class RLPD(OfflineRLAlgorithm):
         progress_bar: bool = False,
         logger: Optional = None,
     ):
+        self.current_critic_update_ratio = self.online_critic_update_ratio
         return super().learn(
             total_timesteps=total_timesteps,
             callback=callback,

@@ -190,14 +190,14 @@ class OfflineRLAlgorithm(OffPolicyAlgorithm):
                 raise ValueError(
                     "Check if your env is wrapped with ActionChunkingWrapper"
                 )
-            self.replace_with_chunked_buffer(action_chunk_size)
+            self.replace_with_chunked_buffer(action_chunk_size, buffer_size)
 
-    def replace_with_chunked_buffer(self, action_chunk_size: int):
+    def replace_with_chunked_buffer(self, action_chunk_size: int, buffer_size: int):
         # Replace the replay buffer with ActionChunkedReplayBuffer
         self.replay_buffer = ActionChunkedReplayBuffer(
             action_chunk_size=action_chunk_size,
             pad_action_chunk_with_last_action=True,
-            buffer_size=self.buffer_size,
+            buffer_size=buffer_size,
             observation_space=self.observation_space,
             action_space=self.action_space,
             device=self.device,

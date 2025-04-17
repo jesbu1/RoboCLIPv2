@@ -240,7 +240,9 @@ def main(cfg: DictConfig):
     wandb_logger = WandBLogger()
     ### Create environment and callbacks ###
     envs, eval_env = create_envs(cfg, reward_model, logger=wandb_logger)
-    model, model_class, policy_kwargs = get_policy_algorithm(cfg, envs, log_dir, reward_model)
+    model, model_class, policy_kwargs = get_policy_algorithm(
+        cfg, envs, log_dir, reward_model
+    )
 
     # Set eval freq and video freq if not set
 
@@ -287,9 +289,10 @@ def main(cfg: DictConfig):
     # Map the tasks to their strings
     # offline_task_strings =
 
-    if cfg.offline_training.offline_training_steps > 0 or cfg.online_training.mix_buffers_ratio > 0:
-        
-
+    if (
+        cfg.offline_training.offline_training_steps > 0
+        or cfg.online_training.mix_buffers_ratio > 0
+    ):
         try:
             if cfg.reward_model.name == "rewind_two_cam":
                 cfg.reward_model.name = "rewind"
@@ -414,7 +417,8 @@ def main(cfg: DictConfig):
             # Replace action chunked buffer again since loading it may not always work
             if cfg.general_training.action_chunk_size > 1:
                 model.replace_with_chunked_buffer(
-                    cfg.general_training.action_chunk_size
+                    cfg.general_training.action_chunk_size,
+                    buffer_size=cfg.online_training.total_time_steps,
                 )
 
             # Various other things to set that don't get set by load
@@ -699,17 +703,17 @@ def get_policy_algorithm(cfg: DictConfig, envs: VecEnv, log_dir: str, reward_mod
 
     # if language, it's first
     if "language_feature" in orig_obs_keys:
-        dim_ranges.append(orig_obs_space['language_feature'].shape[0])
+        dim_ranges.append(orig_obs_space["language_feature"].shape[0])
         projection_dims.append(128)
     # then images
     for key in orig_obs_keys:
         if "image_feature" in key:
-            dim_ranges.append(orig_obs_space['image_feature_0'].shape[0])
+            dim_ranges.append(orig_obs_space["image_feature_0"].shape[0])
             projection_dims.append(512)
 
     # then proprio
     if "proprio" in orig_obs_keys:
-        dim_ranges.append(dim_ranges.append(orig_obs_space['proprio'].shape[0]))
+        dim_ranges.append(orig_obs_space["proprio"].shape[0])
         projection_dims.append(128)
 
     policy_kwargs = {

@@ -267,7 +267,7 @@ class ActionSequenceActor(CustomActor):
             d_model=last_layer_dim, nhead=8, batch_first=True
         )
         self.action_transformer = nn.TransformerDecoder(
-            decoder_layer, num_layers=1, norm=nn.LayerNorm(last_layer_dim)
+            decoder_layer, num_layers=4, norm=nn.LayerNorm(last_layer_dim)
         )
         self.triangular_mask = th.triu(
             th.ones(action_sequence_length, action_sequence_length) * float("-inf"),

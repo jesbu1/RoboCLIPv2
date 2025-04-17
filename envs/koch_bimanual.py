@@ -208,7 +208,7 @@ class KochBimanualEnv(Env):
             obs["proprio"] = torch.zeros(12)
             for key in self.image_keys:
                 obs[key] = torch.zeros(480, 640, 3)
-            return obs, 0, False, {}
+            return obs, 0, True, {}
 
         self.counter += 1
         done = False
@@ -472,7 +472,8 @@ def create_wrapped_env(
 
         base_env = ImageEmbeddingWrapper(base_env, reward_model)
 
-        base_env = SuccessWrapper(base_env)
+        if not robot_disabled:
+            base_env = SuccessWrapper(base_env)
 
         dense_eval = True if (mode == "eval" or mode == "demo") else False
         base_env = LearnedRewardWrapper(
