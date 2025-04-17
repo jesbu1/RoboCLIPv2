@@ -422,6 +422,10 @@ def create_wrapped_env(
         #         use_sparse = False
         #     base_env = RewardWrapper(base_env, sparse=use_sparse, success_bonus=reward_model.success_bonus)
 
+
+        # add gym normalize reward wrapper
+        base_env = gym.wrappers.NormalizeReward(base_env)
+
         if monitor:
             base_env = Monitor(base_env)
 
