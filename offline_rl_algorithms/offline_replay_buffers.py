@@ -421,26 +421,38 @@ class H5ReplayBuffer(ReplayBuffer):
             dones_chunked[:] = self.dones[valid_indices]
 
             # Find the valid length for each chunk based on dones
-            done_cumsum = np.cumsum(dones_chunked, axis=1)
-            valid_lengths = np.argmax(done_cumsum > 0, axis=1)
-            valid_lengths[valid_lengths == 0] = window_size
+            # Calculate the index of the first done=True in each chunk
+            first_done_index = np.argmax(dones_chunked, axis=1)
+            # Check if any done=True exists in each chunk
+            any_done_in_chunk = np.any(dones_chunked, axis=1)
+            # If a done exists, the length is index + 1. Otherwise, it's the full window size.
+            valid_lengths = np.where(
+                any_done_in_chunk, first_done_index + 1, window_size
+            )
 
-            # Create masks for valid actions, rewards, and dones
-            valid_masks = np.arange(window_size)[None, :] <= valid_lengths[:, None]
+            # Create masks for valid actions, rewards, and dones (mask is True up to *before* the valid_lengths index)
+            valid_masks = np.arange(window_size)[None, :] < valid_lengths[:, None]
 
             # Apply masks to compute padded actions, rewards, and dones
-            padded_actions = np.where(valid_masks[:, :, None], actions_chunked, 0)
+            # Rewards up to and including the step with done=True are summed
             summed_rewards = np.sum(np.where(valid_masks, rewards_chunked, 0), axis=1)
+            # Done is True if *any* done occurred within the valid length
             any_dones = np.any(np.where(valid_masks, dones_chunked, 0), axis=1)
+            # Apply mask for padding actions (actions are padded *after* the valid length)
+            padded_actions = np.where(valid_masks[:, :, None], actions_chunked, 0)
 
             # Handle padding for actions
             if self.pad_action_chunk_with_last_action:
+                # Get the index of the *last valid action* for each chunk
+                last_valid_indices = np.maximum(0, valid_lengths - 1)
                 last_valid_actions = actions_chunked[
-                    np.arange(len(valid_lengths)), valid_lengths - 1
+                    np.arange(len(valid_lengths)), last_valid_indices
                 ]
-                for i in range(len(valid_lengths)):
-                    invalid_mask = ~valid_masks[i]
-                    padded_actions[i][invalid_mask] = last_valid_actions[i]
+                # Pad the actions *after* the valid length with the last valid action
+                pad_mask = ~valid_masks
+                padded_actions[pad_mask] = last_valid_actions[
+                    pad_mask[:, 0]
+                ]  # Use broadcasting for efficiency
 
             actions = padded_actions.astype(np.float32)
             rewards = summed_rewards.reshape(-1, 1).astype(np.float32)
