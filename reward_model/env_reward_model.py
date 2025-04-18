@@ -113,11 +113,11 @@ class EnvRewardModel(BaseRewardModel):
         """
         Returns the output dimension of the image encoder. Used to determine the observation space of a policy.
         """
-        return self.dino_vits14.output_dim
+        return 768
     
     @property
     def text_output_dim(self) -> int:
         """
         Returns the output dimension of the text encoder. Used to determine the observation space of a policy.
         """
-        return self.minilm_model.output_dim
+        return 384
