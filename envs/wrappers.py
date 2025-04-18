@@ -416,6 +416,7 @@ class LearnedRewardWrapper(gym.Wrapper):
         # Success bonus
         if info.get("success", False):
             reward += self.reward_model.success_bonus
+            print("adding success bonus", reward)
 
         return obs, reward, done, info
 

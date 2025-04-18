@@ -264,7 +264,7 @@ class ActionSequenceActor(CustomActor):
 
         self.action_dist = SquashedDiagGaussianDistribution(action_dim)  # type: ignore[assignment]
         decoder_layer = nn.TransformerDecoderLayer(
-            d_model=last_layer_dim, nhead=4, batch_first=True
+            d_model=last_layer_dim, nhead=8, batch_first=True
         )
         self.action_transformer = nn.TransformerDecoder(
             decoder_layer, num_layers=1, norm=nn.LayerNorm(last_layer_dim)
@@ -422,7 +422,7 @@ class RecurrentQNetwork(nn.Module):
         # self.downprojector = nn.Linear(features_dim, 128)
 
         encoder_layer = nn.TransformerEncoderLayer(
-            d_model=128, nhead=4, batch_first=True
+            d_model=128, nhead=8, batch_first=True
         )
         self.transformer_action_processor = nn.TransformerEncoder(
             encoder_layer, num_layers=1, norm=nn.LayerNorm(128)

@@ -431,7 +431,7 @@ def create_wrapped_env(
 
         if logger is not None:
             base_env = LoggingWrapper(base_env, logger, prefix=mode)
-        base_env = gym.wrappers.NormalizeReward(base_env)
+        # base_env = gym.wrappers.NormalizeReward(base_env)
 
         return base_env
 
