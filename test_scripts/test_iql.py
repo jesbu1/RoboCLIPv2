@@ -772,6 +772,12 @@ def get_policy_algorithm(cfg: DictConfig, envs: VecEnv, log_dir: str, reward_mod
         # For SAC, we cannot take anything besides net_arch as a parameter
         policy_kwargs = {
             "net_arch": policy_kwargs["net_arch"],
+            "features_extractor_class": FlatRangeFeaturesExtractor,
+            "features_extractor_kwargs": {
+                "dim_ranges": dim_ranges,
+                "projection_dims": projection_dims,
+                "normalize_images": True,
+            },
         }
 
         if not args.pretrained:

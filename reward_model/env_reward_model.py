@@ -4,8 +4,9 @@ import numpy as np
 import abc
 from typing import Union, List
 from reward_model.base_reward_model import BaseRewardModel
-from reward_model.liv_reward_model import LIVRewardModel # TODO: implement liv_reward_model.py
 
+from transformers import AutoTokenizer, AutoModel
+from reward_model.clip_utils import dino_load_image, mean_pooling
 
 class EnvRewardModel(BaseRewardModel):
     def __init__(self, reward_type: str="dense", model_path: str = "", device: str = "cuda", reward_at_every_step: bool = False, success_bonus: float = 10.) -> None:
@@ -23,7 +24,22 @@ class EnvRewardModel(BaseRewardModel):
         # TODO: Turn this into a cfg option and a param in every constructor
         self.reward_at_every_step = reward_at_every_step
 
-        self.liv_model = LIVRewardModel(model_load_path="", use_pca=False, attention_heads=4, device=device, batch_size=64)
+
+        # for the text embedding, we use minilm
+        self.minilm_tokenizer = AutoTokenizer.from_pretrained(
+            "sentence-transformers/all-MiniLM-L12-v2"
+        )
+        self.minilm_model = AutoModel.from_pretrained(
+            "sentence-transformers/all-MiniLM-L12-v2"
+        ).to(device)
+
+        # for the image embedding, we use dino
+        self.dino_vits14 = torch.hub.load(
+            "facebookresearch/dinov2", "dinov2_vitb14"
+        ).to(device)
+
+        self.dino_batch_size = 64
+
 
     
     def _encode_text_batch(self, text: List[str]) -> np.ndarray:
@@ -32,14 +48,49 @@ class EnvRewardModel(BaseRewardModel):
         :param text: A list of text data to be encoded.
         :return: Encoded representation of the text.
         """
-        return self.liv_model._encode_text_batch(text)
-    def _encode_image_batch(self, images: torch.Tensor) -> np.ndarray:
+        with torch.no_grad():
+            encoded_input = self.minilm_tokenizer(
+                text, padding=False, truncation=True, return_tensors="pt"
+            ).to(self.device)
+            model_output = self.minilm_model(**encoded_input)
+            text_embeddings = (
+                mean_pooling(model_output, encoded_input["attention_mask"])
+                .cpu()
+                .numpy()
+            )
+
+        return text_embeddings
+    
+    def _encode_image_batch(self, images: torch.Tensor) -> torch.Tensor:
         """
         Encodes a batch of video frames into an image representation.
-        :param images: A batch of video frames to be encoded. The shape of the input should be (batch_size, num_frames, height, width, channels).
+        :param images: A batch of video frames to be encoded. The shape of the input should be (batch_size, num_images, height, width, channels).
         :return: Encoded representation of each frame.
         """
-        return self.liv_model._encode_image_batch(images)
+        # TODO: this can probably handle multiple batches but untested
+        assert images.shape[0] == 1, "LIV doesn't support batch > 1"
+        images = images.squeeze(0)
+
+        with torch.inference_mode():
+            episode_images_dino = [
+                dino_load_image(
+                    (img.to("cpu").numpy().transpose(1, 2, 0) * 255).astype(np.uint8)
+                )
+                for img in images
+            ]
+            episode_images_dino = [
+                torch.concatenate(episode_images_dino[i : i + self.dino_batch_size])
+                for i in range(0, len(episode_images_dino), self.dino_batch_size)
+            ]
+            embedding_list = []
+            for batch in episode_images_dino:
+                episode_image_embeddings = (
+                    self.dino_vits14(batch.to(self.device)).squeeze().detach().cpu()
+                )
+                embedding_list.append(episode_image_embeddings)
+            episode_image_embeddings = torch.concat(embedding_list)
+
+        return episode_image_embeddings.unsqueeze(0)
 
     def _calculate_reward_batch(self, encoded_texts, encoded_videos):
         """
@@ -62,11 +113,11 @@ class EnvRewardModel(BaseRewardModel):
         """
         Returns the output dimension of the image encoder. Used to determine the observation space of a policy.
         """
-        return self.liv_model.img_output_dim
+        return self.dino_vits14.output_dim
     
     @property
     def text_output_dim(self) -> int:
         """
         Returns the output dimension of the text encoder. Used to determine the observation space of a policy.
         """
-        return self.liv_model.text_output_dim
+        return self.minilm_model.output_dim
