@@ -11,7 +11,7 @@ logging:
 general_training:
   algo: rlpd
   name: rlpd_scratch
-  action_noise: 0.9 # sigma
+  action_noise: 0.1 # sigma
   learning_rate: 1e-4
 
   # offline rl parameters
@@ -29,8 +29,8 @@ general_training:
 model:
   policy_layer_norm: false
   critic_layer_norm: false
-  pi_net_arch: [768, 512]
-  qf_net_arch: [768, 512]
+  pi_net_arch: [512, 256]
+  qf_net_arch: [512, 256]
 
 
 offline_training:

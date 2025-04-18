@@ -189,6 +189,7 @@ class MetaworldBase(Env):
         Returns:
             observation (object): the initial observation
         """
+        print('resetting')
         if self.random_reset == "train":
             self.rank = random.randint(100, 400)
             self.base_env = self.all_env_types[self.env_id](seed=self.rank)
@@ -424,13 +425,13 @@ def create_wrapped_env(
 
 
         # add gym normalize reward wrapper
-        base_env = gym.wrappers.NormalizeReward(base_env)
 
         if monitor:
             base_env = Monitor(base_env)
 
         if logger is not None:
             base_env = LoggingWrapper(base_env, logger, prefix=mode)
+        base_env = gym.wrappers.NormalizeReward(base_env)
 
         return base_env
 

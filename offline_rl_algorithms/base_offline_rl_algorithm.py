@@ -476,7 +476,7 @@ class OfflineRLAlgorithm(OffPolicyAlgorithm):
         assert train_freq.frequency > 0, "Should at least collect one step or episode."
 
         # Only support 1 env
-        assert env.num_envs == 1, "Only support 1 env"
+        # assert env.num_envs == 1, "Only support 1 env"
 
         if env.num_envs > 1:
             assert train_freq.unit == TrainFrequencyUnit.STEP, (
@@ -526,8 +526,6 @@ class OfflineRLAlgorithm(OffPolicyAlgorithm):
             first_step = False
             # Rescale and perform action
             new_obs, rewards, dones, infos = env.step(actions)
-
-            env.render()
 
             # If done, then set first_step to True
             if dones[0]:

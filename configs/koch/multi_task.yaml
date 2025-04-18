@@ -15,7 +15,7 @@ environment:
   # text_instruction: "open the red trash bin"
   text_instruction: "Put the blue cup in the box"
   # text_instruction: "separate the red and green cups" # unseen task
-  n_envs: 1
+  n_envs: 8
   train_freq_num: 1
   train_freq_type: 'episode'
   ignore_language: false

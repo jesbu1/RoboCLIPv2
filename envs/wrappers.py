@@ -369,7 +369,8 @@ class LearnedRewardWrapper(gym.Wrapper):
 
         encoded_images = {}
         for i, key in enumerate(self.image_keys):
-            encoded_images[key] = obs[f"image_feature_{i}"]
+            if f"image_feature_{i}" in obs:
+                encoded_images[key] = obs[f"image_feature_{i}"]
 
         if self.reward_model.name == "dense" or self.dense_eval:
             reward = original_reward / self.reward_divisor
@@ -389,7 +390,8 @@ class LearnedRewardWrapper(gym.Wrapper):
 
         if encoded_image is not None:
             for key, value in encoded_images.items():
-                self.past_observations[key].append(value)
+                if f"image_feature_{key}" in obs:
+                    self.past_observations[key].append(value)
 
         assert self.reward_language_features is not None, (
             "Language features are None in the reward model"
@@ -404,7 +406,8 @@ class LearnedRewardWrapper(gym.Wrapper):
 
                 self.past_observations = {}
                 for key in self.image_keys:
-                    self.past_observations[key] = []
+                    if f"image_feature_{key}" in obs:
+                        self.past_observations[key] = []
             else:
                 reward = 0
 
@@ -425,7 +428,8 @@ class LearnedRewardWrapper(gym.Wrapper):
         obs = self.env.reset()
 
         for i, key in enumerate(self.image_keys):
-            self.past_observations[key].append(obs[f"image_feature_{i}"])
+            if f"image_feature_{i}" in obs:
+                self.past_observations[key].append(obs[f"image_feature_{i}"])
 
         return obs
 
@@ -526,10 +530,11 @@ class RewardAtEndWrapper(gym.Wrapper):
         obs, reward, done, info = self.env.step(action)
         self.total_reward += reward
         if done:
+            reward_to_return = self.total_reward
             self.total_reward = 0
-            return obs, self.total_reward, done, info
+            return obs, reward_to_return, done, info
         else:
-            return obs, reward, done, info
+            return obs, 0, done, info
 
 
 class RewardScaleWrapper(gym.Wrapper):

@@ -570,7 +570,7 @@ def create_envs(cfg: DictConfig, reward_model: BaseRewardModel, logger=None):
 
     if "metaworld" in env_config.cfg_name:
         if env_config.n_envs > 1:
-            envs = SubprocVecEnv(
+            envs = DummyVecEnv(
                 [
                     create_wrapped_env(
                         env_id,
@@ -590,7 +590,7 @@ def create_envs(cfg: DictConfig, reward_model: BaseRewardModel, logger=None):
                 ]
             )
 
-            eval_env = SubprocVecEnv(
+            eval_env = DummyVecEnv(
                 [
                     create_wrapped_env(
                         env_id,
@@ -605,7 +605,7 @@ def create_envs(cfg: DictConfig, reward_model: BaseRewardModel, logger=None):
                         action_chunk_size=cfg.general_training.action_chunk_size,
                         logger=logger,
                     )
-                    for _ in range(env_config.n_envs)
+                    for _ in range(1)
                 ]
             )  # KitchenEnvDenseOriginalReward(time=True)
         else:
