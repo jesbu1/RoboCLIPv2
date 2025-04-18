@@ -651,9 +651,27 @@ class ActionChunkedReplayBuffer(ReplayBuffer):
             dones_chunked = np.zeros((len(batch_inds), window_size), dtype=bool)
 
             valid_indices = np.where(valid_mask, start_indices, 0)
-            actions_chunked[:] = self.actions.squeeze()[valid_indices]
-            rewards_chunked[:] = self.rewards[valid_indices].squeeze(-1)
-            dones_chunked[:] = self.dones[valid_indices].squeeze(-1)
+            
+            # now select based on env_indices
+            # Reshape valid_indices to use with self.actions (N, n_envs, action_dim)
+            # This will select window elements for each batch item
+            reshaped_valid_indices = valid_indices.reshape(-1)
+            
+            # Get actions, rewards, and dones for all environments at selected time indices
+            temp_actions = self.actions[reshaped_valid_indices]  # Shape: (batch_size*window_size, n_envs, action_dim)
+            temp_rewards = self.rewards[reshaped_valid_indices]  # Shape: (batch_size*window_size, n_envs)
+            temp_dones = self.dones[reshaped_valid_indices]      # Shape: (batch_size*window_size, n_envs)
+            
+            # Reshape to separate batch and window dimensions
+            temp_actions = temp_actions.reshape(len(batch_inds), window_size, self.n_envs, -1)
+            temp_rewards = temp_rewards.reshape(len(batch_inds), window_size, self.n_envs)
+            temp_dones = temp_dones.reshape(len(batch_inds), window_size, self.n_envs)
+            
+            # Select specific environment for each batch item
+            for i, env_idx in enumerate(env_indices):
+                actions_chunked[i] = temp_actions[i, :, env_idx]
+                rewards_chunked[i] = temp_rewards[i, :, env_idx]
+                dones_chunked[i] = temp_dones[i, :, env_idx]
 
             # Find the valid length for each chunk based on dones
             # Calculate the index of the first done=True in each chunk
@@ -664,7 +682,6 @@ class ActionChunkedReplayBuffer(ReplayBuffer):
             valid_lengths = np.where(
                 any_done_in_chunk, first_done_index + 1, window_size
             )
-
             # Create masks for valid actions, rewards, and dones (mask is True up to *before* the valid_lengths index)
             valid_masks = np.arange(window_size)[None, :] < valid_lengths[:, None]
 

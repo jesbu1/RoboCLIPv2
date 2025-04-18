@@ -350,6 +350,7 @@ class OfflineRLAlgorithm(OffPolicyAlgorithm):
             if isinstance(self.action_space, spaces.Box):
                 # IF we have a chunked action, we turn it into a batch
                 is_chunked = False
+                original_shape = unscaled_action.shape
                 if unscaled_action.ndim == 3:
                     # Should be of shape (n_envs*chunk_size, action_dim)
                     n_envs = unscaled_action.shape[0]
@@ -363,11 +364,19 @@ class OfflineRLAlgorithm(OffPolicyAlgorithm):
 
                 # Add noise to the action (improve exploration)
                 if action_noise is not None:
-                    scaled_action = np.clip(scaled_action + action_noise(), -1, 1)
+                    if len(original_shape) == 3:
+                        scaled_action = np.clip(scaled_action.reshape(original_shape) + action_noise()[:, None, :].repeat(self.action_chunk_size, axis=1), -1, 1)
+                    else:
+                        scaled_action = np.clip(scaled_action + action_noise(), -1, 1)
 
                 # We store the scaled action in the buffer
                 buffer_action = scaled_action
+                
+                # now to unscale it, we need to reshape it to be large again
+                if len(original_shape) == 3:
+                    scaled_action = scaled_action.reshape(n_envs*original_shape[1], original_shape[2])
                 action = self.policy.unscale_action(scaled_action)
+                action = action.reshape(original_shape)
 
                 # Now we unbatch the action if it was batched
                 if is_chunked:
@@ -418,7 +427,7 @@ class OfflineRLAlgorithm(OffPolicyAlgorithm):
         deterministic: bool = False,
     ):
         if self.action_chunk_size > 1:
-            assert self.n_envs == 1, "Action chunking only supported for single env"
+            # assert self.n_envs == 1, "Action chunking only supported for single env"
             assert episode_start is not None, "Need episode_start for action chunking"
             if episode_start[0] is True:
                 self.env.set_attr("chunk", [])
@@ -430,7 +439,7 @@ class OfflineRLAlgorithm(OffPolicyAlgorithm):
                 action, _ = super().predict(
                     observation, state, episode_start, deterministic
                 )
-                return action[None, :], _
+                return action, _
             else:
                 # print("not calling predict")
                 return [None], None
@@ -536,8 +545,9 @@ class OfflineRLAlgorithm(OffPolicyAlgorithm):
                 # Check for infos['action']
                 assert "action" in infos[0], "Need action in infos"
 
-                actual_action = infos[0].get("action")[None, :]
-
+                # actual_action = infos[0].get("action")[None, :]
+                # let's support multiple envs
+                actual_action = np.array([info.get("action") for info in infos])
                 buffer_actions = self.policy.scale_action(actual_action)
 
             self.num_timesteps += env.num_envs
