@@ -1,12 +1,14 @@
 import h5py
 
 # h5_path = 'data/h5_buffers/orig/metaworld_traj_15_demos.h5'
-# h5_path = "data/h5_buffers/updated_trajs/metaworld_traj_15_demos_dense.h5"
+h5_path = "data/h5_buffers/updated_trajs/metaworld_traj_15_demos_dense_True.h5"
 # h5_path = "data/real_robot/updated_trajs/pick_orange_left_right_sparse.h5"
-h5_path = "/home/abrar/projects/RoboCLIPv2/data/real_robot/updated_trajs/orange_left_right_handover_dense.h5"
-# h5_path = 'data/h5_buffers/orig/metaworld_traj_15_demos.h5'
+# h5_path = "/home/abrar/projects/RoboCLIPv2/data/real_robot/updated_trajs/orange_left_right_handover_dense.h5"
+# h5_path = (
+#     # "/home/abrar/projects/RoboCLIPv2/data/h5_buffers/orig/metaworld_traj_15_demos.h5"
+# )
 
-h5_path = "usc_koch_rewind_reward.h5"
+# h5_path = "usc_koch_rewind_reward.h5"
 h5_file = h5py.File(h5_path, "r")
 
 print(h5_file.keys())

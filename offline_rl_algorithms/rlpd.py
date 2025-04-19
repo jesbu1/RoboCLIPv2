@@ -225,8 +225,8 @@ class RLPD(OfflineRLAlgorithm):
         # self.policy.critic.optimizer = offline_algo.policy.critic.optimizer
 
         # This replaces the optimizer with the old (new) optimizer
-        self.policy.actor.optimizer = old_policy_optimizer
-        self.policy.critic.optimizer = old_critic_optimizer
+        # self.policy.actor.optimizer = old_policy_optimizer
+        # self.policy.critic.optimizer = old_critic_optimizer
 
         if (
             hasattr(offline_algo, "ent_coef_optimizer")
@@ -424,13 +424,13 @@ class RLPD(OfflineRLAlgorithm):
                         )
 
                     # td error + entropy term
-                    
+
                     if hasattr(replay_data, "valid_length"):
                         valid_lengths = replay_data.valid_length
-                        discount = (self.gamma ** valid_lengths).unsqueeze(1)
+                        discount = (self.gamma**valid_lengths).unsqueeze(1)
                     else:
                         discount = self.gamma
-                    
+
                     target_q_values = (
                         replay_data.rewards
                         + (1 - replay_data.dones) * discount * next_q_values

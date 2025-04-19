@@ -365,16 +365,25 @@ class OfflineRLAlgorithm(OffPolicyAlgorithm):
                 # Add noise to the action (improve exploration)
                 if action_noise is not None:
                     if len(original_shape) == 3:
-                        scaled_action = np.clip(scaled_action.reshape(original_shape) + action_noise()[:, None, :].repeat(self.action_chunk_size, axis=1), -1, 1)
+                        scaled_action = np.clip(
+                            scaled_action.reshape(original_shape)
+                            + action_noise()[:, None, :].repeat(
+                                self.action_chunk_size, axis=1
+                            ),
+                            -1,
+                            1,
+                        )
                     else:
                         scaled_action = np.clip(scaled_action + action_noise(), -1, 1)
 
                 # We store the scaled action in the buffer
                 buffer_action = scaled_action
-                
+
                 # now to unscale it, we need to reshape it to be large again
                 if len(original_shape) == 3:
-                    scaled_action = scaled_action.reshape(n_envs*original_shape[1], original_shape[2])
+                    scaled_action = scaled_action.reshape(
+                        n_envs * original_shape[1], original_shape[2]
+                    )
                 action = self.policy.unscale_action(scaled_action)
                 action = action.reshape(original_shape)
 
@@ -405,15 +414,15 @@ class OfflineRLAlgorithm(OffPolicyAlgorithm):
     def get_log_prob(self, distribution, actions: th.Tensor) -> th.Tensor:
         # handles getting log prob even in action chunked case where we average among the chunk
         if actions.ndim == 3:
-            actions_for_logprob = actions.reshape(
-                actions.shape[0] * actions.shape[1],
-                actions.shape[2],
-            )
-            log_prob = distribution.log_prob(actions_for_logprob)
-            log_prob = log_prob.reshape(
-                actions.shape[0],
-                actions.shape[1],
-            )
+            # actions_for_logprob = actions.reshape(
+            #     actions.shape[0] * actions.shape[1],
+            #     actions.shape[2],
+            # )
+            log_prob = distribution.log_prob(actions)
+            # log_prob = log_prob.reshape(
+            #     actions.shape[0],
+            #     actions.shape[1],
+            # )
             log_prob = log_prob.mean(dim=1, keepdim=False)
         else:
             log_prob = distribution.log_prob(actions)

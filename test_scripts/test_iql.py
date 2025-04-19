@@ -247,7 +247,8 @@ def main(cfg: DictConfig):
     # Set eval freq and video freq if not set
 
     # if it's rlpd, video_freq should be never
-    if training_config.algo == "rlpd":
+    # if training_config.algo == "rlpd":
+    if "koch" in env_config.cfg_name:
         # if False:
         video_freq = 0
         eval_freq = 0
@@ -290,10 +291,9 @@ def main(cfg: DictConfig):
     # offline_task_strings =
 
     if (
-        (cfg.offline_training.offline_training_steps > 0
-        or cfg.online_training.mix_buffers_ratio > 0) and
-        isinstance(model, OfflineRLAlgorithm)
-    ):
+        cfg.offline_training.offline_training_steps > 0
+        or cfg.online_training.mix_buffers_ratio > 0
+    ) and isinstance(model, OfflineRLAlgorithm):
         try:
             if cfg.reward_model.name == "rewind_two_cam":
                 cfg.reward_model.name = "rewind"

@@ -10,14 +10,14 @@ offline_training:
   offline_training_steps: 5000 
 
 online_training:
-  total_time_steps: 1000000
+  total_time_steps: 0
 
 environment:
   cfg_name: "metaworld_some_tasks_15"
   n_envs: 1
   train_freq_num: 1
   train_freq_type: 'step'
-  env_id: "faucet-close-v2" # eval task
+  env_id: "faucet-open-v2" # eval task
   ignore_language: false
 
 # Reward divisor is environment-dependent

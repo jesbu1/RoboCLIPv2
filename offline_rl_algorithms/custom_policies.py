@@ -397,7 +397,7 @@ class ActionSequenceActor(CustomActor):
         actions, log_prob = self.action_dist.log_prob_from_params(
             mean_actions, log_std, **kwargs
         )
-        
+
         return actions, log_prob
         # return actions.reshape(
         #     batch_size, self.action_sequence_length, action_dim
@@ -407,7 +407,6 @@ class ActionSequenceActor(CustomActor):
         self, observation: PyTorchObs, deterministic: bool = False
     ) -> th.Tensor:
         return self(observation, deterministic)
-
 
 
 class RecurrentQNetwork(nn.Module):
@@ -793,8 +792,7 @@ class CustomRNNSACPolicy(CustomSACPolicy):
         )
         critic_kwargs.update({"recurrent_action": True})
         return CustomContinuousCritic(**critic_kwargs).to(self.device)
-    
-    
+
     def predict(
         self,
         observation: Union[np.ndarray, Dict[str, np.ndarray]],
@@ -831,16 +829,19 @@ class CustomRNNSACPolicy(CustomSACPolicy):
             else:
                 # Actions could be on arbitrary scale, so clip the actions to avoid
                 # out of bound error (e.g. if sampling from a Gaussian distribution)
-                actions = np.clip(actions, self.action_space.low, self.action_space.high)
-                
+                actions = np.clip(
+                    actions, self.action_space.low, self.action_space.high
+                )
+
         # now reshape it back to (batch_size, action_sequence_length, action_dim)
-        actions = actions.reshape(-1, self.action_sequence_length, *self.action_space.shape)
+        actions = actions.reshape(
+            -1, self.action_sequence_length, *self.action_space.shape
+        )
 
         # Remove batch dimension if needed
         if not vectorized_env:
             actions = actions.squeeze(axis=0)
         return actions, state
-
 
 
 CustomMlpPolicy = CustomSACPolicy

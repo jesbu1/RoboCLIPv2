@@ -341,17 +341,23 @@ def main():
     )
 
     # Todo: turn this into an argument
+
+    # THIS IS FOR KOCH LEROBOT, which we moved to another script
     image_keys = ["observation.images.main", "observation.images.side"]
     image_keys = sorted(image_keys)
-
     reward_image_key = "observation.images.main"
+
+    # This is for metaworld:
+    image_keys = ["img"]
+    reward_image_key = "img"
 
     args = parser.parse_args()
 
     # The path should be data/{path after data}/updated_trajs/{original file name}_{reward model}.h5
     path = f"data/{args.trajs_to_label.split('data/')[1].split('/')[0]}"
     # Create output file path in updated_traj folder
-    output_path = f"{path}/updated_trajs/{os.path.basename(args.trajs_to_label[:-3])}_{args.reward_model}.h5"
+    # the last True indicates that it is a reward at every step
+    output_path = f"{path}/updated_trajs/{os.path.basename(args.trajs_to_label[:-3])}_{args.reward_model}_True.h5"
 
     # Make sure directory exists
     if not os.path.exists(f"{path}/updated_trajs"):

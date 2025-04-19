@@ -128,8 +128,9 @@ class H5ReplayBuffer(ReplayBuffer):
             # actions = np.clip(actions, -3, 3)
             # actions /= 3.0
 
-            actions /= 180  # normalize between -1 and 1
-            actions = np.clip(actions, -1, 1)
+            if normalize_actions_koch:
+                actions /= 180  # normalize between -1 and 1
+                actions = np.clip(actions, -1, 1)
 
             # actions = -actions
 
@@ -493,6 +494,7 @@ class H5ReplayBuffer(ReplayBuffer):
             np.ones_like(rewards),  # offline_data_mask is 1 for all offline data,
             valid_lengths,
         )
+
         return CombinedBufferSamples(*tuple(map(self.to_torch, data)))
 
 
@@ -651,22 +653,32 @@ class ActionChunkedReplayBuffer(ReplayBuffer):
             dones_chunked = np.zeros((len(batch_inds), window_size), dtype=bool)
 
             valid_indices = np.where(valid_mask, start_indices, 0)
-            
+
             # now select based on env_indices
             # Reshape valid_indices to use with self.actions (N, n_envs, action_dim)
             # This will select window elements for each batch item
             reshaped_valid_indices = valid_indices.reshape(-1)
-            
+
             # Get actions, rewards, and dones for all environments at selected time indices
-            temp_actions = self.actions[reshaped_valid_indices]  # Shape: (batch_size*window_size, n_envs, action_dim)
-            temp_rewards = self.rewards[reshaped_valid_indices]  # Shape: (batch_size*window_size, n_envs)
-            temp_dones = self.dones[reshaped_valid_indices]      # Shape: (batch_size*window_size, n_envs)
-            
+            temp_actions = self.actions[
+                reshaped_valid_indices
+            ]  # Shape: (batch_size*window_size, n_envs, action_dim)
+            temp_rewards = self.rewards[
+                reshaped_valid_indices
+            ]  # Shape: (batch_size*window_size, n_envs)
+            temp_dones = self.dones[
+                reshaped_valid_indices
+            ]  # Shape: (batch_size*window_size, n_envs)
+
             # Reshape to separate batch and window dimensions
-            temp_actions = temp_actions.reshape(len(batch_inds), window_size, self.n_envs, -1)
-            temp_rewards = temp_rewards.reshape(len(batch_inds), window_size, self.n_envs)
+            temp_actions = temp_actions.reshape(
+                len(batch_inds), window_size, self.n_envs, -1
+            )
+            temp_rewards = temp_rewards.reshape(
+                len(batch_inds), window_size, self.n_envs
+            )
             temp_dones = temp_dones.reshape(len(batch_inds), window_size, self.n_envs)
-            
+
             # Select specific environment for each batch item
             for i, env_idx in enumerate(env_indices):
                 actions_chunked[i] = temp_actions[i, :, env_idx]
