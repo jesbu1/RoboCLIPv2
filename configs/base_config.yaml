@@ -54,7 +54,7 @@ online_training:
   total_time_steps: 1000000
   mix_buffers_ratio: 0.50 # Ratio of offline data during online training. Set to 0 for no offline data
   warm_start_online_rl: true
-  learning_starts: 1000
+  learning_starts: 4000
 
 offline_training:
   offline_h5_path: null # Set to null so you must set environment yaml
@@ -73,6 +73,8 @@ reward_model:
   batch_size: 128
   model_path: null
   success_bonus: 10.0
+  normalize_reward: false
+  reward_at_every_step: false
 
 environment:
   text_string: null # Set to null so you must set environment yaml

@@ -319,15 +319,19 @@ class LearnedRewardWrapper(gym.Wrapper):
             #     th.tensor(frames).float().to(self.reward_model.device)
             # )
             # print(f"frames_embeddings shape: {frames_embeddings.shape}")
-            stacked_sequence = np.stack(self.past_observations, axis=1)
+            stacked_sequence = np.stack(self.past_observations, axis=0)
             stacked_sequence = (
                 th.from_numpy(stacked_sequence).float().to(self.reward_model.device)
-            )
-
+            ).unsqueeze(0)
+            # print(f"stacked_sequence shape: {stacked_sequence.shape}")
             reward = self.reward_model.calculate_rewards(
                 self.reward_language_features, stacked_sequence
             )
-
+            if isinstance(reward, th.Tensor):
+                reward = reward.detach().cpu().numpy().item()
+            wandb.log({"train/learned_reward_per_step": reward})
+            # print(f"reward : {reward}")
+            # exit()
         else:
             if done:
                 # stacked_sequence = np.stack(self.past_observations, axis=0)
@@ -364,24 +368,33 @@ class LearnedRewardWrapper(gym.Wrapper):
                     self.save_video(frames_np, reward)
                 if isinstance(reward, th.Tensor):
                     reward = reward.detach().cpu().numpy().item()
-                wandb.log({"train/learned_reward": reward})
+                
                 self.past_observations = []
                 self.raw_observations = []
             else:
                 reward = 0
-        
+
         wandb_reward = reward
         reward /= self.reward_divisor
         if done:
             print(f"reward after divisor: {reward}")
+            wandb.log({"train/learned_reward": wandb_reward})
+
+        # Normalize reward
+        # if self.counter == 1:
+        #     self.offset = reward
+        #     reward -= self.offset
+        # elif self.counter > 1:
+        #     reward -= self.offset
+
         # Success bonus
         if info.get("success", False):
-            #reward += self.reward_model.success_bonus
-            #wandb_reward += self.reward_model.success_bonus
+            reward += self.reward_model.success_bonus
+            wandb_reward += self.reward_model.success_bonus
             self.total_success_bonus += self.reward_model.success_bonus
             print(f"The {self.episode_counter}th episode {self.counter}th step, train success reward: {reward}")
-        # if done:
-        #     wandb.log({"train/learned_reward_with_success_bonus": wandb_reward})
+        if done:
+            wandb.log({"train/learned_reward_with_success_bonus": wandb_reward})
         return obs, reward, done, info
     # @profile
     def reset(self):
@@ -496,6 +509,9 @@ class RecordRewardWrapper(gym.Wrapper):
 
     def step(self, action):
         obs, reward, done, info = self.env.step(action)
+        #reward = reward * 50
+        if self.reward_model.reward_at_every_step:
+            wandb.log({"train/normalized_reward_per_step": reward})
         if done:
             wandb.log({"train/normalized_reward": reward})
         if info.get("success", False):
@@ -504,3 +520,70 @@ class RecordRewardWrapper(gym.Wrapper):
             wandb.log({"train/normalized_reward_with_success_bonus": reward})
         
         return obs, reward, done, info
+
+
+class RunningMeanStd:
+    """Running mean & std, numpy 版（与 OpenAI Baselines 一致）"""
+    def __init__(self, epsilon: float = 1e-4, shape=()):
+        self.mean = np.zeros(shape, dtype=np.float64)
+        self.var = np.ones(shape, dtype=np.float64)
+        self.count = epsilon
+
+    def update(self, x: np.ndarray):
+        """x: (...,) 任意维度 batch"""
+        batch_mean = np.mean(x, axis=0)
+        batch_var  = np.var(x,  axis=0)
+        batch_count = x.shape[0]
+        self._update_from_moments(batch_mean, batch_var, batch_count)
+
+    def _update_from_moments(self, batch_mean, batch_var, batch_count):
+        delta      = batch_mean - self.mean
+        tot_count  = self.count + batch_count
+
+        new_mean   = self.mean + delta * batch_count / tot_count
+        m_a        = self.var * self.count
+        m_b        = batch_var * batch_count
+        M2         = m_a + m_b + np.square(delta) * self.count * batch_count / tot_count
+        new_var    = M2 / tot_count
+
+        self.mean, self.var, self.count = new_mean, new_var, tot_count
+
+
+class RewardNormalize(gym.Wrapper):
+    """
+    Mimic CleanRL `reward_normalization_gymnasium` 逻辑，适配旧 Gym (无 truncated)。
+    - 折扣 returns: R_t = r_t + γ * (1 - done_t) * R_{t-1}
+      ▶ 终止帧在更新 RMS 时只留下当前 r_t
+      ▶ returns **不会被额外清零**，因此跨 episode 有残余
+    """
+
+    def __init__(self, env: gym.Env, gamma: float = 0.99, epsilon: float = 1e-8):
+        super().__init__(env)
+        self.gamma   = gamma
+        self.epsilon = epsilon
+        # 支持 vector env
+        self.num_envs       = getattr(env, "num_envs", 1)
+        self.is_vector_env  = getattr(env, "is_vector_env", False)
+        self.return_rms     = RunningMeanStd(shape=())    # 标量 reward
+        self.returns        = np.zeros(self.num_envs, dtype=np.float64)
+
+    def step(self, action):
+        obs, rewards, dones, infos = self.env.step(action)
+
+        # 统一成 (n_env,) np.ndarray
+        if not self.is_vector_env:
+            rewards = np.array([rewards], dtype=np.float64)
+            dones   = np.array([dones],   dtype=np.float64)  # bool→0/1
+
+        # === 核心逻辑 ===
+        self.returns = self.returns * self.gamma * (1.0 - dones) + rewards
+        self.return_rms.update(self.returns)
+
+        norm_rews = rewards / np.sqrt(self.return_rms.var + self.epsilon)
+
+        if not self.is_vector_env:          # 还原标量
+            norm_rews = norm_rews[0]
+        return obs, norm_rews, dones if self.is_vector_env else bool(dones[0]), infos
+
+    def reset(self, **kwargs):
+        return self.env.reset(**kwargs)

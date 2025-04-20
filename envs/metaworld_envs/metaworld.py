@@ -321,7 +321,8 @@ def create_wrapped_env(
             base_env = RewardAtEndWrapper(base_env)
         
         if normalize_reward and mode == "train":
-            base_env = NormalizeReward(base_env)
+            base_env = RewardNormalize(base_env, epsilon=1e-8)
+            # base_env = NormalizeReward(base_env, epsilon=1e-8)
             base_env = RecordRewardWrapper(base_env, reward_model)
 
         # else:
