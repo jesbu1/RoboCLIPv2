@@ -10,7 +10,7 @@ logging:
   wandb: true
   wandb_entity_name: "clvr"
   wandb_project_name: "roboclip-v2"
-  wandb_group_name: "${reward_model.name}_${general_training.algo}"
+  wandb_group_name: "small_model_${reward_model.name}_${general_training.algo}"
   log_dir: "./logs/${logging.wandb_group_name}"
   eval_freq: 5000
   video_freq: 5000
@@ -22,7 +22,7 @@ general_training:
   pretrained: false
   action_noise: null
   learning_rate: 1e-4
-  dense_rewards_at_end: true
+  dense_rewards_at_end: false
   entropy_term: "auto"
 
   # offline rl parameters

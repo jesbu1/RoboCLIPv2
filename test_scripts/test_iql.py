@@ -71,7 +71,7 @@ from envs.metaworld_envs.metaworld import (
 from stable_baselines3.common.policies import ActorCriticPolicy
 import stable_baselines3
 
-
+from test_scripts.eval_utils import offline_eval
 import hydra
 from hydra.core.config_store import ConfigStore
 from hydra.utils import to_absolute_path
@@ -269,8 +269,8 @@ def main(cfg: DictConfig):
         eval_freq = 0
         # eval_freq = offline_config.offline_training_steps * env_config.n_envs // (2)
     else:
-        video_freq = offline_config.offline_training_steps * env_config.n_envs // 2
-        eval_freq = offline_config.offline_training_steps * env_config.n_envs // (2)
+        video_freq = offline_config.offline_training_steps * env_config.n_envs // 1
+        eval_freq = offline_config.offline_training_steps * env_config.n_envs // (1)
 
     # Use deterministic actions for evaluation
     eval_callback = OfflineEvalCallback(
@@ -395,6 +395,11 @@ def main(cfg: DictConfig):
             # Log this absolute_save_dir in wandb
             if logging_config.wandb:
                 wandb.run.log({"model_dir": absolute_save_dir})
+
+    # add eval policy on all tasks
+    offline_eval(model, reward_model, image_encoder)
+    exit()
+
 
     # Set the replay buffer back to the original one
     if (

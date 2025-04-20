@@ -26,8 +26,8 @@ general_training:
 model:
   policy_layer_norm: true
   critic_layer_norm: true
-  pi_net_arch: [768, 512, 256]
-  qf_net_arch: [768, 512, 512]
+  pi_net_arch: [512, 512, 256]
+  qf_net_arch: [512, 512, 256]
 
 offline_training:
   offline_training_steps: 0
