@@ -126,8 +126,15 @@ def create_exp_name(cfg: DictConfig):
         exp_name += "use_proprio_"
 
     exp_name += f"_seed_{cfg.environment.env_id}"
-    exp_name += f"_seed_{cfg.general_training.seed}_debug"
+    exp_name += f"_seed_{cfg.general_training.seed}"
+
+    if cfg.reward_model.reward_at_every_step:
+        exp_name += "_dense"
+    else:
+        exp_name += "_sparse"
     
+    if cfg.general_training.normalize_reward:
+        exp_name += "_normalize"
 
     # if the last character is an underscore, remove it
     if exp_name[-1] == "_":
@@ -166,6 +173,7 @@ def parse_reward_model(reward_cfg: DictConfig) -> BaseRewardModel:
             batch_size=reward_cfg.batch_size,
             success_bonus=reward_cfg.success_bonus,
             sum_reward=reward_cfg.sum_reward,
+            reward_at_every_step=reward_cfg.reward_at_every_step,
         )
     elif reward_string == "liv":
         reward_model = LIVRewardModel(
@@ -281,7 +289,7 @@ def main(cfg: DictConfig):
         video_freq=video_freq,
         deterministic=True,
         render=False,
-        n_eval_episodes=10,
+        n_eval_episodes=25,
     )
 
     callback_list = generate_callback_list(logging_config, eval_callback)
@@ -475,10 +483,14 @@ def create_envs(cfg: DictConfig, reward_model: BaseRewardModel, image_encoder):
                     use_proprio=env_config.use_proprio,
                     mode="train",
                     dense_rewards_at_end=cfg.general_training.dense_rewards_at_end,
+                    normalize_reward=cfg.general_training.normalize_reward,
+                    terminate_on_success=cfg.general_training.terminate_on_success,
                 )
                 for _ in range(env_config.n_envs)
             ]
         )
+
+        # envs = LoggingWrapper(envs)
     else:
         envs = DummyVecEnv(
             [
@@ -494,6 +506,8 @@ def create_envs(cfg: DictConfig, reward_model: BaseRewardModel, image_encoder):
                     use_proprio=env_config.use_proprio,
                     mode="train",
                     dense_rewards_at_end=cfg.general_training.dense_rewards_at_end,
+                    normalize_reward=cfg.general_training.normalize_reward,
+                    terminate_on_success=cfg.general_training.terminate_on_success,
                 )
             ]
         )
@@ -512,8 +526,10 @@ def create_envs(cfg: DictConfig, reward_model: BaseRewardModel, image_encoder):
                     is_state_based=env_config.is_state_based,
                     mode="eval",
                     use_proprio=env_config.use_proprio,
+                    normalize_reward=cfg.general_training.normalize_reward,
+                    terminate_on_success=cfg.general_training.terminate_on_success,
                 )
-                for i in range(env_config.n_envs)
+                for i in range(1)
             ]
         )  # KitchenEnvDenseOriginalReward(time=True)
     else:
@@ -530,6 +546,8 @@ def create_envs(cfg: DictConfig, reward_model: BaseRewardModel, image_encoder):
                     is_state_based=env_config.is_state_based,
                     mode="eval",
                     use_proprio=env_config.use_proprio,
+                    normalize_reward=cfg.general_training.normalize_reward,
+                    terminate_on_success=cfg.general_training.terminate_on_success,
                 )
             ]
         )  # KitchenEnvDenseOriginalReward(time=True)

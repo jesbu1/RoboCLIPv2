@@ -176,11 +176,11 @@ class RewindRewardModel(BaseRewardModel):
             embeddings = embeddings[index]
 
         else:
-            # padding 1st frame
+            # padding last frame
             padding_num = num_frames - total_frames
-            first_frame = embeddings[0].unsqueeze(0)
-            padding_frames = first_frame.repeat(padding_num, 1)
-            embeddings = torch.cat([padding_frames, embeddings], dim=0)
+            last_frame = embeddings[-1].unsqueeze(0)
+            padding_frames = last_frame.repeat(padding_num, 1)
+            embeddings = torch.cat([embeddings, padding_frames], dim=0)
         return embeddings
 
 

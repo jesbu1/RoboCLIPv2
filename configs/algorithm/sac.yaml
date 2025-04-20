@@ -11,14 +11,14 @@ general_training:
   algo: sac
   name: sac
   action_noise: null # sigma
-  learning_rate: 1e-4
+  learning_rate: 3e-4
 
 
 model:
   policy_layer_norm: true
   critic_layer_norm: true
-  pi_net_arch: [768, 512, 256]
-  qf_net_arch: [768, 512, 512]
+  pi_net_arch: [512, 400, 400]
+  qf_net_arch: [512, 400, 400]
   
 offline_training:
   offline_training_steps: 0 # SAC is online-only
