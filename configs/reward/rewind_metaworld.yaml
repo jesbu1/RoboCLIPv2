@@ -1,0 +1,28 @@
+# @package _global_
+
+general_training:
+  dense_rewards_at_end: false
+
+
+reward_model: 
+  name: 'rewind'
+  batch_size: 64
+  # model_path: "weights/rewind/real_world_PosEmb_Rewind_ratio_0.8_EMA_momentum_0.3_End_Rewind_ratio_0.1/model_20.pth"
+  model_path: "weights/metaworld/rewind/model_20.pth"
+  reward_at_every_step: true
+  camera_names: ["image"]
+
+
+  success_bonus: 125.0
+
+environment:
+  is_state_based: false
+  reward_image_key: 'image'
+
+# environment:
+#   is_state_based: false
+
+# offline_training:
+#   offline_training_steps: 1
+
+# data/h5_buffers/updated_trajs/metaworld_traj_15_demos_roboclipv2.h5

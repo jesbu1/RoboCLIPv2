@@ -11,6 +11,7 @@ import sys, os
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from reward_model import VLCRewardModel, RoboclipV2RewardModel
 from reward_model.env_reward_model import EnvRewardModel
+from reward_model.rewind_reward_model import ReWiNDRewardModel
 # RoboCLIPEncoder
 
 
@@ -70,14 +71,13 @@ def label_trajectories_iteratively(
         reward_model = VLCRewardModel(
             args.encoder_path, device=args.device, batch_size=args.batch_size
         )
-    elif args.reward_model == "roboclipv2":
-        reward_model = RoboclipV2RewardModel(
-            model_load_path=args.reward_model_path,
-            use_pca=False,
-            attention_heads=4,
-            pca_model_dir=None,
-            device=args.device,
-            batch_size=args.batch_size,
+    elif args.reward_model == "rewind":
+        reward_model = ReWiNDRewardModel(
+            args.reward_model_path,
+            camera_names=[reward_image_key],
+            batch_size=32,
+            success_bonus=0, # these are added later
+            reward_at_every_step=True,
         )
     elif args.reward_model == "sparse":
         reward_model = EnvRewardModel(model_path=None)  # Uses a LIV encoder
@@ -306,15 +306,15 @@ def main():
     # )
     parser.add_argument(
         "--reward_model",
-        choices=["roboclipv2", "roboclip", "vlc", "dense", "sparse", "debug"],
-        default="roboclipv2",
+        choices=["rewind", "roboclip", "vlc", "dense", "sparse", "debug"],
+        default="rewind",
         help="Type of encoder to use.",
     )
     parser.add_argument("--encoder_path", help="Path to the encoder model file.")
     parser.add_argument(
         "--reward_model_path",
         help="Path to the saved model.",
-        default="/data/shared/roboclip/clip_liv_models/RegressionRandom_liv_subtract_before_heads_4/model_74.pt",
+        default="weights/metaworld/rewind/model_20.pth",
     )
     parser.add_argument(
         "--sparse_only", action="store_true", help="Use sparse rewards only."
