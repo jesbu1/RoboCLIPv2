@@ -221,8 +221,8 @@ class RLPD(OfflineRLAlgorithm):
         # self.policy.critic.optimizer = offline_algo.policy.critic.optimizer
 
         # This replaces the optimizer with the old (new) optimizer
-        self.policy.actor.optimizer = old_policy_optimizer
-        self.policy.critic.optimizer = old_critic_optimizer
+        # self.policy.actor.optimizer = old_policy_optimizer
+        # self.policy.critic.optimizer = old_critic_optimizer
 
         if (
             hasattr(offline_algo, "ent_coef_optimizer")
