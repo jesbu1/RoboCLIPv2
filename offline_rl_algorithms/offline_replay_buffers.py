@@ -21,6 +21,8 @@ from stable_baselines3.common.vec_env import VecNormalize
 
 from reward_model.base_reward_model import BaseRewardModel
 
+from copy import deepcopy
+
 try:
     # Check memory used by replay buffer when possible
     import psutil
@@ -534,8 +536,32 @@ class CombinedBuffer(ReplayBuffer):
         old_batch_size = int(batch_size * self.ratio)
         new_batch_size = batch_size - old_batch_size
 
-        old_samples = self.old_buffer.sample(old_batch_size, env=env)
-        new_samples = self.new_buffer.sample(new_batch_size, env=env)
+        old_size = self.old_buffer.size()
+        new_size = self.new_buffer.size()
+
+        if old_size == 0 and new_size == 0:
+            return CombinedBufferSamples(
+                observations=th.empty(0),
+                actions=th.empty(0),
+                next_observations=th.empty(0),
+                dones=th.empty(0),
+                rewards=th.empty(0),
+                mc_returns=th.empty(0),
+                offline_data_mask=th.empty(0),
+                valid_length=th.empty(0),
+            )
+
+        if old_size == 0:
+            new_samples = self.new_buffer.sample(batch_size, env=env)
+            old_samples = None
+        elif new_size == 0:
+            old_samples = self.old_buffer.sample(batch_size, env=env)
+            new_samples = None
+        else:
+            old_batch_size = int(batch_size * self.ratio)
+            new_batch_size = batch_size - old_batch_size
+            old_samples = self.old_buffer.sample(old_batch_size, env=env)
+            new_samples = self.new_buffer.sample(new_batch_size, env=env)
         # Concatenate the samples into old_samples
         cat_names = [
             "observations",
@@ -549,21 +575,37 @@ class CombinedBuffer(ReplayBuffer):
         ]
         attributes = {}
         for name in cat_names:
+            # NOTE: This is incorrect when using this as a success/fail buffer
             if name == "offline_data_mask":
                 # 1 for the old data, 0 for the new data
                 old_data = th.ones(old_batch_size, 1)
                 new_data = th.zeros(new_batch_size, 1)
+
+            # TODO: This is incorrect when using this as a success/fail buffer
             elif name == "mc_returns":
-                old_data = getattr(old_samples, name)
-                new_data = th.zeros_like(
-                    old_data
-                )  # set all mc_returns to 0 for new data as it's currently not supported
+                if old_samples is not None:
+                    old_data = getattr(old_samples, name)
+                if new_samples is not None:
+                    new_data = th.zeros_like(
+                        old_data
+                    )  # set all mc_returns to 0 for new data as it's currently not supported
             else:
-                old_data = getattr(old_samples, name)
-                new_data = getattr(new_samples, name)
+                if old_samples is None:
+                    old_data = th.empty(0)
+                else:
+                    old_data = getattr(old_samples, name)
+                if new_samples is None:
+                    new_data = th.empty(0)
+                else:
+                    new_data = getattr(new_samples, name)
 
             try:
-                attributes[name] = th.cat((old_data, new_data), dim=0)
+                if old_samples is not None and new_samples is not None:
+                    attributes[name] = th.cat((old_data, new_data), dim=0)
+                elif old_samples is not None:
+                    attributes[name] = old_data
+                elif new_samples is not None:
+                    attributes[name] = new_data
             except:
                 breakpoint()
 
@@ -752,6 +794,75 @@ class ActionChunkedReplayBuffer(ReplayBuffer):
             valid_lengths,  # valid_lengths is the number of valid actions
         )
         return CombinedBufferSamples(*tuple(map(self.to_torch, data)))
+
+    def clone(self):
+        # we should clone this class but we have to make sure not to
+        # deep copy ['action_space', and 'observation_space']
+
+        new_buffer = type(self).__new__(type(self))
+        output_dict = {}
+        for key, value in self.__dict__.items():
+            if key in ["action_space", "observation_space"]:
+                output_dict[key] = value
+            else:
+                print(f"Cloning {key}")
+                output_dict[key] = deepcopy(value)
+        new_buffer.__dict__ = output_dict
+        return new_buffer
+
+
+class SuccessFailSplitBuffer(CombinedBuffer):
+    # A buffer that modifies the "add" function and maintains two buffers
+    # One for successful trajs and one for failed trajs
+    # That way, we can 50/50 sample from both
+    def __init__(
+        self,
+        original_buffer: ReplayBuffer,
+        ratio: float = 0.5,
+    ):
+        # maintain two new buffers that are a copy of the original
+        # one for success and one for failure
+        self.success_buffer = original_buffer.clone()
+        self.failure_buffer = original_buffer.clone()
+
+        self.temp_input_output = []
+
+        super().__init__(self.success_buffer, self.failure_buffer, ratio=ratio)
+
+    def add(
+        self,
+        obs: np.ndarray,
+        next_obs: np.ndarray,
+        action: np.ndarray,
+        reward: np.ndarray,
+        done: np.ndarray,
+        infos: List[Dict[str, Any]],
+    ) -> None:
+        self.temp_input_output.append((obs, next_obs, action, reward, done, infos))
+
+        # if done, then we add it to the success buffer if success, otherwise we add it to failure buffer
+        if done[0]:
+            if infos[0].get("success", False):
+                for (
+                    obs,
+                    next_obs,
+                    action,
+                    reward,
+                    done,
+                    infos,
+                ) in self.temp_input_output:
+                    self.success_buffer.add(obs, next_obs, action, reward, done, infos)
+            else:
+                for (
+                    obs,
+                    next_obs,
+                    action,
+                    reward,
+                    done,
+                    infos,
+                ) in self.temp_input_output:
+                    self.failure_buffer.add(obs, next_obs, action, reward, done, infos)
+            self.temp_input_output = []
 
 
 if __name__ == "__main__":
