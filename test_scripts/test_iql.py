@@ -71,7 +71,7 @@ from envs.metaworld_envs.metaworld import (
 from stable_baselines3.common.policies import ActorCriticPolicy
 import stable_baselines3
 
-
+from test_scripts.eval_utils import offline_eval
 import hydra
 from hydra.core.config_store import ConfigStore
 from hydra.utils import to_absolute_path
@@ -277,8 +277,8 @@ def main(cfg: DictConfig):
         eval_freq = 0
         # eval_freq = offline_config.offline_training_steps * env_config.n_envs // (2)
     else:
-        video_freq = offline_config.offline_training_steps * env_config.n_envs // 10
-        eval_freq = offline_config.offline_training_steps * env_config.n_envs // (10)
+        video_freq = offline_config.offline_training_steps * env_config.n_envs // 1
+        eval_freq = offline_config.offline_training_steps * env_config.n_envs // (1)
 
     # Use deterministic actions for evaluation
     eval_callback = OfflineEvalCallback(
@@ -395,14 +395,17 @@ def main(cfg: DictConfig):
                 model.save(save_dir, exclude=["offline_algo"])
             else:
                 model.save(save_dir)
-
             # Model is saved at
             absolute_save_dir = os.path.abspath(save_dir)
             print(f"Model saved at {absolute_save_dir}")
-
             # Log this absolute_save_dir in wandb
             if logging_config.wandb:
                 wandb.run.log({"model_dir": absolute_save_dir})
+
+    # add eval policy on all tasks
+    # offline_eval(model, reward_model, image_encoder)
+    # exit()
+
 
     # Set the replay buffer back to the original one
     if (
@@ -417,7 +420,7 @@ def main(cfg: DictConfig):
     online_video_freq = logging_config.video_freq // env_config.n_envs
     eval_callback.eval_freq = online_eval_freq
     eval_callback.video_freq = online_video_freq
-    assert cfg.online_training.total_time_steps == 500000, "Total time steps should be 500k."
+    # assert cfg.online_training.total_time_steps == 500000, "Total time steps should be 500k."
     if cfg.online_training.total_time_steps > 0:
         # logger only exists for offline algorithms
         if isinstance(model, OfflineRLAlgorithm):

@@ -4,14 +4,18 @@ defaults:
   - _self_
 
 offline_training:
-  offline_h5_path: "scripts/metaworld_policy_pretrain_dataset_rewind_div_0.01.h5"
+  offline_h5_path: "/home/jzhang96/RoboCLIPv2/scripts/metaworld_policy_pretrain_dataset_rewind_dense.h5" #
   offline_tasks: ['button-press-v2', 'button-press-topdown-wall-v2', 'coffee-pull-v2', 'dial-turn-v2', 'door-open-v2',
                   'door-unlock-v2', 'drawer-close-v2', 'faucet-open-v2', 'handle-press-v2', 'handle-pull-side-v2',
                   'peg-insert-side-v2', 'pick-place-v2', 'plate-slide-v2', 'plate-slide-back-side-v2', 'push-v2',
                   'reach-v2', 'stick-push-v2', 'stick-pull-v2', 'window-open-v2', 'hand-insert-v2']
+  ckpt_path: "/home/jzhang96/RoboCLIPv2/outputs/2025-04-21/03-34-31/logs/small_model_rewind_iql/last_offline.zip"
 
+online_training:
+  total_time_steps: 100000
 
-
+general_training:
+  seed: 42
 
 environment:
   cfg_name: "metaworld_off_on_15"
@@ -23,4 +27,6 @@ environment:
 
 # Reward divisor is environment-dependent
 reward_model:
-  reward_divisor: 0.01
+  reward_divisor: 1
+
+# /home/jzhang96/RoboCLIPv2/outputs/2025-04-20/00-08-09/logs/small_model_sparse_iql/last_offline
