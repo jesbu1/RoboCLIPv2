@@ -2,7 +2,7 @@ from models.reward_model.base_reward_model import BaseRewardModel
 from new_task_annotation_v2 import eval_gt_annotation
 from envs.metaworld_envs.metaworld import create_wrapped_env
 from stable_baselines3.common.vec_env import DummyVecEnv
-
+from tqdm import tqdm
 import torch as th
 import wandb
 
@@ -17,7 +17,7 @@ def offline_eval(policy, reward_model: BaseRewardModel, image_encoder, rollout_n
     
     wandb_log = {}
 
-    for env_id in eval_envs:
+    for env_id in tqdm(eval_envs):
         text_instruction = eval_gt_annotation[env_id]
         with th.no_grad():
             lang_feat_policy = reward_model.encode_text_for_policy(text_instruction).squeeze()
