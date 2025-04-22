@@ -76,6 +76,7 @@ def label_trajectories_iteratively(args, traj_h5, output_file):
                     # Otherwise use the other reward models
                     else:
                         # Process video frames iteratively using stored embeddings
+                        # TODO: fix this for rewind inference
                         start_idx = max(0, i - args.window_length + 1)
                         video_embeddings = []
                         for j in range(start_idx, i + 1):

@@ -389,12 +389,12 @@ class LearnedRewardWrapper(gym.Wrapper):
 
         # Success bonus
         if info.get("success", False):
-            reward += self.reward_model.success_bonus
-            wandb_reward += self.reward_model.success_bonus
+            # reward += self.reward_model.success_bonus
+            # wandb_reward += self.reward_model.success_bonus
             self.total_success_bonus += self.reward_model.success_bonus
             print(f"The {self.episode_counter}th episode {self.counter}th step, train success reward: {reward}")
-        if done:
-            wandb.log({"train/learned_reward_with_success_bonus": wandb_reward})
+        # if done:
+        #     wandb.log({"train/learned_reward_with_success_bonus": wandb_reward})
         return obs, reward, done, info
     # @profile
     def reset(self):
