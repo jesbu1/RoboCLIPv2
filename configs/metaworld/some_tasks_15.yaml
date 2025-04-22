@@ -8,6 +8,7 @@ offline_training:
   offline_h5_path: "metaworld_traj_15_demos_sparse.h5"
   offline_tasks: ["window-open-v2", "window-close-v2", "door-open-v2", "drawer-open-v2", "faucet-open-v2"]
   offline_training_steps: 1000000
+  ckpt_path: "/home/yusenluo/RoboCLIP_offline/RoboCLIPv2/models/reward_model/pretrained_rewind/rewind_dense_100k.zip"
 
 online_training:
   total_time_steps: 1000000

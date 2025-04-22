@@ -9,7 +9,7 @@ logging:
   video_freq: 10000
 
 general_training:
-  algo: iql
+  algo: rlpd
   name: wsrl_iql
   action_noise: 0.0 # sigma
   learning_rate: 3e-4
@@ -31,11 +31,11 @@ model:
 
 offline_training:
   offline_training_steps: 100000
-  ckpt_path: "/home/jzhang96/RoboCLIPv2/outputs/2025-04-21/03-34-31/logs/small_model_rewind_iql/last_offline.zip"  # Path to load checkpoint from, if provided will skip offline training
+  ckpt_path: "/home/yusenluo/RoboCLIP_offline/RoboCLIPv2/models/reward_model/pretrained_rewind/rewind_dense_100k.zip"  # Path to load checkpoint from, if provided will skip offline training
   critic_update_ratio: 1
 
 online_training:
-  total_time_steps: 1000000
+  total_time_steps: 100000
   mix_buffers_ratio: 0.0 # WSRL does not use old replay buffer
   warm_start_online_rl: true # main change for WSRL
   learning_starts: 4000

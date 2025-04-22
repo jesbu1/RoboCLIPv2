@@ -3,7 +3,7 @@
 reward_model: 
   name: 'rewind'
   batch_size: 64
-  model_path: '/home/jzhang96/RoboCLIPv2/scripts/metaworld_5_Demo_PosEmb_View_side_OpenX_Rewind_ratio_0.8_EMA_momentum_0.3_End_Rewind_ratio_0.1/model_20.pth'
+  model_path: '/home/yusenluo/RoboCLIP_offline/RoboCLIPv2/models/reward_model/rewind_model/metaworld_PosEmb_View_side_OpenX_Rewind_ratio_0.8_EMA_momentum_0.3_End_Rewind_ratio_0.1/model_19.pth'
   use_pca: false
   success_bonus: 10
   reward_divisor: 1
@@ -14,7 +14,7 @@ general_training:
   dense_rewards_at_end: false
   learning_rate: 1e-3
   entropy_term: "auto"
-  normalize_reward: true
+  normalize_reward: false
   terminate_on_success: false
 # environment:
 #   is_state_based: false
