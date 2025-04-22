@@ -5,10 +5,11 @@ defaults:
 
 # Because RLPD is slower, we will log more frequently
 logging:
-  eval_freq: 10000
-  video_freq: 10000
+  eval_freq: 5000
+  video_freq: 5000
 
 general_training:
+  algo: rlpd
   algo: rlpd
   name: wsrl_iql
   action_noise: 0.0 # sigma
