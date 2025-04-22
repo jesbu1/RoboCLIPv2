@@ -5,11 +5,11 @@ defaults:
 
 # Because RLPD is slower, we will log more frequently
 logging:
-  eval_freq: 10000
-  video_freq: 10000
+  eval_freq: 5000
+  video_freq: 5000
 
 general_training:
-  algo: iql
+  algo: rlpd
   name: wsrl_iql
   action_noise: 0.0 # sigma
   learning_rate: 3e-4
@@ -31,7 +31,7 @@ model:
 
 offline_training:
   offline_training_steps: 100000
-  ckpt_path: "/home/jzhang96/RoboCLIPv2/outputs/2025-04-21/03-34-31/logs/small_model_rewind_iql/last_offline.zip"  # Path to load checkpoint from, if provided will skip offline training
+  # ckpt_path: "/home/jzhang96/RoboCLIPv2/outputs/2025-04-21/03-34-31/logs/small_model_rewind_iql/last_offline.zip"  # Path to load checkpoint from, if provided will skip offline training
   critic_update_ratio: 1
 
 online_training:

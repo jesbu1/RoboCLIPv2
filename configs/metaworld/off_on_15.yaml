@@ -9,7 +9,7 @@ offline_training:
                   'door-unlock-v2', 'drawer-close-v2', 'faucet-open-v2', 'handle-press-v2', 'handle-pull-side-v2',
                   'peg-insert-side-v2', 'pick-place-v2', 'plate-slide-v2', 'plate-slide-back-side-v2', 'push-v2',
                   'reach-v2', 'stick-push-v2', 'stick-pull-v2', 'window-open-v2', 'hand-insert-v2']
-  ckpt_path: "/home/jzhang96/RoboCLIPv2/outputs/2025-04-21/03-34-31/logs/small_model_rewind_iql/last_offline.zip"
+  # ckpt_path: "/home/jzhang96/RoboCLIPv2/outputs/2025-04-21/03-34-31/logs/small_model_rewind_iql/last_offline.zip"
 
 online_training:
   total_time_steps: 100000
