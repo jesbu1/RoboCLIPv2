@@ -298,6 +298,10 @@ class IQL(OfflineRLAlgorithm):
         q_target_values = []
         reward_values = []
 
+        if gradient_steps != 1:
+            # only so if we are doing per-step training, we don't overprint
+            print(f"Going to take {gradient_steps} training steps")
+
         for gradient_step in range(gradient_steps):
             # We need to sample because `log_std` may have changed between two gradient steps
             if self.use_sde:

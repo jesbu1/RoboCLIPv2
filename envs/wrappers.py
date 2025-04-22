@@ -319,6 +319,7 @@ class LearnedRewardWrapper(gym.Wrapper):
         self.__dict__.update(state)
 
     def _compute_reward(self):
+        # print(len(self.past_observations["observation.images.main"]))
         if not hasattr(self.reward_model, "multiple_cameras"):
             stacked_sequence = np.stack(
                 self.past_observations[self.image_keys[self.image_reward_idx]],
@@ -352,7 +353,7 @@ class LearnedRewardWrapper(gym.Wrapper):
                         key,
                     )
                 )
-            print(rewards)
+            # print(rewards)
             reward = sum(rewards) / len(self.image_keys)
 
         return reward
@@ -388,10 +389,10 @@ class LearnedRewardWrapper(gym.Wrapper):
 
             return obs, sparse_reward, done, info
 
-        if encoded_image is not None:
-            for key, value in encoded_images.items():
-                if f"image_feature_{key}" in obs:
-                    self.past_observations[key].append(value)
+        if encoded_images is not None:
+            for i, key in enumerate(self.image_keys):
+                if f"image_feature_{i}" in obs:
+                    self.past_observations[key].append(obs[f"image_feature_{i}"])
 
         assert self.reward_language_features is not None, (
             "Language features are None in the reward model"
@@ -718,6 +719,10 @@ class ACTTemporalEnsemblerWrapper(gym.Wrapper):
         # (chunk_size,) count of how many actions are in the ensemble for each time step in the sequence.
         self.chunk_count = None
         return self.env.reset()
+
+    @property
+    def is_chunk_empty(self):
+        return True
 
     def ensure_safeish_goal_position(
         self,

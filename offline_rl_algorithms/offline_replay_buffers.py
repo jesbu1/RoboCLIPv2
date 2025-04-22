@@ -499,6 +499,20 @@ class H5ReplayBuffer(ReplayBuffer):
 
         return CombinedBufferSamples(*tuple(map(self.to_torch, data)))
 
+    def clone(self):
+        # we should clone this class but we have to make sure not to
+        # deep copy ['action_space', and 'observation_space']
+
+        new_buffer = type(self).__new__(type(self))
+        output_dict = {}
+        for key, value in self.__dict__.items():
+            if key in ["action_space", "observation_space"]:
+                output_dict[key] = value
+            else:
+                output_dict[key] = deepcopy(value)
+        new_buffer.__dict__ = output_dict
+        return new_buffer
+
 
 class CombinedBuffer(ReplayBuffer):
     def __init__(
@@ -617,6 +631,13 @@ class CombinedBuffer(ReplayBuffer):
         :return: The total size of the buffer
         """
         return self.new_buffer.size() + self.old_buffer.size()
+
+    def clone(self):
+        return CombinedBuffer(
+            old_buffer=self.old_buffer.clone(),
+            new_buffer=self.new_buffer.clone(),
+            ratio=self.ratio,
+        )
 
 
 class ActionChunkedReplayBuffer(ReplayBuffer):
@@ -805,7 +826,6 @@ class ActionChunkedReplayBuffer(ReplayBuffer):
             if key in ["action_space", "observation_space"]:
                 output_dict[key] = value
             else:
-                print(f"Cloning {key}")
                 output_dict[key] = deepcopy(value)
         new_buffer.__dict__ = output_dict
         return new_buffer

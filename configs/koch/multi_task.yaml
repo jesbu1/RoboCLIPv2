@@ -13,18 +13,20 @@ environment:
   cfg_name: "koch_single_task"
   # text_instruction: "separate the orange and blue cups" # seen task
   # text_instruction: "open the red trash bin"
-  text_instruction: "Put the blue cup in the box"
+  # text_instruction: "Put the blue cup in the box"
   # text_instruction: "separate the red and green cups" # unseen task
+  text_instruction: "Separate the blue and red cups"
   n_envs: 1
   train_freq_num: 1
   train_freq_type: 'episode'
   ignore_language: false
   image_keys: ['observation.images.main', 'observation.images.side']
-  max_episode_steps: 500
+  max_episode_steps: 300
   use_proprio: true
 
 online_training:
-  gradient_steps: 50000
+  total_time_steps: 50000
+  gradient_steps: 125
 
 general_training:
   gamma: 0.99 # gamma should be (1/(1-gamma) = 250 steps

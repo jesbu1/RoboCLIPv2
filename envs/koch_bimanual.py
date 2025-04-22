@@ -229,7 +229,7 @@ class KochBimanualEnv(Env):
 
         self.robot.send_action(safe_action)
         dt_s = time.perf_counter() - self.prev_time
-        print(f"Time taken: {dt_s}")
+        # print(f"Time taken: {dt_s}")
 
         busy_wait(1 / self.fps - dt_s)
         # busy_wait(dt_s)
@@ -253,9 +253,9 @@ class KochBimanualEnv(Env):
         for key in self.image_keys:
             obs[key] = observation[key]
 
-        # reward = compute_debug_reward(state.numpy())
+        reward = compute_debug_reward(state.numpy())
         # print(reward)
-        reward = 0
+        # reward = 0
 
         return obs, reward, done, info
 
@@ -392,7 +392,7 @@ class SuccessWrapper(gym.Wrapper):
                     # If no response in 5 seconds, then assume 0.0
                     try:
                         prompt = "Type '1' in 5 seconds if it is a success, else it is a failure"
-                        answer = inputimeout(prompt, timeout=5)
+                        answer = inputimeout(prompt, timeout=0.5)
                     except TimeoutOccurred:
                         answer = 0.0
 
@@ -498,10 +498,19 @@ def create_wrapped_env(
         base_env = FlattenDictObservationWrapper(base_env, use_proprio=use_proprio)
 
         if action_chunk_size > 1:
-            base_env = ActionChunkingWrapper(
-                base_env, chunk_size=action_chunk_size, n_action_steps=action_chunk_size
-            )
-            # base_env = ACTTemporalEnsemblerWrapper(base_env, -0.01, action_chunk_size)
+            if mode == "train":
+                base_env = ActionChunkingWrapper(
+                    base_env,
+                    chunk_size=action_chunk_size,
+                    n_action_steps=action_chunk_size,
+                )
+                # base_env = ACTTemporalEnsemblerWrapper(
+                #     base_env, 0.01, action_chunk_size
+                # )
+            elif mode == "eval" or mode == "demo":
+                base_env = ACTTemporalEnsemblerWrapper(
+                    base_env, 0.01, action_chunk_size
+                )
 
         if monitor:
             base_env = Monitor(base_env)

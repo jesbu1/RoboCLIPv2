@@ -35,6 +35,54 @@ from offline_rl_algorithms.custom_policies import (
     CustomRNNMlpPolicy,
     CustomMultiInputPolicy,
 )
+import threading
+
+import functools
+from stable_baselines3.common.utils import check_for_correct_spaces, get_system_info
+from stable_baselines3.common.save_util import (
+    load_from_zip_file,
+)
+
+import warnings
+
+
+def recursive_getattr(obj: Any, attr: str, *args) -> Any:
+    """
+    Recursive version of getattr
+    taken from https://stackoverflow.com/questions/31174295
+
+    Ex:
+    > MyObject.sub_object = SubObject(name='test')
+    > recursive_getattr(MyObject, 'sub_object.name')  # return test
+    :param obj:
+    :param attr: Attribute to retrieve
+    :return: The attribute
+    """
+
+    def _getattr(obj: Any, attr: str) -> Any:
+        try:
+            return getattr(obj, attr, *args)
+        except AttributeError:
+            print("recursive_getattr failed on " + attr)
+            return None
+
+    return functools.reduce(_getattr, [obj, *attr.split(".")])
+
+
+def recursive_setattr(obj: Any, attr: str, val: Any) -> None:
+    """
+    Recursive version of setattr
+    taken from https://stackoverflow.com/questions/31174295
+
+    Ex:
+    > MyObject.sub_object = SubObject(name='test')
+    > recursive_setattr(MyObject, 'sub_object.name', 'hello')
+    :param obj:
+    :param attr: Attribute to set
+    :param val: New value of the attribute
+    """
+    pre, _, post = attr.rpartition(".")
+    return setattr(recursive_getattr(obj, pre) if pre else obj, post, val)
 
 
 class RLPD(OfflineRLAlgorithm):
@@ -206,20 +254,106 @@ class RLPD(OfflineRLAlgorithm):
     def set_policies_with_offline(self, offline_algo=None):
         # now replace the RLPD actor and critic with the offline_algo's actor and critic
         # replace their parameters so that the optimizer is still the same
-
+        # test: set the policy and critic params to 1
+        # for param in self.policy.actor.parameters():
+        #     param.data.fill_(1.0)
+        # for param in self.policy.critic.parameters():
+        #     param.data.fill_(1.0)
         if offline_algo is None:
             offline_algo = self.offline_algo
 
         if offline_algo is None and self.offline_algo is not None:
+            print("Offline algo is not set")
             return
+        self.policy.actor = offline_algo.policy.actor
+        self.policy.critic = offline_algo.policy.critic
+        self.policy.critic_target = offline_algo.policy.critic_target
+
+        self.policy.actor.optimizer = type(self.policy.actor.optimizer)(
+            self.policy.actor.parameters(),
+            lr=self.policy.actor.optimizer.param_groups[0]["lr"],
+        )
+        self.policy.critic.optimizer = type(self.policy.critic.optimizer)(
+            self.policy.critic.parameters(),
+            lr=self.policy.critic.optimizer.param_groups[0]["lr"],
+        )
+
+        return
 
         old_policy_optimizer = self.policy.actor.optimizer
         old_critic_optimizer = self.policy.critic.optimizer
         old_ent_coef_optimizer = self.ent_coef_optimizer
 
-        self.policy.actor = offline_algo.policy.actor
-        self.policy.critic = offline_algo.policy.critic
-        self.policy.critic_target = offline_algo.policy.critic_target
+        # for name, param in self.policy.actor.named_parameters():
+        #     if param.grad is None:
+        #         print(f"{name} has no grad!")
+
+        # self.policy.actor = offline_algo.policy.actor
+        # self.policy.critic = offline_algo.policy.critic
+        # self.policy.critic_target = offline_algo.policy.critic_target
+
+        # self.policy.actor.optimizer = old_policy_optimizer
+        # self.policy.critic.optimizer = old_critic_optimizer
+        # self.ent_coef_optimizer = old_ent_coef_optimizer
+
+        self.policy.actor.load_state_dict(offline_algo.policy.actor.state_dict())
+        self.policy.critic.load_state_dict(offline_algo.policy.critic.state_dict())
+        self.policy.critic_target.load_state_dict(
+            offline_algo.policy.critic_target.state_dict()
+        )
+
+        # Recreate the optimizers with the right parameters
+        old_actor_optim_state = old_policy_optimizer.state_dict()
+        old_critic_optim_state = old_critic_optimizer.state_dict()
+
+        # Re-init optimizers on new parameters
+        self.policy.actor.optimizer = type(self.policy.actor.optimizer)(
+            self.policy.actor.parameters(),
+            lr=self.policy.actor.optimizer.param_groups[0]["lr"],
+        )
+        self.policy.critic.optimizer = type(self.policy.critic.optimizer)(
+            self.policy.critic.parameters(),
+            lr=self.policy.critic.optimizer.param_groups[0]["lr"],
+        )
+
+        # OPTIONAL: restore optimizer state if you want continuity
+        self.policy.actor.optimizer.load_state_dict(old_actor_optim_state)
+        self.policy.critic.optimizer.load_state_dict(old_critic_optim_state)
+
+        # set to be trainable
+        self.policy.actor.train()
+        self.policy.critic.train()
+        self.policy.critic_target.train()
+
+        def compare_params(model, optimizer):
+            model_params = set(p for p in model.parameters())
+            opt_params = set(
+                p for group in optimizer.param_groups for p in group["params"]
+            )
+
+            missing_in_optimizer = model_params - opt_params
+            extra_in_optimizer = opt_params - model_params
+
+            if missing_in_optimizer:
+                print("❌ Parameters in model but not in optimizer:")
+                for p in missing_in_optimizer:
+                    print(f" - {p.shape}")
+            if extra_in_optimizer:
+                print("❌ Parameters in optimizer but not in model:")
+                for p in extra_in_optimizer:
+                    print(f" - {p.shape}")
+            if not missing_in_optimizer and not extra_in_optimizer:
+                print("✅ Optimizer is correctly tracking all model parameters.")
+
+            return missing_in_optimizer, extra_in_optimizer
+
+        print("actor")
+        compare_params(self.policy.actor, self.policy.actor.optimizer)
+        print("critic")
+        compare_params(self.policy.critic, self.policy.critic.optimizer)
+
+        # breakpoint()
+
         # This sets the optimizer to the offline_algo's optimizer
         # self.policy.actor.optimizer = offline_algo.policy.actor.optimizer
         # self.policy.critic.optimizer = offline_algo.policy.critic.optimizer
@@ -236,8 +370,17 @@ class RLPD(OfflineRLAlgorithm):
                 "Setting ent_coef_optimizer and ent coef to the old value of the offline algo"
             )
             # self.ent_coef_optimizer = offline_algo.ent_coef_optimizer
-            self.log_ent_coef = offline_algo.log_ent_coef
-            self.ent_coef_optimizer = old_ent_coef_optimizer
+            # self.log_ent_coef = offline_algo.log_ent_coef
+            # self.ent_coef_optimizer = old_ent_coef_optimizer
+            # # self.log_ent_coef.load_state_dict(offline_algo.log_ent_coef.state_dict())
+            # # self.ent_coef_optimizer.load_state_dict(
+            # #     offline_algo.ent_coef_optimizer.state_dict()
+            # # )
+
+            # self.ent_coef_optimizer = type(self.ent_coef_optimizer)(
+            #     [self.log_ent_coef], lr=self.lr_schedule(1)
+            # )
+            # compare_params(self.log_)
 
         elif hasattr(offline_algo, "ent_coef_tensor"):
             print(
@@ -353,17 +496,31 @@ class RLPD(OfflineRLAlgorithm):
         )
 
     def train(
-        self, gradient_steps: int, batch_size: int = 64, logging_prefix: str = ""
+        self,
+        gradient_steps: int,
+        batch_size: int = 64,
+        logging_prefix: str = "",
+        policy_lock: Optional[threading.Lock] = None,
     ) -> None:
         # Switch to train mode (this affects batch norm / dropout)
         self.policy.set_training_mode(True)
         # Update optimizers learning rate
+        # breakpoint()
         optimizers = [self.actor.optimizer, self.critic.optimizer]
         if self.ent_coef_optimizer is not None:
             optimizers += [self.ent_coef_optimizer]
 
         # Update learning rate according to lr schedule
         self._update_learning_rate(optimizers)
+
+        # for name, param in self.actor.named_parameters():
+
+        #     def make_hook(n):
+        #         return lambda grad: print(
+        #             f"Grad for {n}: {grad.norm() if grad is not None else 'None'}"
+        #         )
+
+        #     param.register_hook(make_hook(name))
 
         ent_coef_losses, ent_coefs = [], []
         actor_losses, critic_losses = [], []
@@ -375,6 +532,7 @@ class RLPD(OfflineRLAlgorithm):
         if gradient_steps != 1:
             # only so if we are doing per-step training, we don't overprint
             print(f"Going to take {gradient_steps} training steps")
+            print(self.replay_buffer.size())
 
         for gradient_step in range(gradient_steps):
             # We need to sample because `log_std` may have changed between two gradient steps
@@ -394,10 +552,14 @@ class RLPD(OfflineRLAlgorithm):
 
                 with th.no_grad():
                     # Select action according to policy
+                    # print("replay data shape", replay_data.next_observations.shape)
+                    if policy_lock is not None:
+                        policy_lock.acquire()
                     next_actions, next_log_prob = self.actor.action_log_prob(
                         replay_data.next_observations
                     )
-
+                    if policy_lock is not None:
+                        policy_lock.release()
                     if next_actions.ndim == 3:
                         # Take the mean of the logprob
                         next_log_prob = next_log_prob.mean(dim=1, keepdim=True)
@@ -439,9 +601,9 @@ class RLPD(OfflineRLAlgorithm):
                 # Get current Q-values estimates for each critic network
                 # using action from the replay buffer
                 current_q_values = th.cat(
-                    self.critic(replay_data.observations, replay_data.actions), dim=1
+                    self.critic(replay_data.observations, replay_data.actions),
+                    dim=1,
                 )
-
                 # Compute critic loss
                 critic_loss = F.mse_loss(
                     current_q_values, target_q_values.expand_as(current_q_values)
@@ -452,6 +614,8 @@ class RLPD(OfflineRLAlgorithm):
                 # Optimize the critic
                 self.critic.optimizer.zero_grad()
                 critic_loss.backward()
+                # Apply gradient clipping to improve stability
+                # th.nn.utils.clip_grad_norm_(self.critic.parameters(), max_norm=10.0)
                 self.critic.optimizer.step()
 
                 # target network update
@@ -465,7 +629,11 @@ class RLPD(OfflineRLAlgorithm):
                         self.batch_norm_stats, self.batch_norm_stats_target, 1.0
                     )
             # Action by the current actor for the sampled state
+            if policy_lock is not None:
+                policy_lock.acquire()
             actions_pi, log_prob = self.actor.action_log_prob(replay_data.observations)
+            if policy_lock is not None:
+                policy_lock.release()
 
             if actions_pi.ndim == 3:
                 # Take the mean of the logprob
@@ -512,13 +680,63 @@ class RLPD(OfflineRLAlgorithm):
             )
             mean_qf_pi = th.mean(q_values_pi, dim=1, keepdim=True)
 
+            if policy_lock is not None:
+                policy_lock.acquire()
             actor_loss = (ent_coef * log_prob - mean_qf_pi).mean()
             actor_losses.append(actor_loss.item())
 
+            ### DEBUG
+            # params_in_optimizer = set()
+            # for group in self.actor.optimizer.param_groups:
+            #     params_in_optimizer.update(group["params"])
+
+            # target_param = self.actor.mu_processor[0]._parameters["weight"]
+            # print("Tracking:", target_param in params_in_optimizer)  # Should be True
+            # print("Grad:", self.actor.mu_processor[0]._parameters["weight"].grad)
+            # print(
+            #     "Requires grad:",
+            #     self.actor.mu_processor[0]._parameters["weight"].requires_grad,
+            # )
+            weights_before = (
+                self.actor.mu_processor[0]._parameters["weight"].detach().clone()
+            )
+
+            ### DEBUG END
+
             self.actor.optimizer.zero_grad()
             actor_loss.backward()
+
+            # Apply gradient clipping to improve stability
+            # th.nn.utils.clip_grad_norm_(self.actor.parameters(), max_norm=10.0)
             self.actor.optimizer.step()
 
+            weights_after = (
+                self.actor.mu_processor[0]._parameters["weight"].detach().clone()
+            )
+
+            # check if they are close
+            weight_difference = weights_after - weights_before
+            # print(
+            #     "weight difference",
+            #     weight_difference.min(),
+            #     weight_difference.max(),
+            #     weight_difference.mean(),
+            # )
+            # print(
+            #     "weights before",
+            #     weights_before.min(),
+            #     weights_before.max(),
+            #     weights_before.mean(),
+            # )
+            # print(
+            #     "weights after",
+            #     weights_after.min(),
+            #     weights_after.max(),
+            #     weights_after.mean(),
+            # )
+
+            if policy_lock is not None:
+                policy_lock.release()
             actor_log_pis.append(log_prob.mean().item())
 
         self._n_updates += gradient_steps
@@ -531,6 +749,9 @@ class RLPD(OfflineRLAlgorithm):
             f"{logging_prefix}/average_q_next_values": np.mean(q_next_values_list),
             f"{logging_prefix}/average_reward": np.mean(reward_values),
             f"{logging_prefix}/average_actor_log_pis": np.mean(actor_log_pis),
+            f"{logging_prefix}/weight_difference_max": weight_difference.max(),
+            f"{logging_prefix}/weight_difference_min": weight_difference.min(),
+            f"{logging_prefix}/weight_difference_mean": weight_difference.mean(),
         }
 
         if len(ent_coef_losses) > 0:
@@ -580,3 +801,221 @@ class RLPD(OfflineRLAlgorithm):
         else:
             saved_pytorch_variables = ["ent_coef_tensor"]
         return state_dicts, saved_pytorch_variables
+
+    def set_parameters(
+        self,
+        load_path_or_dict: Union[str, Dict[str, Dict]],
+        exact_match: bool = True,
+        device: Union[th.device, str] = "auto",
+    ) -> None:
+        """
+        Load parameters from a given zip-file or a nested dictionary containing parameters for
+        different modules (see ``get_parameters``).
+
+        :param load_path_or_iter: Location of the saved data (path or file-like, see ``save``), or a nested
+            dictionary containing nn.Module parameters used by the policy. The dictionary maps
+            object names to a state-dictionary returned by ``torch.nn.Module.state_dict()``.
+        :param exact_match: If True, the given parameters should include parameters for each
+            module and each of their parameters, otherwise raises an Exception. If set to False, this
+            can be used to update only specific parameters.
+        :param device: Device on which the code should run.
+        """
+        params = None
+        if isinstance(load_path_or_dict, dict):
+            params = load_path_or_dict
+        else:
+            _, params, _ = load_from_zip_file(load_path_or_dict, device=device)
+
+        # Keep track which objects were updated.
+        # `_get_torch_save_params` returns [params, other_pytorch_variables].
+        # We are only interested in former here.
+        objects_needing_update = set(self._get_torch_save_params()[0])
+        updated_objects = set()
+
+        for name in params:
+            attr = None
+            try:
+                attr = recursive_getattr(self, name)
+            except Exception as e:
+                # What errors recursive_getattr could throw? KeyError, but
+                # possible something else too (e.g. if key is an int?).
+                # Catch anything for now.
+                raise ValueError(f"Key {name} is an invalid object name.") from e
+
+            if isinstance(attr, th.optim.Optimizer):
+                # Optimizers do not support "strict" keyword...
+                # Seems like they will just replace the whole
+                # optimizer state with the given one.
+                # On top of this, optimizer state-dict
+                # seems to change (e.g. first ``optim.step()``),
+                # which makes comparing state dictionary keys
+                # invalid (there is also a nesting of dictionaries
+                # with lists with dictionaries with ...), adding to the
+                # mess.
+                #
+                # TL;DR: We might not be able to reliably say
+                # if given state-dict is missing keys.
+                #
+                # Solution: Just load the state-dict as is, and trust
+                # the user has provided a sensible state dictionary.
+                attr.load_state_dict(params[name])
+            else:
+                # Assume attr is th.nn.Module
+                try:
+                    attr.load_state_dict(params[name], strict=exact_match)
+                except:
+                    print("load_state_dict failed on " + name)
+            updated_objects.add(name)
+
+        if exact_match and updated_objects != objects_needing_update:
+            raise ValueError(
+                "Names of parameters do not match agents' parameters: "
+                f"expected {objects_needing_update}, got {updated_objects}"
+            )
+
+    @classmethod
+    def load(  # noqa: C901
+        cls: Type[OfflineRLAlgorithm],
+        path: Union[str, pathlib.Path, io.BufferedIOBase],
+        env: Optional[GymEnv] = None,
+        device: Union[th.device, str] = "auto",
+        custom_objects: Optional[Dict[str, Any]] = None,
+        print_system_info: bool = False,
+        force_reset: bool = True,
+        **kwargs,
+    ) -> OfflineRLAlgorithm:
+        """
+        Load the model from a zip-file.
+        Warning: ``load`` re-creates the model from scratch, it does not update it in-place!
+        For an in-place load use ``set_parameters`` instead.
+
+        :param path: path to the file (or a file-like) where to
+            load the agent from
+        :param env: the new environment to run the loaded model on
+            (can be None if you only need prediction from a trained model) has priority over any saved environment
+        :param device: Device on which the code should run.
+        :param custom_objects: Dictionary of objects to replace
+            upon loading. If a variable is present in this dictionary as a
+            key, it will not be deserialized and the corresponding item
+            will be used instead. Similar to custom_objects in
+            ``keras.models.load_model``. Useful when you have an object in
+            file that can not be deserialized.
+        :param print_system_info: Whether to print system info from the saved model
+            and the current system info (useful to debug loading issues)
+        :param force_reset: Force call to ``reset()`` before training
+            to avoid unexpected behavior.
+            See https://github.com/DLR-RM/stable-baselines3/issues/597
+        :param kwargs: extra arguments to change the model when loading
+        :return: new model instance with loaded parameters
+        """
+        if print_system_info:
+            print("== CURRENT SYSTEM INFO ==")
+            get_system_info()
+
+        data, params, pytorch_variables = load_from_zip_file(
+            path,
+            device=device,
+            custom_objects=custom_objects,
+            print_system_info=print_system_info,
+        )
+
+        # Remove stored device information and replace with ours
+        if "policy_kwargs" in data:
+            if "device" in data["policy_kwargs"]:
+                del data["policy_kwargs"]["device"]
+            # backward compatibility, convert to new format
+            if (
+                "net_arch" in data["policy_kwargs"]
+                and len(data["policy_kwargs"]["net_arch"]) > 0
+            ):
+                saved_net_arch = data["policy_kwargs"]["net_arch"]
+                if isinstance(saved_net_arch, list) and isinstance(
+                    saved_net_arch[0], dict
+                ):
+                    data["policy_kwargs"]["net_arch"] = saved_net_arch[0]
+
+        if (
+            "policy_kwargs" in kwargs
+            and kwargs["policy_kwargs"] != data["policy_kwargs"]
+        ):
+            raise ValueError(
+                f"The specified policy kwargs do not equal the stored policy kwargs."
+                f"Stored kwargs: {data['policy_kwargs']}, specified kwargs: {kwargs['policy_kwargs']}"
+            )
+
+        if "observation_space" not in data or "action_space" not in data:
+            raise KeyError(
+                "The observation_space and action_space were not given, can't verify new environments"
+            )
+
+        if env is not None:
+            # Wrap first if needed
+            env = cls._wrap_env(env, data["verbose"])
+            # Check if given env is valid
+            check_for_correct_spaces(
+                env, data["observation_space"], data["action_space"]
+            )
+            # Discard `_last_obs`, this will force the env to reset before training
+            # See issue https://github.com/DLR-RM/stable-baselines3/issues/597
+            if force_reset and data is not None:
+                data["_last_obs"] = None
+            # `n_envs` must be updated. See issue https://github.com/DLR-RM/stable-baselines3/issues/1018
+            if data is not None:
+                data["n_envs"] = env.num_envs
+        else:
+            # Use stored env, if one exists. If not, continue as is (can be used for predict)
+            if "env" in data:
+                env = data["env"]
+
+        # noinspection PyArgumentList
+        model = cls(  # pytype: disable=not-instantiable,wrong-keyword-args
+            policy=data["policy_class"],
+            env=env,
+            device=device,
+            _init_setup_model=False,  # pytype: disable=not-instantiable,wrong-keyword-args
+        )
+
+        # load parameters
+        model.__dict__.update(data)
+        model.__dict__.update(kwargs)
+        model._setup_model()
+        try:
+            # put state_dicts back in place
+            model.set_parameters(params, exact_match=False, device=device)
+        except RuntimeError as e:
+            # Patch to load Policy saved using SB3 < 1.7.0
+            # the error is probably due to old policy being loaded
+            # See https://github.com/DLR-RM/stable-baselines3/issues/1233
+            if "pi_features_extractor" in str(
+                e
+            ) and "Missing key(s) in state_dict" in str(e):
+                model.set_parameters(params, exact_match=False, device=device)
+                warnings.warn(
+                    "You are probably loading a model saved with SB3 < 1.7.0, "
+                    "we deactivated exact_match so you can save the model "
+                    "again to avoid issues in the future "
+                    "(see https://github.com/DLR-RM/stable-baselines3/issues/1233 for more info). "
+                    f"Original error: {e} \n"
+                    "Note: the model should still work fine, this only a warning."
+                )
+            else:
+                raise e
+        # put other pytorch variables back in place
+        if pytorch_variables is not None:
+            for name in pytorch_variables:
+                # Skip if PyTorch variable was not defined (to ensure backward compatibility).
+                # This happens when using SAC/TQC.
+                # SAC has an entropy coefficient which can be fixed or optimized.
+                # If it is optimized, an additional PyTorch variable `log_ent_coef` is defined,
+                # otherwise it is initialized to `None`.
+                if pytorch_variables[name] is None:
+                    continue
+                # Set the data attribute directly to avoid issue when using optimizers
+                # See https://github.com/DLR-RM/stable-baselines3/issues/391
+                recursive_setattr(model, name + ".data", pytorch_variables[name].data)
+
+        # Sample gSDE exploration matrix, so it uses the right device
+        # see issue #44
+        if model.use_sde:
+            model.policy.reset_noise()  # pytype: disable=attribute-error
+        return model

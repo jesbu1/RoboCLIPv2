@@ -5,8 +5,8 @@ defaults:
 
 # Because RLPD is slower, we will log more frequently
 logging:
-  eval_freq: 5000
-  video_freq: 5000
+  eval_freq: 0
+  video_freq: 0
 
 general_training:
   algo: rlpd
@@ -16,10 +16,10 @@ general_training:
 
   # offline rl parameters
   n_critics: 10
-  n_critics_to_sample: 2
+  n_critics_to_sample: 5
 
   # RLPD-specific parameters
-  rlpd_train_critic_with_entropy: true
+  rlpd_train_critic_with_entropy: false
   # Note: RLPD's offline step uses default params defined in base_config.yaml
   rlpd_offline_algo: iql
   action_chunk_size: 60
@@ -28,23 +28,25 @@ general_training:
   policy_extraction: 'awr' # awr or ddpg
   awr_advantage_temp: 1.0 # iql only
 
-  learning_starts: 4000
+  learning_starts: 5
 
 model:
   policy_layer_norm: true
   critic_layer_norm: true
-  pi_net_arch: [768, 512]
-  qf_net_arch: [768, 512]
+  pi_net_arch: [1024, 768, 512]
+  qf_net_arch: [1024, 1024, 512]
+  # pi_net_arch: [768, 512]
+  # qf_net_arch: [768, 512]
 
 offline_training:
-  offline_training_steps: 15000
+  offline_training_steps: 5
   ckpt_path: null  # Path to load checkpoint from, if provided will skip offline training
   critic_update_ratio: 1
 
 online_training:
-  total_time_steps: 500000
+  total_time_steps: 50000
   mix_buffers_ratio: 0.0 # WSRL does not use old replay buffer
   warm_start_online_rl: true # main change for WSRL
-  learning_starts: 4000
+  learning_starts: 5
   critic_update_ratio: 4
-  gradient_steps: 500
+  gradient_steps: 75

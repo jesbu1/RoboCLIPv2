@@ -35,9 +35,113 @@ from offline_rl_algorithms.custom_policies import (
 from offline_rl_algorithms.offline_replay_buffers import (
     CombinedBuffer,
     ActionChunkedReplayBuffer,
+    SuccessFailSplitBuffer,
 )
 
 import gym
+import threading
+
+
+# Thread-safe rollout collection function (not a class method)
+def collect_rollouts_threadsafe(
+    algo,
+    env,
+    callback,
+    train_freq,
+    replay_buffer,
+    action_noise=None,
+    learning_starts=0,
+    log_interval=None,
+    policy_lock=None,
+    buffer_lock=None,
+):
+    """
+    Collect experiences and store them into a ReplayBuffer.
+    This function is designed to be run in a separate thread.
+    Locks must be provided for policy and buffer.
+    """
+    # Switch to eval mode (affects batch norm / dropout)
+    # with policy_lock:
+    #     algo.policy.set_training_mode(False)
+    num_collected_steps, num_collected_episodes = 0, 0
+    assert train_freq.frequency > 0, "Should at least collect one step or episode."
+    if env.num_envs > 1:
+        assert train_freq.unit.name == "STEP", (
+            "You must use only one env when doing episodic training."
+        )
+    if (
+        action_noise is not None
+        and env.num_envs > 1
+        and not hasattr(action_noise, "vectorized")
+    ):
+        action_noise = VectorizedActionNoise(action_noise, env.num_envs)
+    if hasattr(algo.policy, "use_sde") and algo.policy.use_sde:
+        algo.policy.actor.reset_noise(env.num_envs)
+    callback.on_rollout_start()
+    continue_training = True
+    first_step = True
+    while should_collect_more_steps(
+        train_freq, num_collected_steps, num_collected_episodes
+    ):
+        if (
+            hasattr(algo.policy, "use_sde")
+            and algo.policy.use_sde
+            and hasattr(algo.policy, "sde_sample_freq")
+            and algo.policy.sde_sample_freq > 0
+            and num_collected_steps % algo.policy.sde_sample_freq == 0
+        ):
+            algo.policy.actor.reset_noise(env.num_envs)
+        # Sample action
+        with th.inference_mode():
+            actions, buffer_actions = algo._sample_action(
+                learning_starts,
+                action_noise,
+                env.num_envs,
+                episode_start=np.array([first_step]),
+                policy_lock=policy_lock,
+            )
+        first_step = False
+        new_obs, rewards, dones, infos = env.step(actions)
+        # make fake ones
+        # new_obs = np.zeros((env.num_envs, *env.observation_space.shape))
+        # rewards = np.zeros(env.num_envs)
+        # dones = np.zeros(env.num_envs)
+        # infos = [{"action": action} for action in actions]
+
+        if dones[0]:
+            first_step = True
+        # Action chunking logic if needed
+        if hasattr(algo, "action_chunk_size") and algo.action_chunk_size > 1:
+            assert "action" in infos[0], "Need action in infos"
+            actual_action = np.array([info.get("action") for info in infos])
+            buffer_actions = algo.policy.scale_action(actual_action)
+        # Update counters
+        algo.num_timesteps += env.num_envs
+
+        # NOTE: num_timesteps and other global counters should be handled by main class, not here
+        # Store transition in buffer
+        # with buffer_lock:
+        algo._store_transition(
+            replay_buffer, buffer_actions, new_obs, rewards, dones, infos
+        )
+        callback.update_locals(locals())
+        if callback.on_step() is False:
+            return False
+        algo._update_info_buffer(infos, dones)
+        algo._update_current_progress_remaining(
+            getattr(algo, "num_timesteps", 0), getattr(algo, "_total_timesteps", 0)
+        )
+        algo._on_step()
+        for idx, done in enumerate(dones):
+            if done and action_noise is not None:
+                if hasattr(action_noise, "reset"):
+                    action_noise.reset()
+        num_collected_steps += 1
+        for done in dones:
+            if done:
+                num_collected_episodes += 1
+        pass
+    return True
 
 
 class OfflineRLAlgorithm(OffPolicyAlgorithm):
@@ -192,7 +296,13 @@ class OfflineRLAlgorithm(OffPolicyAlgorithm):
                 )
             self.replace_with_chunked_buffer(action_chunk_size, buffer_size)
 
-    def replace_with_chunked_buffer(self, action_chunk_size: int, buffer_size: int):
+    def replace_with_chunked_buffer(
+        self,
+        action_chunk_size: int,
+        buffer_size: int,
+        evenly_sample_success: bool = False,
+        ratio: float = 0.5,
+    ):
         # Replace the replay buffer with ActionChunkedReplayBuffer
         self.replay_buffer = ActionChunkedReplayBuffer(
             action_chunk_size=action_chunk_size,
@@ -204,6 +314,12 @@ class OfflineRLAlgorithm(OffPolicyAlgorithm):
             n_envs=self.n_envs,
             optimize_memory_usage=self.optimize_memory_usage,
         )
+
+        if evenly_sample_success:
+            self.replay_buffer = SuccessFailSplitBuffer(
+                original_buffer=self.replay_buffer,
+                ratio=ratio,
+            )
 
     def _setup_model(self) -> None:
         super()._setup_model()
@@ -272,10 +388,10 @@ class OfflineRLAlgorithm(OffPolicyAlgorithm):
         total_timesteps: int,
         callback: MaybeCallback = None,
         log_interval: int = 4,
-        tb_log_name: str = "OfflineRL",
+        tb_log_name: str = "run",
         reset_num_timesteps: bool = True,
         progress_bar: bool = False,
-        logger: Optional[Logger] = None,
+        logger: Optional = None,
     ):
         if logger is not None:
             super().set_logger(logger)
@@ -284,15 +400,53 @@ class OfflineRLAlgorithm(OffPolicyAlgorithm):
             # switch from offline to online
             self.critic_update_ratio = self.online_critic_update_ratio
 
-        # TODO: implement custom buffer and switch it here
-        return super().learn(
-            total_timesteps=total_timesteps,
-            callback=callback,
-            log_interval=log_interval,
-            tb_log_name=tb_log_name,
-            reset_num_timesteps=reset_num_timesteps,
-            progress_bar=progress_bar,
+        total_timesteps, callback = self._setup_learn(
+            total_timesteps,
+            callback,
+            reset_num_timesteps,
+            tb_log_name,
+            progress_bar,
         )
+
+        callback.on_training_start(locals(), globals())
+
+        # --- Threading primitives ---
+        policy_lock = threading.Lock()
+        buffer_lock = threading.Lock()
+        while self.num_timesteps < total_timesteps:
+            # Start rollout collection in a thread
+            rollout_thread = threading.Thread(
+                target=collect_rollouts_threadsafe,
+                args=(
+                    self,
+                    self.env,
+                    callback,
+                    self.train_freq,
+                    self.replay_buffer,
+                    self.action_noise,
+                    self.learning_starts,
+                    log_interval,
+                    policy_lock,
+                    buffer_lock,
+                ),
+            )
+            rollout_thread.start()
+            # Train in main thread (wait for rollout to finish first)
+            if self.num_timesteps >= self.learning_starts:
+                gradient_steps = (
+                    self.gradient_steps
+                    if self.gradient_steps >= 0
+                    else self.train_freq.frequency
+                )
+                if gradient_steps > 0:
+                    self.train(
+                        batch_size=self.batch_size,
+                        gradient_steps=gradient_steps,
+                        policy_lock=policy_lock,
+                    )
+            rollout_thread.join()  # Wait for rollout collection to finish
+        callback.on_training_end()
+        return self
 
     # def _excluded_save_params(self) -> List[str]:
     #     raise NotImplementedError
@@ -306,6 +460,7 @@ class OfflineRLAlgorithm(OffPolicyAlgorithm):
         action_noise: Optional[ActionNoise] = None,
         n_envs: int = 1,
         episode_start: bool = False,
+        policy_lock: Optional[threading.Lock] = None,
     ) -> Tuple[np.ndarray, np.ndarray]:
         """
         This differs from the parent class in that if there are any offline training steps performed, we will warm start the online RL training with the pre-trained policy.
@@ -339,9 +494,13 @@ class OfflineRLAlgorithm(OffPolicyAlgorithm):
             # we assume that the policy uses tanh to scale the action
             # We use non-deterministic action in the case of SAC, for TD3, it does not matter
             assert self._last_obs is not None, "self._last_obs was not set"
+            if policy_lock is not None:
+                policy_lock.acquire()
             unscaled_action, _ = self.predict(
-                self._last_obs, deterministic=False, episode_start=episode_start
+                self._last_obs, deterministic=True, episode_start=episode_start
             )
+            if policy_lock is not None:
+                policy_lock.release()
 
         # Note: unscaled_action is only None when an existing chunk is being executed.
         # Exists more as a sanity check to ensure code breaks if this condition is true.
@@ -362,9 +521,10 @@ class OfflineRLAlgorithm(OffPolicyAlgorithm):
 
                 scaled_action = self.policy.scale_action(unscaled_action)
 
+                # print(scaled_action.shape, original_shape, action_noise().shape)
                 # Add noise to the action (improve exploration)
                 if action_noise is not None:
-                    if len(original_shape) == 3:
+                    if len(original_shape) == 3 and original_shape[0] != 1:
                         scaled_action = np.clip(
                             scaled_action.reshape(original_shape)
                             + action_noise()[:, None, :].repeat(
@@ -373,8 +533,11 @@ class OfflineRLAlgorithm(OffPolicyAlgorithm):
                             -1,
                             1,
                         )
+
                     else:
                         scaled_action = np.clip(scaled_action + action_noise(), -1, 1)
+
+                # print(scaled_action.shape)
 
                 # We store the scaled action in the buffer
                 buffer_action = scaled_action
@@ -442,13 +605,17 @@ class OfflineRLAlgorithm(OffPolicyAlgorithm):
                 self.env.set_attr("chunk", [])
             elif (
                 self.env.get_attr("is_chunk_empty")
-                or self.env.get_attr("is_chunk_empty")[0]
+                and self.env.get_attr("is_chunk_empty")[0]
             ):
                 # print("calling predict")
-                action, _ = super().predict(
-                    observation, state, episode_start, deterministic
-                )
-                return action, _
+                try:
+                    action, _ = super().predict(
+                        observation, state, episode_start, deterministic
+                    )
+                    return action, _
+                except Exception as e:
+                    print("Exception in predict:", e)
+                    return [None], None
             else:
                 # print("not calling predict")
                 return [None], None

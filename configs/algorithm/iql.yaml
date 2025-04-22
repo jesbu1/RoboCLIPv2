@@ -10,16 +10,17 @@ logging:
 general_training:
   algo: iql
   name: iql
-  action_noise: 0.0 # sigma
-  learning_rate: 1e-3
+  action_noise: 0.1 # sigma
+  learning_rate: 3e-4
 
-  n_critics: 5
+  n_critics: 10
   n_critics_to_sample: 2
   
   # IQL-specific parameters
   policy_extraction: 'awr' # awr or ddpg
-  awr_advantage_temp: 0.5 # iql only
+  awr_advantage_temp: 1.0 # iql only
   ddpg_bc_weight: 0. # iql only
+  learning_starts: 5
 
 
   action_chunk_size: 60
@@ -27,8 +28,8 @@ general_training:
 model:
   policy_layer_norm: true
   critic_layer_norm: true
-  pi_net_arch: [768, 512, 512]
-  qf_net_arch: [1024, 768, 512]
+  pi_net_arch: [1024, 768, 512]
+  qf_net_arch: [1024, 1024, 512]
 
 offline_training:
   offline_training_steps: 150000
@@ -36,8 +37,8 @@ offline_training:
   critic_update_ratio: 1 
 
 online_training:
-  total_time_steps: 0
-  warm_start_online_rl: true
-  learning_starts: 0
+  total_time_steps: 20000
+  warm_start_online_rl: false
+  learning_starts: 5
   critic_update_ratio: 4
   mix_buffers_ratio: 0.50

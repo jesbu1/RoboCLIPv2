@@ -51,6 +51,7 @@ from reward_model.roboclipv2_reward_model import RoboclipV2RewardModel
 from reward_model.rewind_reward_model import ReWiNDRewardModel
 
 from reward_model.env_reward_model import EnvRewardModel
+from stable_baselines3.common.logger import configure
 
 
 from stable_baselines3.common.policies import ActorCriticPolicy
@@ -238,6 +239,8 @@ def main(cfg: DictConfig):
     reward_model = parse_reward_model(cfg.reward_model)
 
     wandb_logger = WandBLogger()
+    # use a basic logger
+    # wandb_logger = configure("logging", [""])
     ### Create environment and callbacks ###
     envs, eval_env = create_envs(cfg, reward_model, logger=wandb_logger)
     model, model_class, policy_kwargs = get_policy_algorithm(
@@ -290,12 +293,17 @@ def main(cfg: DictConfig):
     # Map the tasks to their strings
     # offline_task_strings =
 
+    # model.offline_algo.save("./logs/temp")
+
     if (
         cfg.offline_training.offline_training_steps > 0
         or cfg.online_training.mix_buffers_ratio > 0
     ) and isinstance(model, OfflineRLAlgorithm):
         try:
-            if cfg.reward_model.name == "rewind_two_cam":
+            if (
+                cfg.reward_model.name == "rewind_two_cam"
+                or cfg.reward_model.name == "debug"
+            ):
                 cfg.reward_model.name = "rewind"
 
             h5_path = offline_config.offline_h5_path.format(
@@ -375,7 +383,11 @@ def main(cfg: DictConfig):
                 #     offline_config.ckpt_path, offline_algo=model.offline_algo, env=envs
                 # )
                 # NOTE: assuming that the offline algo has the same observation space as the env
-                new_offline_algo = model.offline_algo.load(
+                print(
+                    "Loading offline algo from",
+                    offline_config.ckpt_path + "_rlpd_offline",
+                )
+                new_offline_algo = model.load(
                     offline_config.ckpt_path + "_rlpd_offline",
                     env=envs,
                     custom_objects={
@@ -390,22 +402,24 @@ def main(cfg: DictConfig):
                     "policy_kwargs": policy_kwargs,
                 }
 
-                model = model.load(
-                    offline_config.ckpt_path,
-                    env=envs,
-                    **kwargs,
-                    custom_objects={
-                        "observation_space": envs.observation_space,
-                        "action_space": envs.action_space,
-                    },
-                )
-                model.offline_algo = new_offline_algo
+                print("Loading the untrained online policy")
+
+                # model = model.load(
+                #     offline_config.ckpt_path,
+                #     env=envs,
+                #     **kwargs,
+                #     custom_objects={
+                #         "observation_space": envs.observation_space,
+                #         "action_space": envs.action_space,
+                #     },
+                # )
+                # model.offline_algo = new_offline_algo
                 model.set_logger(wandb_logger)
                 model.learned_offline = True
-                model.set_policies_with_offline(offline_algo=new_offline_algo)
+                # model.set_policies_with_offline(offline_algo=new_offline_algo)
 
             else:
-                model.load(
+                model = model.load(
                     offline_config.ckpt_path,
                     env=envs,
                     custom_objects={
@@ -420,7 +434,11 @@ def main(cfg: DictConfig):
                 model.replace_with_chunked_buffer(
                     cfg.general_training.action_chunk_size,
                     buffer_size=cfg.online_training.total_time_steps,
+                    evenly_sample_success=True,
+                    ratio=0.5,
                 )
+                print(model.replay_buffer)
+                model.replay_buffer.sample(10)
 
             # Various other things to set that don't get set by load
             model.set_logger(wandb_logger)
@@ -433,18 +451,21 @@ def main(cfg: DictConfig):
             model.gradient_steps = cfg.online_training.gradient_steps
             model._convert_train_freq()
 
+            model.learning_starts = cfg.general_training.learning_starts
+            model.online_critic_update_ratio = cfg.general_training.critic_update_ratio
+
         else:
             # checkpoint callback. only save 5 times
             save_freq = int(offline_config.offline_training_steps / 5)
-            checkpoint_callback = CheckpointCallback(
-                save_freq=save_freq,
-                save_path="./logs/",
-                name_prefix="offline_training",
-                save_replay_buffer=True,
-                save_vecnormalize=True,
-                verbose=2,
-            )
-            callback_list.append(checkpoint_callback)
+            # checkpoint_callback = CheckpointCallback(
+            #     save_freq=save_freq,
+            #     save_path="./logs/",
+            #     name_prefix="offline_training",
+            #     save_replay_buffer=True,
+            #     save_vecnormalize=True,
+            #     verbose=2,
+            # )
+            # callback_list.append(checkpoint_callback)
 
             model.learn_offline(
                 offline_replay_buffer=buffer,

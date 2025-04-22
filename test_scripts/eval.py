@@ -188,11 +188,33 @@ def load_model(model_path, env, model_type="rlpd", offline_algo=None):
                 else:
                     print(f"Warning: Offline algorithm not found at {offline_path}")
 
-            model = RLPD.load(model_path, env=env, offline_algo=offline_algo)
+            model = RLPD.load(
+                model_path,
+                env=env,
+                offline_algo=offline_algo,
+                custom_objects={
+                    "observation_space": env.observation_space,
+                    "action_space": env.action_space,
+                },
+            )
         elif model_type.lower() == "iql":
-            model = IQL.load(model_path, env=env)
+            model = IQL.load(
+                model_path,
+                env=env,
+                custom_objects={
+                    "observation_space": env.observation_space,
+                    "action_space": env.action_space,
+                },
+            )
         elif model_type.lower() == "bc":
-            model = BC.load(model_path, env=env)
+            model = BC.load(
+                model_path,
+                env=env,
+                custom_objects={
+                    "observation_space": env.observation_space,
+                    "action_space": env.action_space,
+                },
+            )
         elif model_type.lower() == "cql":
             model = CQL.load(model_path, env=env)
         else:
@@ -238,7 +260,7 @@ def evaluate_model(
 
         while not done:
             action, _ = model.predict(
-                obs, deterministic=deterministic, episode_start=np.array([first_step])
+                obs, deterministic=True, episode_start=np.array([first_step])
             )
             obs, reward, done, info = env.step(action)
 

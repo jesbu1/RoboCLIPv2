@@ -18,6 +18,7 @@ environment:
   train_freq_num: 1
   train_freq_type: 'step'
   env_id: "faucet-close-v2" # eval task
+  # env_id: "button-press-topdown-v2" # eval task
   ignore_language: false
 
 # Reward divisor is environment-dependent

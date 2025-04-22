@@ -4,3 +4,8 @@ reward_model:
   name: 'debug'
   encoder: 'liv' # default and only option is vlc
   success_bonus: 100.0
+  reward_at_every_step: true
+
+environment:
+  is_state_based: false
+  reward_image_key: 'observation.images.main'
