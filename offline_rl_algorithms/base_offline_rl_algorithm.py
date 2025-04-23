@@ -450,6 +450,7 @@ class OfflineRLAlgorithm(OffPolicyAlgorithm):
         reset_num_timesteps: bool = True,
         progress_bar: bool = False,
         logger: Optional = None,
+        parallelize: bool = False,
     ):
         if logger is not None:
             super().set_logger(logger)
@@ -469,15 +470,48 @@ class OfflineRLAlgorithm(OffPolicyAlgorithm):
         callback.on_training_start(locals(), globals())
         self.policy.actor.share_memory()
 
-        # --- Threading primitives ---
-        policy_lock = threading.Lock()
-        buffer_lock = threading.Lock()
-        while self.num_timesteps < total_timesteps:
-            # Start rollout collection in a thread
-            rollout_thread = threading.Thread(
-                target=collect_rollouts_threadsafe,
-                args=(
-                    self,
+        if parallelize:
+            # --- Threading primitives ---
+            policy_lock = threading.Lock()
+            buffer_lock = threading.Lock()
+            while self.num_timesteps < total_timesteps:
+                # Start rollout collection in a thread
+                rollout_thread = threading.Thread(
+                    target=collect_rollouts_threadsafe,
+                    args=(
+                        self,
+                        self.env,
+                        callback,
+                        self.train_freq,
+                        self.replay_buffer,
+                        self.action_noise,
+                        self.learning_starts,
+                        log_interval,
+                        policy_lock,
+                        buffer_lock,
+                    ),
+                )
+                rollout_thread.start()
+                # Train in main thread (wait for rollout to finish first)
+                if self.num_timesteps >= self.learning_starts:
+                    gradient_steps = (
+                        self.gradient_steps
+                        if self.gradient_steps >= 0
+                        else self.train_freq.frequency
+                    )
+                    if gradient_steps > 0:
+                        self.train(
+                            batch_size=self.batch_size,
+                            gradient_steps=gradient_steps,
+                            policy_lock=policy_lock,
+                        )
+                rollout_thread.join()  # Wait for rollout collection to finish
+                
+        else:
+            # --- Non-Threaded Primitives ---
+            while self.num_timesteps < total_timesteps:
+                # Collect rollouts
+                self.collect_rollouts(
                     self.env,
                     callback,
                     self.train_freq,
@@ -485,25 +519,19 @@ class OfflineRLAlgorithm(OffPolicyAlgorithm):
                     self.action_noise,
                     self.learning_starts,
                     log_interval,
-                    policy_lock,
-                    buffer_lock,
-                ),
-            )
-            rollout_thread.start()
-            # Train in main thread (wait for rollout to finish first)
-            if self.num_timesteps >= self.learning_starts:
-                gradient_steps = (
-                    self.gradient_steps
-                    if self.gradient_steps >= 0
-                    else self.train_freq.frequency
                 )
-                if gradient_steps > 0:
-                    self.train(
-                        batch_size=self.batch_size,
-                        gradient_steps=gradient_steps,
-                        policy_lock=policy_lock,
+                # Train
+                if self.num_timesteps >= self.learning_starts:
+                    gradient_steps = (
+                        self.gradient_steps
+                        if self.gradient_steps >= 0
+                        else self.train_freq.frequency
                     )
-            rollout_thread.join()  # Wait for rollout collection to finish
+                    if gradient_steps > 0:
+                        self.train(
+                            batch_size=self.batch_size,
+                            gradient_steps=gradient_steps,
+                        )
         callback.on_training_end()
         return self
 
@@ -674,10 +702,10 @@ class OfflineRLAlgorithm(OffPolicyAlgorithm):
                     return action, _
                 except Exception as e:
                     print("Exception in predict:", e)
-                    return [None], None
+                    return [None] * self.env.num_envs, None
             else:
                 # print("not calling predict")
-                return [None], None
+                return [None] * self.env.num_envs, None
         # print("calling predict")
         action, _ = super().predict(observation, state, episode_start, deterministic)
         return action, _

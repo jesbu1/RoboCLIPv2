@@ -15,6 +15,9 @@ from metaworld.envs import (
 from envs.wrappers import *
 from reward_model.env_reward_model import EnvRewardModel
 
+import torch
+from torchvision import transforms
+
 environment_to_instruction = {
     "assembly-v2": "assembling",
     "basketball-v2": "playing basketball",
@@ -118,6 +121,7 @@ class MetaworldBase(Env):
         self.action_space = self.base_env.action_space
         self.observation_space = self.base_env.observation_space
         self.image_keys = ["image"]
+        self.cropper = transforms.CenterCrop(224)
         self.image_reward_idx = 0
 
         self.observation_space = gym.spaces.Dict(
@@ -178,6 +182,8 @@ class MetaworldBase(Env):
 
         if self.image_keys:
             image = self.render(mode="rgb_array")
+            # if args.center_crop:
+            image = self.cropper(torch.Tensor(image).permute(2,0,1)).permute(1,2,0).numpy().astype(np.uint8)
             obs["image"] = image
 
         return obs

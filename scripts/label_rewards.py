@@ -5,6 +5,8 @@ import h5py
 from tqdm import tqdm
 import torch.nn.functional as F
 
+from torchvision import transforms
+
 import numpy as np
 import sys, os
 
@@ -49,7 +51,7 @@ def compute_debug_reward(state):
 
 
 def label_trajectories_iteratively(
-    args, traj_h5, output_file, image_keys, reward_image_key
+    args, traj_h5, output_file, image_keys, reward_image_key, reward_at_every_step=True
 ):
     """
     Processes trajectories iteratively, computes rewards, and saves data directly to the output HDF5 file.
@@ -59,6 +61,9 @@ def label_trajectories_iteratively(
     is_reward_update = all(
         key in output_file.keys() for key in ["lang_embedding", "img", "timesteps"]
     )
+    
+    if args.center_crop:
+        cropper = transforms.CenterCrop(224)
 
     # Initialize the specified encoder
     if args.reward_model == "roboclip":
@@ -77,7 +82,7 @@ def label_trajectories_iteratively(
             camera_names=[reward_image_key],
             batch_size=32,
             success_bonus=0, # these are added later
-            reward_at_every_step=True,
+            reward_at_every_step=reward_at_every_step,
         )
     elif args.reward_model == "sparse":
         reward_model = EnvRewardModel(model_path=None)  # Uses a LIV encoder
@@ -202,6 +207,8 @@ def label_trajectories_iteratively(
     for traj_id in tqdm(traj_keys, desc="Processing trajectories"):
         traj_data = traj_h5[traj_id]
         num_steps = len(traj_data["done"])
+        
+        current_observation_embeds = []
 
         for i in tqdm(range(num_steps)):
             # Encode text only if the instruction changes
@@ -225,9 +232,12 @@ def label_trajectories_iteratively(
             for j, key in enumerate(image_keys):
                 image = traj_data[key][i]
                 image = image[None, None, :, :, :]
+                if args.center_crop:
+                    image = cropper(torch.Tensor(image[0,0]).permute(2,0,1))[None, None, ...].numpy().astype(np.uint8)
                 image_embeds_dict[key][current_timestep] = reward_model.encode_images(
                     image
                 ).squeeze()
+                current_observation_embeds.append(reward_model.encode_images(image).squeeze())
 
             # img = traj_data["img"][i][None, None, ...]
             # img_embedding = reward_model.encode_images(img).squeeze()
@@ -245,7 +255,21 @@ def label_trajectories_iteratively(
                     rewards[current_timestep] = reward
 
                 else:
-                    rewards[current_timestep] = 0.0  # should be 0 right?
+                    # use other reward models if reward_at_every_step
+                    if not reward_at_every_step:
+                        rewards[current_timestep] = 0.0  # should be 0 right?
+                    else:
+                        stacked_sequence = np.stack(
+                            current_observation_embeds, axis=0
+                        )
+                        stacked_sequence = (
+                            th.from_numpy(stacked_sequence).float().to(reward_model.device)
+                        )
+
+                        reward = reward_model.calculate_rewards(
+                            text_embedding[None, None, ...], stacked_sequence.unsqueeze(0)
+                        )
+                        rewards[current_timestep] = reward
 
             else:
                 # Dense and sparse are special cases
@@ -262,32 +286,23 @@ def label_trajectories_iteratively(
                 # Otherwise use the other reward models
                 else:
                     # Process video frames iteratively
-                    # start_idx = max(0, i - args.window_length + 1)
-                    # video_frames = [
-                    #     traj_data[reward_image_key][j] for j in range(start_idx, i + 1)
-                    # ]
-                    # video_frames = np.stack(video_frames)[None, ...]
-                    # video_embedding = reward_model.encode_images(video_frames)
-
-                    # Should be of shape (1, num_frames, embedding_dim)
-                    video_embeddings = image_embeds_dict[reward_image_key].unsqueeze(0)
-
-                    # repeat the text embedding to match the batch size
-                    text_embedding = (
-                        torch.from_numpy(text_embedding)
-                        .unsqueeze(0)
-                        .repeat(1, video_embedding.shape[0], 1)
+                    stacked_sequence = np.stack(
+                        current_observation_embeds, axis=0
                     )
+                    stacked_sequence = (
+                        th.from_numpy(stacked_sequence).float().to(reward_model.device)
+                    )
+                    
                     reward = reward_model.calculate_rewards(
-                        text_embedding, torch.from_numpy(video_embedding)
+                        text_embedding[None, None, ...], stacked_sequence.unsqueeze(0)
                     )
-
                     rewards[current_timestep] = reward
 
             # Save the image for the current timestep
             # img_dataset[current_timestep] = traj_data["img"][i]
             # for key in image_keys:
             #     image_datasets[key][current_timestep] = traj_data[key][i]
+            print(reward)
 
             current_timestep += 1
 
@@ -314,7 +329,7 @@ def main():
     parser.add_argument(
         "--reward_model_path",
         help="Path to the saved model.",
-        default="weights/metaworld/rewind/model_20.pth",
+        default="weights/metaworld/rewind/model_19.pth",
     )
     parser.add_argument(
         "--sparse_only", action="store_true", help="Use sparse rewards only."
@@ -338,6 +353,11 @@ def main():
         type=int,
         default=64,
         help="Batch size for encoding video frames.",
+    )
+    parser.add_argument(
+        '--center_crop',
+        action='store_true',
+        help='Center crop images'
     )
 
     # Todo: turn this into an argument

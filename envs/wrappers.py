@@ -419,6 +419,10 @@ class LearnedRewardWrapper(gym.Wrapper):
             reward += self.reward_model.success_bonus
             print("adding success bonus", reward)
 
+        if isinstance(reward, np.ndarray):
+            # All wrappers act on 1 env at a time
+            reward = reward[0]
+
         return obs, reward, done, info
 
     def reset(self):

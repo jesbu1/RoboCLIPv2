@@ -535,6 +535,7 @@ def main(cfg: DictConfig):
                     callback=online_callback_list,
                     logger=logger,
                     progress_bar=True,
+                    parallelize=True if "koch" in env_config.cfg_name else False,
                 )
             else:
                 model.learn(

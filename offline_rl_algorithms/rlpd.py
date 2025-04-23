@@ -994,6 +994,7 @@ class RLPD(OfflineRLAlgorithm):
         reset_num_timesteps: bool = True,
         progress_bar: bool = False,
         logger: Optional = None,
+        parallelize: bool = False,
     ):
         self.current_critic_update_ratio = self.online_critic_update_ratio
         return super().learn(
@@ -1004,6 +1005,7 @@ class RLPD(OfflineRLAlgorithm):
             reset_num_timesteps=reset_num_timesteps,
             progress_bar=progress_bar,
             logger=logger,
+            parallelize=parallelize,
         )
 
     def _excluded_save_params(self) -> List[str]:
