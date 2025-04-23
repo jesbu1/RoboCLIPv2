@@ -80,9 +80,8 @@ from stable_baselines3.common.callbacks import EvalCallback
 
 import torch as th
 
-th.set_float32_matmul_precision("high")
 
-
+# th.set_float32_matmul_precision("high")
 def create_exp_name(cfg: DictConfig):
     exp_name = cfg.environment.cfg_name + "_"
 
@@ -132,7 +131,7 @@ def create_exp_name(cfg: DictConfig):
         exp_name += "_dense"
     else:
         exp_name += "_sparse"
-    
+
     if cfg.general_training.normalize_reward:
         exp_name += "_normalize"
 
@@ -155,7 +154,7 @@ def parse_reward_model(reward_cfg: DictConfig) -> BaseRewardModel:
         )
     elif reward_string == "vlc":
         reward_model = VLCRewardModel(
-            server_url = reward_cfg.server_url,
+            server_url=reward_cfg.server_url,
             batch_size=reward_cfg.batch_size,
             success_bonus=reward_cfg.success_bonus,
         )
@@ -206,7 +205,6 @@ def parse_reward_model(reward_cfg: DictConfig) -> BaseRewardModel:
     reward_model.set_success_bonus(reward_cfg.success_bonus)
     reward_model.set_reward_divisor(reward_cfg.reward_divisor)
     print(f"Success bonus: {reward_model.success_bonus}")
-
 
     # Also set default image encoder to be a LIVEncoder
     # image_encoder = LIVEncoder(
@@ -307,7 +305,10 @@ def main(cfg: DictConfig):
 
     # Map the tasks to their strings
     # offline_task_strings =
-    if offline_config.offline_training_steps > 0 or cfg.online_training.mix_buffers_ratio > 0.0:
+    if (
+        offline_config.offline_training_steps > 0
+        or cfg.online_training.mix_buffers_ratio > 0.0
+    ):
         try:
             h5_path = offline_config.offline_h5_path.format(cfg.reward_model.name)
             h5_path = to_absolute_path(h5_path)
@@ -323,7 +324,10 @@ def main(cfg: DictConfig):
             )
             raise FileNotFoundError
 
-    if offline_config.offline_training_steps > 0 or cfg.online_training.mix_buffers_ratio > 0.0:
+    if (
+        offline_config.offline_training_steps > 0
+        or cfg.online_training.mix_buffers_ratio > 0.0
+    ):
         sparse_only = True if reward_model.name == "sparse" else False
         buffer = H5ReplayBuffer(
             h5_path,
@@ -341,8 +345,10 @@ def main(cfg: DictConfig):
         )
 
     ### Learn offline
-    if offline_config.offline_training_steps > 0 and isinstance(
-        model, OfflineRLAlgorithm
+    if (
+        offline_config.offline_training_steps > 0
+        and isinstance(model, OfflineRLAlgorithm)
+        or (hasattr(offline_config, "ckpt_path") and offline_config.ckpt_path)
     ):
         # if offline_config.offline_h5_path is None:
         #     default_h5_path = (
@@ -360,22 +366,39 @@ def main(cfg: DictConfig):
 
             # if rlpd, we do a special load
             if training_config.algo == "rlpd":
-                # model.load(
-                #     offline_config.ckpt_path, offline_algo=model.offline_algo, env=envs
-                # )
-                new_offline_algo = model.offline_algo.load(
-                    offline_config.ckpt_path + "_rlpd_offline", env=envs
+                print(
+                    "Loading offline algo from",
+                    offline_config.ckpt_path + "_rlpd_offline",
                 )
-                model.offline_algo = new_offline_algo
-                model.set_policies_with_offline(offline_algo=new_offline_algo)
+                # load the original offline algo
+                offline_algo = model.offline_algo.load(
+                    offline_config.ckpt_path + "_rlpd_offline",
+                    env=envs,
+                    custom_objects={
+                        "observation_space": envs.observation_space,
+                        "action_space": envs.action_space,
+                    },
+                    print_system_info=True,
+                    load_torch_params_only=True,  # new argument to make sure config isn't overwritten
+                )
 
-                kwargs = {
-                    "policy_kwargs": policy_kwargs,
-                }
+                # load the current model
+                model = model.load(
+                    offline_config.ckpt_path,
+                    env=envs,
+                    custom_objects={
+                        "observation_space": envs.observation_space,
+                        "action_space": envs.action_space,
+                    },
+                    print_system_info=True,
+                    load_torch_params_only=True,  # new argument to make sure config isn't overwritten
+                )
 
-                model = model.load(offline_config.ckpt_path, env=envs, **kwargs)
-                model.offline_algo = new_offline_algo
+                model.offline_algo = offline_algo
+
                 model.set_logger(wandb_logger)
+                model.learned_offline = True
+                model.set_policies_with_offline()
 
             else:
                 model.load(offline_config.ckpt_path, env=envs)

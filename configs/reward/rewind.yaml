@@ -15,7 +15,7 @@ general_training:
   learning_rate: 1e-3
   entropy_term: "auto"
   normalize_reward: false
-  terminate_on_success: false
+  terminate_on_success: true
 # environment:
 #   is_state_based: false
 
