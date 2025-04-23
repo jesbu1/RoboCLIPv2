@@ -4,7 +4,7 @@ defaults:
   - _self_
 
 offline_training:
-  offline_h5_path: "/data/shared/roboclip/h5_buffers/updated_trajs/metaworld_traj_15_demos_{}.h5"
+  offline_h5_path: "/data/shared/roboclip/data/h5_buffers/updated_trajs/metaworld_traj_15_demos_{}.h5"
   offline_tasks: ['door-close-v2', 'drawer-close-v2', 'button-press-wall-v2', 'window-open-v2', 
                   'handle-press-side-v2', 'coffee-push-v2', 'faucet-close-v2', 'stick-pull-v2', 
                   'sweep-into-v2', 'push-back-v2', 'lever-pull-v2', ' faucet-open-v2', 'dial-turn-v2',

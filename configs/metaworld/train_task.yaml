@@ -5,7 +5,7 @@ defaults:
 
 
 offline_training:
-  offline_h5_path: "data/h5_buffers/updated_trajs/metaworld_traj_15_demos_{0}_{1}.h5"
+  offline_h5_path: "/data/shared/roboclip/data/h5_buffers/updated_trajs/metaworld_traj_15_demos_{0}_{1}.h5"
   offline_tasks: ["window-open-v2", "window-close-v2", "door-open-v2", "drawer-open-v2", "faucet-open-v2"]
   offline_training_steps: 5000 
 
