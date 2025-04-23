@@ -10,7 +10,6 @@ logging:
 
 general_training:
   algo: rlpd
-  algo: rlpd
   name: wsrl_iql
   action_noise: 0.0 # sigma
   learning_rate: 3e-4
@@ -32,7 +31,7 @@ model:
 
 offline_training:
   offline_training_steps: 100000
-  ckpt_path: "/home/yusenluo/RoboCLIP_offline/RoboCLIPv2/models/reward_model/pretrained_rewind/rewind_dense_100k.zip"  # Path to load checkpoint from, if provided will skip offline training
+  # ckpt_path: "/home/yusenluo/RoboCLIP_offline/RoboCLIPv2/models/reward_model/pretrained_rewind/rewind_dense_100k.zip"  # Path to load checkpoint from, if provided will skip offline training
   critic_update_ratio: 1
 
 online_training:

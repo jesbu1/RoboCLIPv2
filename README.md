@@ -80,7 +80,7 @@ python scripts/label_rewards.py --trajs_to_label data/h5_buffers/orig/metaworld_
 
 
 First run this:
-python test_scripts/test_iql.py metaworld=off_on_15 algorithm=wsrl_iql reward=rewind online_training.total_time_steps=0 offline_training.offline_training_steps=500
+python test_scripts/test_iql.py metaworld=off_on_15 algorithm=wsrl_iql reward=rewind online_training.total_time_steps=0 offline_training.offline_training_steps=50000
 
 Then grab the checkpoint path. You should see two files:
 "rlpd.zip" "rlpd_last_offline.zip"
@@ -88,4 +88,4 @@ Then grab the checkpoint path. You should see two files:
 Then to do online training, do this:
 python test_scripts/test_iql.py metaworld=off_on_15 algorithm=wsrl_iql reward=rewind online_training.total_time_steps=5000 offline_training.offline_training_steps=0 offline_training.ckpt_path="/home/jzhang96/RoboCLIPv2/outputs/2025-04-21/15-53-12/logs/small_model_rewind_rlpd/rlpd"
 
- python test_scripts/test_iql.py metaworld=off_on_15 algorithm=wsrl_iql reward=rewind online_training.total_time_steps=5000 offline_training.ckpt_path="/home/jzhang96/RoboCLIPv2/outputs/2025-04-21/16-23-54/logs/small_model_rewind_rlpd/last_offline"
+ python test_scripts/test_iql.py metaworld=off_on_15 algorithm=wsrl_iql reward=rewind online_training.total_time_steps=5000 offline_training.ckpt_path="/home/jzhang96/RoboCLIPv2/outputs/2025-04-21/16-23-54/logs/small_model_rewind_rlpd/last_offline"  #50k pretrained
