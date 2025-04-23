@@ -84,6 +84,7 @@ class MetaworldBase(Env):
         random_reset="train",
         max_episode_steps=128,
         use_proprio=False,
+        terminate_on_success=False,
     ):
         """
         Parameters
@@ -138,7 +139,7 @@ class MetaworldBase(Env):
         self.random_reset = random_reset
 
         self.use_proprio = use_proprio
-
+        self.terminate_on_success = terminate_on_success
     def step(self, action):
         """
         Run one timestep of the environment's dynamics. When end of
@@ -163,6 +164,8 @@ class MetaworldBase(Env):
         # if success, we add "is_success" to the info
         if "success" in info and info["success"]:
             info["is_success"] = True
+            if self.terminate_on_success:
+                done = True
         else:
             info["is_success"] = False
 
@@ -343,6 +346,7 @@ def create_wrapped_env(
     dense_rewards_at_end=False,
     action_chunk_size=1,
     logger=None,
+    terminate_on_success=False,
 ):
     """
     Creates a wrapped MetaWorld environment with the given options.
@@ -355,7 +359,7 @@ def create_wrapped_env(
         use_simulator_reward: Whether to use the simulator reward (default=False).
         use_time: Whether to add time to the observation (default=True).
         monitor: Whether to monitor the environment returns, rewards, etc. (default=False).
-
+        terminate_on_success: Whether to terminate the episode on success (default=False).
     Returns:
         A function that returns the wrapped environment when called.
     """
@@ -367,6 +371,7 @@ def create_wrapped_env(
                 goal_observable=goal_observable,
                 random_reset="eval",
                 use_proprio=use_proprio,
+                terminate_on_success=terminate_on_success,
             )
         elif mode == "train":
             base_env = MetaworldBase(
@@ -374,6 +379,7 @@ def create_wrapped_env(
                 goal_observable=goal_observable,
                 random_reset="train",
                 use_proprio=use_proprio,
+                terminate_on_success=terminate_on_success,
             )
         elif mode == "demo":
             base_env = MetaworldBase(
@@ -381,6 +387,7 @@ def create_wrapped_env(
                 goal_observable=goal_observable,
                 random_reset="demo",
                 use_proprio=use_proprio,
+                terminate_on_success=terminate_on_success,
             )
         else:
             raise ValueError("Invalid mode")
