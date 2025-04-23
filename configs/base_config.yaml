@@ -32,6 +32,8 @@ general_training:
   critic_update_ratio: 1 # iql and cql
   # gamma: 0.998 # (1/(1-gamma)) = 500 steps
   gamma: 0.99 # (1/(1-gamma)) = 500 steps
+  
+  terminate_on_success: true
 
   # IQL-specific parameters
   policy_extraction: 'awr' # awr or ddpg

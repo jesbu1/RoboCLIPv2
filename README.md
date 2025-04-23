@@ -17,9 +17,6 @@ conda activate lerobot_rl
 
 pip install -r requirements.txt
 
-# Install torch with pip with your cuda version!
-pip install torch...
-
 # Get mjrl
 git clone https://github.com/aravindr93/mjrl.git
 pip install -e mjrl
@@ -31,17 +28,24 @@ pip install -e Metaworld
 
 pip install -e kitchen_alt
 pip install -e kitchen_alt/kitchen/envs
-wget https://www.rocq.inria.fr/cluster-willow/amiech/howto100m/s3d_howto100m.pth
-wget https://www.rocq.inria.fr/cluster-willow/amiech/howto100m/s3d_dict.npy
+#wget https://www.rocq.inria.fr/cluster-willow/amiech/howto100m/s3d_howto100m.pth # not needed if not running RoboCLIP metaworld experiments
+#wget https://www.rocq.inria.fr/cluster-willow/amiech/howto100m/s3d_dict.npy # not needed if not running RoboCLIP metaworld experiments
 git submodule init
 git submodule update --recursive
+rm -rf reward_model/LIV
+git clone https://github.com/penn-pal-lab/LIV reward_model/LIV
 pip install -e reward_model/LIV 
 pip install -e reward_model/LIV/liv/models/clip
 
+#pip install stable_baselines3==1.8.0 --no-deps
+pip install stable-baselines3[extra]==1.8.0 --no-deps
+
+pip install hydra-core==1.3.2 # something gets messed up with previous installs so need to reinstall
+
 # Reinstall pytorch>=2.0. https://pytorch.org/
-pip install torch... # look at instructions at URL
-pip install stable_baselines3==1.8.0 --no-deps
-pip install stable-baselines3==1.8.0[extra] --no-deps
+# Install torch with pip with your cuda version!
+pip install torch==2.5.1 torchvision==0.20.1 --index-url https://download.pytorch.org/whl/cu124 # for example
+
 
 pip install -e .
 ```

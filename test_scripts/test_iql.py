@@ -611,6 +611,7 @@ def create_envs(cfg: DictConfig, reward_model: BaseRewardModel, logger=None):
                         dense_rewards_at_end=cfg.general_training.dense_rewards_at_end,
                         action_chunk_size=cfg.general_training.action_chunk_size,
                         logger=logger,
+                        terminate_on_success=cfg.general_training.terminate_on_success,
                     )
                     for _ in range(env_config.n_envs)
                 ]
@@ -630,6 +631,7 @@ def create_envs(cfg: DictConfig, reward_model: BaseRewardModel, logger=None):
                         use_proprio=env_config.use_proprio,
                         action_chunk_size=cfg.general_training.action_chunk_size,
                         logger=logger,
+                        terminate_on_success=cfg.general_training.terminate_on_success,
                     )
                     for _ in range(1)
                 ]
@@ -650,6 +652,7 @@ def create_envs(cfg: DictConfig, reward_model: BaseRewardModel, logger=None):
                         dense_rewards_at_end=cfg.general_training.dense_rewards_at_end,
                         action_chunk_size=cfg.general_training.action_chunk_size,
                         logger=logger,
+                        terminate_on_success=cfg.general_training.terminate_on_success,
                     )
                 ]
             )
@@ -667,6 +670,7 @@ def create_envs(cfg: DictConfig, reward_model: BaseRewardModel, logger=None):
                         use_proprio=env_config.use_proprio,
                         action_chunk_size=cfg.general_training.action_chunk_size,
                         logger=logger,
+                        terminate_on_success=cfg.general_training.terminate_on_success,
                     )
                 ]
             )  # KitchenEnvDenseOriginalReward(time=True)
