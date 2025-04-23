@@ -33,8 +33,8 @@ general_training:
 model:
   policy_layer_norm: true
   critic_layer_norm: true
-  pi_net_arch: [768, 512, 512]
-  qf_net_arch: [768, 512, 512]
+  pi_net_arch: [1024, 768, 512]
+  qf_net_arch: [1024, 1024, 512]
   # pi_net_arch: [768, 512]
   # qf_net_arch: [768, 512]
 
@@ -47,6 +47,6 @@ online_training:
   total_time_steps: 50000
   mix_buffers_ratio: 0.0 # WSRL does not use old replay buffer
   warm_start_online_rl: true # main change for WSRL
-  learning_starts: 5
-  critic_update_ratio: 1
+  learning_starts: 1000
   gradient_steps: 75
+  critic_update_ratio: 4

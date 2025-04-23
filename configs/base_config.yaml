@@ -29,7 +29,7 @@ general_training:
   entropy_term: "auto"
 
   # offline rl parameters
-  critic_update_ratio: 1 # iql and cql
+  critic_update_ratio: 4 # iql and cql
   # gamma: 0.998 # (1/(1-gamma)) = 500 steps
   gamma: 0.99 # (1/(1-gamma)) = 500 steps
   
