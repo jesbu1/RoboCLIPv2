@@ -354,7 +354,7 @@ class OfflineRLAlgorithm(OffPolicyAlgorithm):
                     "Check if your env is wrapped with ActionChunkingWrapper"
                 )
             self.replace_with_chunked_buffer(
-                action_chunk_size, buffer_size, success_bonus=success_bonus
+                action_chunk_size, buffer_size, success_bonus=success_bonus, evenly_sample_success=True
             )
 
     def replace_with_chunked_buffer(
