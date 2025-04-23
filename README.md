@@ -40,6 +40,7 @@ pip install -e reward_model/LIV/liv/models/clip
 pip install stable_baselines3==1.8.0 --no-deps
 pip install stable-baselines3[extra]==1.8.0 --no-deps
 
+pip install hydra-core==1.3.2 # something gets messed up with previous installs so need to reinstall
 
 # Reinstall pytorch>=2.0. https://pytorch.org/
 # Install torch with pip with your cuda version!
