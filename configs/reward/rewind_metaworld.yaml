@@ -8,7 +8,7 @@ reward_model:
   name: 'rewind'
   batch_size: 64
   # model_path: "weights/rewind/real_world_PosEmb_Rewind_ratio_0.8_EMA_momentum_0.3_End_Rewind_ratio_0.1/model_20.pth"
-  model_path: "weights/metaworld/rewind/model_20.pth"
+  model_path: "/data/shared/roboclip/weights/metaworld/rewind/model_20.pth"
   reward_at_every_step: true
   camera_names: ["image"]
 

@@ -329,7 +329,7 @@ def main():
     parser.add_argument(
         "--reward_model_path",
         help="Path to the saved model.",
-        default="weights/metaworld/rewind/model_19.pth",
+        default="/data/shared/roboclip/weights/metaworld/rewind/model_19.pth",
     )
     parser.add_argument(
         "--sparse_only", action="store_true", help="Use sparse rewards only."
