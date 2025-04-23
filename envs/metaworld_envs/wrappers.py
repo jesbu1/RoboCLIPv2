@@ -377,7 +377,7 @@ class LearnedRewardWrapper(gym.Wrapper):
         wandb_reward = reward
         reward /= self.reward_divisor
         if done:
-            print(f"reward after divisor: {reward}")
+            # print(f"reward after divisor: {reward}")
             wandb.log({"train/learned_reward": wandb_reward})
 
         # Normalize reward
