@@ -490,9 +490,9 @@ class H5ReplayBuffer(ReplayBuffer):
             padded_actions = np.where(valid_masks[:, :, None], actions_chunked, 0)
 
             # Handle padding for actions
+            last_valid_indices = np.maximum(0, valid_lengths - 1)
             if self.pad_action_chunk_with_last_action:
                 # Get the index of the *last valid action* for each chunk
-                last_valid_indices = np.maximum(0, valid_lengths - 1)
                 last_valid_actions = actions_chunked[
                     np.arange(len(valid_lengths)), last_valid_indices
                 ]
@@ -512,15 +512,15 @@ class H5ReplayBuffer(ReplayBuffer):
                     last_valid_actions,
                 )
 
-                # in this case, the last valid reward should also be repeated
-                last_valid_rewards = rewards_chunked[
-                    np.arange(len(valid_lengths)), last_valid_indices
-                ]
-                padded_rewards = np.where(
-                    valid_masks,
-                    rewards_chunked,
-                    np.repeat(last_valid_rewards[:, np.newaxis], window_size, axis=1),
-                )
+            # in this case, the last valid reward should also be repeated
+            last_valid_rewards = rewards_chunked[
+                np.arange(len(valid_lengths)), last_valid_indices
+            ]
+            padded_rewards = np.where(
+                valid_masks,
+                rewards_chunked,
+                np.repeat(last_valid_rewards[:, np.newaxis], window_size, axis=1),
+            )
 
             summed_rewards = np.sum(padded_rewards, axis=1)
 
@@ -826,9 +826,9 @@ class ActionChunkedReplayBuffer(ReplayBuffer):
             padded_actions = np.where(valid_masks[:, :, None], actions_chunked, 0)
 
             # Handle padding for actions
+            last_valid_indices = np.maximum(0, valid_lengths - 1)
             if self.pad_action_chunk_with_last_action:
                 # Get the index of the *last valid action* for each chunk
-                last_valid_indices = np.maximum(0, valid_lengths - 1)
                 last_valid_actions = actions_chunked[
                     np.arange(len(valid_lengths)), last_valid_indices
                 ]
@@ -848,15 +848,15 @@ class ActionChunkedReplayBuffer(ReplayBuffer):
                     last_valid_actions,
                 )
 
-                # in this case, the last valid reward should also be repeated
-                last_valid_rewards = rewards_chunked[
-                    np.arange(len(valid_lengths)), last_valid_indices
-                ]
-                padded_rewards = np.where(
-                    valid_masks,
-                    rewards_chunked,
-                    np.repeat(last_valid_rewards[:, np.newaxis], window_size, axis=1),
-                )
+            # in this case, the last valid reward should also be repeated
+            last_valid_rewards = rewards_chunked[
+                np.arange(len(valid_lengths)), last_valid_indices
+            ]
+            padded_rewards = np.where(
+                valid_masks,
+                rewards_chunked,
+                np.repeat(last_valid_rewards[:, np.newaxis], window_size, axis=1),
+            )
 
             summed_rewards = np.sum(padded_rewards, axis=1)
 
