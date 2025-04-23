@@ -11,9 +11,6 @@ from typing import (
     Union,
     Iterable,
 )
-import io
-import os
-import pathlib
 
 import numpy as np
 import torch as th
@@ -26,7 +23,6 @@ from offline_rl_algorithms.base_offline_rl_algorithm import OfflineRLAlgorithm
 from stable_baselines3.common.policies import BasePolicy
 from stable_baselines3.common.type_aliases import GymEnv, MaybeCallback, Schedule
 from stable_baselines3.common.utils import get_parameters_by_name, polyak_update
-from offline_rl_algorithms.bc import BC
 from offline_rl_algorithms.custom_policies import (
     CustomActor,
     CustomSACPolicy,
@@ -203,47 +199,21 @@ class RLPD(OfflineRLAlgorithm):
         # now replace the RLPD actor and critic with the offline_algo's actor and critic
         # replace their parameters so that the optimizer is still the same
 
+        self.current_critic_update_ratio = (
+            self.online_critic_update_ratio
+        )  # make sure that the critic update ratio is set to the online ratio
         if offline_algo is None:
             offline_algo = self.offline_algo
 
         if offline_algo is None and self.offline_algo is not None:
+            print("Offline algo is not set")
             return
-
-        old_policy_optimizer = self.policy.actor.optimizer
-        old_critic_optimizer = self.policy.critic.optimizer
-        old_ent_coef_optimizer = self.ent_coef_optimizer
-
         self.policy.actor = offline_algo.policy.actor
         self.policy.critic = offline_algo.policy.critic
         self.policy.critic_target = offline_algo.policy.critic_target
-        # This sets the optimizer to the offline_algo's optimizer
-        # self.policy.actor.optimizer = offline_algo.policy.actor.optimizer
-        # self.policy.critic.optimizer = offline_algo.policy.critic.optimizer
-
-        # This replaces the optimizer with the old (new) optimizer
-        self.policy.actor.optimizer = old_policy_optimizer
-        self.policy.critic.optimizer = old_critic_optimizer
-
-        if (
-            hasattr(offline_algo, "ent_coef_optimizer")
-            and offline_algo.ent_coef_optimizer is not None
-        ):
-            print(
-                "Setting ent_coef_optimizer and ent coef to the old value of the offline algo"
-            )
-            # self.ent_coef_optimizer = offline_algo.ent_coef_optimizer
-            self.log_ent_coef = offline_algo.log_ent_coef
-            self.ent_coef_optimizer = old_ent_coef_optimizer
-
-        elif hasattr(offline_algo, "ent_coef_tensor"):
-            print(
-                f"Setting ent_coef_tensor to the old value of the offline algo: {offline_algo.ent_coef_tensor.item()}"
-            )
-            self.ent_coef_tensor = offline_algo.ent_coef_tensor
-
-        self.learned_offline = True
 
         self._create_aliases()
+        return
 
     def _setup_model(self) -> None:
         super()._setup_model()
@@ -379,16 +349,37 @@ class RLPD(OfflineRLAlgorithm):
             else:
                 ent_coef = self.ent_coef_tensor
 
-            for critic_update in range(self.current_critic_update_ratio):
-                # Sample replay buffer
-                replay_data = self.replay_buffer.sample(
-                    batch_size, env=self._vec_normalize_env
-                )  # type: ignore[union-attr]
+            # Sample replay buffer
+            replay_data = self.replay_buffer.sample(
+                batch_size, env=self._vec_normalize_env
+            )  # type: ignore[union-attr]
 
+            critic_minibatch_size = batch_size // self.current_critic_update_ratio
+
+            for critic_update in range(self.current_critic_update_ratio):
+                critic_data_obs = replay_data.observations[
+                    critic_update * critic_minibatch_size : (critic_update + 1)
+                    * critic_minibatch_size
+                ]
+                critic_data_actions = replay_data.actions[
+                    critic_update * critic_minibatch_size : (critic_update + 1)
+                    * critic_minibatch_size
+                ]
+                critic_data_next_obs = replay_data.next_observations[
+                    critic_update * critic_minibatch_size : (critic_update + 1)
+                    * critic_minibatch_size
+                ]
+                critic_data_rewards = replay_data.rewards[
+                    critic_update * critic_minibatch_size : (critic_update + 1)
+                    * critic_minibatch_size
+                ]
+                critic_data_dones = replay_data.dones[
+                    critic_update * critic_minibatch_size : (critic_update + 1)
+                    * critic_minibatch_size
+                ]
                 with th.no_grad():
-                    # Select action according to policy
                     next_actions, next_log_prob = self.actor.action_log_prob(
-                        replay_data.next_observations
+                        critic_data_next_obs
                     )
                     # Compute the next Q values: min over all critics targets
                     # sample a random subset of self.n_critics_to_sample critics. no replacement
@@ -397,7 +388,7 @@ class RLPD(OfflineRLAlgorithm):
                     ]
                     next_q_values = th.cat(
                         self.critic_target(
-                            replay_data.next_observations,
+                            critic_data_next_obs,
                             next_actions,
                             critic_indices=critic_indices,
                         ),
@@ -414,14 +405,14 @@ class RLPD(OfflineRLAlgorithm):
 
                     # td error + entropy term
                     target_q_values = (
-                        replay_data.rewards
-                        + (1 - replay_data.dones) * self.gamma * next_q_values
+                        critic_data_rewards
+                        + (1 - critic_data_dones) * self.gamma * next_q_values
                     )
 
                 # Get current Q-values estimates for each critic network
                 # using action from the replay buffer
                 current_q_values = th.cat(
-                    self.critic(replay_data.observations, replay_data.actions), dim=1
+                    self.critic(critic_data_obs, critic_data_actions), dim=1
                 )
 
                 # Compute critic loss
@@ -552,4 +543,5 @@ class RLPD(OfflineRLAlgorithm):
             state_dicts.append("ent_coef_optimizer")
         else:
             saved_pytorch_variables = ["ent_coef_tensor"]
+
         return state_dicts, saved_pytorch_variables
