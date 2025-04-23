@@ -299,6 +299,7 @@ class OfflineRLAlgorithm(OffPolicyAlgorithm):
         support_multi_env: bool = True,
         warm_start_online_rl: bool = True,
         action_chunk_size: int = 3,
+        success_bonus: float = 0.0,
     ):
         super().__init__(
             policy,
@@ -352,7 +353,9 @@ class OfflineRLAlgorithm(OffPolicyAlgorithm):
                 raise ValueError(
                     "Check if your env is wrapped with ActionChunkingWrapper"
                 )
-            self.replace_with_chunked_buffer(action_chunk_size, buffer_size)
+            self.replace_with_chunked_buffer(
+                action_chunk_size, buffer_size, success_bonus=success_bonus
+            )
 
     def replace_with_chunked_buffer(
         self,
@@ -360,6 +363,7 @@ class OfflineRLAlgorithm(OffPolicyAlgorithm):
         buffer_size: int,
         evenly_sample_success: bool = False,
         ratio: float = 0.5,
+        success_bonus: float = 0.0,
     ):
         # Replace the replay buffer with ActionChunkedReplayBuffer
         self.replay_buffer = ActionChunkedReplayBuffer(
@@ -371,6 +375,7 @@ class OfflineRLAlgorithm(OffPolicyAlgorithm):
             device=self.device,
             n_envs=self.n_envs,
             optimize_memory_usage=self.optimize_memory_usage,
+            success_bonus=success_bonus,
         )
 
         if evenly_sample_success:
@@ -506,7 +511,7 @@ class OfflineRLAlgorithm(OffPolicyAlgorithm):
                             policy_lock=policy_lock,
                         )
                 rollout_thread.join()  # Wait for rollout collection to finish
-                
+
         else:
             # --- Non-Threaded Primitives ---
             while self.num_timesteps < total_timesteps:

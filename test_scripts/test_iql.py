@@ -438,6 +438,7 @@ def main(cfg: DictConfig):
                     buffer_size=cfg.online_training.total_time_steps,
                     evenly_sample_success=True,
                     ratio=0.5,
+                    success_bonus=cfg.reward_model.success_bonus,
                 )
                 print(model.replay_buffer)
                 model.replay_buffer.sample(10)
@@ -855,6 +856,7 @@ def get_policy_algorithm(cfg: DictConfig, envs: VecEnv, log_dir: str, reward_mod
                 warm_start_online_rl=cfg.online_training.warm_start_online_rl,
                 gamma=cfg.general_training.gamma,
                 gradient_steps=cfg.online_training.gradient_steps,
+                success_bonus=cfg.reward_model.success_bonus,
             )
         else:
             model = model_class.load(args.pretrained, env=envs, tensorboard_log=log_dir)
@@ -889,6 +891,7 @@ def get_policy_algorithm(cfg: DictConfig, envs: VecEnv, log_dir: str, reward_mod
                 gamma=cfg.general_training.gamma,
                 action_chunk_size=cfg.general_training.action_chunk_size,
                 gradient_steps=cfg.online_training.gradient_steps,
+                success_bonus=cfg.reward_model.success_bonus,
             )
         else:
             model = model_class.load(args.pretrained, env=envs, tensorboard_log=log_dir)
@@ -911,6 +914,7 @@ def get_policy_algorithm(cfg: DictConfig, envs: VecEnv, log_dir: str, reward_mod
                     cfg.environment.train_freq_type,
                 ),  # useless
                 action_chunk_size=cfg.general_training.action_chunk_size,
+                success_bonus=cfg.reward_model.success_bonus,
             )
         else:
             model = model_class.load(args.pretrained, env=envs, tensorboard_log=log_dir)
@@ -944,6 +948,7 @@ def get_policy_algorithm(cfg: DictConfig, envs: VecEnv, log_dir: str, reward_mod
                 warm_start_online_rl=cfg.online_training.warm_start_online_rl,
                 gamma=cfg.general_training.gamma,
                 action_chunk_size=cfg.general_training.action_chunk_size,
+                success_bonus=cfg.reward_model.success_bonus,
                 gradient_steps=cfg.online_training.gradient_steps,
             )
         else:

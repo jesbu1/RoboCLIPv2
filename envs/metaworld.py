@@ -163,9 +163,10 @@ class MetaworldBase(Env):
         # if success, we add "is_success" to the info
         if "success" in info and info["success"]:
             info["is_success"] = True
+            done = True  # make sure that done is true when success
+            assert not info["TimeLimit.truncated"]
         else:
             info["is_success"] = False
-
         return obs, reward, done, info
 
     def get_obs(self, state):
@@ -183,7 +184,12 @@ class MetaworldBase(Env):
         if self.image_keys:
             image = self.render(mode="rgb_array")
             # if args.center_crop:
-            image = self.cropper(torch.Tensor(image).permute(2,0,1)).permute(1,2,0).numpy().astype(np.uint8)
+            image = (
+                self.cropper(torch.Tensor(image).permute(2, 0, 1))
+                .permute(1, 2, 0)
+                .numpy()
+                .astype(np.uint8)
+            )
             obs["image"] = image
 
         return obs
@@ -195,7 +201,7 @@ class MetaworldBase(Env):
         Returns:
             observation (object): the initial observation
         """
-        print('resetting')
+        print("resetting")
         if self.random_reset == "train":
             self.rank = random.randint(100, 400)
             self.base_env = self.all_env_types[self.env_id](seed=self.rank)
@@ -428,7 +434,6 @@ def create_wrapped_env(
         #     elif reward_model.name == 'dense':
         #         use_sparse = False
         #     base_env = RewardWrapper(base_env, sparse=use_sparse, success_bonus=reward_model.success_bonus)
-
 
         # add gym normalize reward wrapper
 

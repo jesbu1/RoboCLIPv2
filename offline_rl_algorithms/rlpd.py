@@ -150,6 +150,7 @@ class RLPD(OfflineRLAlgorithm):
         train_critic_with_entropy: bool = False,  # whether to train the critic with the entropy term
         warm_start_online_rl: bool = True,
         action_chunk_size: int = 1,
+        success_bonus: float = 0.0,
     ):
         # NOTE: Asserntions currently commonted out due to saving/loading logic. Must fix this later TODO
         # assert (
@@ -192,6 +193,7 @@ class RLPD(OfflineRLAlgorithm):
             support_multi_env=True,
             warm_start_online_rl=warm_start_online_rl,
             action_chunk_size=action_chunk_size,
+            success_bonus=success_bonus,
         )
 
         self.target_entropy = target_entropy
@@ -487,9 +489,7 @@ class RLPD(OfflineRLAlgorithm):
             print("learning offline")
             self.learned_offline = True
             for _ in range(train_steps):
-                metrics = self.train_iql(
-                    1, batch_size=batch_size, logging_prefix="offline"
-                )
+                metrics = self.train(1, batch_size=batch_size, logging_prefix="offline")
                 # metrics is a local() which will be updated in callback.update_locals
                 callback.update_locals(locals())  # a little hacky
                 callback.on_step()  # because of locals, we have access to self.locals['metrics']
@@ -757,6 +757,7 @@ class RLPD(OfflineRLAlgorithm):
             print(f"Going to take {gradient_steps} training steps")
             print(self.replay_buffer.size())
 
+        # breakpoint()
         for gradient_step in range(gradient_steps):
             # We need to sample because `log_std` may have changed between two gradient steps
             if self.use_sde:
@@ -799,7 +800,7 @@ class RLPD(OfflineRLAlgorithm):
                         ),
                         dim=1,
                     )
-                    next_q_values, _ = th.min(next_q_values, dim=1, keepdim=True)
+                    next_q_values = th.mean(next_q_values, dim=1, keepdim=True)
 
                     # add entropy term
                     if self.train_critic_with_entropy:

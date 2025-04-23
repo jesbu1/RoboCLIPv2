@@ -32,6 +32,9 @@ import pybullet as p
 import pybullet_data
 import cv2
 
+import sys
+import threading
+
 
 def compute_debug_reward(state):
     # In debug mode, we apply a manual reward function based on the current state
@@ -118,7 +121,6 @@ class KochBimanualEnv(Env):
 
         self.current_observation = None
 
-        self.counter = 0
         self.prev_time = time.perf_counter()
 
         self.ax1 = plt.subplot(1, 2, 1)
@@ -210,14 +212,9 @@ class KochBimanualEnv(Env):
                 obs[key] = torch.zeros(480, 640, 3)
             return obs, 0, True, {}
 
-        self.counter += 1
         done = False
         reward = 0  # Let a wrapper handle the reward
         info = {}
-
-        if self.counter >= self.max_episode_steps:
-            done = True
-            self.counter = 0
 
         if isinstance(action, np.ndarray):
             action = torch.tensor(action).squeeze(0)
@@ -379,37 +376,43 @@ class SuccessWrapper(gym.Wrapper):
     def __init__(self, env):
         super().__init__(env)
         self.env = env
+        self._user_success = False
+        self._listener_thread = threading.Thread(
+            target=self._keyboard_listener, daemon=True
+        )
+        self._listener_thread.start()
+
+    def _keyboard_listener(self):
+        while True:
+            # Wait for Enter key
+            if sys.stdin.readline().strip() == "":
+                print("User pressed Enter")
+                self._user_success = True
 
     def step(self, action):
         state, orig_reward, done, info = self.env.step(action)
         # reward = 0
 
-        if done:
-            while True:
-                try:
-                    answer = None
-                    reward = 0.0
-                    # If no response in 5 seconds, then assume 0.0
-                    try:
-                        prompt = "Type '1' in 5 seconds if it is a success, else it is a failure"
-                        answer = inputimeout(prompt, timeout=5)
-                    except TimeoutOccurred:
-                        answer = 0.0
+        # If user pressed Enter at any time, mark as success
+        if self._user_success:
+            info["success"] = True
+            done = True
+            self._user_success = False  # reset after use
+        else:
+            info["success"] = False
+            done = False
 
-                    if answer:
-                        reward = float(answer)
-
-                except:
-                    print("Invalid input. Please enter a valid number.")
-
-                if reward == 1.0:
-                    info["success"] = True
-                else:
-                    info["success"] = False
-                break
+        if info.get("TimeLimit.truncated"):
+            done = True
 
         # reward += orig_reward
         return state, orig_reward, done, info
+
+    def reset(self):
+        # Simply add a wait for resetting the environment
+
+        time.sleep(5)
+        return self.env.reset()
 
 
 # Example usage of the base environment and wrappers
@@ -459,6 +462,11 @@ def create_wrapped_env(
             image_keys=image_keys,
             reward_image_key=reward_image_key,
             fake_robot=robot_disabled,
+            max_episode_steps=max_episode_steps,
+        )
+
+        base_env = TimeLimit(
+            base_env,
             max_episode_steps=max_episode_steps,
         )
 

@@ -193,6 +193,7 @@ class IQL(OfflineRLAlgorithm):
         n_critics_to_sample: int = 2,  # number of critics to sample from
         warm_start_online_rl: bool = True,
         action_chunk_size: int = 1,
+        success_bonus: float = 0.0,
     ):
         super().__init__(
             policy,
@@ -222,6 +223,7 @@ class IQL(OfflineRLAlgorithm):
             support_multi_env=True,
             warm_start_online_rl=warm_start_online_rl,
             action_chunk_size=action_chunk_size,
+            success_bonus=success_bonus,
         )
 
         # Entropy coefficient / Entropy temperature

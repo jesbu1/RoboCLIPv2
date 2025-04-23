@@ -707,6 +707,7 @@ class ActionChunkedReplayBuffer(ReplayBuffer):
         n_envs: int = 1,
         optimize_memory_usage: bool = False,
         handle_timeout_termination: bool = True,
+        success_bonus: float = 0.0,
     ):
         super(ActionChunkedReplayBuffer, self).__init__(
             buffer_size,
@@ -719,6 +720,7 @@ class ActionChunkedReplayBuffer(ReplayBuffer):
         )
         self.action_chunk_size = action_chunk_size
         self.pad_action_chunk_with_last_action = pad_action_chunk_with_last_action
+        self.success_bonus = success_bonus
 
     def _get_samples(
         self, batch_inds: np.ndarray, env: Optional[VecNormalize] = None
@@ -769,7 +771,8 @@ class ActionChunkedReplayBuffer(ReplayBuffer):
                 (len(batch_inds), window_size, self.actions.shape[-1])
             )
             rewards_chunked = np.zeros((len(batch_inds), window_size))
-            dones_chunked = np.zeros((len(batch_inds), window_size), dtype=bool)
+            episode_ends_chunked = np.zeros((len(batch_inds), window_size), dtype=bool)
+            successes_chunked = np.zeros((len(batch_inds), window_size), dtype=bool)
 
             valid_indices = np.where(valid_mask, start_indices, 0)
 
@@ -785,9 +788,12 @@ class ActionChunkedReplayBuffer(ReplayBuffer):
             temp_rewards = self.rewards[
                 reshaped_valid_indices
             ]  # Shape: (batch_size*window_size, n_envs)
-            temp_dones = self.dones[
+            episode_ends = self.dones[
                 reshaped_valid_indices
             ]  # Shape: (batch_size*window_size, n_envs)
+            successes = self.dones[reshaped_valid_indices] * (
+                1 - self.timeouts[reshaped_valid_indices]
+            )
 
             # Reshape to separate batch and window dimensions
             temp_actions = temp_actions.reshape(
@@ -796,23 +802,26 @@ class ActionChunkedReplayBuffer(ReplayBuffer):
             temp_rewards = temp_rewards.reshape(
                 len(batch_inds), window_size, self.n_envs
             )
-            temp_dones = temp_dones.reshape(len(batch_inds), window_size, self.n_envs)
+            episode_ends = episode_ends.reshape(
+                len(batch_inds), window_size, self.n_envs
+            )
+            # done only on success
+            successes = successes.reshape(len(batch_inds), window_size, self.n_envs)
 
             # Select specific environment for each batch item
             for i, env_idx in enumerate(env_indices):
                 actions_chunked[i] = temp_actions[i, :, env_idx]
                 rewards_chunked[i] = temp_rewards[i, :, env_idx]
-                dones_chunked[i] = temp_dones[i, :, env_idx]
+                episode_ends_chunked[i] = episode_ends[i, :, env_idx]
+                successes_chunked[i] = successes[i, :, env_idx]
 
             # Find the valid length for each chunk based on dones
-            # Calculate the index of the first done=True in each chunk
-            first_done_index = np.argmax(dones_chunked, axis=1)
-            # Check if any done=True exists in each chunk
-            any_done_in_chunk = np.any(dones_chunked, axis=1)
-            # If a done exists, the length is index + 1. Otherwise, it's the full window size.
-            valid_lengths = np.where(
-                any_done_in_chunk, first_done_index + 1, window_size
-            )
+            # Calculate the index of the first episode_end=True in each chunk (comes from either success or timeout/truncation)
+            first_end_index = np.argmax(episode_ends_chunked, axis=1)
+            # Check if any episode_end=True exists in each chunk
+            any_end_in_chunk = np.any(episode_ends_chunked, axis=1)
+            # If a end exists, the length is index + 1. Otherwise, it's the full window size.
+            valid_lengths = np.where(any_end_in_chunk, first_end_index + 1, window_size)
             # Create masks for valid actions, rewards, and dones (mask is True up to *before* the valid_lengths index)
             valid_masks = np.arange(window_size)[None, :] < valid_lengths[:, None]
 
@@ -820,8 +829,8 @@ class ActionChunkedReplayBuffer(ReplayBuffer):
             # Rewards up to and including the step with done=True are summed
             # summed_rewards = np.sum(np.where(valid_masks, rewards_chunked, 0), axis=1)
             rewards_chunked = np.where(valid_masks, rewards_chunked, 0)
-            # Done is True if *any* done occurred within the valid length
-            any_dones = np.any(np.where(valid_masks, dones_chunked, 0), axis=1)
+            # Success is True if *any* success occurred within the valid length
+            any_success = np.any(np.where(valid_masks, successes_chunked, 0), axis=1)
             # Apply mask for padding actions (actions are padded *after* the valid length)
             padded_actions = np.where(valid_masks[:, :, None], actions_chunked, 0)
 
@@ -848,10 +857,11 @@ class ActionChunkedReplayBuffer(ReplayBuffer):
                     last_valid_actions,
                 )
 
-            # in this case, the last valid reward should also be repeated
-            last_valid_rewards = rewards_chunked[
-                np.arange(len(valid_lengths)), last_valid_indices
-            ]
+            # in this case, the last valid reward should also be repeated WITHOUT success bonus since success = Termination
+            last_valid_rewards = (
+                rewards_chunked[np.arange(len(valid_lengths)), last_valid_indices]
+                - self.success_bonus * any_success
+            )
             padded_rewards = np.where(
                 valid_masks,
                 rewards_chunked,
@@ -862,7 +872,7 @@ class ActionChunkedReplayBuffer(ReplayBuffer):
 
             actions = padded_actions.astype(np.float32)
             rewards = summed_rewards.reshape(-1, 1).astype(np.float32)
-            dones = any_dones.astype(np.float32).reshape(-1, 1)
+            dones = any_success.astype(np.float32).reshape(-1, 1)
 
         else:
             rewards = self.rewards[batch_inds].reshape(-1, 1).astype(np.float32)
