@@ -19,18 +19,18 @@ general_training:
   n_critics_to_sample: 2
 
   # RLPD-specific parameters
-  rlpd_train_critic_with_entropy: true
+  rlpd_train_critic_with_entropy: false
   # Note: RLPD's offline step uses default params defined in base_config.yaml
   rlpd_offline_algo: iql
 
 model:
   policy_layer_norm: true
   critic_layer_norm: true
-  pi_net_arch: [512, 512, 256]
-  qf_net_arch: [512, 512, 256]
+  pi_net_arch: [512, 400, 400]
+  qf_net_arch: [512, 400, 400]
 
 offline_training:
-  offline_training_steps: 0
+  offline_training_steps: 50000
   ckpt_path: null  # Path to load checkpoint from, if provided will skip offline training
   critic_update_ratio: 1
 

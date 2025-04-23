@@ -32,7 +32,7 @@ pip install -e models/LIV
 pip install -e models/LIV/liv/models/clip
 
 # Reinstall pytorch>=2.0. https://pytorch.org/
-pip install torch # look at instructions at URL
+pip install --upgrade torch torchvision # look at instructions at URL
 
 pip install -e .
 ```

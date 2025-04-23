@@ -12,14 +12,14 @@ general_training:
   algo: rlpd
   name: wsrl_iql
   action_noise: 0.0 # sigma
-  learning_rate: 3e-4
+  learning_rate: 1e-3
 
   # offline rl parameters
   n_critics: 10
   n_critics_to_sample: 2
 
   # RLPD-specific parameters
-  rlpd_train_critic_with_entropy: true
+  rlpd_train_critic_with_entropy: false
   # Note: RLPD's offline step uses default params defined in base_config.yaml
   rlpd_offline_algo: iql
 
@@ -30,8 +30,8 @@ model:
   qf_net_arch: [512, 400, 400]
 
 offline_training:
-  offline_training_steps: 100000
-  # ckpt_path: "/home/yusenluo/RoboCLIP_offline/RoboCLIPv2/models/reward_model/pretrained_rewind/rewind_dense_100k.zip"  # Path to load checkpoint from, if provided will skip offline training
+  offline_training_steps: 50000
+  # ckpt_path: "/home/yusenluo/RoboCLIP_offline/RoboCLIPv2/outputs/2025-04-22/03-33-03/logs/rewind_rlpd/last_offline"  # Path to load checkpoint from, if provided will skip offline training
   critic_update_ratio: 1
 
 online_training:
