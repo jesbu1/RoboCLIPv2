@@ -63,8 +63,6 @@ from hydra.core.config_store import ConfigStore
 from hydra.utils import to_absolute_path
 from omegaconf import DictConfig, OmegaConf
 
-th.set_float32_matmul_precision("high")
-
 
 def create_exp_name(cfg: DictConfig):
     exp_name = cfg.environment.cfg_name + "_"
@@ -392,15 +390,17 @@ def main(cfg: DictConfig):
                     "Loading offline algo from",
                     offline_config.ckpt_path + "_rlpd_offline",
                 )
-                offline_algo = model.offline_algo.load(
-                    offline_config.ckpt_path + "_rlpd_offline",
-                    env=envs,
-                    custom_objects={
-                        "observation_space": envs.observation_space,
-                        "action_space": envs.action_space,
-                    },
-                    print_system_info=True,
-                )
+                if model.offline_algo is not None:
+                    offline_algo = model.offline_algo.load(
+                        offline_config.ckpt_path + "_rlpd_offline",
+                        env=envs,
+                        custom_objects={
+                            "observation_space": envs.observation_space,
+                            "action_space": envs.action_space,
+                        },
+                        print_system_info=True,
+                        load_torch_params_only=True,
+                    )
 
                 model = model.load(
                     offline_config.ckpt_path,
@@ -410,45 +410,15 @@ def main(cfg: DictConfig):
                         "action_space": envs.action_space,
                     },
                     print_system_info=True,
+                    load_torch_params_only=True,
                 )
-
-                model.offline_algo = offline_algo
-
-                # model.offline_algo = model.offline_algo.load(
-                #     offline_config.ckpt_path + "_rlpd_offline",
-                #     env=envs,
-                #     custom_objects={
-                #         "observation_space": envs.observation_space,
-                #         "action_space": envs.action_space,
-                #     },
-                #     print_system_info=True,
-                # )
-
-                print(model.actor.optimizer)
-                # breakpoint()
-                # exit()
-                # model.offline_algo = new_offline_algo
-                # model.set_policies_with_offline(offline_algo=new_offline_algo)
-
-                kwargs = {
-                    "policy_kwargs": policy_kwargs,
-                }
-
-                print("Loading the untrained online policy")
-
-                # model = model.load(
-                #     offline_config.ckpt_path,
-                #     env=envs,
-                #     **kwargs,
-                #     custom_objects={
-                #         "observation_space": envs.observation_space,
-                #         "action_space": envs.action_space,
-                #     },
-                # )
-                # model.offline_algo = new_offline_algo
                 model.set_logger(wandb_logger)
                 model.learned_offline = True
-                model.set_policies_with_offline()
+
+                if model.offline_algo is not None:
+                    model.offline_algo = offline_algo
+
+                    model.set_policies_with_offline()
 
             else:
                 model = model.load(
@@ -510,7 +480,8 @@ def main(cfg: DictConfig):
             save_dir = os.path.join(log_dir, "last_offline")
 
             if training_config.algo == "rlpd":
-                model.offline_algo.save(save_dir + "_rlpd_offline")
+                if hasattr(model, "offline_algo") and model.offline_algo is not None:
+                    model.offline_algo.save(save_dir + "_rlpd_offline")
                 model.save(save_dir, exclude=["offline_algo"])
             else:
                 model.save(save_dir)
@@ -951,7 +922,7 @@ def get_policy_algorithm(cfg: DictConfig, envs: VecEnv, log_dir: str, reward_mod
             model = model_class(
                 cfg.model.policy_type,
                 envs,
-                offline_algo=model,
+                offline_algo=None,
                 verbose=1,
                 tensorboard_log=log_dir,
                 buffer_size=cfg.online_training.total_time_steps,

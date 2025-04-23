@@ -45,6 +45,9 @@ from stable_baselines3.common.save_util import (
 
 import warnings
 
+from offline_rl_algorithms.iql import ValueCritic
+from copy import deepcopy
+
 
 class RLPD(OfflineRLAlgorithm):
     """
@@ -109,6 +112,7 @@ class RLPD(OfflineRLAlgorithm):
     }
     policy: CustomSACPolicy
     actor: CustomActor
+    v_net: ValueCritic
 
     def __init__(
         self,
@@ -209,6 +213,12 @@ class RLPD(OfflineRLAlgorithm):
 
         self.name = "rlpd"
 
+        self.expectile = 0.7
+        self.clip_score = 100
+        self.policy_extraction = "awr"
+        self.ddpg_bc_weight = 0.1
+        self.advantage_temp = 1.0
+
     def set_offline_algo(self, offline_algo):
         self.offline_algo = offline_algo
 
@@ -223,7 +233,7 @@ class RLPD(OfflineRLAlgorithm):
         if offline_algo is None:
             offline_algo = self.offline_algo
 
-        if offline_algo is None and self.offline_algo is not None:
+        if self.offline_algo is None:
             print("Offline algo is not set")
             return
         self.policy.actor = offline_algo.policy.actor
@@ -410,9 +420,24 @@ class RLPD(OfflineRLAlgorithm):
             self.critic_target, ["running_"]
         )
 
+        self.v_net = ValueCritic(
+            self.observation_space,
+            self.action_space,
+            self.policy.critic_kwargs["net_arch"],
+            deepcopy(self.policy.critic.features_extractor),
+            features_dim=self.policy.actor.latent_pi[0].in_features,
+            activation_fn=self.policy.net_args["activation_fn"],
+            normalize_images=self.policy.critic.normalize_images,
+            share_features_extractor=self.policy.critic.share_features_extractor,
+            lr_schedule=self.lr_schedule,
+            optimizer_class=self.policy.optimizer_class,
+            optimizer_kwargs=self.policy.optimizer_kwargs,
+            use_layer_norm=self.policy.critic_kwargs["use_layer_norm"],
+        ).to(self.device)
+
     def _create_aliases(self) -> None:
         self.actor = self.policy.actor
-        self.critic = self.policy.critic.to(th.float32)
+        self.critic = self.policy.critic
         self.critic_target = self.policy.critic_target
 
     def learn_offline(
@@ -422,18 +447,56 @@ class RLPD(OfflineRLAlgorithm):
         batch_size: int = 64,
         callback: MaybeCallback = None,
     ) -> None:
-        # override train function to use BC offline training
-        self.offline_algo.set_logger(self.logger)
+        if self.offline_algo is not None:
+            # override train function to use BC offline training
+            self.offline_algo.set_logger(self.logger)
 
-        self.offline_algo.learn_offline(
-            offline_replay_buffer=offline_replay_buffer,
-            train_steps=train_steps,
-            batch_size=batch_size,
-            callback=callback,
-        )
+            self.offline_algo.learn_offline(
+                offline_replay_buffer=offline_replay_buffer,
+                train_steps=train_steps,
+                batch_size=batch_size,
+                callback=callback,
+            )
 
-        # Set the policies with the offline_algo's policies
-        self.set_policies_with_offline()
+            # Set the policies with the offline_algo's policies
+            self.set_policies_with_offline()
+
+        else:
+            # we do IQL in here!
+
+            if "current_critic_update_ratio" in self.__dict__:
+                # switch to offline
+                self.critic_update_ratio = self.offline_critic_update_ratio
+
+            total_timesteps, callback = self._setup_learn(
+                total_timesteps=train_steps,
+                callback=callback,
+                reset_num_timesteps=False,
+                tb_log_name="offline",
+                progress_bar=False,
+            )
+            total_timesteps *= self.n_envs  # because of a progress bar issue
+
+            callback = self._init_callback(callback, True)
+            callback.on_training_start(locals(), globals())
+
+            # Swap replay buffer for offline training
+            old_replay_buffer = self.replay_buffer
+            self.replay_buffer = offline_replay_buffer
+
+            print("learning offline")
+            self.learned_offline = True
+            for _ in range(train_steps):
+                metrics = self.train_iql(
+                    1, batch_size=batch_size, logging_prefix="offline"
+                )
+                # metrics is a local() which will be updated in callback.update_locals
+                callback.update_locals(locals())  # a little hacky
+                callback.on_step()  # because of locals, we have access to self.locals['metrics']
+
+            callback.on_training_end()
+
+            self.replay_buffer = old_replay_buffer
 
         # old_train_function = self.train
         # RLPD.train = self._train_offline
@@ -446,15 +509,214 @@ class RLPD(OfflineRLAlgorithm):
         # # for online training we use RLPD's train function
         # RLPD.train = old_train_function
 
-    def _train_offline(
-        self, gradient_steps: int, batch_size: int = 64, logging_prefix: str = ""
+    def train_iql(
+        self,
+        gradient_steps: int,
+        batch_size: int = 64,
+        logging_prefix: str = "train",
+        policy_lock: Optional[threading.Lock] = None,
     ) -> None:
-        return type(self.offline_algo).train(
-            self.offline_algo,
-            gradient_steps=gradient_steps,
-            batch_size=batch_size,
-            logging_prefix=logging_prefix,
-        )
+        # Switch to train mode (this affects batch norm / dropout)
+        self.policy.set_training_mode(True)
+        # Update optimizers learning rate
+        optimizers = [self.actor.optimizer, self.critic.optimizer]
+        # Update learning rate according to lr schedule
+        self._update_learning_rate(optimizers)
+
+        actor_losses, q_losses, v_losses = [], [], []
+        actor_log_pis = []
+        q_values = []
+        v_next_values = []
+        v_values = []
+        q_target_values = []
+        reward_values = []
+
+        if gradient_steps != 1:
+            # only so if we are doing per-step training, we don't overprint
+            print(f"Going to take {gradient_steps} training steps")
+
+        for gradient_step in range(gradient_steps):
+            # We need to sample because `log_std` may have changed between two gradient steps
+            if self.use_sde:
+                self.actor.reset_noise()
+
+            for _ in range(int(self.current_critic_update_ratio)):
+                # Sample replay buffer
+                replay_data = self.replay_buffer.sample(
+                    batch_size, env=self._vec_normalize_env
+                )  # type: ignore[union-attr]
+
+                # Compute necessary values for the training update
+                q_preds = th.cat(
+                    self.critic(
+                        replay_data.observations,
+                        replay_data.actions,
+                    ),
+                    dim=1,
+                )
+                with th.no_grad():
+                    # for generality with REDQ implmentation
+                    critic_indices = th.randperm(self.policy_kwargs["n_critics"])[
+                        : self.n_critics_to_sample
+                    ].to(replay_data.observations.device)
+                    target_q_preds = th.cat(
+                        self.critic_target(
+                            replay_data.observations,
+                            replay_data.actions,
+                            critic_indices=critic_indices,
+                        ),
+                        dim=1,
+                    )
+
+                    target_q_pred, _ = th.min(target_q_preds, dim=1)
+                    target_q_pred = target_q_pred.reshape(-1, 1)
+                    next_vf_pred = self.v_net(replay_data.next_observations)
+                vf_pred = self.v_net(replay_data.observations)
+
+                # Q value loss
+                target_q_values = (
+                    replay_data.rewards
+                    + (1 - replay_data.dones) * self.gamma * next_vf_pred
+                )
+                q_loss = F.mse_loss(q_preds, target_q_values.expand_as(q_preds))
+
+                # Value function expectile loss
+                vf_err = vf_pred - target_q_pred
+                vf_sign = (vf_err > 0).float()
+                vf_weight = (1 - vf_sign) * self.expectile + vf_sign * (
+                    1 - self.expectile
+                )
+                vf_loss = (vf_weight * (vf_err**2)).mean()
+
+                # log q1 and q2 values
+                q_values.append(q_preds.mean().item())
+
+                # log v
+                v_values.append(vf_pred.mean().item())
+
+                # log target
+                q_target_values.append(target_q_values.mean().item())
+
+                # log next v
+                v_next_values.append(next_vf_pred.mean().item())
+
+                # log q and v losses
+                q_losses.append(q_loss.item())
+                v_losses.append(vf_loss.item())
+
+                # Optimize the critic Q
+                self.critic.optimizer.zero_grad()
+                q_loss.backward()
+                # Apply gradient clipping to improve stability
+                th.nn.utils.clip_grad_norm_(self.critic.parameters(), max_norm=10.0)
+                self.critic.optimizer.step()
+
+                # Optimize the value function
+                self.v_net.optimizer.zero_grad()
+                vf_loss.backward()
+                # Apply gradient clipping to improve stability
+                th.nn.utils.clip_grad_norm_(self.v_net.parameters(), max_norm=10.0)
+                self.v_net.optimizer.step()
+
+                # Target network update
+                if gradient_step % self.target_update_interval == 0:
+                    polyak_update(
+                        self.critic.parameters(),
+                        self.critic_target.parameters(),
+                        self.tau,
+                    )
+                    polyak_update(
+                        self.batch_norm_stats, self.batch_norm_stats_target, 1.0
+                    )
+
+            # Policy loss
+            if self.policy_extraction == "awr":
+                advantage = target_q_pred - vf_pred.detach()
+                weights = th.clamp(
+                    th.exp(advantage * self.advantage_temp), 0, self.clip_score
+                )
+                if policy_lock is not None:
+                    policy_lock.acquire()
+                mean_actions, log_std, kwargs = self.actor.get_action_dist_params(
+                    replay_data.observations
+                )
+                distribution = self.actor.action_dist.proba_distribution(
+                    mean_actions, log_std
+                )
+                if policy_lock is not None:
+                    policy_lock.release()
+
+                log_prob = self.get_log_prob(distribution, replay_data.actions)
+                log_prob = log_prob.reshape(-1, 1)
+                policy_loss = -th.mean(weights * log_prob)
+            elif self.policy_extraction == "ddpg":
+                # autoscale the bc weight based on the average q value
+
+                if policy_lock is not None:
+                    policy_lock.acquire()
+
+                with th.no_grad():
+                    average_q_value = th.abs(th.min(q_preds, dim=1)).mean()
+                    scaled_ddpg_bc_weight = self.ddpg_bc_weight / average_q_value
+                mean_actions, log_std, _ = self.actor.get_action_dist_params(
+                    replay_data.observations
+                )
+                distribution = self.actor.action_dist.proba_distribution(
+                    mean_actions, log_std
+                )
+                if policy_lock is not None:
+                    policy_lock.release()
+                log_prob = self.get_log_prob(distribution, replay_data.actions)
+
+                actions_pi = distribution.actions_from_params(mean_actions, log_std)
+
+                critic_indices = th.randperm(self.policy_kwargs["n_critics"])[
+                    : self.n_critics_to_sample
+                ].to(replay_data.observations.device)
+                q_values_pi = self.critic(
+                    replay_data.observations, actions_pi, critic_indices=critic_indices
+                )
+                min_qf_pi = th.min(*q_values_pi).squeeze(-1)
+                assert min_qf_pi.shape == log_prob.shape, (
+                    f"{min_qf_pi.shape} != {log_prob.shape}"
+                )
+                policy_loss = -th.mean(min_qf_pi + scaled_ddpg_bc_weight * log_prob)
+                # print proportion of policy loss contributed to by each term
+                # policy_loss = -th.mean(min_qf_pi + self.ddpg_bc_weight * log_prob)
+
+            # log average in batch reward
+            reward_values.append(replay_data.rewards.mean().item())
+
+            # Optimize the policy
+            if policy_lock is not None:
+                policy_lock.acquire()
+            self.actor.optimizer.zero_grad()
+            policy_loss.backward()
+            self.actor.optimizer.step()
+            if policy_lock is not None:
+                policy_lock.release()
+
+            # log actor stuff
+            actor_losses.append(policy_loss.item())
+            actor_log_pis.append(log_prob.mean().item())
+        self._n_updates += gradient_steps
+
+        metrics_dict = {
+            f"{logging_prefix}/actor_loss": np.mean(actor_losses),
+            f"{logging_prefix}/q_loss": np.mean(q_losses),
+            f"{logging_prefix}/v_loss": np.mean(v_losses),
+            f"{logging_prefix}/average_q_values": np.mean(q_values),
+            f"{logging_prefix}/average_v_next_values": np.mean(v_next_values),
+            f"{logging_prefix}/average_reward": np.mean(reward_values),
+            f"{logging_prefix}/average_v_values": np.mean(v_values),
+            f"{logging_prefix}/average_q1_target_values": np.mean(q_target_values),
+            f"{logging_prefix}/average_actor_log_pis": np.mean(actor_log_pis),
+        }
+
+        for metric in metrics_dict:
+            self.logger.record(metric, metrics_dict[metric])
+
+        return metrics_dict
 
     def train(
         self,
@@ -550,7 +812,7 @@ class RLPD(OfflineRLAlgorithm):
 
                     if hasattr(replay_data, "valid_length"):
                         valid_lengths = replay_data.valid_length
-                        discount = (self.gamma**valid_lengths).unsqueeze(1)
+                        discount = (self.gamma**valid_lengths).unsqueeze(1).float()
                     else:
                         discount = self.gamma
 

@@ -475,6 +475,7 @@ class H5ReplayBuffer(ReplayBuffer):
             valid_lengths = np.where(
                 any_done_in_chunk, first_done_index + 1, window_size
             )
+            window_sizes = np.ones(len(batch_inds)) * window_size
 
             # Create masks for valid actions, rewards, and dones (mask is True up to *before* the valid_lengths index)
             valid_masks = np.arange(window_size)[None, :] < valid_lengths[:, None]
@@ -535,7 +536,7 @@ class H5ReplayBuffer(ReplayBuffer):
             rewards,
             mc_returns,
             np.ones_like(rewards),  # offline_data_mask is 1 for all offline data,
-            valid_lengths,
+            window_sizes,
         )
 
         return CombinedBufferSamples(*tuple(map(self.to_torch, data)))
@@ -733,6 +734,7 @@ class ActionChunkedReplayBuffer(ReplayBuffer):
             )
 
         valid_lengths = np.ones(len(batch_inds))
+        window_sizes = np.ones(len(batch_inds)) * self.action_chunk_size
         if self.action_chunk_size > 1:
             # Create sliding window views for actions, rewards, and dones
             max_len = len(
@@ -853,7 +855,7 @@ class ActionChunkedReplayBuffer(ReplayBuffer):
             self._normalize_reward(all_rewards.reshape(-1, 1), env),
             rewards,  # set mc_returns to rewards
             np.zeros_like(rewards),  # offline_data_mask is 0 for online data
-            valid_lengths,  # valid_lengths is the number of valid actions
+            window_sizes,  # valid_lengths is the number of valid actions
         )
         return CombinedBufferSamples(*tuple(map(self.to_torch, data)))
 
