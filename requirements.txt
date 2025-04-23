@@ -86,4 +86,6 @@ numpy==1.26.4
 #nvidia-cuda-runtime-cu11==11.7.99
 #nvidia-cuda-runtime-cu12==12.1.105
 #nvidia-cudnn-cu11
+rich
 tensorboard
+tqdm
