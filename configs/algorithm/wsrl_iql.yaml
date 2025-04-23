@@ -47,6 +47,6 @@ online_training:
   total_time_steps: 50000
   mix_buffers_ratio: 0.0 # WSRL does not use old replay buffer
   warm_start_online_rl: true # main change for WSRL
-  learning_starts: 5
-  critic_update_ratio: 1
+  learning_starts: 1000
+  critic_update_ratio: 4
   gradient_steps: 75
