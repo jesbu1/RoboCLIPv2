@@ -775,6 +775,10 @@ class RLPD(OfflineRLAlgorithm):
                 replay_data = self.replay_buffer.sample(
                     batch_size, env=self._vec_normalize_env
                 )  # type: ignore[union-attr]
+                
+                if len(replay_data.observations) == 0:
+                    print("Buffer is still empty. Skipping this training step")
+                    return {}
 
                 with th.no_grad():
                     # Select action according to policy
