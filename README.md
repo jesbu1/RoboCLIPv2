@@ -43,7 +43,7 @@ pip install stable-baselines3[extra]==1.8.0 --no-deps
 
 # Reinstall pytorch>=2.0. https://pytorch.org/
 # Install torch with pip with your cuda version!
-pip install --upgrade torch torchvision  # for example
+pip install --upgrade torch torchvision --index-url https://download.pytorch.org/whl/cu126 # for example
 
 pip install -e .
 ```
