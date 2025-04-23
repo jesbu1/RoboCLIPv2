@@ -165,9 +165,7 @@ class OfflineEvalCallback(EvalCallback):
                     "Something went wrong when logging gradients/weights. Skipping logging"
                 )
 
-        if (
-            self.video_freq > 0 and self.n_calls % self.video_freq == 0
-        ) or self.n_calls == 1:
+        if self.video_freq > 0 and self.n_calls % self.video_freq == 0:
             video_buffer = self.record_video()
             # self.logger.record({f"evaluation_video": wandb.Video(video_buffer, fps=20, format="mp4")}, commit=False)
             self.logger.record(
@@ -194,9 +192,10 @@ class OfflineEvalCallback(EvalCallback):
             frame = frame[::3, ::3, :3]
             frames.append(frame)
             action, _ = self.model.predict(
-                obs, deterministic=False, episode_start=np.array([first_step])
+                obs,
+                deterministic=True,
+                episode_start=np.array([first_step], env=self.eval_env),
             )
-
             obs, reward, done, info = self.eval_env.step(action)
             first_step = False
             if done:

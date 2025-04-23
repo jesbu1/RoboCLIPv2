@@ -638,7 +638,6 @@ class ActionChunkingWrapper(gym.Wrapper):
         #     # If chunk is not empty, we will assert that chunked_action is None
         #     breakpoint()
         #     assert chunked_action is None
-
         popped_action = self.chunk[0]
         self.chunk = self.chunk[1:]
         # print("Chunk is empty")

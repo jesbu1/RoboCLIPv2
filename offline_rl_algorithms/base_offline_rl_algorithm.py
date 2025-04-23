@@ -689,16 +689,16 @@ class OfflineRLAlgorithm(OffPolicyAlgorithm):
         state: Optional[Tuple[np.ndarray, ...]] = None,
         episode_start: Optional[np.ndarray] = None,
         deterministic: bool = False,
+        env: Optional[GymEnv] = None,
     ):
+        if env is None:
+            env = self.env
         if self.action_chunk_size > 1:
             # assert self.n_envs == 1, "Action chunking only supported for single env"
             assert episode_start is not None, "Need episode_start for action chunking"
             if episode_start[0] is True:
-                self.env.set_attr("chunk", [])
-            elif (
-                self.env.get_attr("is_chunk_empty")
-                and self.env.get_attr("is_chunk_empty")[0]
-            ):
+                env.set_attr("chunk", [])
+            elif env.get_attr("is_chunk_empty") and env.get_attr("is_chunk_empty")[0]:
                 # print("calling predict")
                 try:
                     action, _ = super().predict(
@@ -707,10 +707,10 @@ class OfflineRLAlgorithm(OffPolicyAlgorithm):
                     return action, _
                 except Exception as e:
                     print("Exception in predict:", e)
-                    return [None] * self.env.num_envs, None
+                    return [None] * env.num_envs, None
             else:
                 # print("not calling predict")
-                return [None] * self.env.num_envs, None
+                return [None] * env.num_envs, None
         # print("calling predict")
         action, _ = super().predict(observation, state, episode_start, deterministic)
         return action, _
