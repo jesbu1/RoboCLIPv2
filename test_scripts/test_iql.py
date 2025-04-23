@@ -299,6 +299,10 @@ def main(cfg: DictConfig):
         cfg.offline_training.offline_training_steps > 0
         or cfg.online_training.mix_buffers_ratio > 0
     ) and isinstance(model, OfflineRLAlgorithm):
+        debug_koch = False
+        if cfg.reward_model.name == "debug" and "koch" in env_config.cfg_name:
+            debug_koch = True
+
         try:
             if (
                 cfg.reward_model.name == "rewind_two_cam"
@@ -345,6 +349,7 @@ def main(cfg: DictConfig):
             pad_action_chunk_with_last_action=(
                 True if "koch" in env_config.cfg_name else False
             ),
+            debug_koch=debug_koch,
         )
 
     ### Learn offline
@@ -387,16 +392,43 @@ def main(cfg: DictConfig):
                     "Loading offline algo from",
                     offline_config.ckpt_path + "_rlpd_offline",
                 )
-                new_offline_algo = model.load(
+                offline_algo = model.offline_algo.load(
                     offline_config.ckpt_path + "_rlpd_offline",
                     env=envs,
                     custom_objects={
                         "observation_space": envs.observation_space,
                         "action_space": envs.action_space,
                     },
+                    print_system_info=True,
                 )
-                model.offline_algo = new_offline_algo
-                model.set_policies_with_offline(offline_algo=new_offline_algo)
+
+                model = model.load(
+                    offline_config.ckpt_path,
+                    env=envs,
+                    custom_objects={
+                        "observation_space": envs.observation_space,
+                        "action_space": envs.action_space,
+                    },
+                    print_system_info=True,
+                )
+
+                model.offline_algo = offline_algo
+
+                # model.offline_algo = model.offline_algo.load(
+                #     offline_config.ckpt_path + "_rlpd_offline",
+                #     env=envs,
+                #     custom_objects={
+                #         "observation_space": envs.observation_space,
+                #         "action_space": envs.action_space,
+                #     },
+                #     print_system_info=True,
+                # )
+
+                print(model.actor.optimizer)
+                # breakpoint()
+                # exit()
+                # model.offline_algo = new_offline_algo
+                # model.set_policies_with_offline(offline_algo=new_offline_algo)
 
                 kwargs = {
                     "policy_kwargs": policy_kwargs,
@@ -416,7 +448,7 @@ def main(cfg: DictConfig):
                 # model.offline_algo = new_offline_algo
                 model.set_logger(wandb_logger)
                 model.learned_offline = True
-                # model.set_policies_with_offline(offline_algo=new_offline_algo)
+                model.set_policies_with_offline()
 
             else:
                 model = model.load(

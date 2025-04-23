@@ -41,6 +41,39 @@ class CombinedBufferSamples(NamedTuple):
     valid_length: th.Tensor  # for chunked actions
 
 
+def compute_debug_reward(state):
+    # In debug mode, we apply a manual reward function based on the current state
+    state = state
+    # # Let us set the task to be to approach a specific goal position
+    goal_position = [
+        90,
+        0,
+        0,
+        0,
+        0,
+        -180,
+        90,
+        0,
+        0,
+        0,
+        0,
+        -180,
+    ]
+
+    goal_position = np.array(goal_position)
+
+    # Reward is L2 distance to the goal position from state
+    # reward = -torch.norm(state - goal_position)
+
+    # The positions are rotations of motors, so we want the average degree difference
+    difference = np.abs(state - goal_position)
+    # Bound the difference to 180 degrees
+    difference = np.minimum(difference, 180 - difference)
+
+    reward = -np.sum(difference) / 12
+    return reward
+
+
 class H5ReplayBuffer(ReplayBuffer):
     """
     Replay buffer that can create an HDF5 dataset to store the transitions.
@@ -91,6 +124,7 @@ class H5ReplayBuffer(ReplayBuffer):
         normalize_actions_koch: bool = False,
         action_chunk_size: int = 1,
         pad_action_chunk_with_last_action: bool = True,
+        debug_koch: bool = False,
     ):
         """
         Initialize the replay buffer.
@@ -149,6 +183,13 @@ class H5ReplayBuffer(ReplayBuffer):
                 rewards = rewards.astype(np.float32)
             else:
                 rewards = f["rewards"][()]
+
+            if debug_koch:
+                rewards = []
+                for i in range(len(observations)):
+                    rewards.append(compute_debug_reward(observations[i]))
+                rewards = np.array(rewards)
+
             dones = f["done"][()]
             # timesteps = f["timesteps"][()]
 

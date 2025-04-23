@@ -12,14 +12,14 @@ general_training:
   algo: rlpd
   name: rlpd_scratch
   action_noise: 0.1 # sigma
-  learning_rate: 3e-3
+  learning_rate: 3e-4
 
   # offline rl parameters
-  n_critics: 10
+  n_critics: 2
   n_critics_to_sample: 2
 
   # RLPD-specific parameters
-  rlpd_train_critic_with_entropy: true
+  rlpd_train_critic_with_entropy: false
   # Note: RLPD's offline step uses default params defined in base_config.yaml
   rlpd_offline_algo: iql
   action_chunk_size: 60
@@ -27,10 +27,10 @@ general_training:
   # entropy_term: 0.1
 
 model:
-  policy_layer_norm: false
-  critic_layer_norm: false
-  pi_net_arch: [512, 256]
-  qf_net_arch: [512, 256]
+  policy_layer_norm: true
+  critic_layer_norm: true
+  pi_net_arch: [1024, 768, 512]
+  qf_net_arch: [1024, 1024, 512]
 
 
 offline_training:

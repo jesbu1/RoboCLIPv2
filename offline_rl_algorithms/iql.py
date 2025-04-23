@@ -25,6 +25,8 @@ from offline_rl_algorithms.custom_policies import (
 
 from copy import deepcopy
 
+import threading
+
 
 class ValueCritic(BaseModel):
     """
@@ -184,7 +186,7 @@ class IQL(OfflineRLAlgorithm):
         advantage_temp: float = 5.0,
         expectile: float = 0.7,
         clip_score: float = 100,
-        policy_extraction: str = "ddpg",
+        policy_extraction: str = "awr",
         ddpg_bc_weight: float = 0.1,
         offline_critic_update_ratio: int = 1,  # number of critic updates per actor update
         online_critic_update_ratio: int = 1,  # number of critic updates per actor update
@@ -281,7 +283,11 @@ class IQL(OfflineRLAlgorithm):
         self.critic_target = self.policy.critic_target
 
     def train(
-        self, gradient_steps: int, batch_size: int = 64, logging_prefix: str = "train"
+        self,
+        gradient_steps: int,
+        batch_size: int = 64,
+        logging_prefix: str = "train",
+        policy_lock: Optional[threading.Lock] = None,
     ) -> None:
         # Switch to train mode (this affects batch norm / dropout)
         self.policy.set_training_mode(True)
@@ -402,21 +408,28 @@ class IQL(OfflineRLAlgorithm):
                 weights = th.clamp(
                     th.exp(advantage * self.advantage_temp), 0, self.clip_score
                 )
-
+                if policy_lock is not None:
+                    policy_lock.acquire()
                 mean_actions, log_std, kwargs = self.actor.get_action_dist_params(
                     replay_data.observations
                 )
                 distribution = self.actor.action_dist.proba_distribution(
                     mean_actions, log_std
                 )
+                if policy_lock is not None:
+                    policy_lock.release()
 
                 log_prob = self.get_log_prob(distribution, replay_data.actions)
                 log_prob = log_prob.reshape(-1, 1)
                 policy_loss = -th.mean(weights * log_prob)
             elif self.policy_extraction == "ddpg":
                 # autoscale the bc weight based on the average q value
+
+                if policy_lock is not None:
+                    policy_lock.acquire()
+
                 with th.no_grad():
-                    average_q_value = th.abs(th.min(*q_preds)).mean()
+                    average_q_value = th.abs(th.min(q_preds, dim=1)).mean()
                     scaled_ddpg_bc_weight = self.ddpg_bc_weight / average_q_value
                 mean_actions, log_std, _ = self.actor.get_action_dist_params(
                     replay_data.observations
@@ -424,6 +437,8 @@ class IQL(OfflineRLAlgorithm):
                 distribution = self.actor.action_dist.proba_distribution(
                     mean_actions, log_std
                 )
+                if policy_lock is not None:
+                    policy_lock.release()
                 log_prob = self.get_log_prob(distribution, replay_data.actions)
 
                 actions_pi = distribution.actions_from_params(mean_actions, log_std)
@@ -446,9 +461,13 @@ class IQL(OfflineRLAlgorithm):
             reward_values.append(replay_data.rewards.mean().item())
 
             # Optimize the policy
+            if policy_lock is not None:
+                policy_lock.acquire()
             self.actor.optimizer.zero_grad()
             policy_loss.backward()
             self.actor.optimizer.step()
+            if policy_lock is not None:
+                policy_lock.release()
 
             # log actor stuff
             actor_losses.append(policy_loss.item())

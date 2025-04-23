@@ -12,10 +12,10 @@ general_training:
   algo: rlpd
   name: rlpd_iql
   action_noise: 0.0 # sigma
-  learning_rate: 3e-3
+  learning_rate: 3e-4
 
   # offline rl parameters
-  n_critics: 10
+  n_critics: 2
   n_critics_to_sample: 2
 
   # RLPD-specific parameters
@@ -49,6 +49,6 @@ online_training:
   total_time_steps: 50000
   mix_buffers_ratio: 0.5 
   warm_start_online_rl: false
-  critic_update_ratio: 4
+  critic_update_ratio: 1
   gradient_steps: 75
   learning_starts: 0

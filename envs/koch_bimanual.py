@@ -220,7 +220,7 @@ class KochBimanualEnv(Env):
             self.counter = 0
 
         if isinstance(action, np.ndarray):
-            action = torch.tensor(action)
+            action = torch.tensor(action).squeeze(0)
         current_state = self.current_observation["observation.state"]
 
         safe_action = self.ensure_safe_goal_position(
