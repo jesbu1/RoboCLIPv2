@@ -940,8 +940,8 @@ class SuccessFailSplitBuffer(CombinedBuffer):
         self.temp_input_output.append((obs, next_obs, action, reward, done, infos))
 
         # if done, then we add it to the success buffer if success, otherwise we add it to failure buffer
-        if done[0]:
-            if infos[0].get("success", False):
+        if any([d for d in done]):
+            if any([info.get("success", False) for info in infos]):
                 for (
                     obs,
                     next_obs,
@@ -961,6 +961,7 @@ class SuccessFailSplitBuffer(CombinedBuffer):
                     infos,
                 ) in self.temp_input_output:
                     self.failure_buffer.add(obs, next_obs, action, reward, done, infos)
+            print(f"Success buffer {self.success_buffer.size()}, Failure buffer {self.failure_buffer.size()}")
             self.temp_input_output = []
 
 
