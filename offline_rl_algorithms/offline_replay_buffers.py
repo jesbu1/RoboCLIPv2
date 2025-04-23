@@ -482,7 +482,8 @@ class H5ReplayBuffer(ReplayBuffer):
 
             # Apply masks to compute padded actions, rewards, and dones
             # Rewards up to and including the step with done=True are summed
-            summed_rewards = np.sum(np.where(valid_masks, rewards_chunked, 0), axis=1)
+            # summed_rewards = np.sum(np.where(valid_masks, rewards_chunked, 0), axis=1)
+            rewards_chunked = np.where(valid_masks, rewards_chunked, 0)
             # Done is True if *any* done occurred within the valid length
             any_dones = np.any(np.where(valid_masks, dones_chunked, 0), axis=1)
             # Apply mask for padding actions (actions are padded *after* the valid length)
@@ -510,6 +511,18 @@ class H5ReplayBuffer(ReplayBuffer):
                     padded_actions,
                     last_valid_actions,
                 )
+
+                # in this case, the last valid reward should also be repeated
+                last_valid_rewards = rewards_chunked[
+                    np.arange(len(valid_lengths)), last_valid_indices
+                ]
+                padded_rewards = np.where(
+                    valid_masks,
+                    rewards_chunked,
+                    np.repeat(last_valid_rewards[:, np.newaxis], window_size, axis=1),
+                )
+
+            summed_rewards = np.sum(padded_rewards, axis=1)
 
             actions = padded_actions.astype(np.float32)
             rewards = summed_rewards.reshape(-1, 1).astype(np.float32)
@@ -805,7 +818,8 @@ class ActionChunkedReplayBuffer(ReplayBuffer):
 
             # Apply masks to compute padded actions, rewards, and dones
             # Rewards up to and including the step with done=True are summed
-            summed_rewards = np.sum(np.where(valid_masks, rewards_chunked, 0), axis=1)
+            # summed_rewards = np.sum(np.where(valid_masks, rewards_chunked, 0), axis=1)
+            rewards_chunked = np.where(valid_masks, rewards_chunked, 0)
             # Done is True if *any* done occurred within the valid length
             any_dones = np.any(np.where(valid_masks, dones_chunked, 0), axis=1)
             # Apply mask for padding actions (actions are padded *after* the valid length)
@@ -833,6 +847,18 @@ class ActionChunkedReplayBuffer(ReplayBuffer):
                     padded_actions,
                     last_valid_actions,
                 )
+
+                # in this case, the last valid reward should also be repeated
+                last_valid_rewards = rewards_chunked[
+                    np.arange(len(valid_lengths)), last_valid_indices
+                ]
+                padded_rewards = np.where(
+                    valid_masks,
+                    rewards_chunked,
+                    np.repeat(last_valid_rewards[:, np.newaxis], window_size, axis=1),
+                )
+
+            summed_rewards = np.sum(padded_rewards, axis=1)
 
             actions = padded_actions.astype(np.float32)
             rewards = summed_rewards.reshape(-1, 1).astype(np.float32)

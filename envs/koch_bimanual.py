@@ -392,7 +392,7 @@ class SuccessWrapper(gym.Wrapper):
                     # If no response in 5 seconds, then assume 0.0
                     try:
                         prompt = "Type '1' in 5 seconds if it is a success, else it is a failure"
-                        answer = inputimeout(prompt, timeout=0.5)
+                        answer = inputimeout(prompt, timeout=5)
                     except TimeoutOccurred:
                         answer = 0.0
 
