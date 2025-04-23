@@ -538,30 +538,29 @@ class OfflineRLAlgorithm(OffPolicyAlgorithm):
             model.__dict__.update(data)
             model.__dict__.update(kwargs)
             model._setup_model()
-            try:
-                # put state_dicts back in place
-                model.set_parameters(params, exact_match=False, device=device)
-            except RuntimeError as e:
-                # Patch to load Policy saved using SB3 < 1.7.0
-                # the error is probably due to old policy being loaded
-                # See https://github.com/DLR-RM/stable-baselines3/issues/1233
-                if "pi_features_extractor" in str(
-                    e
-                ) and "Missing key(s) in state_dict" in str(e):
-                    model.set_parameters(params, exact_match=False, device=device)
-                    warnings.warn(
-                        "You are probably loading a model saved with SB3 < 1.7.0, "
-                        "we deactivated exact_match so you can save the model "
-                        "again to avoid issues in the future "
-                        "(see https://github.com/DLR-RM/stable-baselines3/issues/1233 for more info). "
-                        f"Original error: {e} \n"
-                        "Note: the model should still work fine, this only a warning."
-                    )
-                else:
-                    raise e
         else:
             model = self
-        # put other pytorch variables back in place
+        try:
+            # put state_dicts back in place
+            model.set_parameters(params, exact_match=False, device=device)
+        except RuntimeError as e:
+            # Patch to load Policy saved using SB3 < 1.7.0
+            # the error is probably due to old policy being loaded
+            # See https://github.com/DLR-RM/stable-baselines3/issues/1233
+            if "pi_features_extractor" in str(
+                e
+            ) and "Missing key(s) in state_dict" in str(e):
+                model.set_parameters(params, exact_match=False, device=device)
+                warnings.warn(
+                    "You are probably loading a model saved with SB3 < 1.7.0, "
+                    "we deactivated exact_match so you can save the model "
+                    "again to avoid issues in the future "
+                    "(see https://github.com/DLR-RM/stable-baselines3/issues/1233 for more info). "
+                    f"Original error: {e} \n"
+                    "Note: the model should still work fine, this only a warning."
+                )
+            else:
+                raise e
         if pytorch_variables is not None:
             for name in pytorch_variables:
                 # Skip if PyTorch variable was not defined (to ensure backward compatibility).
