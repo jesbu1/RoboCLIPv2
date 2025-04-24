@@ -182,6 +182,7 @@ def parse_reward_model(reward_cfg: DictConfig) -> BaseRewardModel:
             pca_model_dir=None,
             batch_size=reward_cfg.batch_size,
             success_bonus=reward_cfg.success_bonus,
+            single_reward=reward_cfg.single_reward,
         )
 
     # TODO: get these models up

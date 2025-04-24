@@ -37,7 +37,7 @@ class Dino_miniLM_Encoder(BaseEncoder):
         self.MAX_NUM_FRAMES_PER_EPISODE = max_num_frames_per_episode
 
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-        self.dinov2_vits14 = torch.hub.load("facebookresearch/dinov2", "dinov2_vitb14", force_reload=True)
+        self.dinov2_vits14 = torch.hub.load("facebookresearch/dinov2", "dinov2_vitb14", force_reload=False)
         self.dinov2_vits14 = self.dinov2_vits14.to(self.device)
         self.dino_transform_image = T.Compose(
             [T.ToTensor(), T.CenterCrop(224), T.Resize(244), T.CenterCrop(224), T.Normalize([0.5], [0.5])]

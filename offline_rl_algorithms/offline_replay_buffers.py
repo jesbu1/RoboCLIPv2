@@ -353,6 +353,68 @@ class H5ReplayBuffer(ReplayBuffer):
             np.ones_like(rewards),  # offline_data_mask is 1 for all offline data,
         )
         return CombinedBufferSamples(*tuple(map(self.to_torch, data)))
+    
+    def _validate_dataset(self, verbose: bool = False) -> None:
+        """
+        Sanity-check the loaded replay buffer. 不会修改任何数据；
+        如发现严重问题直接 raise AssertionError。
+        """
+        # 1) basic shape/dtype
+        assert self.observations.dtype == np.float32, "observations should be float32"
+        assert self.next_observations.dtype == np.float32
+        assert self.actions.dtype == np.float32
+        assert self.rewards.dtype == np.float32
+        assert self.dones.dtype in (np.float32, np.float64, np.int8, np.bool_), (
+            f"illegal dtype: {self.dones.dtype}"
+        )
+
+        # 2) numerical validity
+        for name, arr in [
+            ("obs", self.observations),
+            ("next_obs", self.next_observations),
+            ("actions", self.actions),
+            ("rewards", self.rewards),
+        ]:
+            assert np.isfinite(arr).all(), f"{name} contains NaN/Inf"
+
+        # 3) action range
+        act_min, act_max = self.actions.min(), self.actions.max()
+        assert act_min >= -1.01 and act_max <= 1.01, (
+            f"actions out of range: min {act_min:.3f}, max {act_max:.3f}"
+        )
+
+        # 4) reward distribution
+        r_min, r_max = self.rewards.min(), self.rewards.max()
+        # use 1, 200 as empirical thresholds, can be adjusted as needed
+        if r_max > 220 or r_min < -220:
+            raise AssertionError(f"reward absolute value exceeds 220, likely not scaled correctly: [{r_min}, {r_max}]")
+
+        # 5) success rate and average length
+        episode_ends = np.where(self.dones == 1)[0]
+        if len(episode_ends) == 0:
+            raise AssertionError("dones does not contain 1, cannot identify episode boundaries")
+
+        episode_lengths = np.diff(np.concatenate([[-1], episode_ends])).astype(int)
+        avg_H = episode_lengths.mean()
+        success_rate = (self.rewards[episode_ends] > 0).mean()
+
+        # 6) expected MC-return (quick estimate)
+        gamma = 0.99
+        est_return = (gamma ** (avg_H - 1)) * 200 * success_rate + (
+            self.rewards[self.dones == 0].mean() * avg_H
+        )
+
+        if verbose:
+            print("── Data summary ─────────────────────────")
+            print(f"buffer size          : {self.buffer_size}")
+            print(f"obs dim              : {self.observations.shape[1]}")
+            print(f"action dim           : {self.actions.shape[1]}")
+            print(f"avg episode length   : {avg_H:.1f}")
+            print(f"success rate         : {success_rate*100:.1f}%")
+            print(f"reward range         : [{r_min:.3f}, {r_max:.3f}]")
+            print(f"estimate MC-return   : {est_return:.2f}")
+            print("──────────────────────────────────────────")
+
 
 
 class CombinedBuffer(ReplayBuffer):
@@ -431,14 +493,15 @@ class CombinedBuffer(ReplayBuffer):
 
 if __name__ == "__main__":
     # Test the H5ReplayBuffer
-    h5_path = "data/h5_buffers/updated_trajs/metaworld_dataset_sparse_only.h5"
-    buffer = H5ReplayBuffer(h5_path, success_bonus=10)
-    print(buffer.size())
-    samples = buffer.sample(10)
+    h5_path = "/home/yusenluo/RoboCLIP_offline/RoboCLIPv2/scripts/metaworld_policy_pretrain_dataset_rewind_dense.h5"
+    buffer = H5ReplayBuffer(h5_path, success_bonus=200)
+    buffer._validate_dataset(verbose=True)
+    # print(buffer.size())
+    # samples = buffer.sample(10)
 
-    # Test the CombinedBuffer
-    buffer = CombinedBuffer(buffer, buffer)
-    print(buffer.size())
-    samples = buffer.sample(10)
+    # # Test the CombinedBuffer
+    # buffer = CombinedBuffer(buffer, buffer)
+    # print(buffer.size())
+    # samples = buffer.sample(10)
 
     breakpoint()

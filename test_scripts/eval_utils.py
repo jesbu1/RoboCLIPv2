@@ -1,5 +1,5 @@
 from models.reward_model.base_reward_model import BaseRewardModel
-from new_task_annotation_v2 import eval_gt_annotation
+from test_scripts.new_task_annotation_v2 import eval_gt_annotation
 from envs.metaworld_envs.metaworld import create_wrapped_env
 from stable_baselines3.common.vec_env import DummyVecEnv
 from tqdm import tqdm

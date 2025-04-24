@@ -26,12 +26,12 @@ general_training:
 model:
   policy_layer_norm: true
   critic_layer_norm: true
-  pi_net_arch: [512, 400, 400]
-  qf_net_arch: [512, 400, 400]
+  pi_net_arch: [768, 512, 256]
+  qf_net_arch: [768, 512, 256]
 
 offline_training:
-  offline_training_steps: 50000
-  # ckpt_path: "/home/yusenluo/RoboCLIP_offline/RoboCLIPv2/outputs/2025-04-22/03-33-03/logs/rewind_rlpd/last_offline"  # Path to load checkpoint from, if provided will skip offline training
+  offline_training_steps: 100000
+  # ckpt_path: "/home/yusenluo/RoboCLIP_offline/RoboCLIPv2/outputs/2025-04-23/18-37-37/logs/rewind_rlpd/last_offline" # Path to load checkpoint from, if provided will skip offline training
   critic_update_ratio: 1
 
 online_training:

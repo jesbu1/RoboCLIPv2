@@ -3,12 +3,13 @@
 reward_model: 
   name: 'sparse'
   encoder: 'dino' # default and only option is vlc
-  success_bonus: 10.0
+  success_bonus: 200
+  reward_at_every_step: false
 
-  general_training:
-    dense_rewards_at_end: false
-    entropy_term: "auto"
-    learning_rate: 1e-3
+general_training:
+  dense_rewards_at_end: false
+  entropy_term: "auto"
+  learning_rate: 1e-3
 
 environment:
   is_state_based: false
