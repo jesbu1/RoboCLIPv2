@@ -1,5 +1,5 @@
 from models.reward_model.base_reward_model import BaseRewardModel
-from new_task_annotation_v2 import eval_gt_annotation
+from new_task_annotation_v2 import eval_gt_annotation, train_gt_annotation
 from envs.metaworld_envs.metaworld import create_wrapped_env
 from stable_baselines3.common.vec_env import DummyVecEnv
 from tqdm import tqdm
@@ -14,11 +14,16 @@ def offline_eval(policy, reward_model: BaseRewardModel, image_encoder, rollout_n
     # text_instruction = env_config.text_string
 
     eval_envs = list(eval_gt_annotation.keys())
-    
+    train_envs = list(train_gt_annotation.keys())
+    eval_envs = eval_envs + train_envs
+
     wandb_log = {}
 
     for env_id in tqdm(eval_envs):
-        text_instruction = eval_gt_annotation[env_id]
+        if env_id in eval_gt_annotation:
+            text_instruction = eval_gt_annotation[env_id]
+        else:
+            text_instruction = train_gt_annotation[env_id]
         with th.no_grad():
             lang_feat_policy = reward_model.encode_text_for_policy(text_instruction).squeeze()
             lang_feat_reward = reward_model.encode_text(text_instruction).squeeze()
