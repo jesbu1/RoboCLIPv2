@@ -439,6 +439,9 @@ def main(cfg: DictConfig):
                     evenly_sample_success=True,
                     ratio=0.5,
                     success_bonus=cfg.reward_model.success_bonus,
+                    pad_action_chunk_with_last_action=(
+                        True if "koch" in env_config.cfg_name else False
+                    ),
                 )
                 print(model.replay_buffer)
                 model.replay_buffer.sample(10)

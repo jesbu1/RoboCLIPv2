@@ -147,7 +147,7 @@ def collect_rollouts_threadsafe(
                 learning_starts,
                 action_noise,
                 env.num_envs,
-                episode_start=np.array([first_step]),
+                episode_start=np.array([first_step] * env.num_envs),
                 policy_lock=policy_lock,
             )
         first_step = False
@@ -354,7 +354,7 @@ class OfflineRLAlgorithm(OffPolicyAlgorithm):
                     "Check if your env is wrapped with ActionChunkingWrapper"
                 )
             self.replace_with_chunked_buffer(
-                action_chunk_size, buffer_size, success_bonus=success_bonus
+                action_chunk_size, buffer_size, success_bonus=success_bonus, evenly_sample_success=True
             )
 
     def replace_with_chunked_buffer(
@@ -364,11 +364,12 @@ class OfflineRLAlgorithm(OffPolicyAlgorithm):
         evenly_sample_success: bool = False,
         ratio: float = 0.5,
         success_bonus: float = 0.0,
+        pad_action_chunk_with_last_action: bool = True,
     ):
         # Replace the replay buffer with ActionChunkedReplayBuffer
         self.replay_buffer = ActionChunkedReplayBuffer(
             action_chunk_size=action_chunk_size,
-            pad_action_chunk_with_last_action=True,
+            pad_action_chunk_with_last_action=pad_action_chunk_with_last_action,
             buffer_size=buffer_size,
             observation_space=self.observation_space,
             action_space=self.action_space,
@@ -696,22 +697,32 @@ class OfflineRLAlgorithm(OffPolicyAlgorithm):
         if self.action_chunk_size > 1:
             # assert self.n_envs == 1, "Action chunking only supported for single env"
             assert episode_start is not None, "Need episode_start for action chunking"
-            if episode_start[0] is True:
-                env.set_attr("chunk", [])
-            elif env.get_attr("is_chunk_empty") and env.get_attr("is_chunk_empty")[0]:
-                # print("calling predict")
-                try:
-                    action, _ = super().predict(
-                        observation, state, episode_start, deterministic
-                    )
-                    return action, _
-                except Exception as e:
-                    print("Exception in predict:", e)
-                    return [None] * env.num_envs, None
-            else:
-                # print("not calling predict")
+            envs_to_predict_for = []
+            for i in range(env.num_envs):
+                episode_start[i] = True
+
+                if episode_start[i] is True:
+                    env.envs[i].chunk = []
+                    envs_to_predict_for.append(i)
+                elif env.envs[i].is_chunk_empty:
+                    # print("calling predict")
+                    envs_to_predict_for.append(i)
+                    # try:
+                    #     action, _ = super().predict(
+                    #         observation, state, episode_start, deterministic
+                    #     )
+                    #     return action, _
+                    # except Exception as e:
+                    #     print("Exception in predict:", e)
+                    #     return [None] * env.num_envs, None
+                # else:
+                #     # print("not calling predict")
+                #     return [None] * env.num_envs, None
+            # print("calling predict")
+
+            if len(envs_to_predict_for) == 0:
                 return [None] * env.num_envs, None
-        # print("calling predict")
+
         action, _ = super().predict(observation, state, episode_start, deterministic)
         return action, _
 
@@ -797,7 +808,7 @@ class OfflineRLAlgorithm(OffPolicyAlgorithm):
                 learning_starts,
                 action_noise,
                 env.num_envs,
-                episode_start=np.array([first_step]),
+                episode_start=np.array([first_step] * env.num_envs),
             )
 
             first_step = False
