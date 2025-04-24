@@ -512,10 +512,11 @@ class H5ReplayBuffer(ReplayBuffer):
                     last_valid_actions,
                 )
 
-            # in this case, the last valid reward should also be repeated
-            last_valid_rewards = rewards_chunked[
-                np.arange(len(valid_lengths)), last_valid_indices
-            ]
+            # in this case, the last valid reward should also be repeated, without the success bonus since that's already there.
+            last_valid_rewards = (
+                rewards_chunked[np.arange(len(valid_lengths)), last_valid_indices]
+                - self.success_bonus * any_dones
+            )
             padded_rewards = np.where(
                 valid_masks,
                 rewards_chunked,
