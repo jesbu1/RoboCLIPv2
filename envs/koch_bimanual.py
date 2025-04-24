@@ -90,7 +90,7 @@ class KochBimanualEnv(Env):
 
         # action space is of size 12
         self.action_space = gym.spaces.Box(
-            low=-180, high=180, shape=(12,), dtype=np.float32
+            low=-360, high=360, shape=(12,), dtype=np.float32
         )
         # Make the observation just the state
 

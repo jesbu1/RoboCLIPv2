@@ -452,10 +452,13 @@ def main(cfg: DictConfig):
                 cfg.environment.train_freq_type,
             )  # type: ignore[arg-type]
             model.gradient_steps = cfg.online_training.gradient_steps
+            model.online_critic_update_ratio = cfg.online_training.critic_update_ratio
+            model.offline_critic_update_ratio = cfg.offline_training.critic_update_ratio
+            # setting to online because we are loading offline
+            model.current_critic_update_ratio = cfg.online_training.critic_update_ratio
             model._convert_train_freq()
 
             model.learning_starts = cfg.general_training.learning_starts
-            model.online_critic_update_ratio = cfg.general_training.critic_update_ratio
 
         else:
             # checkpoint callback. only save 5 times
@@ -536,7 +539,7 @@ def main(cfg: DictConfig):
                     callback=online_callback_list,
                     logger=logger,
                     progress_bar=True,
-                    parallelize=True if "koch" in env_config.cfg_name else False,
+                    # parallelize=True if "koch" in env_config.cfg_name else False,
                 )
             else:
                 model.learn(
