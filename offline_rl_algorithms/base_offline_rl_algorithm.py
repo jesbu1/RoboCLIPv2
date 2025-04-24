@@ -364,11 +364,12 @@ class OfflineRLAlgorithm(OffPolicyAlgorithm):
         evenly_sample_success: bool = False,
         ratio: float = 0.5,
         success_bonus: float = 0.0,
+        pad_action_chunk_with_last_action: bool = True,
     ):
         # Replace the replay buffer with ActionChunkedReplayBuffer
         self.replay_buffer = ActionChunkedReplayBuffer(
             action_chunk_size=action_chunk_size,
-            pad_action_chunk_with_last_action=True,
+            pad_action_chunk_with_last_action=pad_action_chunk_with_last_action,
             buffer_size=buffer_size,
             observation_space=self.observation_space,
             action_space=self.action_space,
