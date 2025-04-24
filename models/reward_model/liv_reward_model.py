@@ -22,7 +22,7 @@ def normalize_embeddings(embeddings, return_tensor=True):
         return normalized_embeddings.detach().cpu().numpy()
 
 class LIVRewardModel(BaseRewardModel):
-    def __init__(self, model_load_path: str, use_pca: bool, attention_heads: int, pca_model_dir: str = None, device: str = 'cuda', batch_size=64, reward_at_every_step: bool = False, success_bonus: int = 10, single_reward: bool = True):
+    def __init__(self, model_load_path: str, use_pca: bool, attention_heads: int, pca_model_dir: str = None, device: str = 'cuda', batch_size=64, reward_at_every_step: bool = False, success_bonus: int = 10, last_frame_reward_only: bool = True):
         """
         Initializes the LIV reward model.
         :param model_load_path: Path to the model checkpoint.
@@ -38,7 +38,7 @@ class LIVRewardModel(BaseRewardModel):
         # self.pretrained_liv_model = self._load_model(model_load_path)
         self.reward_at_every_step = reward_at_every_step
         self.liv_encoder = LIVEncoder(model_load_path, use_pca, attention_heads, device, batch_size)
-        self.single_reward = single_reward
+        self.last_frame_reward_only = last_frame_reward_only
 
     def _encode_text_batch(self, text: List[str]) -> np.ndarray:
         """
@@ -67,7 +67,7 @@ class LIVRewardModel(BaseRewardModel):
         print(f"encoded_texts shape: {encoded_texts.shape}")
         print(f"encoded_videos shape: {encoded_videos.shape}")
         similarities = F.cosine_similarity(encoded_videos.squeeze(0), encoded_texts, dim=1)
-        if self.single_reward:
+        if self.last_frame_reward_only:
             final_reward = similarities[-1]
             final_reward = float(final_reward.detach().cpu().item())
         else:

@@ -13,7 +13,7 @@ def main():
             pca_model_dir=None,
             batch_size=64,
             success_bonus=200,
-            single_reward=False,
+            last_frame_reward_only=False,
         )
     text_instruction = "Reach the goal"
     frames = th.randn(1, 128, 224, 224, 3)
