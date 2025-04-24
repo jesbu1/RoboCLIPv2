@@ -4,7 +4,7 @@ defaults:
   - _self_
 
 offline_training:
-  offline_h5_path: "/home/jzhang96/RoboCLIPv2/scripts/metaworld_policy_pretrain_dataset_rewind_dense.h5" #
+  offline_h5_path: "/home/jzhang96/RoboCLIPv2/scripts/metaworld_policy_pretrain_dataset_rewind_dense_10.h5" #
   offline_tasks: ['button-press-v2', 'button-press-topdown-wall-v2', 'coffee-pull-v2', 'dial-turn-v2', 'door-open-v2',
                   'door-unlock-v2', 'drawer-close-v2', 'faucet-open-v2', 'handle-press-v2', 'handle-pull-side-v2',
                   'peg-insert-side-v2', 'pick-place-v2', 'plate-slide-v2', 'plate-slide-back-side-v2', 'push-v2',

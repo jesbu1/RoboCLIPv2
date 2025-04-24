@@ -426,7 +426,7 @@ def main(cfg: DictConfig):
                 wandb.run.log({"model_dir": absolute_save_dir})
 
     # add eval policy on all taskss
-    offline_eval(model, reward_model, image_encoder)
+    # offline_eval(model, reward_model, image_encoder)
     # exit()
 
 

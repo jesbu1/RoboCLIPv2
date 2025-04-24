@@ -143,7 +143,7 @@ def subsample_video(video_frames, max_length = 16):
 
 def main(args):
 
-    dataset_path = "../open_x_processing/metaworld_pretraining_dataset.h5"
+    dataset_path = "../open_x_processing/metaworld_pretraining_dataset_10.h5"
     h5_file = h5py.File(dataset_path, "a")
     minilm_model, minilm_tokenizer = load_model()
     # add annotation
@@ -181,9 +181,9 @@ def main(args):
     
 
     # generate pretraining dataset structure same with abrar
-    pre_training_dataset = f"metaworld_policy_pretrain_dataset_{args.reward_type}.h5" # this is the dataset for pretraining
+    pre_training_dataset = f"metaworld_policy_pretrain_dataset_{args.reward_type}_10.h5" # this is the dataset for pretraining
     if args.reward_type == "rewind":
-        pre_training_dataset = f"metaworld_policy_pretrain_dataset_rewind_dense.h5"
+        pre_training_dataset = f"metaworld_policy_pretrain_dataset_rewind_dense_10_debug.h5"
     pre_training_h5_file = h5py.File(pre_training_dataset, "w")
 
     group_keys = ["rewards", 
@@ -199,7 +199,7 @@ def main(args):
                     "done",
                   "action"]
 
-    traj_keys = ["0", "1", "10", "11", "12"]
+    traj_keys = ["0", "1", "10", "11", "12", "13", "14", "2", "3", "4"]
     
 
     total_timesteps = 0
@@ -277,8 +277,7 @@ def main(args):
                         
                         model_input_text_embedding = torch.tensor(text_embedding).unsqueeze(0).to(device)
                         reward_seq, _ = model(input_video_frames, model_input_text_embedding)
-                        
-                        last_reward = reward_seq[-1][-1].item()
+                        last_reward = reward_seq[0][-1].item()
                         
                         pre_training_h5_file["rewards"][current_step] = last_reward
 
@@ -312,7 +311,7 @@ if __name__ == "__main__":
         "--reward_type",
         type=str,
         default="dense",
-        choices=["dense", "sparse", "rewind"],
+        choices=["dense", "sparse", "rewind", "liv"],
         required=True,
     )
     # parser.add_argument(

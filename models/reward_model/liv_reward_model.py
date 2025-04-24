@@ -53,7 +53,7 @@ class LIVRewardModel(BaseRewardModel):
         :param images: A batch of video frames to be encoded. The shape of the input should be (batch_size, num_frames, height, width, channels).
         :return: Encoded representation of each frame.
         """
-        print(f"LIV images shape: {images.shape}")
+        # print(f"LIV images shape: {images.shape}")
         return self.liv_encoder.encode_images(images)
 
     def _calculate_reward_batch(self, encoded_texts: np.ndarray, encoded_videos: np.ndarray) -> np.ndarray:
@@ -63,8 +63,8 @@ class LIVRewardModel(BaseRewardModel):
         :param encoded_videos: Encoded video representations.
         :return: Reward values for each text-video pair.
         """
-        print(f"encoded_texts shape: {encoded_texts.shape}")
-        print(f"encoded_videos shape: {encoded_videos.shape}")
+        # print(f"encoded_texts shape: {encoded_texts.shape}")
+        # print(f"encoded_videos shape: {encoded_videos.shape}")
         similarities = F.cosine_similarity(encoded_videos.squeeze(0), encoded_texts, dim=1)
         final_reward = similarities[-1]
         final_reward = float(final_reward.detach().cpu().item())
