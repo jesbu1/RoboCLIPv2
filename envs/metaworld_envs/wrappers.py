@@ -362,6 +362,8 @@ class LearnedRewardWrapper(gym.Wrapper):
                 reward = self.reward_model.calculate_rewards(
                     self.reward_language_features, frames_embeddings
                 )
+                print(f"reward: {reward}")
+                exit()
                 if self.episode_counter % 350 == 0:
                     # Convert raw_observations to numpy array and save as video
                     frames_np = [frame.squeeze() for frame in self.raw_observations]

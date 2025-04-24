@@ -301,6 +301,7 @@ class IQL(OfflineRLAlgorithm):
 
             for _ in range(int(self.current_critic_update_ratio)):
                 # Sample replay buffer
+                # self.replay_buffer._validate_dataset(verbose=True)
                 replay_data = self.replay_buffer.sample(
                     batch_size, env=self._vec_normalize_env
                 )  # type: ignore[union-attr]
@@ -331,7 +332,7 @@ class IQL(OfflineRLAlgorithm):
                     target_q_pred = target_q_pred.reshape(-1, 1)
                     next_vf_pred = self.v_net(replay_data.next_observations)
                 vf_pred = self.v_net(replay_data.observations)
-
+                # import pdb; pdb.set_trace()
                 # Q value loss
                 target_q_values = (
                     replay_data.rewards
@@ -406,6 +407,7 @@ class IQL(OfflineRLAlgorithm):
                 # autoscale the bc weight based on the average q value
                 with th.no_grad():
                     average_q_value = th.abs(th.min(*q_preds)).mean()
+                    #average_q_value = q_preds.min(dim=1)[0].abs().mean()
                     scaled_ddpg_bc_weight = self.ddpg_bc_weight / average_q_value
                 mean_actions, log_std, _ = self.actor.get_action_dist_params(
                     replay_data.observations
