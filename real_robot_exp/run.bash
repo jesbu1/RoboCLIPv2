@@ -66,4 +66,5 @@ wait
 python train_roll_progress_only_ema.py --rewind --subsample_video --max_length 16 --two_step_training --cosine_scheduler --clip_grad --progress_loss --extra_data_ratio 0.20 --text_embedding_model minilm --worker 1 --rewind_ratio 0.8 --epochs 30 --extra_data_type metaworld --positional_encoding --end_rewind_ratio 0.1 &
 wait
 
+python train_roll_progress_only_ema.py --rewind --subsample_video --max_length 16 --two_step_training --cosine_scheduler --clip_grad --progress_loss --extra_data_ratio 0.20 --text_embedding_model minilm --worker 1 --openx_data --rewind_ratio 0.8 --epochs 30 --extra_data_type real_world --openx_data --positional_encoding --end_rewind_ratio 0.1 &
 

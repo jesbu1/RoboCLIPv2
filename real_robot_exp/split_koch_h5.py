@@ -58,4 +58,5 @@ train_file.close()
 eval_file = h5py.File("usc_koch_rewind_dino_reward_side_eval.h5", 'w')
 for key in Eval_keys:
     h5_file.copy(key, eval_file)
+import pdb ; pdb.set_trace()
 eval_file.close()

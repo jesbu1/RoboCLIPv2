@@ -89,7 +89,7 @@ def main(args):
     
 
     # group_name = "Dino_Koch_v2"
-    group_name = "April_9_Metaworld_Rewind_Fix_Back"
+    group_name = "RealRobot_Fullset_Koch"
     run = wandb.init(
         entity=WANDB_ENTITY_NAME,
         project=WANDB_PROJECT_NAME,
@@ -111,14 +111,24 @@ def main(args):
         if args.view == "side":
             h5_train_eval_file = h5py.File("usc_koch_rewind_dino_reward_side_train.h5", "r")
             h5_eval_file = h5py.File("usc_koch_rewind_dino_reward_side_eval.h5", "r")
-            extra_data_path = "usc_koch_rewind_dino_reward_side_train.h5"
+            if args.full_set:
+                extra_data_path = "usc_koch_rewind_dino_reward_side.h5"
+            else:
+                extra_data_path = "usc_koch_rewind_dino_reward_side_train.h5"
         elif args.view == "top":
             h5_train_eval_file = h5py.File("usc_koch_rewind_dino_reward_main_train.h5", "r")
             h5_eval_file = h5py.File("usc_koch_rewind_dino_reward_main_eval.h5", "r")
             if args.full_set:
-                extra_data_path = "usc_koch_rewind_dino_reward_main_full.h5"
+                extra_data_path = "usc_koch_rewind_dino_reward_main.h5"
             else:
                 extra_data_path = "usc_koch_rewind_dino_reward_main_train.h5"
+        elif args.view == "all":
+            h5_train_eval_file = h5py.File("usc_koch_rewind_dino_reward_side_train.h5", "r")
+            h5_eval_file = h5py.File("usc_koch_rewind_dino_reward_side_eval.h5", "r")
+            if args.full_set:
+                extra_data_path = "usc_koch_rewind_dino_reward_all.h5"
+                print("Using all data new generated")
+
     embedding_dim = 768
 
     if args.openx_data:
@@ -329,7 +339,7 @@ if __name__ == "__main__":
     argparser.add_argument('--cosine_scheduler', action='store_true')
     argparser.add_argument('--clip_grad', action='store_true')
     argparser.add_argument('--progress_loss', action='store_true')
-    argparser.add_argument('--view', type=str, default="side", choices=["side", "top"])
+    argparser.add_argument('--view', type=str, default="side", choices=["side", "top", "all"])
     argparser.add_argument('--extra_data_ratio', type=float, default=0.02)
     argparser.add_argument('--catagorical_progress', action='store_true')
 

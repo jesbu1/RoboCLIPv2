@@ -92,7 +92,7 @@ class LivRealVideoTrainDataset(Dataset):
         traj_lists = [traj for traj in traj_lists if "lang" not in traj] 
         random_name = random.choice(traj_lists)
         progress_dataset = np.asarray(data_group[random_name]) # all video data
-
+        
         start_idx = random.randint(0, len(progress_dataset)-3)
         end_idx = random.randint(start_idx+3, len(progress_dataset))
 
