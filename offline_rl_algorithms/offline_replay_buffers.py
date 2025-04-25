@@ -352,6 +352,7 @@ class H5ReplayBuffer(ReplayBuffer):
             else rewards,
             np.ones_like(rewards),  # offline_data_mask is 1 for all offline data,
         )
+
         return CombinedBufferSamples(*tuple(map(self.to_torch, data)))
     
     def _validate_dataset(self, verbose: bool = False) -> None:

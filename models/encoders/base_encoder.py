@@ -58,7 +58,7 @@ class BaseEncoder(abc.ABC):
             # print("shape after transpose", images.shape) # (num_vids, num_frames, 3, H, W) (1,1,3,480,640)
         for i in range(0, len(images), self.batch_size):
             batch_images = images[i : i + self.batch_size]
-            batch_images = torch.tensor(batch_images, dtype=torch.float32).to(
+            batch_images = torch.tensor(batch_images, dtype=torch.float32).contiguous().to(
                 self.device
             )
             # print("batch_images shape", batch_images.shape) # (1,1,3,480,640)
