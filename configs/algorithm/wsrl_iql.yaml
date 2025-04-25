@@ -5,8 +5,10 @@ defaults:
 
 # Because RLPD is slower, we will log more frequently
 logging:
-  eval_freq: 5000
-  video_freq: 5000
+  eval_freq: 10000
+  video_freq: 10000
+  wandb_group_name: "${reward_model.name}_${general_training.algo}_${environment.env_id}_online_final"
+  log_dir: "./logs/${logging.wandb_group_name}"
 
 general_training:
   algo: rlpd
@@ -22,8 +24,9 @@ general_training:
   rlpd_train_critic_with_entropy: false
   # Note: RLPD's offline step uses default params defined in base_config.yaml
   rlpd_offline_algo: iql
-  expectile: 0.75 #0.7
-  awr_advantage_temp: 2 #0.5
+  # expectile: 0.75 #0.7
+  # awr_advantage_temp: 2 #0.5
+  seed: 42
 
 model:
   policy_layer_norm: true
@@ -33,7 +36,7 @@ model:
 
 offline_training:
   offline_training_steps: 100000
-  # ckpt_path: "/home/yusenluo/RoboCLIP_offline/RoboCLIPv2/outputs/2025-04-24/02-45-17/logs/sparse_rlpd/last_offline"  # Path to load checkpoint from, if provided will skip offline training
+  ckpt_path: "/data/shared/roboclip/metaworld_pretrain_policy/metaworld_sparse_pretrain_100k/last_offline"  # Path to load checkpoint from, if provided will skip offline training
   #"/home/yusenluo/RoboCLIP_offline/RoboCLIPv2/outputs/2025-04-24/05-08-57/logs/rewind_rlpd/last_offline" Rewind dense 100k
   critic_update_ratio: 1
 

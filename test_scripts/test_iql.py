@@ -425,9 +425,10 @@ def main(cfg: DictConfig):
             # Log this absolute_save_dir in wandb
             if logging_config.wandb:
                 wandb.run.log({"model_dir": absolute_save_dir})
+                
 
     # add eval policy on all tasks
-    offline_eval(model, reward_model, image_encoder)
+    # offline_eval(model, reward_model, image_encoder, rollout_num = 25)
     # exit()
 
 
@@ -730,7 +731,7 @@ def get_policy_algorithm(cfg: DictConfig, envs: VecEnv, log_dir: str):
                 n_critics_to_sample=cfg.general_training.n_critics_to_sample,
                 warm_start_online_rl=cfg.online_training.warm_start_online_rl,
                 gamma=cfg.general_training.gamma,
-                expectile=cfg.general_training.expectile,
+                # expectile=cfg.general_training.expectile,
             )
         else:
             model = model_class.load(args.pretrained, env=envs, tensorboard_log=log_dir)
