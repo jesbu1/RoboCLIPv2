@@ -155,6 +155,7 @@ def main():
             pca_model_dir=None,
             batch_size=64,
             success_bonus=200,
+            last_frame_reward_only = True,
         )
 
     dataset_path = "../open_x_processing/metaworld_pretraining_dataset_10.h5"
@@ -198,7 +199,7 @@ def main():
     
 
 #     # generate pretraining dataset structure same with abrar
-    pre_training_dataset = f"metaworld_policy_pretrain_dataset_liv_10.h5" # this is the dataset for pretraining
+    pre_training_dataset = f"metaworld_policy_pretrain_dataset_liv_5.h5" # this is the dataset for pretraining
 #     if args.reward_type == "rewind":
 #         pre_training_dataset = f"metaworld_policy_pretrain_dataset_rewind_dense_10.h5"
     pre_training_h5_file = h5py.File(pre_training_dataset, "w")
@@ -216,7 +217,8 @@ def main():
                     "done",
                   "action"]
 
-    traj_keys = ["0", "1", "10", "11", "12", "13", "14", "2", "3", "4"]
+    # traj_keys = ["0", "1", "10", "11", "12", "13", "14", "2", "3", "4"]
+    traj_keys = ["0", "1", "10", "11", "12"]
     
 
     total_timesteps = 0
@@ -279,7 +281,7 @@ def main():
                     pre_training_h5_file["done"][current_step] = done[j]
 
                     liv_reward = reward_model.calculate_rewards(
-                        np.expand_dims(text_embedding.shape, axis=0),
+                        np.expand_dims(text_embedding, axis=0),
                         np.expand_dims(traj_img_embeddings[:j+1], axis=0),
                     )
 
@@ -289,6 +291,7 @@ def main():
 
 
     print("current_step", current_step, "total_timesteps", total_timesteps, "sum reward", np.sum(pre_training_h5_file["rewards"]))
+    print("max reward", np.max(pre_training_h5_file["rewards"]), "min reward", np.min(pre_training_h5_file["rewards"]))
     pre_training_h5_file.close()
 
     
