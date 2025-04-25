@@ -493,8 +493,8 @@ class CombinedBuffer(ReplayBuffer):
 
 if __name__ == "__main__":
     # Test the H5ReplayBuffer
-    h5_path = "/home/yusenluo/RoboCLIP_offline/RoboCLIPv2/scripts/metaworld_policy_pretrain_dataset_rewind_dense.h5"
-    buffer = H5ReplayBuffer(h5_path, success_bonus=200)
+    h5_path = "/home/yusenluo/RoboCLIP_offline/RoboCLIPv2/scripts/metaworld_policy_pretrain_dataset_liv_10.h5"
+    buffer = H5ReplayBuffer(h5_path, success_bonus=0)
     buffer._validate_dataset(verbose=True)
     # print(buffer.size())
     # samples = buffer.sample(10)
