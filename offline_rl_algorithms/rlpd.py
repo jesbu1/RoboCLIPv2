@@ -927,9 +927,12 @@ class RLPD(OfflineRLAlgorithm):
             #     "Requires grad:",
             #     self.actor.mu_processor[0]._parameters["weight"].requires_grad,
             # )
-            weights_before = (
-                self.actor.mu_processor[0]._parameters["weight"].detach().clone()
-            )
+
+            # only do this if mu_processor exists
+            if hasattr(self.actor, "mu_processor"):
+                weights_before = (
+                    self.actor.mu_processor[0]._parameters["weight"].detach().clone()
+                )
 
             ### DEBUG END
 
@@ -940,30 +943,14 @@ class RLPD(OfflineRLAlgorithm):
             # th.nn.utils.clip_grad_norm_(self.actor.parameters(), max_norm=10.0)
             self.actor.optimizer.step()
 
-            weights_after = (
-                self.actor.mu_processor[0]._parameters["weight"].detach().clone()
-            )
+            # only do this if mu_processor exists
+            if hasattr(self.actor, "mu_processor"):
+                weights_after = (
+                    self.actor.mu_processor[0]._parameters["weight"].detach().clone()
+                )
 
-            # check if they are close
-            weight_difference = weights_after - weights_before
-            # print(
-            #     "weight difference",
-            #     weight_difference.min(),
-            #     weight_difference.max(),
-            #     weight_difference.mean(),
-            # )
-            # print(
-            #     "weights before",
-            #     weights_before.min(),
-            #     weights_before.max(),
-            #     weights_before.mean(),
-            # )
-            # print(
-            #     "weights after",
-            #     weights_after.min(),
-            #     weights_after.max(),
-            #     weights_after.mean(),
-            # )
+                # check if they are close
+                weight_difference = weights_after - weights_before
 
             if policy_lock is not None:
                 policy_lock.release()
@@ -979,10 +966,18 @@ class RLPD(OfflineRLAlgorithm):
             f"{logging_prefix}/average_q_next_values": np.mean(q_next_values_list),
             f"{logging_prefix}/average_reward": np.mean(reward_values),
             f"{logging_prefix}/average_actor_log_pis": np.mean(actor_log_pis),
-            f"{logging_prefix}/weight_difference_max": weight_difference.max(),
-            f"{logging_prefix}/weight_difference_min": weight_difference.min(),
-            f"{logging_prefix}/weight_difference_mean": weight_difference.mean(),
         }
+
+        if hasattr(self.actor, "mu_processor"):
+            metrics_dict[f"{logging_prefix}/weight_difference_max"] = (
+                weight_difference.max()
+            )
+            metrics_dict[f"{logging_prefix}/weight_difference_min"] = (
+                weight_difference.min()
+            )
+            metrics_dict[f"{logging_prefix}/weight_difference_mean"] = (
+                weight_difference.mean()
+            )
 
         if len(ent_coef_losses) > 0:
             metrics_dict[f"{logging_prefix}/ent_coef_loss"] = np.mean(ent_coef_losses)

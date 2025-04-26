@@ -165,8 +165,12 @@ class H5ReplayBuffer(ReplayBuffer):
             # actions /= 3.0
 
             if normalize_actions_koch:
-                actions /= 180  # normalize between -1 and 1
-                actions = np.clip(actions, -1, 1)
+                # actions /= 180  # normalize between -1 and 1
+                # actions = np.clip(actions, -1, 1)
+                low = -360
+                high = 360
+
+                actions = 2.0 * ((actions - low) / (high - low)) - 1.0
 
             # actions = -actions
 
@@ -289,12 +293,6 @@ class H5ReplayBuffer(ReplayBuffer):
                     prev_start = i
 
             rewards = new_rewards
-        # add the success bonus
-        if success_bonus != 0:
-            print(
-                "-----Adding success bonus to offline buffer. Warning: this assumes all dones in the offline buffer == success.-----"
-            )
-            rewards[dones == 1] += success_bonus
 
         # calculate monte-carlo returns
         self.mc_returns = None
@@ -437,6 +435,8 @@ class H5ReplayBuffer(ReplayBuffer):
         observation = observation.astype(np.float32)
         next_obs = next_obs.astype(np.float32)
 
+        window_sizes = np.ones((len(batch_inds),))
+
         valid_lengths = np.ones((len(batch_inds),))
         if self.action_chunk_size > 1:
             # Create sliding window views for actions, rewards, and dones
@@ -513,10 +513,9 @@ class H5ReplayBuffer(ReplayBuffer):
                 )
 
             # in this case, the last valid reward should also be repeated, without the success bonus since that's already there.
-            last_valid_rewards = (
-                rewards_chunked[np.arange(len(valid_lengths)), last_valid_indices]
-                - self.success_bonus * any_dones
-            )
+            last_valid_rewards = rewards_chunked[
+                np.arange(len(valid_lengths)), last_valid_indices
+            ]
             padded_rewards = np.where(
                 valid_masks,
                 rewards_chunked,
@@ -524,6 +523,9 @@ class H5ReplayBuffer(ReplayBuffer):
             )
 
             summed_rewards = np.sum(padded_rewards, axis=1)
+
+            # now we add the success bonus to anywhere with dones
+            summed_rewards[any_dones] += self.success_bonus
 
             actions = padded_actions.astype(np.float32)
             rewards = summed_rewards.reshape(-1, 1).astype(np.float32)
@@ -534,6 +536,8 @@ class H5ReplayBuffer(ReplayBuffer):
             dones = self.dones[batch_inds].reshape(-1, 1).astype(np.float32)
             actions = self.actions[batch_inds, :].astype(np.float32)
             window_sizes = np.ones(len(batch_inds)) * 1
+
+            rewards[dones] += self.success_bonus
 
         if self.calculate_mc_returns:
             mc_returns = self.mc_returns[batch_inds].reshape(-1, 1)
@@ -664,11 +668,19 @@ class CombinedBuffer(ReplayBuffer):
                 if old_samples is None:
                     old_data = th.empty(0)
                 else:
-                    old_data = getattr(old_samples, name)
+                    try:
+                        old_data = getattr(old_samples, name)
+                    except AttributeError:
+                        # print("old_samples failed on " + name)
+                        old_data = th.ones(old_batch_size).to(old_data.device)
                 if new_samples is None:
                     new_data = th.empty(0)
                 else:
-                    new_data = getattr(new_samples, name)
+                    try:
+                        new_data = getattr(new_samples, name)
+                    except AttributeError:
+                        # print("new_samples failed on " + name)
+                        new_data = th.ones(new_batch_size).to(old_data.device)
 
             try:
                 if old_samples is not None and new_samples is not None:
@@ -963,7 +975,9 @@ class SuccessFailSplitBuffer(CombinedBuffer):
                     infos,
                 ) in self.temp_input_output:
                     self.failure_buffer.add(obs, next_obs, action, reward, done, infos)
-            print(f"Success buffer {self.success_buffer.size()}, Failure buffer {self.failure_buffer.size()}")
+            print(
+                f"Success buffer {self.success_buffer.size()}, Failure buffer {self.failure_buffer.size()}"
+            )
             self.temp_input_output = []
 
 

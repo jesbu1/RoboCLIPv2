@@ -28,8 +28,6 @@ general_training:
   dense_rewards_at_end: false
   entropy_term: "auto"
 
-  # offline rl parameters
-  critic_update_ratio: 4 # iql and cql
   # gamma: 0.998 # (1/(1-gamma)) = 500 steps
   gamma: 0.99 # (1/(1-gamma)) = 500 steps
   
