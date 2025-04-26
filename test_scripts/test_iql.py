@@ -507,6 +507,17 @@ def main(cfg: DictConfig):
         and cfg.online_training.mix_buffers_ratio > 0.0
     ):
         model.set_combined_buffer(buffer, ratio=cfg.online_training.mix_buffers_ratio)
+    # reset the last layer of the actor
+    # for layer in model.actor.mu_processor.children():
+    #    if hasattr(layer, "reset_parameters"):
+    #        layer.reset_parameters()
+    # for layer in model.actor.log_std_processor.children():
+    #    if hasattr(layer, "reset_parameters"):
+    #        layer.reset_parameters()
+    # for i in range(len(model.critic.q_networks)):
+    #    for layer in model.critic.q_networks[i].q_network.children():
+    #        if hasattr(layer, "reset_parameters"):
+    #            layer.reset_parameters()
 
     ### Learn online ###
     logger = model.logger  # set logger in case

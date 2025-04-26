@@ -1016,10 +1016,6 @@ class OfflineRLAlgorithm(OffPolicyAlgorithm):
             # Rescale and perform action
             new_obs, rewards, dones, infos = env.step(actions)
 
-            # If done, then set first_step to True
-            if dones[0]:
-                first_step = True
-
             # Reset
             if self.action_chunk_size > 1:
                 # Check for infos['action']

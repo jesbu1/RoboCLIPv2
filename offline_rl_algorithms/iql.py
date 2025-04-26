@@ -420,7 +420,6 @@ class IQL(OfflineRLAlgorithm):
                 )
                 if policy_lock is not None:
                     policy_lock.release()
-
                 log_prob = self.get_log_prob(distribution, replay_data.actions)
                 log_prob = log_prob.reshape(-1, 1)
                 policy_loss = -th.mean(weights * log_prob)
