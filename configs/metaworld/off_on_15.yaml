@@ -16,7 +16,7 @@ online_training:
   total_time_steps: 100000
 
 general_training:
-  seed: 42
+  seed: 0
 
 environment:
   cfg_name: "metaworld_off_on_15"

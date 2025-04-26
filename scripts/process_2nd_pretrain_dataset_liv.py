@@ -31,96 +31,96 @@ from models.reward_model.liv_reward_model import LIVRewardModel
 #         ).to(device)
 #     model.load_state_dict(model_dict['ema_model'])
 #     return model
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-
-# def mean_pooling(model_output, attention_mask):
-#     token_embeddings = model_output[
-#         0
-#     ]  # First element of model_output contains all token embeddings
-#     input_mask_expanded = (
-#         attention_mask.unsqueeze(-1).expand(token_embeddings.size()).float()
-#     )
-#     return torch.sum(token_embeddings * input_mask_expanded, 1) / torch.clamp(
-#         input_mask_expanded.sum(1), min=1e-9
-#     )
-
-
-
-# def load_model():
-#     minilm_tokenizer = AutoTokenizer.from_pretrained(
-#         "sentence-transformers/all-MiniLM-L12-v2"
-#     )
-#     minilm_model = AutoModel.from_pretrained("sentence-transformers/all-MiniLM-L12-v2").to(
-#         device
-#     )
-#     return minilm_model, minilm_tokenizer
+def mean_pooling(model_output, attention_mask):
+    token_embeddings = model_output[
+        0
+    ]  # First element of model_output contains all token embeddings
+    input_mask_expanded = (
+        attention_mask.unsqueeze(-1).expand(token_embeddings.size()).float()
+    )
+    return torch.sum(token_embeddings * input_mask_expanded, 1) / torch.clamp(
+        input_mask_expanded.sum(1), min=1e-9
+    )
 
 
 
-# def embedding_lang(ann, minilm_model, minilm_tokenizer):
-#     lang_embeddings = list()
-#     for task in ann:
-#         encoded_input = minilm_tokenizer(
-#             [task], padding=False, truncation=True, return_tensors="pt"
-#         ).to(device)
-
-#         model_output = minilm_model(**encoded_input)
-#         minlm_task_embedding = (
-#             mean_pooling(model_output, encoded_input["attention_mask"])
-#             .cpu()
-#             .detach()
-#             .numpy()
-#         )
-#         lang_embeddings.append(minlm_task_embedding)
-#     lang_embeddings = np.concatenate(lang_embeddings, axis=0)
-#     return lang_embeddings
+def load_model():
+    minilm_tokenizer = AutoTokenizer.from_pretrained(
+        "sentence-transformers/all-MiniLM-L12-v2"
+    )
+    minilm_model = AutoModel.from_pretrained("sentence-transformers/all-MiniLM-L12-v2").to(
+        device
+    )
+    return minilm_model, minilm_tokenizer
 
 
-# dino_transform_image = T.Compose(
-#     [T.ToTensor(), T.CenterCrop(224), T.Normalize([0.5], [0.5])]
-# )
 
-# def dino_load_image(image):
-#     img = Image.fromarray(image)
+def embedding_lang(ann, minilm_model, minilm_tokenizer):
+    lang_embeddings = list()
+    for task in ann:
+        encoded_input = minilm_tokenizer(
+            [task], padding=False, truncation=True, return_tensors="pt"
+        ).to(device)
 
-#     transformed_img = dino_transform_image(img)[:3].unsqueeze(0)
+        model_output = minilm_model(**encoded_input)
+        minlm_task_embedding = (
+            mean_pooling(model_output, encoded_input["attention_mask"])
+            .cpu()
+            .detach()
+            .numpy()
+        )
+        lang_embeddings.append(minlm_task_embedding)
+    lang_embeddings = np.concatenate(lang_embeddings, axis=0)
+    return lang_embeddings
 
-#     return transformed_img
+
+dino_transform_image = T.Compose(
+    [T.ToTensor(), T.CenterCrop(224), T.Normalize([0.5], [0.5])]
+)
+
+def dino_load_image(image):
+    img = Image.fromarray(image)
+
+    transformed_img = dino_transform_image(img)[:3].unsqueeze(0)
+
+    return transformed_img
 
 
-# dinov2_vits14 = torch.hub.load("facebookresearch/dinov2", "dinov2_vitb14")
-# dinov2_vits14 = dinov2_vits14.to(device)
-# DINO_BATCH_SIZE = 200
+dinov2_vits14 = torch.hub.load("facebookresearch/dinov2", "dinov2_vitb14")
+dinov2_vits14 = dinov2_vits14.to(device)
+DINO_BATCH_SIZE = 200
 
-# def embedding_image(sampled_images):
-#     with torch.inference_mode():
-#         # batch it
-#         episode_images_dino = [
-#             dino_load_image(img) for img in sampled_images
-#         ]
-#         episode_images_dino = [torch.concatenate(episode_images_dino[i : i + DINO_BATCH_SIZE])
-#         for i in range(
-#             0, len(episode_images_dino), DINO_BATCH_SIZE
-#         )
-#         ]
-#         embedding_list = []
-#         for batch in episode_images_dino:
-#             episode_image_embeddings = (
-#                 dinov2_vits14(batch.to(device))
-#                 .squeeze()
-#                 .detach()
-#                 .cpu()
-#                 .numpy()
-#             )
-#             embedding_list.append(episode_image_embeddings)
-#         try:
-#             episode_image_embeddings = np.concatenate(embedding_list)
-#         except:
-#             for i in range(len(embedding_list)):
-#                 print("embedding_list[i].shape", embedding_list[i].shape)
-#             import pdb ; pdb.set_trace()
-#             a = 0
-#     return episode_image_embeddings
+def embedding_image(sampled_images):
+    with torch.inference_mode():
+        # batch it
+        episode_images_dino = [
+            dino_load_image(img) for img in sampled_images
+        ]
+        episode_images_dino = [torch.concatenate(episode_images_dino[i : i + DINO_BATCH_SIZE])
+        for i in range(
+            0, len(episode_images_dino), DINO_BATCH_SIZE
+        )
+        ]
+        embedding_list = []
+        for batch in episode_images_dino:
+            episode_image_embeddings = (
+                dinov2_vits14(batch.to(device))
+                .squeeze()
+                .detach()
+                .cpu()
+                .numpy()
+            )
+            embedding_list.append(episode_image_embeddings)
+        try:
+            episode_image_embeddings = np.concatenate(embedding_list)
+        except:
+            for i in range(len(embedding_list)):
+                print("embedding_list[i].shape", embedding_list[i].shape)
+            import pdb ; pdb.set_trace()
+            a = 0
+    return episode_image_embeddings
 
 # def subsample_video(video_frames, max_length = 16):
 #     video_length = len(video_frames)
@@ -160,7 +160,7 @@ def main():
 
     dataset_path = "../open_x_processing/metaworld_pretraining_dataset_10.h5"
     h5_file = h5py.File(dataset_path, "a")
-#     minilm_model, minilm_tokenizer = load_model()
+    minilm_model, minilm_tokenizer = load_model()
     # add annotation
    
     merge_gt_annotation = {}
@@ -171,31 +171,25 @@ def main():
 #         model = load_rewind_model()
 #         model.eval()
 #         model.to(device)
-    if "text_embedding_liv" in h5_file[list(h5_file.keys())[-1]]:
-        del h5_file[list(h5_file.keys())[-1]]["text_embedding_liv"]
-    if "text_embedding_liv" not in h5_file[list(h5_file.keys())[-1]]:
-
+    if "text_embedding" not in h5_file[list(h5_file.keys())[-1]]:
         print("text_embedding not exists, start to generate minilm embedding")
-
         for key in train_gt_annotation.keys():
             merge_gt_annotation[key] = [train_gt_annotation[key]] + generated_gt_annotation[key]
-
-            lang_list = []
-            for per_task_ann in merge_gt_annotation[key]:
-                lang_list.append(reward_model.encode_text(per_task_ann))
-            lang_embeddings = np.concatenate(lang_list, axis=0)
-
+            lang_embeddings = embedding_lang(merge_gt_annotation[key], minilm_model, minilm_tokenizer)
             merge_gt_annotation_embedding[key] = lang_embeddings
             merge_gt_annotation_string[key] = np.asarray(merge_gt_annotation[key], dtype=h5py.string_dtype(encoding='utf-8'))
-            if "text_embedding_liv" in h5_file[key]:
-                del h5_file[key]["text_embedding_liv"]
+            if "text_embedding" in h5_file[key]:
+                del h5_file[key]["text_embedding"]
+            if "text_string" in h5_file[key]:
+                del h5_file[key]["text_string"]
             h5_file[key].create_dataset(
-                "text_embedding_liv", data=merge_gt_annotation_embedding[key]
+                "text_embedding", data=merge_gt_annotation_embedding[key]
             )
-
+            h5_file[key].create_dataset(
+                "text_string", data=merge_gt_annotation_string[key]
+            )
     else:
         print("text_embedding already exists")
-
     
 
 #     # generate pretraining dataset structure same with abrar
@@ -229,9 +223,9 @@ def main():
     total_timesteps = total_timesteps * 5 # each task has 6 annotations
 
 
-    pre_training_h5_file.create_dataset("lang_embedding", (total_timesteps, 1024), dtype="float32")
-    pre_training_h5_file.create_dataset("policy_lang_embedding", (total_timesteps, 1024), dtype="float32")
-    pre_training_h5_file.create_dataset("img_embedding", (total_timesteps, 1024), dtype="float32")
+    pre_training_h5_file.create_dataset("lang_embedding", (total_timesteps, 384), dtype="float32")
+    pre_training_h5_file.create_dataset("policy_lang_embedding", (total_timesteps, 384), dtype="float32")
+    pre_training_h5_file.create_dataset("img_embedding", (total_timesteps, 768), dtype="float32")
     pre_training_h5_file.create_dataset("timesteps", (total_timesteps,), dtype="int32")
     pre_training_h5_file.create_dataset("text_string", (total_timesteps,), dtype=h5py.string_dtype(encoding='utf-8'))
     pre_training_h5_file.create_dataset("env_id", (total_timesteps,), dtype=h5py.string_dtype(encoding='utf-8'))
@@ -247,8 +241,10 @@ def main():
         group = h5_file[key]
         for traj_id in traj_keys:
             traj_imgs = np.asarray(group[traj_id]['img'])
-            traj_imgs = np.expand_dims(traj_imgs, axis=0)
-            traj_img_embeddings = reward_model.encode_images(traj_imgs)
+            traj_img_embeddings = embedding_image(traj_imgs)
+            traj_imgs_for_liv = np.expand_dims(traj_imgs, axis=0)
+            traj_imgs_for_liv = reward_model.encode_images(traj_imgs_for_liv)
+            
 
             states = np.asarray(group[traj_id]['state'])
             next_states = np.asarray(group[traj_id]['next_state'])
@@ -257,7 +253,8 @@ def main():
             done = np.asarray(group[traj_id]['done'])
             env_id = np.asarray(key, dtype=h5py.string_dtype(encoding='utf-8'))
 
-            text_embedding_all = np.asarray(h5_file[key]['text_embedding_liv'])
+            text_embedding_all = np.asarray(h5_file[key]['text_embedding'])
+            text_liv_embedding_all = np.asarray(h5_file[key]['text_embedding_liv'])
             text_string_all = np.asarray(h5_file[key]['text_string'])
             rewards = np.asarray(group[traj_id]['reward'])
 
@@ -266,6 +263,7 @@ def main():
             for i in range(len(text_embedding_all)):
                 text_embedding = text_embedding_all[i]
                 text_string = text_string_all[i]
+                text_liv_embedding = text_liv_embedding_all[i]
 
                 for j in range(len(states)):
                     pre_training_h5_file["lang_embedding"][current_step] = text_embedding
@@ -281,8 +279,8 @@ def main():
                     pre_training_h5_file["done"][current_step] = done[j]
 
                     liv_reward = reward_model.calculate_rewards(
-                        np.expand_dims(text_embedding, axis=0),
-                        np.expand_dims(traj_img_embeddings[:j+1], axis=0),
+                        np.expand_dims(text_liv_embedding, axis=0),
+                        np.expand_dims(traj_imgs_for_liv[:j+1], axis=0),
                     )
 
                     pre_training_h5_file["rewards"][current_step] = liv_reward
