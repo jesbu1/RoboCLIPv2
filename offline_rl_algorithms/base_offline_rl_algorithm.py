@@ -590,7 +590,7 @@ class OfflineRLAlgorithm(OffPolicyAlgorithm):
             if policy_lock is not None:
                 policy_lock.acquire()
             unscaled_action, _ = self.predict(
-                self._last_obs, deterministic=True, episode_start=episode_start
+                self._last_obs, deterministic=False, episode_start=episode_start
             )
             if policy_lock is not None:
                 policy_lock.release()
@@ -722,7 +722,6 @@ class OfflineRLAlgorithm(OffPolicyAlgorithm):
 
             if len(envs_to_predict_for) == 0:
                 return [None] * env.num_envs, None
-
         action, _ = super().predict(observation, state, episode_start, deterministic)
         return action, _
 
@@ -814,10 +813,6 @@ class OfflineRLAlgorithm(OffPolicyAlgorithm):
             first_step = False
             # Rescale and perform action
             new_obs, rewards, dones, infos = env.step(actions)
-
-            # If done, then set first_step to True
-            if dones[0]:
-                first_step = True
 
             # Reset
             if self.action_chunk_size > 1:

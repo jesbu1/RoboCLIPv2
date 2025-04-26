@@ -533,6 +533,7 @@ class H5ReplayBuffer(ReplayBuffer):
             rewards = self.rewards[batch_inds].reshape(-1, 1).astype(np.float32)
             dones = self.dones[batch_inds].reshape(-1, 1).astype(np.float32)
             actions = self.actions[batch_inds, :].astype(np.float32)
+            window_sizes = np.ones(len(batch_inds)) * 1
 
         if self.calculate_mc_returns:
             mc_returns = self.mc_returns[batch_inds].reshape(-1, 1)
