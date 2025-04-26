@@ -309,7 +309,7 @@ if __name__ == "__main__":
     ]
 
     # remove eval tasks from dataset_ids
-    dataset_ids = [x for x in dataset_ids if x not in eval_tasks]
+    # dataset_ids = [x for x in dataset_ids if x not in eval_tasks]
 
     reward_model_path = "weights/rewind/one_step_transformer.pth"
     # reward_model_path = "weights/rewind/real_world_PosEmb_Rewind_ratio_0.8_EMA_momentum_0.3_End_Rewind_ratio_0.1/model_30.pth"
@@ -319,7 +319,7 @@ if __name__ == "__main__":
     reward_at_every_step = True
     # dataset_id = "test/orange_left_right_handover"
     reward_model_type = "rewind"
-    output_path = f"./data/real_robot/updated_trajs/usc_koch_rewind_{reward_model_type}_{reward_at_every_step}.h5"
+    output_path = f"./data/real_robot/updated_trajs/usc_koch_rewind_full_{reward_model_type}_{reward_at_every_step}.h5"
     lerobot_to_reward_hdf5(
         dataset_id=dataset_ids,
         output_path=output_path,

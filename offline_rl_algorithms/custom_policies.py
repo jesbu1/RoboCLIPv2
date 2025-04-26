@@ -209,6 +209,22 @@ class CustomActor(Actor):
         )
         return data
 
+    def __deepcopy__(self, memo):
+        obj = type(self).__new__(self.__class__)
+        output_dict = {}
+        for key, value in self.__dict__.items():
+            # if key in ["action_space", "observation_space"]:
+            #     output_dict[key] = value
+            # else:
+            #     output_dict[key] = copy.deepco/copy(value)
+            try:
+                output_dict[key] = copy.deepcopy(value)
+            except:
+                print("Actor failed to deep copy key:", key)
+                output_dict[key] = copy.copy(value)
+        obj.__dict__ = output_dict
+        return obj
+
 
 class ActionSequenceActor(CustomActor):
     # uses an RNN to output an action sequence
@@ -854,7 +870,7 @@ class CustomRNNSACPolicy(CustomSACPolicy):
             try:
                 output_dict[key] = copy.deepcopy(value)
             except:
-                print("Failed to deep copy key:", key)
+                # print("Policy failed to deep copy key:", key)
                 output_dict[key] = copy.copy(value)
         obj.__dict__ = output_dict
         return obj

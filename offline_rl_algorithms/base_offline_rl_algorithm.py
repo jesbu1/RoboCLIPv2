@@ -8,7 +8,7 @@ from stable_baselines3.common.buffers import ReplayBuffer
 from stable_baselines3.common.noise import ActionNoise, VectorizedActionNoise
 from stable_baselines3.common.off_policy_algorithm import OffPolicyAlgorithm
 from stable_baselines3.common.policies import BasePolicy
-from stable_baselines3.common.callbacks import BaseCallback
+from stable_baselines3.common.callbacks import BaseCallback, CallbackList
 
 from stable_baselines3.common.type_aliases import (
     GymEnv,
@@ -40,8 +40,11 @@ from offline_rl_algorithms.offline_replay_buffers import (
 
 import gym
 import threading
+from concurrent import futures
 
 import pathlib, io, functools, warnings
+
+import copy
 
 from stable_baselines3.common.utils import check_for_correct_spaces, get_system_info
 from stable_baselines3.common.save_util import (
@@ -92,6 +95,167 @@ def recursive_setattr(obj: Any, attr: str, val: Any) -> None:
         return None
 
 
+from stable_baselines3.common.preprocessing import (
+    get_action_dim,
+    is_image_space,
+    maybe_transpose,
+    preprocess_obs,
+)
+from stable_baselines3.common.distributions import (
+    BernoulliDistribution,
+    CategoricalDistribution,
+    DiagGaussianDistribution,
+    Distribution,
+    MultiCategoricalDistribution,
+    StateDependentNoiseDistribution,
+    make_proba_distribution,
+)
+from stable_baselines3.common.preprocessing import (
+    get_action_dim,
+    is_image_space,
+    maybe_transpose,
+    preprocess_obs,
+)
+from stable_baselines3.common.torch_layers import (
+    BaseFeaturesExtractor,
+    CombinedExtractor,
+    FlattenExtractor,
+    MlpExtractor,
+    NatureCNN,
+    create_mlp,
+)
+from stable_baselines3.common.utils import (
+    get_device,
+    is_vectorized_observation,
+    obs_as_tensor,
+)
+
+
+class ThreadSafePolicy:
+    def __init__(self, actor, observation_space, device, _squash_output):
+        self.actor = actor
+        self.observation_space = observation_space
+        self.action_space = actor.action_space
+        self.device = device
+        self._squash_output = _squash_output
+
+    @property
+    def squash_output(self) -> bool:
+        """(bool) Getter for squash_output."""
+        return self._squash_output
+
+    def unscale_action(self, scaled_action: np.ndarray) -> np.ndarray:
+        """
+        Rescale the action from [-1, 1] to [low, high]
+        (no need for symmetric action space)
+
+        :param scaled_action: Action to un-scale`
+        """
+        low, high = self.action_space.low, self.action_space.high
+        return low + (0.5 * (scaled_action + 1.0) * (high - low))
+
+    def obs_to_tensor(
+        self, observation: Union[np.ndarray, Dict[str, np.ndarray]]
+    ) -> Tuple[th.Tensor, bool]:
+        """
+        Convert an input observation to a PyTorch tensor that can be fed to a model.
+        Includes sugar-coating to handle different observations (e.g. normalizing images).
+
+        :param observation: the input observation
+        :return: The observation as PyTorch tensor
+            and whether the observation is vectorized or not
+        """
+        vectorized_env = False
+        if isinstance(observation, dict):
+            # need to copy the dict as the dict in VecFrameStack will become a torch tensor
+            observation = copy.deepcopy(observation)
+            for key, obs in observation.items():
+                obs_space = self.observation_space.spaces[key]
+                if is_image_space(obs_space):
+                    obs_ = maybe_transpose(obs, obs_space)
+                else:
+                    obs_ = np.array(obs)
+                vectorized_env = vectorized_env or is_vectorized_observation(
+                    obs_, obs_space
+                )
+                # Add batch dimension if needed
+                observation[key] = obs_.reshape(
+                    (-1, *self.observation_space[key].shape)
+                )
+
+        elif is_image_space(self.observation_space):
+            # Handle the different cases for images
+            # as PyTorch use channel first format
+            observation = maybe_transpose(observation, self.observation_space)
+
+        else:
+            observation = np.array(observation)
+
+        if not isinstance(observation, dict):
+            # Dict obs need to be handled separately
+            vectorized_env = is_vectorized_observation(
+                observation, self.observation_space
+            )
+            # Add batch dimension if needed
+            observation = observation.reshape((-1, *self.observation_space.shape))
+
+        observation = obs_as_tensor(observation, self.device)
+        return observation, vectorized_env
+
+    def predict(
+        self,
+        observation: Union[np.ndarray, Dict[str, np.ndarray]],
+        state: Optional[Tuple[np.ndarray, ...]] = None,
+        episode_start: Optional[np.ndarray] = None,
+        deterministic: bool = False,
+    ) -> Tuple[np.ndarray, Optional[Tuple[np.ndarray, ...]]]:
+        """
+        Get the policy action from an observation (and optional hidden state).
+        Includes sugar-coating to handle different observations (e.g. normalizing images).
+
+        :param observation: the input observation
+        :param state: The last hidden states (can be None, used in recurrent policies)
+        :param episode_start: The last masks (can be None, used in recurrent policies)
+            this correspond to beginning of episodes,
+            where the hidden states of the RNN must be reset.
+        :param deterministic: Whether or not to return deterministic actions.
+        :return: the model's action and the next hidden state
+            (used in recurrent policies)
+        """
+
+        # Switch to eval mode (this affects batch norm / dropout)
+
+        observation, vectorized_env = self.obs_to_tensor(observation)
+        with th.no_grad():
+            actions = self._predict(observation, deterministic=deterministic)
+        # Convert to numpy, and reshape to the original action shape
+        actions = actions.cpu().numpy().reshape((-1, *self.action_space.shape))
+
+        if isinstance(self.action_space, spaces.Box):
+            if self.squash_output:
+                # Rescale to proper domain when using squashing
+                actions = self.unscale_action(actions)
+            else:
+                # Actions could be on arbitrary scale, so clip the actions to avoid
+                # out of bound error (e.g. if sampling from a Gaussian distribution)
+                actions = np.clip(
+                    actions, self.action_space.low, self.action_space.high
+                )
+
+        # now reshape it back to (batch_size, action_sequence_length, action_dim)
+        actions = actions.reshape(
+            -1, self.actor.action_sequence_length, *self.action_space.shape
+        )
+
+        # Remove batch dimension if needed
+        if not vectorized_env:
+            actions = actions.squeeze(axis=0)
+        return actions, state
+
+    def _predict(self, observation, deterministic):
+        return self.actor(observation, deterministic)
+
+
 # Thread-safe rollout collection function (not a class method)
 def collect_rollouts_threadsafe(
     algo,
@@ -127,9 +291,18 @@ def collect_rollouts_threadsafe(
         action_noise = VectorizedActionNoise(action_noise, env.num_envs)
     if hasattr(algo.policy, "use_sde") and algo.policy.use_sde:
         algo.policy.actor.reset_noise(env.num_envs)
-    callback.on_rollout_start()
+    # callback.on_rollout_start()
     continue_training = True
     first_step = True
+    with policy_lock:
+        actor = copy.deepcopy(algo.policy.actor).cpu().to(algo.device)
+        actor.eval()
+        actor.set_training_mode(False)
+        # make a new threadsafe policy that simply has a predict function that calls the actor
+        threadsafe_policy = ThreadSafePolicy(
+            actor, algo.observation_space, algo.device, algo.policy.squash_output
+        )
+
     while should_collect_more_steps(
         train_freq, num_collected_steps, num_collected_episodes
     ):
@@ -148,7 +321,8 @@ def collect_rollouts_threadsafe(
                 action_noise,
                 env.num_envs,
                 episode_start=np.array([first_step] * env.num_envs),
-                policy_lock=policy_lock,
+                policy_lock=None,
+                policy=threadsafe_policy,
             )
         first_step = False
         new_obs, rewards, dones, infos = env.step(actions)
@@ -190,7 +364,6 @@ def collect_rollouts_threadsafe(
         for done in dones:
             if done:
                 num_collected_episodes += 1
-        pass
 
     # clear memory and such with garbage collection
     import gc
@@ -199,7 +372,7 @@ def collect_rollouts_threadsafe(
     # clean up torch memory
     th.cuda.empty_cache()
 
-    return True
+    return replay_buffer, num_collected_steps
 
 
 class OfflineRLAlgorithm(OffPolicyAlgorithm):
@@ -354,7 +527,10 @@ class OfflineRLAlgorithm(OffPolicyAlgorithm):
                     "Check if your env is wrapped with ActionChunkingWrapper"
                 )
             self.replace_with_chunked_buffer(
-                action_chunk_size, buffer_size, success_bonus=success_bonus, evenly_sample_success=True
+                action_chunk_size,
+                buffer_size,
+                success_bonus=success_bonus,
+                evenly_sample_success=True,
             )
 
     def replace_with_chunked_buffer(
@@ -474,7 +650,7 @@ class OfflineRLAlgorithm(OffPolicyAlgorithm):
         )
 
         callback.on_training_start(locals(), globals())
-        self.policy.actor.share_memory()
+        # self.policy.actor.share_memory()
 
         if parallelize:
             # --- Threading primitives ---
@@ -482,11 +658,16 @@ class OfflineRLAlgorithm(OffPolicyAlgorithm):
             buffer_lock = threading.Lock()
             while self.num_timesteps < total_timesteps:
                 # Start rollout collection in a thread
-                rollout_thread = threading.Thread(
-                    target=collect_rollouts_threadsafe,
-                    args=(
+
+                empty_callback_list = CallbackList([])
+                empty_callback_list = empty_callback_list.init_callback(self)
+
+                with futures.ThreadPoolExecutor(max_workers=1) as executor:
+                    future = executor.submit(
+                        collect_rollouts_threadsafe,
                         self,
                         self.env,
+                        # empty_callback_list,
                         callback,
                         self.train_freq,
                         self.replay_buffer,
@@ -495,23 +676,28 @@ class OfflineRLAlgorithm(OffPolicyAlgorithm):
                         log_interval,
                         policy_lock,
                         buffer_lock,
-                    ),
-                )
-                rollout_thread.start()
-                # Train in main thread (wait for rollout to finish first)
-                if self.num_timesteps >= self.learning_starts:
-                    gradient_steps = (
-                        self.gradient_steps
-                        if self.gradient_steps >= 0
-                        else self.train_freq.frequency
                     )
-                    if gradient_steps > 0:
-                        self.train(
-                            batch_size=self.batch_size,
-                            gradient_steps=gradient_steps,
-                            policy_lock=policy_lock,
+
+                    # Train in main thread while rollout is being collected
+                    if self.num_timesteps >= self.learning_starts:
+                        gradient_steps = (
+                            self.gradient_steps
+                            if self.gradient_steps >= 0
+                            else self.train_freq.frequency
                         )
-                rollout_thread.join()  # Wait for rollout collection to finish
+                        if gradient_steps > 0:
+                            self.train(
+                                batch_size=self.batch_size,
+                                gradient_steps=gradient_steps,
+                                policy_lock=policy_lock,
+                            )
+
+                    # Wait for rollout collection to finish and get the return value
+                    # NOTE: this code only handles the train_freq=episodes case!
+                    self.replay_buffer, num_collected_steps = future.result()
+                    total_timesteps += num_collected_steps
+                    callback.update_locals(locals())
+                    callback.on_step()
 
         else:
             # --- Non-Threaded Primitives ---
@@ -554,6 +740,7 @@ class OfflineRLAlgorithm(OffPolicyAlgorithm):
         n_envs: int = 1,
         episode_start: bool = False,
         policy_lock: Optional[threading.Lock] = None,
+        policy: Optional[BasePolicy] = None,
     ) -> Tuple[np.ndarray, np.ndarray]:
         """
         This differs from the parent class in that if there are any offline training steps performed, we will warm start the online RL training with the pre-trained policy.
@@ -590,7 +777,10 @@ class OfflineRLAlgorithm(OffPolicyAlgorithm):
             if policy_lock is not None:
                 policy_lock.acquire()
             unscaled_action, _ = self.predict(
-                self._last_obs, deterministic=True, episode_start=episode_start
+                self._last_obs,
+                deterministic=True,
+                episode_start=episode_start,
+                policy=policy,
             )
             if policy_lock is not None:
                 policy_lock.release()
@@ -616,19 +806,25 @@ class OfflineRLAlgorithm(OffPolicyAlgorithm):
 
                 # print(scaled_action.shape, original_shape, action_noise().shape)
                 # Add noise to the action (improve exploration)
-                if action_noise is not None:
-                    if len(original_shape) == 3 and original_shape[0] != 1:
-                        scaled_action = np.clip(
-                            scaled_action.reshape(original_shape)
-                            + action_noise()[:, None, :].repeat(
-                                self.action_chunk_size, axis=1
-                            ),
-                            -1,
-                            1,
-                        )
+                if action_noise is not None and action_noise._sigma > 0:
+                    try:
+                        if len(original_shape) == 3 and original_shape[0] != 1:
+                            scaled_action = np.clip(
+                                scaled_action.reshape(original_shape)
+                                + action_noise()[:, None, :].repeat(
+                                    self.action_chunk_size, axis=1
+                                ),
+                                -1,
+                                1,
+                            )
 
-                    else:
-                        scaled_action = np.clip(scaled_action + action_noise(), -1, 1)
+                        else:
+                            scaled_action = np.clip(
+                                scaled_action + action_noise(), -1, 1
+                            )
+                    except Exception as e:
+                        print("Error adding action noise:", e)
+                        breakpoint()
 
                 # print(scaled_action.shape)
 
@@ -691,7 +887,11 @@ class OfflineRLAlgorithm(OffPolicyAlgorithm):
         episode_start: Optional[np.ndarray] = None,
         deterministic: bool = False,
         env: Optional[GymEnv] = None,
+        policy: Optional[BasePolicy] = None,
     ):
+        if policy is None:
+            policy = self.policy
+
         if env is None:
             env = self.env
         if self.action_chunk_size > 1:
@@ -723,7 +923,8 @@ class OfflineRLAlgorithm(OffPolicyAlgorithm):
             if len(envs_to_predict_for) == 0:
                 return [None] * env.num_envs, None
 
-        action, _ = super().predict(observation, state, episode_start, deterministic)
+        action, _ = policy.predict(observation, state, episode_start, deterministic)
+        # action, _ = super().predict(observation, state, episode_start, deterministic)
         return action, _
 
     def collect_rollouts(

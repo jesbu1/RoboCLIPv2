@@ -418,7 +418,7 @@ def main(cfg: DictConfig):
                 if model.offline_algo is not None:
                     model.offline_algo = offline_algo
 
-                    model.set_policies_with_offline()
+                model.set_policies_with_offline()
 
             else:
                 model = model.load(
@@ -542,7 +542,7 @@ def main(cfg: DictConfig):
                     callback=online_callback_list,
                     logger=logger,
                     progress_bar=True,
-                    # parallelize=True if "koch" in env_config.cfg_name else False,
+                    parallelize=True if "koch" in env_config.cfg_name else False,
                 )
             else:
                 model.learn(
@@ -972,9 +972,11 @@ def get_policy_algorithm(cfg: DictConfig, envs: VecEnv, log_dir: str, reward_mod
 def generate_callback_list(args: DictConfig, eval_callback: EvalCallback):
     if args.wandb:
         customwandbcallback = CustomWandbCallback()
-        callbacks = [eval_callback, customwandbcallback]
+        # callbacks = [eval_callback, customwandbcallback]
+        callbacks = [customwandbcallback]
     else:
-        callbacks = [eval_callback]
+        # callbacks = [eval_callback]
+        callbacks = []
     return callbacks
 
 

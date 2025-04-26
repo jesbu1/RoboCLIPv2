@@ -90,7 +90,7 @@ class KochBimanualEnv(Env):
 
         # action space is of size 12
         self.action_space = gym.spaces.Box(
-            low=-360, high=360, shape=(12,), dtype=np.float32
+            low=-270, high=270, shape=(12,), dtype=np.float32
         )
         # Make the observation just the state
 
@@ -411,7 +411,7 @@ class SuccessWrapper(gym.Wrapper):
     def reset(self):
         # Simply add a wait for resetting the environment
 
-        time.sleep(5)
+        time.sleep(0.5)
         return self.env.reset()
 
 

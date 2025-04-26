@@ -26,6 +26,7 @@ from offline_rl_algorithms.base_offline_rl_algorithm import OfflineRLAlgorithm
 from stable_baselines3.common.policies import BasePolicy
 from stable_baselines3.common.type_aliases import GymEnv, MaybeCallback, Schedule
 from stable_baselines3.common.utils import get_parameters_by_name, polyak_update
+from stable_baselines3.common.distributions import kl_divergence
 from offline_rl_algorithms.bc import BC
 from offline_rl_algorithms.custom_policies import (
     CustomActor,
@@ -151,6 +152,7 @@ class RLPD(OfflineRLAlgorithm):
         warm_start_online_rl: bool = True,
         action_chunk_size: int = 1,
         success_bonus: float = 0.0,
+        use_kl_against_old: bool = True,
     ):
         # NOTE: Asserntions currently commonted out due to saving/loading logic. Must fix this later TODO
         # assert (
@@ -221,29 +223,35 @@ class RLPD(OfflineRLAlgorithm):
         self.ddpg_bc_weight = 0.1
         self.advantage_temp = 1.0
 
+        self.train = self.train_rlpd
+        self.use_kl_against_old = use_kl_against_old
+
     def set_offline_algo(self, offline_algo):
         self.offline_algo = offline_algo
 
     def set_policies_with_offline(self, offline_algo=None):
-        # now replace the RLPD actor and critic with the offline_algo's actor and critic
-        # replace their parameters so that the optimizer is still the same
-        # test: set the policy and critic params to 1
-        # for param in self.policy.actor.parameters():
-        #     param.data.fill_(1.0)
-        # for param in self.policy.critic.parameters():
-        #     param.data.fill_(1.0)
+        """
+        Replace the RLPD actor and critic with the offline_algo's actor and critic.
+        Replace their parameters so that the optimizer is still the same.
+        """
         if offline_algo is None:
             offline_algo = self.offline_algo
 
-        if self.offline_algo is None:
-            print("Offline algo is not set")
-            return
-        self.policy.actor = offline_algo.policy.actor
-        self.policy.critic = offline_algo.policy.critic
-        self.policy.critic_target = offline_algo.policy.critic_target
+        # if self.offline_algo is None:
+        #     print("Offline algo is not set")
+        #     return
+
+        if self.offline_algo is not None:
+            self.policy.actor = offline_algo.policy.actor
+            self.policy.critic = offline_algo.policy.critic
+            self.policy.critic_target = offline_algo.policy.critic_target
+
+        # old actor will be used for KL divergence computation against the old policy
+        # self.old_actor = th.compile(deepcopy(self.policy).actor.cpu().to(self.device))
+        self.old_actor = deepcopy(self.policy.actor).cpu().to(self.device)
 
         # self.policy.actor.optimizer = type(self.policy.actor.optimizer)(
-        #     self.policy.actor.parameters(),
+        #     self.policy
         #     lr=self.policy.actor.optimizer.param_groups[0]["lr"],
         # )
         # self.policy.critic.optimizer = type(self.policy.critic.optimizer)(
@@ -720,7 +728,7 @@ class RLPD(OfflineRLAlgorithm):
 
         return metrics_dict
 
-    def train(
+    def train_rlpd(
         self,
         gradient_steps: int,
         batch_size: int = 64,
@@ -728,6 +736,7 @@ class RLPD(OfflineRLAlgorithm):
         policy_lock: Optional[threading.Lock] = None,
     ) -> None:
         # Switch to train mode (this affects batch norm / dropout)
+        # breakpoint()
         self.policy.set_training_mode(True)
         # Update optimizers learning rate
         # breakpoint()
@@ -775,7 +784,6 @@ class RLPD(OfflineRLAlgorithm):
                 replay_data = self.replay_buffer.sample(
                     batch_size, env=self._vec_normalize_env
                 )  # type: ignore[union-attr]
-                
                 if len(replay_data.observations) == 0:
                     print("Buffer is still empty. Skipping this training step")
                     return {}
@@ -811,6 +819,7 @@ class RLPD(OfflineRLAlgorithm):
                     # add entropy term
                     if self.train_critic_with_entropy:
                         # TODO: there is an error here
+                        assert not self.use_kl_against_old, "Not implemented yet"
                         next_q_values = (
                             next_q_values - ent_coef * next_log_prob.reshape(-1, 1)
                         )
@@ -858,21 +867,27 @@ class RLPD(OfflineRLAlgorithm):
                     polyak_update(
                         self.batch_norm_stats, self.batch_norm_stats_target, 1.0
                     )
+
             # Action by the current actor for the sampled state
             if policy_lock is not None:
                 policy_lock.acquire()
-            actions_pi, log_prob = self.actor.action_log_prob(replay_data.observations)
+            # actions_pi, log_prob = self.actor.action_log_prob(replay_data.observations)
+            mean_actions, log_std, kwargs = self.actor.get_action_dist_params(
+                replay_data.observations
+            )
+            actions_pi, log_prob = self.actor.action_dist.log_prob_from_params(
+                mean_actions, log_std, **kwargs
+            )
             if policy_lock is not None:
                 policy_lock.release()
-
             if actions_pi.ndim == 3:
                 # Take the mean of the logprob
                 log_prob = log_prob.mean(dim=1, keepdim=True)
-
             log_prob = log_prob.reshape(-1, 1)
 
             ent_coef_loss = None
             if self.ent_coef_optimizer is not None and self.log_ent_coef is not None:
+                assert not self.use_kl_against_old, "Not implemented yet"
                 # Important: detach the variable from the graph
                 # so we don't change it with other losses
                 # see https://github.com/rail-berkeley/softlearning/issues/60
@@ -912,7 +927,34 @@ class RLPD(OfflineRLAlgorithm):
 
             if policy_lock is not None:
                 policy_lock.acquire()
-            actor_loss = (ent_coef * log_prob - mean_qf_pi).mean()
+
+            # Calculate KL divergence between old and current actor
+            with th.no_grad():
+                old_mean, old_log_std, _ = self.old_actor.get_action_dist_params(
+                    replay_data.observations
+                )
+                old_actor_distribution = self.old_actor.action_dist.proba_distribution(
+                    old_mean, old_log_std
+                )
+            curr_actor_distribution = self.actor.action_dist.proba_distribution(
+                mean_actions, log_std, **kwargs
+            )
+
+            kl_div = kl_divergence(
+                curr_actor_distribution, old_actor_distribution
+            )  # B x ACtion CHUnk x action dim
+            kl_div = kl_div.sum(1).mean(-1, keepdim=True)
+
+            if self.use_kl_against_old:
+                actor_loss = (ent_coef * kl_div - mean_qf_pi).mean()
+            else:
+                actor_loss = (ent_coef * log_prob - mean_qf_pi).mean()
+
+            # Log KL divergence
+            self.logger.record(
+                f"{logging_prefix}/kl_divergence", kl_div.detach().mean().item()
+            )
+
             actor_losses.append(actor_loss.item())
 
             ### DEBUG
@@ -985,6 +1027,218 @@ class RLPD(OfflineRLAlgorithm):
         for metric in metrics_dict:
             self.logger.record(metric, metrics_dict[metric])
 
+        return metrics_dict
+
+    def train_cql(
+        self,
+        gradient_steps: int,
+        batch_size: int = 64,
+        logging_prefix: str = "train",
+        policy_lock: Optional[threading.Lock] = None,
+    ) -> None:
+        """
+        CQL training loop, closely modeled after train_iql and CQL.train.
+        """
+        self.policy.set_training_mode(True)
+        optimizers = [self.actor.optimizer, self.critic.optimizer]
+        if self.ent_coef_optimizer is not None:
+            optimizers += [self.ent_coef_optimizer]
+        self._update_learning_rate(optimizers)
+
+        ent_coef_losses, ent_coefs = [], []
+        actor_losses, critic_losses, cql_losses = [], [], []
+        actor_log_pis = []
+        q_values_list = []
+        q_next_values_list = []
+        reward_values = []
+
+        if gradient_steps != 1:
+            print(f"Going to take {gradient_steps} CQL training steps")
+
+        for gradient_step in range(gradient_steps):
+            if self.use_sde:
+                self.actor.reset_noise()
+
+            if self.ent_coef_optimizer is not None and self.log_ent_coef is not None:
+                ent_coef = th.exp(self.log_ent_coef.detach())
+            else:
+                ent_coef = self.ent_coef_tensor
+
+            for critic_update in range(self.current_critic_update_ratio):
+                replay_data = self.replay_buffer.sample(
+                    batch_size, env=self._vec_normalize_env
+                )
+                if len(replay_data.observations) == 0:
+                    print("Buffer is empty. Skipping this CQL training step")
+                    return {}
+
+                with th.no_grad():
+                    if policy_lock is not None:
+                        policy_lock.acquire()
+                    next_actions, next_log_prob = self.actor.action_log_prob(
+                        replay_data.next_observations
+                    )
+                    if policy_lock is not None:
+                        policy_lock.release()
+                    if next_actions.ndim == 3:
+                        next_log_prob = next_log_prob.mean(dim=1, keepdim=True)
+                    critic_indices = th.randperm(self.policy_kwargs["n_critics"])[
+                        : self.n_critics_to_sample
+                    ]
+                    next_q_values = th.cat(
+                        self.critic_target(
+                            replay_data.next_observations,
+                            next_actions,
+                            critic_indices=critic_indices,
+                        ),
+                        dim=1,
+                    )
+                    next_q_values, _ = th.min(next_q_values, dim=1, keepdim=True)
+                    next_q_values = next_q_values - ent_coef * next_log_prob.reshape(
+                        -1, 1
+                    )
+                    target_q_values = (
+                        replay_data.rewards
+                        + (1 - replay_data.dones) * self.gamma * next_q_values
+                    )
+
+                # --- CQL Loss ---
+                random_actions = (
+                    th.FloatTensor(replay_data.actions.shape)
+                    .uniform_(-1, 1)
+                    .to(self.device)
+                )
+                current_actions, current_log_pis = self.actor.action_log_prob(
+                    replay_data.observations
+                )
+                next_actions_cql, next_log_pis = self.actor.action_log_prob(
+                    replay_data.next_observations
+                )
+                # current_log_pis = current_log_pis.reshape(-1, 1)
+                # next_log_pis = next_log_pis.reshape(-1, 1)
+                if next_actions_cql.ndim == 3:
+                    next_log_pis = next_log_pis.mean(dim=1, keepdim=True)
+                    current_log_pis = current_log_pis.mean(dim=1, keepdim=True)
+
+                q_rand = th.cat(
+                    self.critic(replay_data.observations, random_actions), 1
+                )
+                q_current_actions = th.cat(
+                    self.critic(replay_data.observations, current_actions), 1
+                )
+                q_next_actions = th.cat(
+                    self.critic(replay_data.observations, next_actions_cql), 1
+                )
+                random_density = np.log(0.5 ** current_actions.shape[-1])
+
+                # Expand log_pis to match q_* shape if needed
+                n_critics = q_rand.shape[1]
+                if current_log_pis.shape[1] == 1:
+                    current_log_pis = current_log_pis.repeat(1, n_critics)
+                if next_log_pis.shape[1] == 1:
+                    next_log_pis = next_log_pis.repeat(1, n_critics)
+
+                # CQL regularizer (logsumexp)
+                # breakpoint()
+                cql_cat = th.cat(
+                    [
+                        q_rand - random_density,
+                        q_next_actions - next_log_pis.detach(),
+                        q_current_actions - current_log_pis.detach(),
+                    ],
+                    1,
+                )
+                cql_loss = (
+                    th.logsumexp(cql_cat, dim=1).mean() - q_current_actions.mean()
+                )
+                cql_losses.append(cql_loss.item())
+
+                # Critic loss (TD + CQL)
+                current_q_values = th.cat(
+                    self.critic(replay_data.observations, replay_data.actions),
+                    dim=1,
+                )
+                critic_loss = (
+                    F.mse_loss(
+                        current_q_values, target_q_values.expand_as(current_q_values)
+                    )
+                    + cql_loss
+                )
+                critic_losses.append(critic_loss.item())
+
+                # Optimize the critic
+                self.critic.optimizer.zero_grad()
+                critic_loss.backward()
+                self.critic.optimizer.step()
+
+                # Target network update
+                if gradient_step % self.target_update_interval == 0:
+                    polyak_update(
+                        self.critic.parameters(),
+                        self.critic_target.parameters(),
+                        self.tau,
+                    )
+                    polyak_update(
+                        self.batch_norm_stats, self.batch_norm_stats_target, 1.0
+                    )
+
+                # log average q values
+                q_values_list.append(current_q_values.mean().item())
+                q_next_values_list.append(next_q_values.mean().item())
+                reward_values.append(replay_data.rewards.mean().item())
+
+            # Actor loss (same as SAC)
+            if policy_lock is not None:
+                policy_lock.acquire()
+            actions_pi, log_prob = self.actor.action_log_prob(replay_data.observations)
+            if policy_lock is not None:
+                policy_lock.release()
+            if actions_pi.ndim == 3:
+                log_prob = log_prob.mean(dim=1, keepdim=True)
+            log_prob = log_prob.reshape(-1, 1)
+            q_values_pi = th.cat(
+                self.critic(replay_data.observations, actions_pi), dim=1
+            )
+            mean_qf_pi = th.mean(q_values_pi, dim=1, keepdim=True)
+            actor_loss = (ent_coef * log_prob - mean_qf_pi).mean()
+            actor_losses.append(actor_loss.item())
+            actor_log_pis.append(log_prob.mean().item())
+            # Optimize actor
+            self.actor.optimizer.zero_grad()
+            actor_loss.backward()
+            self.actor.optimizer.step()
+
+            # Entropy coefficient loss (if applicable)
+            ent_coef_loss = None
+            if self.ent_coef_optimizer is not None and self.log_ent_coef is not None:
+                ent_coef = th.exp(self.log_ent_coef.detach())
+                ent_coef_loss = -(
+                    self.log_ent_coef * (log_prob + self.target_entropy).detach()
+                ).mean()
+                ent_coef_losses.append(ent_coef_loss.item())
+            else:
+                ent_coef = self.ent_coef_tensor
+            ent_coefs.append(ent_coef.item())
+            if ent_coef_loss is not None and self.ent_coef_optimizer is not None:
+                self.ent_coef_optimizer.zero_grad()
+                ent_coef_loss.backward()
+                self.ent_coef_optimizer.step()
+
+        self._n_updates += gradient_steps
+        metrics_dict = {
+            f"{logging_prefix}/ent_coef": np.mean(ent_coefs),
+            f"{logging_prefix}/actor_loss": np.mean(actor_losses),
+            f"{logging_prefix}/critic_loss": np.mean(critic_losses),
+            f"{logging_prefix}/cql_loss": np.mean(cql_losses),
+            f"{logging_prefix}/average_q_values": np.mean(q_values_list),
+            f"{logging_prefix}/average_q_next_values": np.mean(q_next_values_list),
+            f"{logging_prefix}/average_reward": np.mean(reward_values),
+            f"{logging_prefix}/average_actor_log_pis": np.mean(actor_log_pis),
+        }
+        if len(ent_coef_losses) > 0:
+            metrics_dict[f"{logging_prefix}/ent_coef_loss"] = np.mean(ent_coef_losses)
+        for metric in metrics_dict:
+            self.logger.record(metric, metrics_dict[metric])
         return metrics_dict
 
     def learn(

@@ -167,8 +167,8 @@ class H5ReplayBuffer(ReplayBuffer):
             if normalize_actions_koch:
                 # actions /= 180  # normalize between -1 and 1
                 # actions = np.clip(actions, -1, 1)
-                low = -360
-                high = 360
+                low = -270
+                high = 270
 
                 actions = 2.0 * ((actions - low) / (high - low)) - 1.0
 
@@ -937,6 +937,10 @@ class SuccessFailSplitBuffer(CombinedBuffer):
         self.success_buffer = original_buffer.clone()
         self.failure_buffer = original_buffer.clone()
 
+        # this is only for compatibility with CombinedBuffer
+        self.old_buffer = self.success_buffer
+        self.new_buffer = self.failure_buffer
+
         self.temp_input_output = []
 
         super().__init__(self.success_buffer, self.failure_buffer, ratio=ratio)
@@ -978,6 +982,21 @@ class SuccessFailSplitBuffer(CombinedBuffer):
                 f"Success buffer {self.success_buffer.size()}, Failure buffer {self.failure_buffer.size()}"
             )
             self.temp_input_output = []
+
+    def clone(self):
+        buf = SuccessFailSplitBuffer(
+            original_buffer=self.success_buffer.clone(),
+        )
+
+        buf.success_buffer = self.success_buffer.clone()
+        buf.failure_buffer = self.failure_buffer.clone()
+        return buf
+
+    def size(self) -> int:
+        """
+        :return: The current size of the buffer
+        """
+        return self.success_buffer.size() + self.failure_buffer.size()
 
 
 if __name__ == "__main__":

@@ -15,23 +15,23 @@ general_training:
   learning_rate: 3e-4
 
   # offline rl parameters
-  n_critics: 2
+  n_critics: 5
   n_critics_to_sample: 2
 
   # RLPD-specific parameters
   rlpd_train_critic_with_entropy: false
   # Note: RLPD's offline step uses default params defined in base_config.yaml
   rlpd_offline_algo: iql
-  action_chunk_size: 30
-  learning_starts: 0
+  action_chunk_size: 60
+  learning_starts: 3000
 
   # IQL-specific parameters
   policy_extraction: 'awr' # awr or ddpg
-  awr_advantage_temp: 1.0 # iql only
+  awr_advantage_temp: 5.0 # iql only
 
 model:
-  policy_layer_norm: true
-  critic_layer_norm: true
+  policy_layer_norm: false
+  critic_layer_norm: false
   pi_net_arch: [1024, 768, 512]
   qf_net_arch: [1024, 1024, 512]
   # pi_net_arch: [768, 512]
@@ -48,7 +48,7 @@ environment:
 online_training:
   total_time_steps: 50000
   mix_buffers_ratio: 0.5 
-  warm_start_online_rl: false
+  warm_start_online_rl: true
   critic_update_ratio: 4
   gradient_steps: 75
-  learning_starts: 0
+  learning_starts: 3000
