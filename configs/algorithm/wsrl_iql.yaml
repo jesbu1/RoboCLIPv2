@@ -20,6 +20,7 @@ general_training:
 
   # RLPD-specific parameters
   rlpd_train_critic_with_entropy: false
+  entropy_term: 0.1
   # Note: RLPD's offline step uses default params defined in base_config.yaml
   rlpd_offline_algo: iql
   action_chunk_size: 60
@@ -37,7 +38,7 @@ model:
   qf_net_arch: [768, 512, 512]
 
 offline_training:
-  offline_training_steps: 5000
+  offline_training_steps: 15_000
   ckpt_path: null  # Path to load checkpoint from, if provided will skip offline training
   critic_update_ratio: 1
 
@@ -45,6 +46,6 @@ online_training:
   total_time_steps: 50000
   mix_buffers_ratio: 0.5 # WSRL does not use old replay buffer
   warm_start_online_rl: true # main change for WSRL
-  learning_starts: 5000
+  learning_starts: 4000
   gradient_steps: 75
   critic_update_ratio: 4
