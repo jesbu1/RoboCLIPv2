@@ -319,16 +319,24 @@ class LearnedRewardWrapper(gym.Wrapper):
             #     th.tensor(frames).float().to(self.reward_model.device)
             # )
             # print(f"frames_embeddings shape: {frames_embeddings.shape}")
-            stacked_sequence = np.stack(self.past_observations, axis=0)
-            stacked_sequence = (
-                th.from_numpy(stacked_sequence).float().to(self.reward_model.device)
-            ).unsqueeze(0)
-            # print(f"stacked_sequence shape: {stacked_sequence.shape}")
+            if self.reward_model.name == "RewindRewardModel":
+                stacked_sequence = np.stack(self.past_observations, axis=0)
+                stacked_sequence = (
+                    th.from_numpy(stacked_sequence).float().to(self.reward_model.device)
+                ).unsqueeze(0)
+            elif self.reward_model.name == "LIVRewardModel":
+                stacked_sequence = th.from_numpy(self.reward_model.encode_images(
+                    image_for_model
+                )).unsqueeze(0)
+                print(f"stacked_sequence shape: {stacked_sequence.shape}") # (1, 1, 1024)
+
             reward = self.reward_model.calculate_rewards(
                 self.reward_language_features, stacked_sequence
             )
+
             if isinstance(reward, th.Tensor):
                 reward = reward.detach().cpu().numpy().item()
+            # print(f"reward: {reward}")
             wandb.log({"train/learned_reward_per_step": reward})
             # print(f"reward : {reward}")
             # exit()
@@ -351,7 +359,6 @@ class LearnedRewardWrapper(gym.Wrapper):
                         ]
                         for frame in self.raw_observations
                     ]
-                self.episode_counter += 1
                 
                 frames = np.stack(frames, axis=1).squeeze(2)
                 # print(f"frames shape: {frames.shape}") # (1, 128, 224, 224, 3)
@@ -380,6 +387,7 @@ class LearnedRewardWrapper(gym.Wrapper):
         reward /= self.reward_divisor
         if done:
             # print(f"reward after divisor: {reward}")
+            self.episode_counter += 1
             wandb.log({"train/learned_reward": wandb_reward})
 
         # Normalize reward

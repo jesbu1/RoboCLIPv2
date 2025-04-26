@@ -183,6 +183,7 @@ def parse_reward_model(reward_cfg: DictConfig) -> BaseRewardModel:
             batch_size=reward_cfg.batch_size,
             success_bonus=reward_cfg.success_bonus,
             last_frame_reward_only=reward_cfg.last_frame_reward_only,
+            reward_at_every_step=reward_cfg.reward_at_every_step,
         )
 
     # TODO: get these models up
@@ -427,7 +428,7 @@ def main(cfg: DictConfig):
                 wandb.run.log({"model_dir": absolute_save_dir})
 
     # add eval policy on all tasks
-    offline_eval(model, reward_model, image_encoder)
+    # offline_eval(model, reward_model, image_encoder)
     # exit()
 
 

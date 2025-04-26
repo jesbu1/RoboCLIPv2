@@ -7,7 +7,7 @@ reward_model:
   use_pca: false
   success_bonus: 200.0
   reward_divisor: 1
-  reward_at_every_step: false
+  reward_at_every_step: true
   last_frame_reward_only: true
 
 general_training:

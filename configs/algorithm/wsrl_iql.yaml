@@ -7,6 +7,7 @@ defaults:
 logging:
   eval_freq: 5000
   video_freq: 5000
+  wandb_group_name: "${reward_model.name}_${general_training.algo}_${environment.env_id}_final"
 
 general_training:
   algo: rlpd
@@ -31,8 +32,9 @@ model:
 
 offline_training:
   offline_training_steps: 100000
-  # ckpt_path: "/home/yusenluo/RoboCLIP_offline/RoboCLIPv2/outputs/2025-04-24/02-45-17/logs/sparse_rlpd/last_offline"  # Path to load checkpoint from, if provided will skip offline training
+  ckpt_path: "/home/yusenluo/RoboCLIP_offline/RoboCLIPv2/outputs/2025-04-24/05-08-57/logs/rewind_rlpd/last_offline"  # Path to load checkpoint from, if provided will skip offline training
   #"/home/yusenluo/RoboCLIP_offline/RoboCLIPv2/outputs/2025-04-24/05-08-57/logs/rewind_rlpd/last_offline" Rewind dense 100k
+  #"/home/yusenluo/RoboCLIP_offline/RoboCLIPv2/outputs/2025-04-24/21-56-25/logs/rewind_rlpd/last_offline" Rewind dense 100k + policy layer NO norm
   critic_update_ratio: 1
 
 online_training:

@@ -16,14 +16,14 @@ online_training:
   total_time_steps: 100000
 
 general_training:
-  seed: 42
+  seed: 32
 
 environment:
   cfg_name: "metaworld_off_on_15"
   n_envs: 1
   train_freq_num: 1
   train_freq_type: 'step'
-  env_id: "window-close-v2" # eval task
+  env_id: "button-press-wall-v2" # eval task
   ignore_language: false
 
 # Reward divisor is environment-dependent

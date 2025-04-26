@@ -39,6 +39,7 @@ class LIVRewardModel(BaseRewardModel):
         self.reward_at_every_step = reward_at_every_step
         self.liv_encoder = LIVEncoder(model_load_path, use_pca, attention_heads, device, batch_size)
         self.last_frame_reward_only = last_frame_reward_only
+        self.reward_at_every_step = reward_at_every_step
 
     def _encode_text_batch(self, text: List[str]) -> np.ndarray:
         """
