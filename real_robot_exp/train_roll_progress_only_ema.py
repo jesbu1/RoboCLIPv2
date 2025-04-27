@@ -49,7 +49,7 @@ def main(args):
     WANDB_ENTITY_NAME = "clvr"
     WANDB_PROJECT_NAME = "roboclip-v2"
 
-    experiment_name = str(args.extra_data_type) + "_5_Demo"
+    experiment_name = str(args.extra_data_type) + "_DataType_" + str(args.data_type)
     if args.full_set:
         experiment_name += "_FullSet"
     if args.positional_encoding:
@@ -89,7 +89,7 @@ def main(args):
     
 
     # group_name = "Dino_Koch_v2"
-    group_name = "RealRobot_Fullset_Koch"
+    group_name = "RealRobot_Fullset_Koch_combine"
     run = wandb.init(
         entity=WANDB_ENTITY_NAME,
         project=WANDB_PROJECT_NAME,
@@ -126,7 +126,12 @@ def main(args):
             h5_train_eval_file = h5py.File("usc_koch_rewind_dino_reward_side_train.h5", "r")
             h5_eval_file = h5py.File("usc_koch_rewind_dino_reward_side_eval.h5", "r")
             if args.full_set:
-                extra_data_path = "usc_koch_rewind_dino_reward_all.h5"
+                if args.data_type == "old":
+                    extra_data_path = "usc_koch_rewind_dino_reward_all.h5"
+                elif args.data_type == "new":
+                    extra_data_path = "usc_koch_rewind_dino_reward_all_new.h5"
+                elif args.data_type == "all":
+                    extra_data_path = "usc_koch_rewind_dino_reward_all_combine.h5"  
                 print("Using all data new generated")
 
     embedding_dim = 768
@@ -353,6 +358,7 @@ if __name__ == "__main__":
     argparser.add_argument('--ema_momentum', type=float, default=0.3)
     argparser.add_argument('--end_rewind_ratio', type=float, default=0.0)
     argparser.add_argument('--full_set', action='store_true')
+    argparser.add_argument('--data_type', type=str, default="old", choices=["old", "new", "all"])
 
 
 
