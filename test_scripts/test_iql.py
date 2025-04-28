@@ -157,6 +157,7 @@ def parse_reward_model(reward_cfg: DictConfig) -> BaseRewardModel:
             server_url=reward_cfg.server_url,
             batch_size=reward_cfg.batch_size,
             success_bonus=reward_cfg.success_bonus,
+            reward_at_every_step=reward_cfg.reward_at_every_step,
         )
     elif reward_string == "gvl":
         reward_model = GVLRewardModel(
@@ -183,6 +184,7 @@ def parse_reward_model(reward_cfg: DictConfig) -> BaseRewardModel:
             batch_size=reward_cfg.batch_size,
             success_bonus=reward_cfg.success_bonus,
             last_frame_reward_only=reward_cfg.last_frame_reward_only,
+            reward_at_every_step=reward_cfg.reward_at_every_step,
         )
 
     # TODO: get these models up
@@ -428,7 +430,7 @@ def main(cfg: DictConfig):
                 
 
     # add eval policy on all tasks
-    # offline_eval(model, reward_model, image_encoder, rollout_num = 25)
+    # offline_eval(model, reward_model, image_encoder)
     # exit()
 
 

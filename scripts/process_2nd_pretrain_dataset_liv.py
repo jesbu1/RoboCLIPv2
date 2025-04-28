@@ -193,7 +193,7 @@ def main():
     
 
 #     # generate pretraining dataset structure same with abrar
-    pre_training_dataset = f"metaworld_policy_pretrain_dataset_liv_5.h5" # this is the dataset for pretraining
+    pre_training_dataset = f"metaworld_policy_pretrain_dataset_vlc_5.h5" # this is the dataset for pretraining
 #     if args.reward_type == "rewind":
 #         pre_training_dataset = f"metaworld_policy_pretrain_dataset_rewind_dense_10.h5"
     pre_training_h5_file = h5py.File(pre_training_dataset, "w")
@@ -240,6 +240,7 @@ def main():
     for key in tqdm(h5_file.keys()):
         group = h5_file[key]
         for traj_id in traj_keys:
+            import pdb ; pdb.set_trace()
             traj_imgs = np.asarray(group[traj_id]['img'])
             traj_img_embeddings = embedding_image(traj_imgs)
             traj_imgs_for_liv = np.expand_dims(traj_imgs, axis=0)

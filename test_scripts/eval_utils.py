@@ -26,7 +26,12 @@ def offline_eval(policy, reward_model: BaseRewardModel, image_encoder, rollout_n
             text_instruction = train_gt_annotation[env_id]
         with th.no_grad():
             lang_feat_policy = reward_model.encode_text_for_policy(text_instruction).squeeze()
-            lang_feat_reward = reward_model.encode_text(text_instruction).squeeze()
+            # lang_feat = th.from_numpy(lang_feat).squeeze()
+            if reward_model.name != "GVLRewardModel" and reward_model.name != "VLCRewardModel":
+                lang_feat_reward = reward_model.encode_text(text_instruction).squeeze()
+                print("Lang feat reward shape", lang_feat_reward.shape)
+            else:
+                lang_feat_reward = text_instruction
 
             eval_env = DummyVecEnv(
                         [

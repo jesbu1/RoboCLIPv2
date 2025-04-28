@@ -6,9 +6,6 @@ from PIL import Image
 from typing import List, Tuple, Union
 from torchvision.transforms import Compose, Resize, CenterCrop, ToTensor, Normalize 
 from torchvision.transforms import functional as F
-
-default_work_path = os.path.expanduser('~')
-os.environ.setdefault('WORK', default_work_path)
 from video_language_critic.reward import RewardCalculator
 # from paths import *
 import os

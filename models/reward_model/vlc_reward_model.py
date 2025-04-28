@@ -16,15 +16,16 @@ from typing import List, Union
 
 
 class VLCRewardModel(BaseRewardModel):
-    def __init__(self, server_url: str = "http://10.136.20.183:5000", batch_size: int = 64, success_bouns: int = 10, device: str = "cuda", reward_at_every_step: bool = False) -> None:
+    def __init__(self, server_url: str = "http://10.137.28.55:5000", batch_size: int = 64, success_bouns: int = 10, device: str = "cuda", success_bonus: int = 10, reward_at_every_step: bool = False) -> None:
         """
         Initializes the VLC reward client that communicates with a remote VLC server.
         :param server_url: URL of the VLC reward calculation server (Flask).
         :param device: Device to run any necessary local computations on.
         """
-        super().__init__(device= device, batch_size= batch_size, success_bonus= success_bouns)
+        super().__init__(device= device, batch_size= batch_size, success_bonus= success_bonus)
         self.server_url = server_url  # server address
         self.reward_at_every_step = reward_at_every_step
+        self.success_bonus = success_bonus
 
     def encode_text(self, text: Union[str, list]) -> np.ndarray:
         return super().encode_text(text) 
@@ -80,6 +81,20 @@ class VLCRewardModel(BaseRewardModel):
         Returns the name of the encoder class.
         """
         return 'VLCRewardModel'
+
+    @property
+    def img_output_dim(self) -> int:
+        """
+        Returns the output dimension of the image encoder. Used to determine the observation space of a policy.
+        """
+        return 768 # for LIV
+    
+    @property
+    def text_output_dim(self) -> int:
+        """
+        Returns the output dimension of the text encoder. Used to determine the observation space of a policy.
+        """
+        return 384 # for LIV
 
 def read_video_as_frames(video_path: str, as_tensor: bool = False) -> Union[List[np.ndarray], torch.Tensor]:
 

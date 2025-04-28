@@ -3,5 +3,13 @@
 reward_model: 
   name: 'vlc'
   batch_size: 64
-  server_url: null
-  success_bonus: 10.0
+  server_url: "http://10.137.28.55:5000"
+  success_bonus: 200.0
+  reward_at_every_step: true
+
+general_training:
+  dense_rewards_at_end: false
+  learning_rate: 1e-3
+  entropy_term: "auto"
+  normalize_reward: false
+  terminate_on_success: true
