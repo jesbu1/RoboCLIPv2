@@ -295,11 +295,15 @@ def create_wrapped_env(
 
 
         if reward_model.name == "VLCRewardModel" or reward_model.name == "GVLRewardModel":
+            print("language_features_reward", language_features_reward)
             base_env = VLC_GVL_RewardWrapper(
                 base_env,
                 reward_model,
+                image_encoder,
+                is_state_based=is_state_based,
                 language_features_reward=language_features_reward,
                 use_proprio=use_proprio,
+                dense_eval=dense_eval,
             )
         else:
             base_env = LearnedRewardWrapper(

@@ -157,6 +157,7 @@ def parse_reward_model(reward_cfg: DictConfig) -> BaseRewardModel:
             server_url=reward_cfg.server_url,
             batch_size=reward_cfg.batch_size,
             success_bonus=reward_cfg.success_bonus,
+            reward_at_every_step=reward_cfg.reward_at_every_step,
         )
     elif reward_string == "gvl":
         reward_model = GVLRewardModel(
