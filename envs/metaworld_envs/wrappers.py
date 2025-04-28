@@ -533,6 +533,9 @@ class VLC_GVL_RewardWrapper(gym.Wrapper):
             video_frames = self._padding_frames(video_frames)
             # print(f"video_frames shape: {video_frames.shape}")
             reward = self.reward_model.calculate_rewards(video_frames, self.language_features)
+            if self.counter == 0:
+                self.offset = reward
+            reward -= self.offset
             if done:
                 wandb.log({"train/learned_reward": reward})
             else:
@@ -540,18 +543,19 @@ class VLC_GVL_RewardWrapper(gym.Wrapper):
 
         reward /= self.reward_divisor
         if info.get("success", False):
-            reward += self.reward_model.success_bonus
+            # reward += self.reward_model.success_bonus
             self.total_success_bonus += self.reward_model.success_bonus
             print(f"The {self.episode_counter}th episode {self.counter}th step, train success reward: {reward}")
         if done:
             self.episode_counter += 1
-            wandb.log({"train/learned_reward_with_success_bonus": reward})
+            # wandb.log({"train/learned_reward_with_success_bonus": reward})
 
         return obs, reward, done, info
 
     def reset(self):
         self.raw_observations = []
         self.counter = 0
+        wandb.log({"train/total_success_bonus": self.total_success_bonus})
         self.total_success_bonus = 0
         obs = self.env.reset()
         proprio = obs[0:4]
@@ -603,7 +607,6 @@ class RecordRewardWrapper(gym.Wrapper):
 
     def step(self, action):
         obs, reward, done, info = self.env.step(action)
-        #reward = reward * 50
         if self.reward_model.reward_at_every_step:
             wandb.log({"train/normalized_reward_per_step": reward})
         if done:
