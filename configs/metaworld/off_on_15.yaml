@@ -24,7 +24,7 @@ environment:
   n_envs: 1
   train_freq_num: 1
   train_freq_type: 'step'
-  env_id: "button-press-wall-v2" # eval task
+  env_id: "coffee-button-v2" # eval task
   ignore_language: false
 
 # Reward divisor is environment-dependent
