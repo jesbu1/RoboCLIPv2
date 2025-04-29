@@ -533,7 +533,7 @@ class VLC_GVL_RewardWrapper(gym.Wrapper):
             video_frames = self._padding_frames(video_frames)
             # print(f"video_frames shape: {video_frames.shape}")
             reward = self.reward_model.calculate_rewards(video_frames, self.language_features)
-            if self.counter == 0:
+            if self.counter == 1:
                 self.offset = reward
             reward -= self.offset
             if done:

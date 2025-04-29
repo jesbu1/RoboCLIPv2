@@ -8,11 +8,6 @@ logging:
   eval_freq: 10000
   video_freq: 10000
   wandb_group_name: "${reward_model.name}_${general_training.algo}_${environment.env_id}_final"
-<<<<<<< HEAD
-  log_dir: "./logs/${logging.wandb_group_name}"
-=======
-
->>>>>>> refs/remotes/origin/offline_rl
 
 general_training:
   algo: rlpd
