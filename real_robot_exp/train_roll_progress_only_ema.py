@@ -89,7 +89,7 @@ def main(args):
     
 
     # group_name = "Dino_Koch_v2"
-    group_name = "RealRobot_Fullset_Koch_combine_matrixplot"
+    group_name = "Metaworld_Fullset_Koch_combine_matrixplot"
     run = wandb.init(
         entity=WANDB_ENTITY_NAME,
         project=WANDB_PROJECT_NAME,
@@ -302,8 +302,8 @@ def main(args):
 
                 if args.extra_data_type == "metaworld":
 
-                    plot_confusion_matrix(h5_file = h5_train_eval_file, set = "train",self_attention_model = self_attention_model, args = args, epoch = epoch)
-                    plot_confusion_matrix(h5_file = h5_eval_file, set = "eval", self_attention_model = self_attention_model, args = args, epoch = epoch)
+                    plot_confusion_matrix(h5_file = h5_train_eval_file, set = "train",self_attention_model = self_attention_model, args = args, epoch = epoch, ema = True, matrix_h5 = matrix_h5)
+                    plot_confusion_matrix(h5_file = h5_eval_file, set = "eval", self_attention_model = self_attention_model, args = args, epoch = epoch, ema = True, matrix_h5 = matrix_h5)
                     plot_progress(h5_train_eval_file, "train", self_attention_model, args, epoch = epoch)
                     plot_progress(h5_eval_file, "eval", self_attention_model, args, epoch = epoch)
 
