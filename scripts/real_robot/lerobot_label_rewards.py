@@ -171,16 +171,21 @@ def lerobot_to_reward_hdf5(
         episode_start_idx = 0
         episode_items = []
         prev_episode_idx = None
+        episode_index = None
 
         for idx in tqdm(range(total_size)):
             item = dataset[idx]
 
             # Get task string
+            episode_index = item["episode_index"]
+
             task = dataset._datasets[item["dataset_index"]].meta.episodes[
                 item["episode_index"]
             ]["tasks"][0]
-
-            episode_index = item["episode_index"]
+            # capitalize the first letter of the task
+            task = task.capitalize()
+            if prev_task is None:
+                prev_task = task
 
             # Check if we're at a new task/episode boundary
             new_episode = (
@@ -190,6 +195,8 @@ def lerobot_to_reward_hdf5(
             )
 
             if new_episode and episode_items:
+                # This is because the current task item is the next one
+                print(f"New episode, {prev_task}")
                 # Process the completed episode
                 episode_len = len(episode_items)
 
@@ -199,15 +206,18 @@ def lerobot_to_reward_hdf5(
                     if isinstance(dataset_id, str)
                     else dataset_id[item["dataset_index"]]
                 )
-                rescaling_factor = rescaling_dict[repo_id]
-                keep_frames = int(episode_len * rescaling_factor)
+                if repo_id in rescaling_dict:
+                    rescaling_factor = rescaling_dict[repo_id]
+                    keep_frames = int(episode_len * rescaling_factor)
 
-                # Rescale frames
-                print(
-                    f"Rescaling episode {episode_index} from {episode_len} to {keep_frames}"
-                )
-                episode_items = episode_items[:keep_frames]
-                print(f"New episode length: {len(episode_items)}")
+                    # Rescale frames
+                    print(
+                        f"Rescaling episode {episode_index} from {episode_len} to {keep_frames}"
+                    )
+                    episode_items = episode_items[:keep_frames]
+                    print(f"New episode length: {len(episode_items)}")
+                else:
+                    print(f"No rescaling for {repo_id}")
 
                 # Sample frames uniformly
                 # if keep_frames < episode_len:
@@ -215,14 +225,14 @@ def lerobot_to_reward_hdf5(
                 #     episode_items = [episode_items[i] for i in indices]
 
                 image_embeddings = []
-
+                rewards = []
                 # Process the episode items
                 for ep_idx, ep_item in enumerate(episode_items):
                     # Only compute text embeddings once per episode
                     if ep_idx == 0:
-                        text_embedding = reward_model.encode_text(task)[0]
+                        text_embedding = reward_model.encode_text(prev_task)[0]
                         policy_lang_embedding = reward_model.encode_text_for_policy(
-                            task
+                            prev_task
                         )[0]
 
                     # Write to datasets
@@ -233,45 +243,58 @@ def lerobot_to_reward_hdf5(
                     dones_dataset[current_idx] = False
 
                     # Compute and write image embeddings
+                    timestep_image_embeddings = []
                     for key in image_keys:
                         image = ep_item[key].numpy()[None, None, :, :, :]
                         image_embedding = reward_model.encode_images(image).squeeze()
                         image_embeds_datasets[key][current_idx] = image_embedding
 
-                        if key == reward_image_key:
-                            image_embeddings.append(image_embedding)
+                        timestep_image_embeddings.append(image_embedding)
+                    image_embeddings.append(timestep_image_embeddings)
 
                     # Write embeddings and strings
                     lang_embedding_dataset[current_idx] = text_embedding
                     policy_lang_embedding_dataset[current_idx] = policy_lang_embedding
-                    string_dataset[current_idx] = task.encode("utf-8")
-                    env_id_dataset[current_idx] = task.encode("utf-8")
+                    string_dataset[current_idx] = prev_task.encode("utf-8")
+                    env_id_dataset[current_idx] = prev_task.encode("utf-8")
 
                     if not reward_at_every_step or ep_idx == 0:
                         rewards_dataset[current_idx] = 0
                     else:
                         embeddings = np.array(image_embeddings)
                         # Compute the rewards
+                        sum_rewards = 0
+                        for i, image_key in enumerate(image_keys):
+                            sum_rewards += reward_model.calculate_rewards(
+                                text_embedding[None, None, :],
+                                embeddings[None, :, i],
+                                image_key,
+                            )
 
-                        reward = reward_model.calculate_rewards(
-                            text_embedding[None, None, :], embeddings[None, :]
-                        )
-                        rewards_dataset[current_idx] = reward
+                        sum_rewards /= len(image_keys)
+                        rewards_dataset[current_idx] = sum_rewards
+                        rewards.append(sum_rewards)
 
                     current_idx += 1
 
-                # Set reward and done for the last frame of the episode
+                # # Set reward and done for the last frame of the episode
                 if current_idx > 0:
-                    rewards_dataset[current_idx - 1] = 1
+                    # rewards_dataset[current_idx - 1] = 1
                     dones_dataset[current_idx - 1] = True
 
                     image_embeddings = np.array(image_embeddings)
                     # Compute the rewards
-                    reward = reward_model.calculate_rewards(
-                        text_embedding[None, None, :], image_embeddings[None, :]
-                    )
+                    sum_rewards = 0
+                    for i, image_key in enumerate(image_keys):
+                        sum_rewards += reward_model.calculate_rewards(
+                            text_embedding[None, None, :],
+                            image_embeddings[None, :, i],
+                            image_key,
+                        )
+                    sum_rewards /= len(image_keys)
+                    reward = sum_rewards
                     rewards_dataset[current_idx] = reward
-                    print(f"Reward: {reward} for task: {task}")
+                    print(f"Reward: {rewards} for task: {task}")
 
                 # Reset for next episode
                 episode_items = [item]
@@ -300,6 +323,8 @@ if __name__ == "__main__":
     dataset_ids = glob.glob(path + "/*")
     dataset_ids = [f"usc_koch_rewind/{os.path.basename(x)}" for x in dataset_ids]
 
+    print(dataset_ids)
+
     eval_tasks = [
         "usc_koch_rewind/put_the_blue_cup_on_the_red_plate",
         "usc_koch_rewind/separate_the_orange_and_blue_cups",
@@ -311,7 +336,13 @@ if __name__ == "__main__":
     # remove eval tasks from dataset_ids
     # dataset_ids = [x for x in dataset_ids if x not in eval_tasks]
 
-    reward_model_path = "weights/rewind/one_step_transformer.pth"
+    # remove anything without a _2 on it
+    dataset_ids = [x for x in dataset_ids if "_2" in x]
+
+    # reward_model_path = "weights/rewind/one_step_transformer.pth"
+    # reward_model_path = ["weights/rewind/all/model_49.pth"] * 2
+    reward_model_path = ["weights/rewind/new_data_mix/model_99.pth"] * 2
+
     # reward_model_path = "weights/rewind/real_world_PosEmb_Rewind_ratio_0.8_EMA_momentum_0.3_End_Rewind_ratio_0.1/model_30.pth"
 
     reward_image_key = "observation.images.main"
@@ -319,7 +350,7 @@ if __name__ == "__main__":
     reward_at_every_step = True
     # dataset_id = "test/orange_left_right_handover"
     reward_model_type = "rewind"
-    output_path = f"./data/real_robot/updated_trajs/usc_koch_rewind_full_{reward_model_type}_{reward_at_every_step}.h5"
+    output_path = f"./data/real_robot/updated_trajs/usc_koch_rewind_new_data_only_new_reward_{reward_model_type}_{reward_at_every_step}.h5"
     lerobot_to_reward_hdf5(
         dataset_id=dataset_ids,
         output_path=output_path,

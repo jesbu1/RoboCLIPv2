@@ -221,7 +221,7 @@ class KochBimanualEnv(Env):
         current_state = self.current_observation["observation.state"]
 
         safe_action = self.ensure_safe_goal_position(
-            goal_pos=action, present_pos=current_state, max_relative_target=3.0
+            goal_pos=action, present_pos=current_state, max_relative_target=6.0
         )
 
         self.robot.send_action(safe_action)
@@ -341,7 +341,7 @@ class KochBimanualEnv(Env):
 
         # sleep
         # busy_wait(5)
-        busy_wait(1)
+        busy_wait(5)
         observation = self.robot.capture_observation()
 
         for key in self.image_keys:
@@ -403,8 +403,14 @@ class SuccessWrapper(gym.Wrapper):
             done = False
 
         if info.get("TimeLimit.truncated"):
-            done = True
-
+            time.sleep(1.0)  # add a sleep to give user time to react
+            if self._user_success:
+                info["success"] = True
+                done = True
+                self._user_success = False  # reset after use
+            else:
+                info["success"] = False
+                done = True
         # reward += orig_reward
         return state, orig_reward, done, info
 
@@ -507,14 +513,14 @@ def create_wrapped_env(
 
         if action_chunk_size > 1:
             if mode == "train":
-                base_env = ActionChunkingWrapper(
-                    base_env,
-                    chunk_size=action_chunk_size,
-                    n_action_steps=action_chunk_size,
-                )
-                # base_env = ACTTemporalEnsemblerWrapper(
-                #     base_env, 0.01, action_chunk_size
+                # base_env = ActionChunkingWrapper(
+                #     base_env,
+                #     chunk_size=action_chunk_size,
+                #     n_action_steps=action_chunk_size,
                 # )
+                base_env = ACTTemporalEnsemblerWrapper(
+                    base_env, 0.01, action_chunk_size
+                )
             elif mode == "eval" or mode == "demo":
                 base_env = ACTTemporalEnsemblerWrapper(
                     base_env, 0.01, action_chunk_size

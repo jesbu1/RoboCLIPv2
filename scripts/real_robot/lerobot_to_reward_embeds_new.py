@@ -28,14 +28,18 @@ dataset_ids = glob.glob(path + "/*")
 
 DATASET_IDS = [f"usc_koch_rewind/{os.path.basename(x)}" for x in dataset_ids]
 
+# filter it so only tasks with "_2" is in them
+# NOTE: This is only to train on the newer data!
+DATASET_IDS = [x for x in DATASET_IDS if "_2" in x]
+
 SAVE_H5_NAME = (
-    "usc_koch_rewind_dino_reward_main.h5"  # name of the h5 file it'll be saved to
+    "usc_koch_rewind_dino_reward_side_new.h5"  # name of the h5 file it'll be saved to
 )
 DEBUG = False  # will use DROID_100
 FRAMES_TO_START_FROM = 128
 MAX_NUM_FRAMES_PER_EPISODE = 32
-PRIMARY_IMAGE_KEY = "observation.images.main"
-# PRIMARY_IMAGE_KEY = "observation.images.side"
+# PRIMARY_IMAGE_KEY = "observation.images.main"
+PRIMARY_IMAGE_KEY = "observation.images.side"
 
 
 os.environ["TF_FORCE_GPU_ALLOW_GROWTH"] = "true"
@@ -208,10 +212,10 @@ with h5py.File(SAVE_H5_NAME, "w") as f:
                 task_group_len_str = str(task_group_len)
 
                 # rescale temporally with rescaling_dict
-                rescaling_dict_key = repo_id
-                episode_images = episode_images[
-                    : int(len(episode_images) * rescaling_dict[rescaling_dict_key])
-                ]
+                if repo_id in rescaling_dict:
+                    episode_images = episode_images[
+                        : int(len(episode_images) * rescaling_dict[repo_id])
+                    ]
 
                 embedding_list = []
                 # linspace to get the indices of the frames to sample
@@ -234,22 +238,22 @@ with h5py.File(SAVE_H5_NAME, "w") as f:
                 ]
 
                 # Create a grid layout (e.g., 4x8 for 32 frames)
-                rows, cols = 4, 8
-                fig, axes = plt.subplots(rows, cols, figsize=(20, 10))
-                fig.suptitle(f"All frames for episode {prev_episode_idx}")
+                # rows, cols = 4, 8
+                # fig, axes = plt.subplots(rows, cols, figsize=(20, 10))
+                # fig.suptitle(f"All frames for episode {prev_episode_idx}")
 
-                # Plot each frame
-                for idx in range(rows * cols):
-                    ax = axes[idx // cols, idx % cols]
-                    if idx < num_frames:
-                        ax.imshow(primary_frames[idx])
-                    ax.axis("off")
-                    # if idx < num_frames:
-                    #     ax.set_title(f'Frame {idx}')
+                # # Plot each frame
+                # for idx in range(rows * cols):
+                #     ax = axes[idx // cols, idx % cols]
+                #     if idx < num_frames:
+                #         ax.imshow(primary_frames[idx])
+                #     ax.axis("off")
+                #     # if idx < num_frames:
+                #     #     ax.set_title(f'Frame {idx}')
 
-                plt.tight_layout()
-                plt.pause(2)
-                plt.close()
+                # plt.tight_layout()
+                # plt.pause(2)
+                # plt.close()
 
                 if EMBEDDING_MODEL == "dinov2":
                     # batch it

@@ -455,13 +455,21 @@ def main(cfg: DictConfig):
                 cfg.environment.train_freq_type,
             )  # type: ignore[arg-type]
             model.gradient_steps = cfg.online_training.gradient_steps
-            model.online_critic_update_ratio = cfg.online_training.critic_update_ratio
-            model.offline_critic_update_ratio = cfg.offline_training.critic_update_ratio
-            # setting to online because we are loading offline
-            model.current_critic_update_ratio = cfg.online_training.critic_update_ratio
+            if hasattr(cfg, "critic_update_ratio"):
+                model.online_critic_update_ratio = (
+                    cfg.online_training.critic_update_ratio
+                )
+                model.offline_critic_update_ratio = (
+                    cfg.offline_training.critic_update_ratio
+                )
+                # setting to online because we are loading offline
+                model.current_critic_update_ratio = (
+                    cfg.online_training.critic_update_ratio
+                )
             model._convert_train_freq()
 
-            model.learning_starts = cfg.general_training.learning_starts
+            if hasattr(cfg, "learning_starts"):
+                model.learning_starts = cfg.general_training.learning_starts
 
         else:
             # checkpoint callback. only save 5 times
@@ -508,16 +516,6 @@ def main(cfg: DictConfig):
     ):
         model.set_combined_buffer(buffer, ratio=cfg.online_training.mix_buffers_ratio)
     # reset the last layer of the actor
-    # for layer in model.actor.mu_processor.children():
-    #    if hasattr(layer, "reset_parameters"):
-    #        layer.reset_parameters()
-    # for layer in model.actor.log_std_processor.children():
-    #    if hasattr(layer, "reset_parameters"):
-    #        layer.reset_parameters()
-    # for i in range(len(model.critic.q_networks)):
-    #    for layer in model.critic.q_networks[i].q_network.children():
-    #        if hasattr(layer, "reset_parameters"):
-    #            layer.reset_parameters()
 
     ### Learn online ###
     logger = model.logger  # set logger in case
@@ -576,6 +574,7 @@ def main(cfg: DictConfig):
             traceback.print_exc()
 
     model.save(log_dir)
+    print("Done and saved to", log_dir)
 
     if logging_config.wandb:
         wandb.finish()

@@ -1,3 +1,4 @@
+from re import I
 from typing import Any, ClassVar, Dict, List, Optional, Tuple, Type, Union
 
 import numpy as np
@@ -103,6 +104,7 @@ class BC(OfflineRLAlgorithm):
         device: Union[th.device, str] = "auto",
         _init_setup_model: bool = True,
         action_chunk_size: int = 1,
+        success_bonus: float = 0.0,
     ):
         super().__init__(
             policy,
@@ -131,6 +133,7 @@ class BC(OfflineRLAlgorithm):
             supported_action_spaces=(spaces.Box,),
             support_multi_env=True,
             action_chunk_size=action_chunk_size,
+            success_bonus=success_bonus,
         )
 
         # Entropy coefficient / Entropy temperature
@@ -217,6 +220,7 @@ class BC(OfflineRLAlgorithm):
         tb_log_name: str = "BC",
         reset_num_timesteps: bool = True,
         progress_bar: bool = False,
+        parallelize: bool = False,
         logger: Optional = None,
     ):
         return super().learn(

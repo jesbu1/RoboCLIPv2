@@ -289,7 +289,7 @@ class IQL(OfflineRLAlgorithm):
         gradient_steps: int,
         batch_size: int = 64,
         logging_prefix: str = "train",
-        policy_lock: Optional[threading.Lock] = None,
+        policy_lock=None,
     ) -> None:
         # Switch to train mode (this affects batch norm / dropout)
         self.policy.set_training_mode(True)

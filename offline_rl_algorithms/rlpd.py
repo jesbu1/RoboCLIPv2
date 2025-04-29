@@ -247,8 +247,9 @@ class RLPD(OfflineRLAlgorithm):
             self.policy.critic_target = offline_algo.policy.critic_target
 
         # old actor will be used for KL divergence computation against the old policy
-        # self.old_actor = th.compile(deepcopy(self.policy).actor.cpu().to(self.device))
-        self.old_actor = deepcopy(self.policy.actor).cpu().to(self.device)
+        print("setting old actor!")
+        self.old_actor = th.compile(deepcopy(self.policy.actor).cpu().to(self.device))
+        # self.old_actor = deepcopy(self.policy.actor).cpu().to(self.device)
 
         # self.policy.actor.optimizer = type(self.policy.actor.optimizer)(
         #     self.policy
@@ -258,6 +259,17 @@ class RLPD(OfflineRLAlgorithm):
         #     self.policy.critic.parameters(),
         #     lr=self.policy.critic.optimizer.param_groups[0]["lr"],
         # )
+
+        # for layer in self.policy.actor.mu_processor.children():
+        #     if hasattr(layer, "reset_parameters"):
+        #         layer.reset_parameters()
+        # for layer in self.policy.actor.log_std_processor.children():
+        #     if hasattr(layer, "reset_parameters"):
+        #         layer.reset_parameters()
+        # for i in range(len(self.policy.critic.q_networks)):
+        #     for layer in self.policy.critic.q_networks[i].q_network.children():
+        #         if hasattr(layer, "reset_parameters"):
+        #             layer.reset_parameters()
 
         return
 
@@ -524,7 +536,7 @@ class RLPD(OfflineRLAlgorithm):
         gradient_steps: int,
         batch_size: int = 64,
         logging_prefix: str = "train",
-        policy_lock: Optional[threading.Lock] = None,
+        policy_lock=None,
     ) -> None:
         # Switch to train mode (this affects batch norm / dropout)
         self.policy.set_training_mode(True)
@@ -733,7 +745,7 @@ class RLPD(OfflineRLAlgorithm):
         gradient_steps: int,
         batch_size: int = 64,
         logging_prefix: str = "",
-        policy_lock: Optional[threading.Lock] = None,
+        policy_lock=None,
     ) -> None:
         # Switch to train mode (this affects batch norm / dropout)
         # breakpoint()
@@ -779,28 +791,85 @@ class RLPD(OfflineRLAlgorithm):
             else:
                 ent_coef = self.ent_coef_tensor
 
+            # Sample replay buffer
+            replay_data = self.replay_buffer.sample(
+                batch_size, env=self._vec_normalize_env
+            )  # type: ignore[union-attr]
+            if len(replay_data.observations) == 0:
+                print("Buffer is still empty. Skipping this training step")
+                return {}
+            shuffled_indicies = np.random.permutation(batch_size)
+            critic_batch_indicies = np.array_split(
+                shuffled_indicies, self.current_critic_update_ratio
+            )
+            # Calculate KL divergence between old and current actor
+            with th.no_grad():
+                old_mean, old_log_std, _ = self.old_actor.get_action_dist_params(
+                    replay_data.observations
+                )
+                old_actor_distribution = self.old_actor.action_dist.proba_distribution(
+                    old_mean, old_log_std
+                )
+
+            # Action by the current actor for the sampled state
+            if policy_lock is not None:
+                policy_lock.acquire()
+            # actions_pi, log_prob = self.actor.action_log_prob(replay_data.observations)
+            mean_actions, log_std, kwargs = self.actor.get_action_dist_params(
+                replay_data.observations
+            )
+            actions_pi, log_prob = self.actor.action_dist.log_prob_from_params(
+                mean_actions, log_std, **kwargs
+            )
+            next_actions, next_log_prob = self.actor.action_log_prob(
+                replay_data.next_observations
+            )
+            if policy_lock is not None:
+                policy_lock.release()
+            curr_actor_distribution = self.actor.action_dist.proba_distribution(
+                mean_actions, log_std, **kwargs
+            )
+            kl_div = kl_divergence(
+                curr_actor_distribution,
+                old_actor_distribution,
+            )
+            kl_div = kl_div.sum(1).mean(-1, keepdim=True)
             for critic_update in range(self.current_critic_update_ratio):
-                # Sample replay buffer
-                replay_data = self.replay_buffer.sample(
-                    batch_size, env=self._vec_normalize_env
-                )  # type: ignore[union-attr]
-                if len(replay_data.observations) == 0:
-                    print("Buffer is still empty. Skipping this training step")
-                    return {}
+                critic_next_obs = replay_data.next_observations[
+                    critic_batch_indicies[critic_update]
+                ]
+                critic_observations = replay_data.observations[
+                    critic_batch_indicies[critic_update]
+                ]
+                critic_dones = replay_data.dones[critic_batch_indicies[critic_update]]
+                critic_next_actions = replay_data.actions[
+                    critic_batch_indicies[critic_update]
+                ]
+                critic_actions = replay_data.actions[
+                    critic_batch_indicies[critic_update]
+                ]
+                critic_rewards = replay_data.rewards[
+                    critic_batch_indicies[critic_update]
+                ]
+                critic_valid_length = replay_data.valid_length[
+                    critic_batch_indicies[critic_update]
+                ]
+                critic_kl_div = kl_div[critic_batch_indicies[critic_update]]
 
                 with th.no_grad():
                     # Select action according to policy
                     # print("replay data shape", replay_data.next_observations.shape)
-                    if policy_lock is not None:
-                        policy_lock.acquire()
-                    next_actions, next_log_prob = self.actor.action_log_prob(
-                        replay_data.next_observations
-                    )
-                    if policy_lock is not None:
-                        policy_lock.release()
-                    if next_actions.ndim == 3:
+                    critic_next_actions = next_actions[
+                        critic_batch_indicies[critic_update]
+                    ]
+                    critic_next_log_prob = next_log_prob[
+                        critic_batch_indicies[critic_update]
+                    ]
+                    if critic_next_actions.ndim == 3:
                         # Take the mean of the logprob
-                        next_log_prob = next_log_prob.mean(dim=1, keepdim=True)
+                        critic_next_log_prob = critic_next_log_prob.mean(
+                            dim=1, keepdim=True
+                        )
                     # Compute the next Q values: min over all critics targets
                     # sample a random subset of self.n_critics_to_sample critics. no replacement
                     critic_indices = th.randperm(self.policy_kwargs["n_critics"])[
@@ -808,8 +877,8 @@ class RLPD(OfflineRLAlgorithm):
                     ]
                     next_q_values = th.cat(
                         self.critic_target(
-                            replay_data.next_observations,
-                            next_actions,
+                            critic_next_obs,
+                            critic_next_actions,
                             critic_indices=critic_indices,
                         ),
                         dim=1,
@@ -818,29 +887,31 @@ class RLPD(OfflineRLAlgorithm):
 
                     # add entropy term
                     if self.train_critic_with_entropy:
-                        # TODO: there is an error here
-                        assert not self.use_kl_against_old, "Not implemented yet"
-                        next_q_values = (
-                            next_q_values - ent_coef * next_log_prob.reshape(-1, 1)
-                        )
+                        if self.use_kl_against_old:
+                            next_q_values = (
+                                next_q_values - ent_coef * critic_kl_div.detach()
+                            )
+                        else:
+                            next_q_values = (
+                                next_q_values
+                                - ent_coef * critic_next_log_prob.reshape(-1, 1)
+                            )
 
                     # td error + entropy term
 
                     if hasattr(replay_data, "valid_length"):
-                        valid_lengths = replay_data.valid_length
+                        valid_lengths = critic_valid_length
                         discount = (self.gamma**valid_lengths).unsqueeze(1).float()
                     else:
                         discount = self.gamma
-
                     target_q_values = (
-                        replay_data.rewards
-                        + (1 - replay_data.dones) * discount * next_q_values
+                        critic_rewards + (1 - critic_dones) * discount * next_q_values
                     )
 
                 # Get current Q-values estimates for each critic network
                 # using action from the replay buffer
                 current_q_values = th.cat(
-                    self.critic(replay_data.observations, replay_data.actions),
+                    self.critic(critic_observations, critic_actions),
                     dim=1,
                 )
                 # Compute critic loss
@@ -868,18 +939,6 @@ class RLPD(OfflineRLAlgorithm):
                         self.batch_norm_stats, self.batch_norm_stats_target, 1.0
                     )
 
-            # Action by the current actor for the sampled state
-            if policy_lock is not None:
-                policy_lock.acquire()
-            # actions_pi, log_prob = self.actor.action_log_prob(replay_data.observations)
-            mean_actions, log_std, kwargs = self.actor.get_action_dist_params(
-                replay_data.observations
-            )
-            actions_pi, log_prob = self.actor.action_dist.log_prob_from_params(
-                mean_actions, log_std, **kwargs
-            )
-            if policy_lock is not None:
-                policy_lock.release()
             if actions_pi.ndim == 3:
                 # Take the mean of the logprob
                 log_prob = log_prob.mean(dim=1, keepdim=True)
@@ -928,14 +987,6 @@ class RLPD(OfflineRLAlgorithm):
             if policy_lock is not None:
                 policy_lock.acquire()
 
-            # Calculate KL divergence between old and current actor
-            with th.no_grad():
-                old_mean, old_log_std, _ = self.old_actor.get_action_dist_params(
-                    replay_data.observations
-                )
-                old_actor_distribution = self.old_actor.action_dist.proba_distribution(
-                    old_mean, old_log_std
-                )
             curr_actor_distribution = self.actor.action_dist.proba_distribution(
                 mean_actions, log_std, **kwargs
             )
@@ -1034,7 +1085,7 @@ class RLPD(OfflineRLAlgorithm):
         gradient_steps: int,
         batch_size: int = 64,
         logging_prefix: str = "train",
-        policy_lock: Optional[threading.Lock] = None,
+        policy_lock=None,
     ) -> None:
         """
         CQL training loop, closely modeled after train_iql and CQL.train.
@@ -1272,6 +1323,7 @@ class RLPD(OfflineRLAlgorithm):
             "online_buffer",  # Exclude the online buffer
             "offline_buffer",  # Exclude the offline buffer
             "logger",  # Exclude the logger
+            "train",
         ]  # noqa: RUF005
 
     def _get_torch_save_params(self) -> Tuple[List[str], List[str]]:

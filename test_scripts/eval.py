@@ -33,7 +33,7 @@ import io
 import imageio
 
 
-def load_model(model_path, env, model_type="rlpd", offline_algo=None):
+def load_model(cfg, model_path, env, model_type="rlpd", offline_algo=None):
     """
     Load a model from the specified path.
 
@@ -188,8 +188,36 @@ def load_model(model_path, env, model_type="rlpd", offline_algo=None):
                 else:
                     print(f"Warning: Offline algorithm not found at {offline_path}")
 
-            model = RLPD.load(
-                model_path,
+            model = RLPD(
+                cfg.model.policy_type,
+                env,
+                offline_algo=None,
+                verbose=1,
+                # tensorboard_log=log_dir,
+                # buffer_size=cfg.online_training.total_time_steps,
+                learning_starts=cfg.online_training.learning_starts,
+                # seed=args.seed,
+                # action_noise=action_noise,  # should be null
+                ent_coef=cfg.general_training.entropy_term,
+                # policy_kwargs=policy_kwargs,
+                learning_rate=cfg.general_training.learning_rate,
+                train_freq=(
+                    cfg.environment.train_freq_num,
+                    cfg.environment.train_freq_type,
+                ),  # useless
+                online_critic_update_ratio=cfg.online_training.critic_update_ratio,
+                offline_critic_update_ratio=cfg.offline_training.critic_update_ratio,
+                n_critics_to_sample=cfg.general_training.n_critics_to_sample,
+                train_critic_with_entropy=cfg.general_training.rlpd_train_critic_with_entropy,
+                warm_start_online_rl=cfg.online_training.warm_start_online_rl,
+                gamma=cfg.general_training.gamma,
+                action_chunk_size=cfg.general_training.action_chunk_size,
+                success_bonus=cfg.reward_model.success_bonus,
+                gradient_steps=cfg.online_training.gradient_steps,
+            )
+
+            model = model.load(
+                path=model_path,
                 env=env,
                 offline_algo=offline_algo,
                 custom_objects={
@@ -199,7 +227,7 @@ def load_model(model_path, env, model_type="rlpd", offline_algo=None):
             )
         elif model_type.lower() == "iql":
             model = IQL.load(
-                model_path,
+                path=model_path,
                 env=env,
                 custom_objects={
                     "observation_space": env.observation_space,
@@ -207,8 +235,9 @@ def load_model(model_path, env, model_type="rlpd", offline_algo=None):
                 },
             )
         elif model_type.lower() == "bc":
-            model = BC.load(
-                model_path,
+            model = BC(policy_type, env, verbose=1, policy_kwargs=policy_kwargs)
+            model.load(
+                path=model_path,
                 env=env,
                 custom_objects={
                     "observation_space": env.observation_space,
@@ -216,7 +245,7 @@ def load_model(model_path, env, model_type="rlpd", offline_algo=None):
                 },
             )
         elif model_type.lower() == "cql":
-            model = CQL.load(model_path, env=env)
+            model = CQL.load(path=model_path, env=env)
         else:
             raise ValueError(f"Unknown model type: {model_type}")
 
@@ -420,7 +449,7 @@ def main(cfg: DictConfig):
     )
 
     # Load the model
-    model = load_model(model_path, envs, model_type=eval_config.model_type)
+    model = load_model(cfg, model_path, envs, model_type=eval_config.model_type)
 
     # Set the logger if available
     if wandb_logger is not None:

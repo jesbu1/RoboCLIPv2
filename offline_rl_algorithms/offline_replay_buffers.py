@@ -195,6 +195,7 @@ class H5ReplayBuffer(ReplayBuffer):
                 rewards = np.array(rewards)
 
             dones = f["done"][()]
+
             # timesteps = f["timesteps"][()]
 
             self.is_state_based = is_state_based
@@ -317,6 +318,67 @@ class H5ReplayBuffer(ReplayBuffer):
             else:
                 timesteps[i] = current_timestep
                 current_timestep += 1
+
+        # Because of noise in the reward function, we will iterate
+        # through the obs/actions/rewards/dones/etc per-episode (based on the dones)
+        # and then shorten them so that the highest reward is where the done occurs
+        # # --- Begin: Truncate episodes at highest reward ---
+        # episode_start = 0
+        # new_obs = []
+        # new_next_obs = []
+        # new_actions = []
+        # new_rewards = []
+        # new_dones = []
+        # new_timesteps = []
+        # new_lang_embeddings = []
+        # N = len(rewards)
+        # num_episodes = 0
+
+        # episode_lengths = []
+        # for i in range(N):
+        #     if dones[i] == 1:
+        #         episode_end = i + 1
+        #         ep_rewards = rewards[episode_start:episode_end]
+        #         # hacky solution for now, but replace the last item of ep_rewards with the second to last one
+        #         ep_rewards[-1] = ep_rewards[-2]
+        #         max_idx = int(np.argmax(ep_rewards))
+        #         print(
+        #             "Max reward index:",
+        #             max_idx,
+        #             "Episode length:",
+        #             episode_end - episode_start,
+        #             "Max reward:",
+        #             ep_rewards[max_idx],
+        #         )
+        #         trunc_end = episode_start + max_idx + 1  # include max reward index
+        #         # NOTE: uncomment line above to truncate. Below will not truncate
+        #         # trunc_end = episode_end
+        #         # Copy truncated episode data
+        #         episode_lengths.append(trunc_end - episode_start)
+        #         new_obs.append(observations[episode_start:trunc_end])
+        #         new_next_obs.append(next_observations[episode_start:trunc_end])
+        #         new_actions.append(actions[episode_start:trunc_end])
+        #         new_rewards.append(rewards[episode_start:trunc_end])
+        #         # Set done to 0 except last one
+        #         ep_dones = np.zeros(trunc_end - episode_start, dtype=dones.dtype)
+        #         ep_dones[-1] = 1.0
+        #         new_dones.append(ep_dones)
+        #         new_timesteps.append(timesteps[episode_start:trunc_end])
+        #         new_lang_embeddings.append(lang_embeddings[episode_start:trunc_end])
+        #         num_episodes += 1
+        #         episode_start = episode_end
+        # print("Number of episodes:", num_episodes)
+        # print("Mean episode length:", np.mean(episode_lengths))
+        # # Concatenate all episodes
+        # if new_obs:
+        #     observations = np.concatenate(new_obs, axis=0)
+        #     next_observations = np.concatenate(new_next_obs, axis=0)
+        #     actions = np.concatenate(new_actions, axis=0)
+        #     rewards = np.concatenate(new_rewards, axis=0)
+        #     dones = np.concatenate(new_dones, axis=0)
+        #     timesteps = np.concatenate(new_timesteps, axis=0)
+        #     lang_embeddings = np.concatenate(new_lang_embeddings, axis=0)
+        # # --- End: Truncate episodes at highest reward ---
 
         self.optimize_memory_usage = False
 
@@ -545,6 +607,7 @@ class H5ReplayBuffer(ReplayBuffer):
             mc_returns = rewards
         # # set rewards to have all zeros
         # rewards = np.zeros_like(rewards)
+
         data = (
             observation,
             actions,
@@ -907,6 +970,14 @@ class ActionChunkedReplayBuffer(ReplayBuffer):
             np.zeros_like(rewards),  # offline_data_mask is 0 for online data
             window_sizes,  # valid_lengths is the number of valid actions
         )
+
+        # shuffle the data before returning
+        data = list(data)
+        idx = np.random.permutation(len(data[0]))
+        for i in range(len(data)):
+            data[i] = data[i][idx]
+        data = tuple(data)
+
         return CombinedBufferSamples(*tuple(map(self.to_torch, data)))
 
     def clone(self):

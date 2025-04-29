@@ -5,14 +5,22 @@ defaults:
 
 # tentatively unused
 offline_training:
-  offline_h5_path: "data/real_robot/updated_trajs/usc_koch_rewind_full_{0}_{1}.h5"
+  # offline_h5_path: "data/real_robot/updated_trajs/usc_koch_rewind_full_both_cams_{0}_{1}.h5"
+  # offline_h5_path: "data/real_robot/updated_trajs/usc_koch_rewind_new_data_old_reward_{0}_{1}.h5"
+  offline_h5_path: "data/real_robot/updated_trajs/usc_koch_rewind_new_old_data_new_reward_{0}_{1}.h5"
+  # offline_h5_path: "data/real_robot/updated_trajs/usc_koch_rewind_new_data_only_new_reward_{0}_{1}.h5"
   reward_at_every_step: false
   offline_tasks: null
 
 environment:
   cfg_name: "koch_single_task"
   # text_instruction: "separate the orange and blue cups" # seen task
-  text_instruction: "open the red trash bin"
+  # text_instruction: "open the red trash bin"
+  # text_instruction: "Move the orange cup from the left to the right"
+  # text_instruction: "Move the blue cup from the right to the left"
+  # text_instruction: "Put the blue cup on the red plate"
+  # text_instruction: "Open the red trash bin"
+  text_instruction: "Put the can in the box"
   # text_instruction: "Put the blue cup in the box"
   # text_instruction: "separate the red and green cups" # unseen task
   # text_instruction: "Separate the blue and red cups"
@@ -21,12 +29,12 @@ environment:
   train_freq_type: 'episode'
   ignore_language: false
   image_keys: ['observation.images.main', 'observation.images.side']
-  max_episode_steps: 250
+  max_episode_steps: 350
   use_proprio: true
 
 online_training:
   total_time_steps: 50000
-  gradient_steps: 125
+  gradient_steps: 200
 
 general_training:
   gamma: 0.99 # gamma should be (1/(1-gamma) = 250 steps

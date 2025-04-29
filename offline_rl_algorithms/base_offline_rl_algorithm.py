@@ -658,6 +658,7 @@ class OfflineRLAlgorithm(OffPolicyAlgorithm):
             buffer_lock = threading.Lock()
             while self.num_timesteps < total_timesteps:
                 # Start rollout collection in a thread
+                print(self.num_timesteps, total_timesteps)
 
                 empty_callback_list = CallbackList([])
                 empty_callback_list = empty_callback_list.init_callback(self)
@@ -692,10 +693,14 @@ class OfflineRLAlgorithm(OffPolicyAlgorithm):
                                 policy_lock=policy_lock,
                             )
 
+                    # Now let's save this!
+                    self.save("./checkpoints/current_checkpoint")
+                    print("Saved checkpoint")
+
                     # Wait for rollout collection to finish and get the return value
                     # NOTE: this code only handles the train_freq=episodes case!
                     self.replay_buffer, num_collected_steps = future.result()
-                    total_timesteps += num_collected_steps
+
                     callback.update_locals(locals())
                     callback.on_step()
 
@@ -1247,18 +1252,18 @@ class OfflineRLAlgorithm(OffPolicyAlgorithm):
                 if "env" in data:
                     env = data["env"]
 
-                # noinspection PyArgumentList
-                model = self.__class__(  # pytype: disable=not-instantiable,wrong-keyword-args
-                    policy=data["policy_class"],
-                    env=env,
-                    device=device,
-                    _init_setup_model=False,  # pytype: disable=not-instantiable,wrong-keyword-args
-                )
+            # noinspection PyArgumentList
+            model = self.__class__(  # pytype: disable=not-instantiable,wrong-keyword-args
+                policy=data["policy_class"],
+                env=env,
+                device=device,
+                _init_setup_model=False,  # pytype: disable=not-instantiable,wrong-keyword-args
+            )
 
-                # load parameters
-                model.__dict__.update(data)
-                model.__dict__.update(kwargs)
-                model._setup_model()
+            # load parameters
+            model.__dict__.update(data)
+            model.__dict__.update(kwargs)
+            model._setup_model()
         else:
             model = self
 
