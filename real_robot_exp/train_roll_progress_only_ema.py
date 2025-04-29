@@ -12,6 +12,7 @@ import h5py
 from torch.nn import CrossEntropyLoss, BCELoss
 import os
 from models_pe import ClassProgressTransformer as pe_model
+# from models_full_pe import ClassProgressTransformer as pe_model
 from models import ClassProgressTransformer as no_pe_model
 # , RewardOneStepNewPositionEmbeddingPredictor
 from utils_clean import update_model, CosineWithMinLRScheduler, eval_model
@@ -49,7 +50,7 @@ def main(args):
     WANDB_ENTITY_NAME = "clvr"
     WANDB_PROJECT_NAME = "roboclip-v2"
 
-    experiment_name = str(args.extra_data_type) + "_DataType_" + str(args.data_type)
+    experiment_name = str(args.extra_data_type) + "_DataType_" + str(args.data_type) + "_nolang_aug"
     if args.full_set:
         experiment_name += "_FullSet"
     if args.positional_encoding:
@@ -99,11 +100,14 @@ def main(args):
     )
 
     if args.extra_data_type == "metaworld":
-        if args.text_embedding_model == "minilm":
-            h5_train_eval_file = h5py.File("metaworld_dino_embeddings_train_5_demos.h5", "r")
+        # if args.text_embedding_model == "minilm":
+        #     h5_train_eval_file = h5py.File("metaworld_dino_embeddings_train_5_demos.h5", "r")
+        #     h5_eval_file = h5py.File("metaworld_dino_embeddings_eval_5_demos.h5", "r")
+        #     extra_data_path = "metaworld_dino_embeddings_train_5_demos.h5"
+       if args.text_embedding_model == "minilm":
+            h5_train_eval_file = h5py.File("metaworld_dino_embeddings_train_5_demos_1_lang.h5", "r")
             h5_eval_file = h5py.File("metaworld_dino_embeddings_eval_5_demos.h5", "r")
-            extra_data_path = "metaworld_dino_embeddings_train_5_demos.h5"
-
+            extra_data_path = "metaworld_dino_embeddings_train_5_demos_1_lang.h5"
 
     else:
         # h5_eval_file = h5py.File("jesse_collect_dataset_new_token.h5", "r")
@@ -188,6 +192,7 @@ def main(args):
     extra_eval_eval_neg_dataset = LivRealVideoEvalDataset(args, h5_eval_file, label = "negative", dataset = "extra")
 
     confusion_matrix_name = "confusion_matrix_" + str(args.extra_data_type) + "_" + str(args.view) + ".h5"
+    confusion_matrix_name = "test_h5_no_textaug.py"
     matrix_h5 = h5py.File(confusion_matrix_name, "w")
 
 
