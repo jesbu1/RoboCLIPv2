@@ -184,7 +184,8 @@ def main(args):
     extra_eval_eval_pos_dataset = LivRealVideoEvalDataset(args, h5_eval_file, label = "positive", dataset = "extra")
     extra_eval_eval_neg_dataset = LivRealVideoEvalDataset(args, h5_eval_file, label = "negative", dataset = "extra")
 
-    matrix_h5 = h5py.File(f"confusion_matrix_{args.view}.h5", "w")
+    confusion_matrix_name = "confusion_matrix_" + str(args.extra_data_type) + "_" + str(args.view) + ".h5"
+    matrix_h5 = h5py.File(confusion_matrix_name, "w")
 
 
     video_dim = 768
