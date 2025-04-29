@@ -36,7 +36,7 @@ Eval_keys = [
     'Put the red tape in the box on the right'
 ]
 
-h5_file_name = "usc_koch_rewind_dino_reward_side.h5"
+h5_file_name = "usc_koch_rewind_dino_reward_side_new.h5"
 h5_file = h5py.File(h5_file_name, 'r')
 
 # print("Keys: %s" % h5_file.keys())
@@ -49,13 +49,14 @@ for key in Eval_keys:
     if key not in h5_file:
         print("Key not found: ", key)
 
-
-train_file = h5py.File("usc_koch_rewind_dino_reward_side_train.h5", 'w')
+train_file_name = h5_file_name.replace(".h5", "_train.h5")
+train_file = h5py.File(train_file_name, 'w')
 for key in train_keys:
     h5_file.copy(key, train_file)
 train_file.close()
 
-eval_file = h5py.File("usc_koch_rewind_dino_reward_side_eval.h5", 'w')
+eval_file_name = h5_file_name.replace(".h5", "_eval.h5")
+eval_file = h5py.File(eval_file_name, 'w')
 for key in Eval_keys:
     h5_file.copy(key, eval_file)
 import pdb ; pdb.set_trace()

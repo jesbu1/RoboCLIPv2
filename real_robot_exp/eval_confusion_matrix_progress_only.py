@@ -119,7 +119,7 @@ def plot_matrix_as_image(matrix, names, set, text, prob = False, org_progress = 
 
 
 
-def plot_confusion_matrix(h5_file, set, self_attention_model, args, epoch = None, ema = False):
+def plot_confusion_matrix(h5_file, set, self_attention_model, args, epoch = None, ema = False, matrix_h5 = None):
     device = next(self_attention_model.parameters()).device
 
     keys = list(h5_file.keys())
@@ -181,6 +181,12 @@ def plot_confusion_matrix(h5_file, set, self_attention_model, args, epoch = None
     #     pred_two_step_prob_list = np.array(pred_two_step_prob_list)
     #     img = plot_matrix_as_image(predicted_progress_row, eval_envs, set, text_list, prob = False)
     #     img1 = plot_matrix_as_image(pred_two_step_prob_list, eval_envs, set, text_list, prob = True)
+
+    pred_matrix = np.array(pred_org_progress_list)
+    if set not in matrix_h5.keys():
+        matrix_h5.create_group(set)
+    group = matrix_h5[set]
+    group.create_dataset(str(epoch), data=pred_matrix)
     img2 = plot_matrix_as_image(pred_org_progress_list, eval_envs, set, text_list, prob = False, org_progress = True, epoch = epoch, ema = ema)
  
 

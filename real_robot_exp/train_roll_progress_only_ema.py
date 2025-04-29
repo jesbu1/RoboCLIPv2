@@ -89,7 +89,7 @@ def main(args):
     
 
     # group_name = "Dino_Koch_v2"
-    group_name = "RealRobot_Fullset_Koch_combine"
+    group_name = "RealRobot_Fullset_Koch_combine_matrixplot"
     run = wandb.init(
         entity=WANDB_ENTITY_NAME,
         project=WANDB_PROJECT_NAME,
@@ -109,19 +109,21 @@ def main(args):
         # h5_eval_file = h5py.File("jesse_collect_dataset_new_token.h5", "r")
         # extra_data_path = "jesse_collect_dataset_new_token.h5"
         if args.view == "side":
-            h5_train_eval_file = h5py.File("usc_koch_rewind_dino_reward_side_train.h5", "r")
-            h5_eval_file = h5py.File("usc_koch_rewind_dino_reward_side_eval.h5", "r")
+            h5_train_eval_file = h5py.File("usc_koch_rewind_dino_reward_side_new_train.h5", "r")
+            h5_eval_file = h5py.File("usc_koch_rewind_dino_reward_side_new_eval.h5", "r")
             if args.full_set:
-                extra_data_path = "usc_koch_rewind_dino_reward_side.h5"
+                extra_data_path = "usc_koch_rewind_dino_reward_side_new.h5"
             else:
-                extra_data_path = "usc_koch_rewind_dino_reward_side_train.h5"
+                extra_data_path = "usc_koch_rewind_dino_reward_side_new_train.h5"
+
         elif args.view == "top":
-            h5_train_eval_file = h5py.File("usc_koch_rewind_dino_reward_main_train.h5", "r")
-            h5_eval_file = h5py.File("usc_koch_rewind_dino_reward_main_eval.h5", "r")
+            h5_train_eval_file = h5py.File("usc_koch_rewind_dino_reward_main_new_train.h5", "r")
+            h5_eval_file = h5py.File("usc_koch_rewind_dino_reward_main_new_eval.h5", "r")
             if args.full_set:
-                extra_data_path = "usc_koch_rewind_dino_reward_main.h5"
+                extra_data_path = "usc_koch_rewind_dino_reward_main_new.h5"
             else:
-                extra_data_path = "usc_koch_rewind_dino_reward_main_train.h5"
+                extra_data_path = "usc_koch_rewind_dino_reward_main_new_train.h5"
+        
         elif args.view == "all":
             h5_train_eval_file = h5py.File("usc_koch_rewind_dino_reward_side_train.h5", "r")
             h5_eval_file = h5py.File("usc_koch_rewind_dino_reward_side_eval.h5", "r")
@@ -133,6 +135,10 @@ def main(args):
                 elif args.data_type == "all":
                     extra_data_path = "usc_koch_rewind_dino_reward_all_combine.h5"  
                 print("Using all data new generated")
+
+        print("Using side view new generated", args.view)
+        print("Using side view new generated", args.view)
+        print("Using side view new generated", args.view)
 
     embedding_dim = 768
 
@@ -178,7 +184,7 @@ def main(args):
     extra_eval_eval_pos_dataset = LivRealVideoEvalDataset(args, h5_eval_file, label = "positive", dataset = "extra")
     extra_eval_eval_neg_dataset = LivRealVideoEvalDataset(args, h5_eval_file, label = "negative", dataset = "extra")
 
-
+    matrix_h5 = h5py.File(f"confusion_matrix_{args.view}.h5", "w")
 
 
     video_dim = 768
@@ -261,10 +267,10 @@ def main(args):
                     compute_metrics_multi(args, ema_model, threshold=0.5, compute_gif = compute_gif, epoch = epoch, one_step=True)
 
                 else: # real world data
-                    plot_confusion_matrix(h5_file = h5_train_eval_file, set = "train",self_attention_model = self_attention_model, args = args, epoch = epoch, ema=False)
-                    plot_confusion_matrix(h5_file = h5_eval_file, set = "eval", self_attention_model = self_attention_model, args = args, epoch = epoch, ema=False)
-                    plot_confusion_matrix(h5_file = h5_train_eval_file, set = "train",self_attention_model = ema_model, args = args, epoch = epoch, ema=True)
-                    plot_confusion_matrix(h5_file = h5_eval_file, set = "eval", self_attention_model = ema_model, args = args, epoch = epoch, ema=True)
+                    # plot_confusion_matrix(h5_file = h5_train_eval_file, set = "train",self_attention_model = self_attention_model, args = args, epoch = epoch, ema=False)
+                    # plot_confusion_matrix(h5_file = h5_eval_file, set = "eval", self_attention_model = self_attention_model, args = args, epoch = epoch, ema=False)
+                    plot_confusion_matrix(h5_file = h5_train_eval_file, set = "train",self_attention_model = ema_model, args = args, epoch = epoch, ema=True, matrix_h5 = matrix_h5)
+                    plot_confusion_matrix(h5_file = h5_eval_file, set = "eval", self_attention_model = ema_model, args = args, epoch = epoch, ema=True, matrix_h5 = matrix_h5)
                     plot_progress(h5_train_eval_file, "train", self_attention_model, args, epoch = epoch)
                     plot_progress(h5_eval_file, "eval", self_attention_model, args, epoch = epoch)
 
