@@ -115,6 +115,70 @@ def plot_matrix_as_image(matrix, names, set, text, prob = False, org_progress = 
     plt.close(fig)  # Close the figure to free memory
 
 
+def plot_matrix_as_image_for_paper(matrix, names, set, text, epoch = None):
+    # Create a figure and axis
+    # only keep 2 decimal points
+    m_min = matrix.min()
+    m_max = matrix.max()
+    if m_max == m_min:
+        # 说明整张矩阵所有值相同，可以直接都置为0 或 1
+        # 这里演示直接设置为 0
+        matrix= np.zeros_like(matrix)
+    else:
+        matrix = (matrix - m_min) / (m_max - m_min)
+
+    # 只保留两位小数
+    matrix = np.round(matrix, 2)
+    # fig, ax = plt.subplots(figsize=(len(matrix), len(matrix)))
+    fig, ax = plt.subplots(figsize=(len(matrix) * 1.25, len(matrix) * 1))
+    
+    # Plot the matrix with a colormap (darker = higher values)
+    # cax = ax.matshow(matrix, cmap='viridis', interpolation='nearest')
+
+    cax = ax.matshow(matrix, cmap="Blues", interpolation="nearest")  # originally was viridis
+
+    # Add color bar
+    # plt.colorbar(cax)
+    # cbar = fig.colorbar(cax, fraction=0.046, pad=0.04)
+
+    # # 只保留两位小数
+    # cbar.formatter = plt.FuncFormatter(lambda x, _: f"{x:.2f}")
+    # cbar.update_ticks()  # 更新刻度标签
+
+    # # 放大颜色条字体
+    # cbar.ax.yaxis.set_tick_params(labelsize=16)  # 你可以调整 `fontsize`
+
+    # Set x-axis and y-axis ticks
+    ax.set_xticks([])
+    ax.set_yticks([])
+
+    # shortened_text = [shorten_name(name, max_length = 6) for name in text]
+    # shortened_names = [shorten_name(name, separator = "-", max_length = 6) for name in names]
+
+    # shortened_text = [shorten_text(name, max_length = 25) for name in text]
+    # shortened_names = [shorten_name(name, separator = "-", max_length = 12) for name in names]
+
+    # Label each row and column with the given names
+    # ax.set_xticklabels(shortened_text, rotation=30, ha='left', fontsize=18)
+    # ax.set_yticklabels(shortened_names, fontsize=18)
+
+    # Display the values in the matrix
+    # for (i, j), val in np.ndenumerate(matrix):
+    #     ax.text(j, i, f'{val:.2f}', ha='center', va='center', color='white' if val > np.max(matrix)/2 else 'black',  fontsize=20)
+
+    # keep 2 digit first 2 digit after decimal point {val:.2f}
+    # Adjust layout to fit labels
+    plt.tight_layout()
+
+    # Convert Matplotlib figure to PIL Image
+    # buf = io.BytesIO()
+    # plt.savefig(buf, format='png')
+    # buf.seek(0)
+    # image = Image.open(buf)
+    wandb.log({f"confusion_matrix_for_paper/{set}_confusion_matrix_Rewind": wandb.Image(fig, caption=f"Epoch {epoch}")})
+    # plt.savefig(f"confusion_matrix_{set}_Rewind_oxe_2.0_weighted_mse.pdf", bbox_inches="tight")
+    plt.close(fig)  # Close the figure to free memory
+
 
 
 
@@ -188,7 +252,7 @@ def plot_confusion_matrix(h5_file, set, self_attention_model, args, epoch = None
     group = matrix_h5[set]
     group.create_dataset(str(epoch), data=pred_matrix)
     img2 = plot_matrix_as_image(pred_org_progress_list, eval_envs, set, text_list, prob = False, org_progress = True, epoch = epoch, ema = ema)
- 
+    img3 = plot_matrix_as_image_for_paper(pred_org_progress_list, eval_envs, set, text_list, epoch = epoch)
 
 
 
