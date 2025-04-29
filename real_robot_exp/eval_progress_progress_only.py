@@ -124,7 +124,18 @@ def plot_progress(h5_file, set, self_attention_model, args, epoch = 0):
             env_pearsons.append(pearson_coef)
             
             plt.plot(frame_index, predicted_classes, label=f"{traj_idx+1}", color=colors[traj_idx], alpha=0.7)
-        
+            plt.xlabel("Frame Index")
+            plt.ylabel("Progress")
+            plt.title(f"{key}")
+            if args.catagorical_progress:
+                plt.ylim(-1, 12)
+            else:
+                plt.ylim(-1, 1)
+            plt.grid(True, alpha=0.3)
+            plt.legend(bbox_to_anchor=(1.05, 1), loc='upper left')
+            wandb.log({f"class_{set}/{key}": wandb.Image(figure, caption=f"Epoch {epoch}")})
+            plt.close()
+            
         # 计算当前环境的平均相关系数
         if env_spearmans:  # 确保不是空列表
             avg_env_spearman = np.mean(env_spearmans)
@@ -144,17 +155,7 @@ def plot_progress(h5_file, set, self_attention_model, args, epoch = 0):
             "epoch": epoch
         })
 
-    plt.xlabel("Frame Index")
-    plt.ylabel("Progress")
-    plt.title(f"{key}")
-    if args.catagorical_progress:
-        plt.ylim(-1, 12)
-    else:
-        plt.ylim(-1, 1)
-    plt.grid(True, alpha=0.3)
-    plt.legend(bbox_to_anchor=(1.05, 1), loc='upper left')
-    wandb.log({f"class_{set}/{key}": wandb.Image(figure, caption=f"Epoch {epoch}")})
-    plt.close()
+
 
 def sample_video_frames(frames, num_frames = 32):
     total_frames = len(frames)

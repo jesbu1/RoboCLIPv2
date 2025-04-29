@@ -118,8 +118,11 @@ def plot_matrix_as_image(matrix, names, set, text, prob = False, org_progress = 
 def plot_matrix_as_image_for_paper(matrix, names, set, text, epoch = None):
     # Create a figure and axis
     # only keep 2 decimal points
+
+    matrix = np.array(matrix)
     m_min = matrix.min()
     m_max = matrix.max()
+
     if m_max == m_min:
         # 说明整张矩阵所有值相同，可以直接都置为0 或 1
         # 这里演示直接设置为 0

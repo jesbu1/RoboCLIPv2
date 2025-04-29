@@ -89,7 +89,7 @@ def main(args):
     
 
     # group_name = "Dino_Koch_v2"
-    group_name = "Metaworld_Fullset_Koch_combine_matrixplot"
+    group_name = args.extra_data_type + "_Fullset_Koch_combine_matrixplot"
     run = wandb.init(
         entity=WANDB_ENTITY_NAME,
         project=WANDB_PROJECT_NAME,
@@ -125,8 +125,8 @@ def main(args):
                 extra_data_path = "usc_koch_rewind_dino_reward_main_new_train.h5"
         
         elif args.view == "all":
-            h5_train_eval_file = h5py.File("usc_koch_rewind_dino_reward_side_train.h5", "r")
-            h5_eval_file = h5py.File("usc_koch_rewind_dino_reward_side_eval.h5", "r")
+            h5_train_eval_file = h5py.File("usc_koch_rewind_dino_reward_new_train_combine.h5", "r")
+            h5_eval_file = h5py.File("usc_koch_rewind_dino_reward_new_eval_combine.h5", "r")
             if args.full_set:
                 if args.data_type == "old":
                     extra_data_path = "usc_koch_rewind_dino_reward_all.h5"
@@ -135,6 +135,9 @@ def main(args):
                 elif args.data_type == "all":
                     extra_data_path = "usc_koch_rewind_dino_reward_all_combine.h5"  
                 print("Using all data new generated")
+            else:
+                extra_data_path = "usc_koch_rewind_dino_reward_new_train_combine.h5"
+
 
         print("Using side view new generated", args.view)
         print("Using side view new generated", args.view)
@@ -255,8 +258,8 @@ def main(args):
 
                 if args.extra_data_type == "metaworld":
 
-                    plot_confusion_matrix(h5_file = h5_train_eval_file, set = "train",self_attention_model = self_attention_model, args = args, epoch = epoch)
-                    plot_confusion_matrix(h5_file = h5_eval_file, set = "eval", self_attention_model = self_attention_model, args = args, epoch = epoch)
+                    plot_confusion_matrix(h5_file = h5_train_eval_file, set = "train",self_attention_model = self_attention_model, args = args, epoch = epoch, matrix_h5=matrix_h5)
+                    plot_confusion_matrix(h5_file = h5_eval_file, set = "eval", self_attention_model = self_attention_model, args = args, epoch = epoch, matrix_h5=matrix_h5)
                     plot_progress(h5_train_eval_file, "train", self_attention_model, args, epoch = epoch)
                     plot_progress(h5_eval_file, "eval", self_attention_model, args, epoch = epoch)
 
