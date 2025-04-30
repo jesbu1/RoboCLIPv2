@@ -430,8 +430,8 @@ def main(cfg: DictConfig):
                 
 
     # add eval policy on all tasks
-    # offline_eval(model, reward_model, image_encoder)
-    # exit()
+    offline_eval(model, reward_model, image_encoder)
+    exit()
 
 
     # Set the replay buffer back to the original one

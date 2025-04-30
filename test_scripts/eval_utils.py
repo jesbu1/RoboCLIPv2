@@ -5,6 +5,10 @@ from stable_baselines3.common.vec_env import DummyVecEnv
 from tqdm import tqdm
 import torch as th
 import wandb
+import numpy as np
+import imageio
+import _frozen_importlib
+import io
 
 
 def offline_eval(policy, reward_model: BaseRewardModel, image_encoder, rollout_num = 10):
@@ -51,18 +55,41 @@ def offline_eval(policy, reward_model: BaseRewardModel, image_encoder, rollout_n
                     )
 
             success_num = 0
+            render = False
             for rollout_id in range(rollout_num):
                 obs = eval_env.reset()
+                if rollout_id == rollout_num - 1:
+                    render = True
+                if render:
+                    img_list = []
+                    img = eval_env.render(mode="rgb_array")
+                    img_list.append(img)
                 for _ in range(
                     eval_env.get_attr("max_episode_steps")[0]
                 ):
                     action, _ = policy.predict(obs, deterministic=True)
                     obs, reward, done, info = eval_env.step(action)
+                    if render:
+                        img = eval_env.render(mode="rgb_array")
+                        img_list.append(img)
                     # import pdb; pdb.set_trace()
                     if info[0]["is_success"]:
                         success_num += 1
                         break
-            wandb_log[f"offline_eval/eval_task/{env_id}_success_rate"] = success_num / rollout_num
+                
+                if render:
+
+                    video_buffer = io.BytesIO()
+                    # save as gif
+
+                    with imageio.get_writer(video_buffer, format='mp4', fps=20) as writer:
+                        for frame in img_list:
+                            writer.append_data(frame)
+                    video_buffer.seek(0)
+                    wandb.log({f"evaluation_video/eval_video/{env_id}": wandb.Video(video_buffer, fps=20, format="mp4")})
+
+
+                wandb_log[f"offline_eval/eval_task/{env_id}_success_rate"] = success_num / rollout_num
 
     # for env_id in tqdm(train_envs):
     #     if env_id in eval_gt_annotation:
