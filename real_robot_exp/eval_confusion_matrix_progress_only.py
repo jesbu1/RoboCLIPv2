@@ -179,7 +179,7 @@ def plot_matrix_as_image_for_paper(matrix, names, set, text, epoch = None):
     # buf.seek(0)
     # image = Image.open(buf)
     wandb.log({f"confusion_matrix_for_paper/{set}_confusion_matrix_Rewind": wandb.Image(fig, caption=f"Epoch {epoch}")})
-    # plt.savefig(f"confusion_matrix_{set}_Rewind_oxe_2.0_weighted_mse.pdf", bbox_inches="tight")
+    plt.savefig(f"confusion_matrix_for_paper_{set}", bbox_inches="tight")
     plt.close(fig)  # Close the figure to free memory
 
 
