@@ -3,7 +3,7 @@
 reward_model: 
   name: 'liv'
   batch_size: 64
-  model_path: '/home/jzhang96/RoboCLIPv2/models/reward_model/liv_model/snapshot_10000.pt'
+  model_path: '/home/yusenluo/RoboCLIP_offline/RoboCLIPv2/models/reward_model/liv_model/snapshot_10000.pt'
   use_pca: false
   success_bonus: 200.0
   reward_divisor: 1
