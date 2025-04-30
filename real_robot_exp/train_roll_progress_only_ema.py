@@ -11,9 +11,9 @@ from tqdm import tqdm
 import h5py
 from torch.nn import CrossEntropyLoss, BCELoss
 import os
-from models_pe import ClassProgressTransformer as pe_model
-# from models_full_pe import ClassProgressTransformer as pe_model
-from models import ClassProgressTransformer as no_pe_model
+# from models_pe import ClassProgressTransformer as pe_model
+from models_full_pe import ClassProgressTransformer as pe_model
+# from models import ClassProgressTransformer as no_pe_model
 # , RewardOneStepNewPositionEmbeddingPredictor
 from utils_clean import update_model, CosineWithMinLRScheduler, eval_model
 from torch.optim import Optimizer
@@ -50,28 +50,30 @@ def main(args):
     WANDB_ENTITY_NAME = "clvr"
     WANDB_PROJECT_NAME = "roboclip-v2"
 
-    experiment_name = str(args.extra_data_type) + "_DataType_" + str(args.data_type) + "_nolang_aug"
-    if args.full_set:
-        experiment_name += "_FullSet"
-    if args.positional_encoding:
-        experiment_name += "_PosEmb"
-    if args.last_frame_pe:
-        experiment_name += "_LastFramePE"
-    experiment_name += "_View_" + args.view
-    if args.openx_data:
-        experiment_name += "_OpenX"
-    else:
-        experiment_name += "_NoOpenX"
+    experiment_name = str(args.extra_data_type) + "_full_PE"
 
-    # if args.extra_data_type == "metaworld":
-    #     experiment_name = "_NewPE_Crop_MetaWorld" 
-    # else: 
-    #     experiment_name = "_RealWorld_Koch"
+    # experiment_name = str(args.extra_data_type) + "_DataType_" + str(args.data_type) + "_nolang_aug"
+    # if args.full_set:
+    #     experiment_name += "_FullSet"
+    # if args.positional_encoding:
+    #     experiment_name += "_PosEmb"
+    # if args.last_frame_pe:
+    #     experiment_name += "_LastFramePE"
+    # experiment_name += "_View_" + args.view
+    # if args.openx_data:
+    #     experiment_name += "_OpenX"
+    # else:
+    #     experiment_name += "_NoOpenX"
 
-    experiment_name += "_Rewind_ratio_" + str(args.rewind_ratio)
-    experiment_name += "_EMA_momentum_" + str(args.ema_momentum)
-    if args.end_rewind_ratio > 0:
-        experiment_name += "_End_Rewind_ratio_" + str(args.end_rewind_ratio)
+    # # if args.extra_data_type == "metaworld":
+    # #     experiment_name = "_NewPE_Crop_MetaWorld" 
+    # # else: 
+    # #     experiment_name = "_RealWorld_Koch"
+
+    # experiment_name += "_Rewind_ratio_" + str(args.rewind_ratio)
+    # experiment_name += "_EMA_momentum_" + str(args.ema_momentum)
+    # if args.end_rewind_ratio > 0:
+    #     experiment_name += "_End_Rewind_ratio_" + str(args.end_rewind_ratio)
 
 
 
@@ -192,7 +194,7 @@ def main(args):
     extra_eval_eval_neg_dataset = LivRealVideoEvalDataset(args, h5_eval_file, label = "negative", dataset = "extra")
 
     # confusion_matrix_name = "confusion_matrix_" + str(args.extra_data_type) + "_" + str(args.view) + ".h5"
-    confusion_matrix_name = "test_h5_no_textaug.h5"
+    confusion_matrix_name = "test_h5_no_textaug1.h5"
     matrix_h5 = h5py.File(confusion_matrix_name, "w")
 
 
@@ -278,8 +280,8 @@ def main(args):
                     else: # real world data
                         # plot_confusion_matrix(h5_file = h5_train_eval_file, set = "train",self_attention_model = self_attention_model, args = args, epoch = epoch, ema=False)
                         # plot_confusion_matrix(h5_file = h5_eval_file, set = "eval", self_attention_model = self_attention_model, args = args, epoch = epoch, ema=False)
-                        plot_confusion_matrix(h5_file = h5_train_eval_file, set = "train",self_attention_model = ema_model, args = args, epoch = epoch, ema=True, matrix_h5 = matrix_h5)
-                        plot_confusion_matrix(h5_file = h5_eval_file, set = "eval", self_attention_model = ema_model, args = args, epoch = epoch, ema=True, matrix_h5 = matrix_h5)
+                        plot_confusion_matrix(h5_file = h5_train_eval_file, set = "train",self_attention_model = ema_model, args = args, epoch = epoch, ema=True, matrix_h5 = matrix_h5, run_name = experiment_name)
+                        plot_confusion_matrix(h5_file = h5_eval_file, set = "eval", self_attention_model = ema_model, args = args, epoch = epoch, ema=True, matrix_h5 = matrix_h5, run_name = experiment_name)
                         plot_progress(h5_train_eval_file, "train", self_attention_model, args, epoch = epoch)
                         plot_progress(h5_eval_file, "eval", self_attention_model, args, epoch = epoch)
 
