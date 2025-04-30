@@ -16,6 +16,7 @@ general_training:
   entropy_term: "auto"
   normalize_reward: false
   terminate_on_success: true
+  resume_ckpt_path: "/home/yusenluo/RoboCLIP_offline/RoboCLIPv2/outputs/2025-04-29/18-22-23/logs/rewind_rlpd_handle-press-side-v2_final/best_model"
 # environment:
 #   is_state_based: false
 

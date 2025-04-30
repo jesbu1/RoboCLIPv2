@@ -369,8 +369,8 @@ class LearnedRewardWrapper(gym.Wrapper):
                 reward = self.reward_model.calculate_rewards(
                     self.reward_language_features, frames_embeddings
                 )
-                print(f"reward: {reward}")
-                exit()
+                # print(f"reward: {reward}")
+                # exit()
                 if self.episode_counter % 350 == 0:
                     # Convert raw_observations to numpy array and save as video
                     frames_np = [frame.squeeze() for frame in self.raw_observations]
@@ -533,7 +533,7 @@ class VLC_GVL_RewardWrapper(gym.Wrapper):
             video_frames = self._padding_frames(video_frames)
             # print(f"video_frames shape: {video_frames.shape}")
             reward = self.reward_model.calculate_rewards(video_frames, self.language_features)
-            if self.counter == 0:
+            if self.counter == 1:
                 self.offset = reward
             reward -= self.offset
             if done:
@@ -647,38 +647,28 @@ class RunningMeanStd:
 
 
 class RewardNormalize(gym.Wrapper):
-    """
-    Mimic CleanRL `reward_normalization_gymnasium` 逻辑，适配旧 Gym (无 truncated)。
-    - 折扣 returns: R_t = r_t + γ * (1 - done_t) * R_{t-1}
-      ▶ 终止帧在更新 RMS 时只留下当前 r_t
-      ▶ returns **不会被额外清零**，因此跨 episode 有残余
-    """
 
     def __init__(self, env: gym.Env, gamma: float = 0.99, epsilon: float = 1e-8):
         super().__init__(env)
         self.gamma   = gamma
         self.epsilon = epsilon
-        # 支持 vector env
         self.num_envs       = getattr(env, "num_envs", 1)
         self.is_vector_env  = getattr(env, "is_vector_env", False)
-        self.return_rms     = RunningMeanStd(shape=())    # 标量 reward
+        self.return_rms     = RunningMeanStd(shape=()) 
         self.returns        = np.zeros(self.num_envs, dtype=np.float64)
 
     def step(self, action):
         obs, rewards, dones, infos = self.env.step(action)
-
-        # 统一成 (n_env,) np.ndarray
         if not self.is_vector_env:
             rewards = np.array([rewards], dtype=np.float64)
-            dones   = np.array([dones],   dtype=np.float64)  # bool→0/1
+            dones   = np.array([dones],   dtype=np.float64) 
 
-        # === 核心逻辑 ===
         self.returns = self.returns * self.gamma * (1.0 - dones) + rewards
         self.return_rms.update(self.returns)
 
         norm_rews = rewards / np.sqrt(self.return_rms.var + self.epsilon)
 
-        if not self.is_vector_env:          # 还原标量
+        if not self.is_vector_env:
             norm_rews = norm_rews[0]
         return obs, norm_rews, dones if self.is_vector_env else bool(dones[0]), infos
 

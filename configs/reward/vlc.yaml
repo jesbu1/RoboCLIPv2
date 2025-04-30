@@ -11,5 +11,5 @@ general_training:
   dense_rewards_at_end: false
   learning_rate: 1e-3
   entropy_term: "auto"
-  normalize_reward: false
+  normalize_reward: true
   terminate_on_success: true
