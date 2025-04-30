@@ -328,7 +328,7 @@ class LearnedRewardWrapper(gym.Wrapper):
                 stacked_sequence = th.from_numpy(self.reward_model.encode_images(
                     image_for_model
                 )).unsqueeze(0)
-                print(f"stacked_sequence shape: {stacked_sequence.shape}") # (1, 1, 1024)
+                # print(f"stacked_sequence shape: {stacked_sequence.shape}") # (1, 1, 1024)
 
             reward = self.reward_model.calculate_rewards(
                 self.reward_language_features, stacked_sequence
@@ -438,50 +438,138 @@ class VLC_GVL_RewardWrapper(gym.Wrapper):
         self,
         env: gym.Env,
         reward_model: BaseRewardModel,
-        language_features_reward: str,  # raw text
+        image_encoder,
+        language_features_reward: str,
         use_proprio: bool = False,
         is_state_based: bool = False,
+        dense_eval: bool = False,
     ):
         super(VLC_GVL_RewardWrapper, self).__init__(env)
         self.reward_model = reward_model
+        self.image_encoder = image_encoder
         self.use_proprio = use_proprio
-        self.language_features = language_features_reward  # raw text
-
+        self.language_features = language_features_reward
+        self.is_state_based = is_state_based
+        self.dense_eval = dense_eval
         # VLC and GVL needs raw image and text
         self.past_observations: List[np.ndarray] = []
         self.counter = 0
-
+        self.raw_observations = []
+        self.episode_counter = 0
+        self.total_success_bonus = 0
         self.reward_divisor = self.reward_model.reward_divisor
         self.reward_at_every_step = self.reward_model.reward_at_every_step
+        
+        if self.is_state_based is False:
+            self.observation_space = spaces.Box(
+                low=-np.inf,
+                high=np.inf,
+                shape=(
+                    self.image_encoder.img_output_dim + (4 if self.use_proprio else 0),
+                ),
+                dtype=np.float32,
+            )
+
+        # =========  视频处理参数  ========= #
+        # 允许从 reward_model 继承 max_frames，否则默认 32
+        self.max_frames: int = getattr(self.reward_model, "max_frames", 12)
+        # 若帧数不足也要拉伸到 max_frames
+        self.stretch_partial_videos: bool = True
+
+    def _padding_frames(self, video_np: "np.ndarray") -> "np.ndarray":
+        """According to max_frames, padding/sampling frames of video, directly operate on numpy, keep [T,H,W,C] layout."""
+        import numpy as np
+
+        num_frames = video_np.shape[0]
+
+        if num_frames >= self.max_frames or self.stretch_partial_videos:
+            float_indices = np.linspace(0, num_frames - 1, self.max_frames)
+            indices = np.round(float_indices).astype(int)
+        else:
+            indices = np.arange(num_frames)
+
+        # Optional custom frame sequence
+        if hasattr(self, "frame_indices_to_use") and self.frame_indices_to_use is not None:
+            if len(indices) > len(self.frame_indices_to_use):
+                indices = indices[self.frame_indices_to_use]
+
+        return video_np[indices]
 
     def step(self, action):
         self.counter += 1
         obs, original_reward, done, info = self.env.step(action)
-
+        proprio = obs[0:4]
         frame = self.env.render()
-        self.past_observations.append(frame)
+        self.raw_observations.append(frame)
+        # Input should be of shape (batch_size, num_frames, height, width, channels)
+        # However, the input is of shape (height, width, channels)
+        image_for_model = frame[None, None, :, :, :]
+        encoded_image = self.image_encoder.encode_images(
+            image_for_model
+        ).squeeze()
+        obs = encoded_image
+        if self.use_proprio:
+                obs = np.concatenate([obs, proprio])
 
-        reward = 0.0
+        if self.dense_eval:
+            # reward = original_reward / self.reward_divisor
+            reward = original_reward
+            if info.get("success", False):
+                reward += self.reward_model.success_bonus
+                if self.dense_eval:
+                    print(f"eval success reward: {reward}")
+            # print(f"obs: {obs.shape}") # 772 = 768 + 4
+            if self.dense_eval:
+                wandb.log({
+                    "eval/eval_original_reward": original_reward,
+                    "eval/eval_reward_with_success_bonus": reward
+                })
+            return obs, reward, done, info
+
         if done or self.reward_at_every_step:
-            video_frames = np.stack(self.past_observations, axis=0)
+            video_frames = np.stack(self.raw_observations, axis=0)
+
+            # ---------  Padding/sampling frames of video  --------- #
+            video_frames = self._padding_frames(video_frames)
+            # print(f"video_frames shape: {video_frames.shape}")
             reward = self.reward_model.calculate_rewards(video_frames, self.language_features)
-            self.past_observations = []
+            if self.counter == 0:
+                self.offset = reward
+            reward -= self.offset
+            if done:
+                wandb.log({"train/learned_reward": reward})
+            else:
+                wandb.log({"train/learned_reward_per_step": reward})
 
         reward /= self.reward_divisor
         if info.get("success", False):
-            reward += self.reward_model.success_bonus
-        print(f"reward: {reward}")
+            # reward += self.reward_model.success_bonus
+            self.total_success_bonus += self.reward_model.success_bonus
+            print(f"The {self.episode_counter}th episode {self.counter}th step, train success reward: {reward}")
+        if done:
+            self.episode_counter += 1
+            # wandb.log({"train/learned_reward_with_success_bonus": reward})
 
         return obs, reward, done, info
 
     def reset(self):
-        self.past_observations = []
+        self.raw_observations = []
         self.counter = 0
-
+        wandb.log({"train/total_success_bonus": self.total_success_bonus})
+        self.total_success_bonus = 0
         obs = self.env.reset()
-        
-        # frame = self.env.render()
-        # self.past_observations.append(frame)
+        proprio = obs[0:4]
+        frame = self.env.render()
+        image_for_model = frame[None, None, :, :, :]
+        encoded_image = self.image_encoder.encode_images(image_for_model).squeeze()
+
+        if self.is_state_based is False:
+            if self.use_proprio:
+                proprio = obs[0:4]
+                obs = np.concatenate([encoded_image, proprio])
+
+            else:
+                obs = encoded_image
 
         return obs
 
@@ -519,7 +607,6 @@ class RecordRewardWrapper(gym.Wrapper):
 
     def step(self, action):
         obs, reward, done, info = self.env.step(action)
-        #reward = reward * 50
         if self.reward_model.reward_at_every_step:
             wandb.log({"train/normalized_reward_per_step": reward})
         if done:
