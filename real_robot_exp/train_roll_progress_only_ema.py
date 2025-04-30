@@ -90,7 +90,7 @@ def main(args):
     
 
     # group_name = "Dino_Koch_v2"
-    group_name = args.extra_data_type + "_Fullset_Koch_combine_matrixplot"
+    group_name = args.extra_data_type + "_April_30"
     run = wandb.init(
         entity=WANDB_ENTITY_NAME,
         project=WANDB_PROJECT_NAME,
@@ -100,14 +100,14 @@ def main(args):
     )
 
     if args.extra_data_type == "metaworld":
-        # if args.text_embedding_model == "minilm":
-        #     h5_train_eval_file = h5py.File("metaworld_dino_embeddings_train_5_demos.h5", "r")
-        #     h5_eval_file = h5py.File("metaworld_dino_embeddings_eval_5_demos.h5", "r")
-        #     extra_data_path = "metaworld_dino_embeddings_train_5_demos.h5"
-       if args.text_embedding_model == "minilm":
-            h5_train_eval_file = h5py.File("metaworld_dino_embeddings_train_5_demos_1_lang.h5", "r")
+        if args.text_embedding_model == "minilm":
+            h5_train_eval_file = h5py.File("metaworld_dino_embeddings_train_5_demos.h5", "r")
             h5_eval_file = h5py.File("metaworld_dino_embeddings_eval_5_demos.h5", "r")
-            extra_data_path = "metaworld_dino_embeddings_train_5_demos_1_lang.h5"
+            extra_data_path = "metaworld_dino_embeddings_train_5_demos.h5"
+    #    if args.text_embedding_model == "minilm":
+    #         h5_train_eval_file = h5py.File("metaworld_dino_embeddings_train_5_demos_1_lang.h5", "r")
+    #         h5_eval_file = h5py.File("metaworld_dino_embeddings_eval_5_demos.h5", "r")
+    #         extra_data_path = "metaworld_dino_embeddings_train_5_demos_1_lang.h5"
 
     else:
         # h5_eval_file = h5py.File("jesse_collect_dataset_new_token.h5", "r")
@@ -191,8 +191,8 @@ def main(args):
     extra_eval_eval_pos_dataset = LivRealVideoEvalDataset(args, h5_eval_file, label = "positive", dataset = "extra")
     extra_eval_eval_neg_dataset = LivRealVideoEvalDataset(args, h5_eval_file, label = "negative", dataset = "extra")
 
-    confusion_matrix_name = "confusion_matrix_" + str(args.extra_data_type) + "_" + str(args.view) + ".h5"
-    confusion_matrix_name = "test_h5_no_textaug.py"
+    # confusion_matrix_name = "confusion_matrix_" + str(args.extra_data_type) + "_" + str(args.view) + ".h5"
+    confusion_matrix_name = "test_h5_no_textaug.h5"
     matrix_h5 = h5py.File(confusion_matrix_name, "w")
 
 
@@ -260,40 +260,40 @@ def main(args):
             ema_model.eval()
             self_attention_model.eval()
             with torch.no_grad():
+                if epoch >= 17:
+                    if args.extra_data_type == "metaworld":
 
-                if args.extra_data_type == "metaworld":
+                        plot_confusion_matrix(h5_file = h5_train_eval_file, set = "train",self_attention_model = self_attention_model, args = args, epoch = epoch, matrix_h5=matrix_h5, run_name = experiment_name)
+                        plot_confusion_matrix(h5_file = h5_eval_file, set = "eval", self_attention_model = self_attention_model, args = args, epoch = epoch, matrix_h5=matrix_h5, run_name = experiment_name)
+                        plot_progress(h5_train_eval_file, "train", self_attention_model, args, epoch = epoch)
+                        plot_progress(h5_eval_file, "eval", self_attention_model, args, epoch = epoch)
 
-                    plot_confusion_matrix(h5_file = h5_train_eval_file, set = "train",self_attention_model = self_attention_model, args = args, epoch = epoch, matrix_h5=matrix_h5)
-                    plot_confusion_matrix(h5_file = h5_eval_file, set = "eval", self_attention_model = self_attention_model, args = args, epoch = epoch, matrix_h5=matrix_h5)
-                    plot_progress(h5_train_eval_file, "train", self_attention_model, args, epoch = epoch)
-                    plot_progress(h5_eval_file, "eval", self_attention_model, args, epoch = epoch)
+                        if epoch % 2 == 0:
+                            compute_gif = True
+                        else:
+                            compute_gif = False
 
-                    if epoch % 2 == 0:
-                        compute_gif = True
-                    else:
-                        compute_gif = False
+                        compute_metrics_multi(args, ema_model, threshold=0.5, compute_gif = compute_gif, epoch = epoch, one_step=True)
 
-                    compute_metrics_multi(args, ema_model, threshold=0.5, compute_gif = compute_gif, epoch = epoch, one_step=True)
+                    else: # real world data
+                        # plot_confusion_matrix(h5_file = h5_train_eval_file, set = "train",self_attention_model = self_attention_model, args = args, epoch = epoch, ema=False)
+                        # plot_confusion_matrix(h5_file = h5_eval_file, set = "eval", self_attention_model = self_attention_model, args = args, epoch = epoch, ema=False)
+                        plot_confusion_matrix(h5_file = h5_train_eval_file, set = "train",self_attention_model = ema_model, args = args, epoch = epoch, ema=True, matrix_h5 = matrix_h5)
+                        plot_confusion_matrix(h5_file = h5_eval_file, set = "eval", self_attention_model = ema_model, args = args, epoch = epoch, ema=True, matrix_h5 = matrix_h5)
+                        plot_progress(h5_train_eval_file, "train", self_attention_model, args, epoch = epoch)
+                        plot_progress(h5_eval_file, "eval", self_attention_model, args, epoch = epoch)
 
-                else: # real world data
-                    # plot_confusion_matrix(h5_file = h5_train_eval_file, set = "train",self_attention_model = self_attention_model, args = args, epoch = epoch, ema=False)
-                    # plot_confusion_matrix(h5_file = h5_eval_file, set = "eval", self_attention_model = self_attention_model, args = args, epoch = epoch, ema=False)
-                    plot_confusion_matrix(h5_file = h5_train_eval_file, set = "train",self_attention_model = ema_model, args = args, epoch = epoch, ema=True, matrix_h5 = matrix_h5)
-                    plot_confusion_matrix(h5_file = h5_eval_file, set = "eval", self_attention_model = ema_model, args = args, epoch = epoch, ema=True, matrix_h5 = matrix_h5)
-                    plot_progress(h5_train_eval_file, "train", self_attention_model, args, epoch = epoch)
-                    plot_progress(h5_eval_file, "eval", self_attention_model, args, epoch = epoch)
-
-                    # save the model
-                    model_dict = {
-                        "model": self_attention_model.state_dict(),
-                        "ema_model": ema_model.state_dict(),
-                        "epoch": epoch,
-                        "args": args
-                    }
-                    folder_name = "models/" + experiment_name
-                    if not os.path.exists(folder_name):
-                        os.makedirs(folder_name)
-                    torch.save(model_dict, folder_name + "/model_" + str(epoch) + ".pth")
+                        # save the model
+                        model_dict = {
+                            "model": self_attention_model.state_dict(),
+                            "ema_model": ema_model.state_dict(),
+                            "epoch": epoch,
+                            "args": args
+                        }
+                        folder_name = "models/" + experiment_name
+                        if not os.path.exists(folder_name):
+                            os.makedirs(folder_name)
+                        torch.save(model_dict, folder_name + "/model_" + str(epoch) + ".pth")
 
 
             ema_model.train()
@@ -307,34 +307,34 @@ def main(args):
             ema_model.eval()
             self_attention_model.eval()
             with torch.no_grad():
+                if epoch >= 17:
+                    if args.extra_data_type == "metaworld":
 
-                if args.extra_data_type == "metaworld":
+                        plot_confusion_matrix(h5_file = h5_train_eval_file, set = "train",self_attention_model = self_attention_model, args = args, epoch = epoch, ema = True, matrix_h5 = matrix_h5)
+                        plot_confusion_matrix(h5_file = h5_eval_file, set = "eval", self_attention_model = self_attention_model, args = args, epoch = epoch, ema = True, matrix_h5 = matrix_h5)
+                        plot_progress(h5_train_eval_file, "train", self_attention_model, args, epoch = epoch)
+                        plot_progress(h5_eval_file, "eval", self_attention_model, args, epoch = epoch)
 
-                    plot_confusion_matrix(h5_file = h5_train_eval_file, set = "train",self_attention_model = self_attention_model, args = args, epoch = epoch, ema = True, matrix_h5 = matrix_h5)
-                    plot_confusion_matrix(h5_file = h5_eval_file, set = "eval", self_attention_model = self_attention_model, args = args, epoch = epoch, ema = True, matrix_h5 = matrix_h5)
-                    plot_progress(h5_train_eval_file, "train", self_attention_model, args, epoch = epoch)
-                    plot_progress(h5_eval_file, "eval", self_attention_model, args, epoch = epoch)
+                        if epoch % 2 == 0:
+                            compute_gif = True
+                        else:
+                            compute_gif = False
 
-                    if epoch % 2 == 0:
-                        compute_gif = True
-                    else:
-                        compute_gif = False
-
-                    compute_metrics_multi(args, ema_model, threshold=0.5, compute_gif = compute_gif, epoch = epoch, one_step=True)
-            ema_model.train()
-            self_attention_model.train()
+                        compute_metrics_multi(args, ema_model, threshold=0.5, compute_gif = compute_gif, epoch = epoch, one_step=True)
+                ema_model.train()
+                self_attention_model.train()
         
-        if args.extra_data_type == "metaworld":
-            model_dict = {
-                "model": self_attention_model.state_dict(),
-                "ema_model": ema_model.state_dict(),
-                "epoch": epoch,
-                "args": args
-            }
-            folder_name = "models/" + experiment_name
-            if not os.path.exists(folder_name):
-                os.makedirs(folder_name)
-            torch.save(model_dict, folder_name + "/model_" + str(epoch) + ".pth")
+            if args.extra_data_type == "metaworld":
+                model_dict = {
+                    "model": self_attention_model.state_dict(),
+                    "ema_model": ema_model.state_dict(),
+                    "epoch": epoch,
+                    "args": args
+                }
+                folder_name = "models/" + experiment_name
+                if not os.path.exists(folder_name):
+                    os.makedirs(folder_name)
+                torch.save(model_dict, folder_name + "/model_" + str(epoch) + ".pth")
 
                     
 

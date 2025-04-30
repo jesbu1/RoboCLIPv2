@@ -13,6 +13,7 @@ import imageio
 import torch.nn.functional as F
 import io
 from PIL import Image
+import os
 # from eval_utils import padding_video
 
 matplotlib.use('Agg')
@@ -115,7 +116,7 @@ def plot_matrix_as_image(matrix, names, set, text, prob = False, org_progress = 
     plt.close(fig)  # Close the figure to free memory
 
 
-def plot_matrix_as_image_for_paper(matrix, names, set, text, epoch = None):
+def plot_matrix_as_image_for_paper(matrix, names, set, text, epoch = None, run_name = None):
     # Create a figure and axis
     # only keep 2 decimal points
 
@@ -179,14 +180,21 @@ def plot_matrix_as_image_for_paper(matrix, names, set, text, epoch = None):
     # buf.seek(0)
     # image = Image.open(buf)
     wandb.log({f"confusion_matrix_for_paper/{set}_confusion_matrix_Rewind": wandb.Image(fig, caption=f"Epoch {epoch}")})
-    plt.savefig(f"confusion_matrix_for_paper_{set}", bbox_inches="tight")
+    folder_name = run_name
+    if not os.path.exists(f"confusion_matrix_for_paper"):
+        os.makedirs(f"confusion_matrix_for_paper")
+    if not os.path.exists(f"confusion_matrix_for_paper/{folder_name}"):
+        os.makedirs(f"confusion_matrix_for_paper/{folder_name}")
+    pdf_path = f"confusion_matrix_for_paper/{folder_name}/confusion_matrix_{set}_epoch_{epoch}.pdf"
+                          
+    plt.savefig(pdf_path, bbox_inches="tight")
     plt.close(fig)  # Close the figure to free memory
 
 
 
 
 
-def plot_confusion_matrix(h5_file, set, self_attention_model, args, epoch = None, ema = False, matrix_h5 = None):
+def plot_confusion_matrix(h5_file, set, self_attention_model, args, epoch = None, ema = False, matrix_h5 = None, run_name = None):
     device = next(self_attention_model.parameters()).device
 
     keys = list(h5_file.keys())
@@ -255,7 +263,7 @@ def plot_confusion_matrix(h5_file, set, self_attention_model, args, epoch = None
     group = matrix_h5[set]
     group.create_dataset(str(epoch), data=pred_matrix)
     img2 = plot_matrix_as_image(pred_org_progress_list, eval_envs, set, text_list, prob = False, org_progress = True, epoch = epoch, ema = ema)
-    img3 = plot_matrix_as_image_for_paper(pred_org_progress_list, eval_envs, set, text_list, epoch = epoch)
+    img3 = plot_matrix_as_image_for_paper(pred_org_progress_list, eval_envs, set, text_list, epoch = epoch, run_name = run_name)
 
 
 
