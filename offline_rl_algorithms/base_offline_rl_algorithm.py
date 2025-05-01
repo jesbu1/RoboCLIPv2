@@ -363,6 +363,7 @@ def collect_rollouts_threadsafe(
         num_collected_steps += 1
         for done in dones:
             if done:
+                print("Reward:", rewards)
                 num_collected_episodes += 1
 
     # clear memory and such with garbage collection
@@ -656,6 +657,7 @@ class OfflineRLAlgorithm(OffPolicyAlgorithm):
             # --- Threading primitives ---
             policy_lock = threading.Lock()
             buffer_lock = threading.Lock()
+            steps_at_last_save = self.num_timesteps
             while self.num_timesteps < total_timesteps:
                 # Start rollout collection in a thread
                 print(self.num_timesteps, total_timesteps)
@@ -694,8 +696,12 @@ class OfflineRLAlgorithm(OffPolicyAlgorithm):
                             )
 
                     # Now let's save this!
-                    self.save("./checkpoints/current_checkpoint")
-                    print("Saved checkpoint")
+                    if self.num_timesteps - steps_at_last_save >= 5000:
+                        self.save(
+                            "./checkpoints/checkpoint_{}".format(self.num_timesteps)
+                        )
+                        print("Saved checkpoint")
+                        steps_at_last_save = self.num_timesteps
 
                     # Wait for rollout collection to finish and get the return value
                     # NOTE: this code only handles the train_freq=episodes case!

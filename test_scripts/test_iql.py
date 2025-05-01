@@ -444,7 +444,7 @@ def main(cfg: DictConfig):
                     ),
                 )
                 print(model.replay_buffer)
-                model.replay_buffer.sample(10)
+                # model.replay_buffer.sample(10)
 
             # Various other things to set that don't get set by load
             model.set_logger(wandb_logger)
@@ -604,7 +604,7 @@ def create_envs(cfg: DictConfig, reward_model: BaseRewardModel, logger=None):
 
     with th.no_grad():
         policy_lang_feat = reward_model.encode_text_for_policy(
-            text_instruction
+            env_config.policy_text_instruction
         ).squeeze()
         lang_feat = reward_model.encode_text(text_instruction).squeeze()
 

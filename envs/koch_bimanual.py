@@ -518,13 +518,9 @@ def create_wrapped_env(
                 #     chunk_size=action_chunk_size,
                 #     n_action_steps=action_chunk_size,
                 # )
-                base_env = ACTTemporalEnsemblerWrapper(
-                    base_env, 0.01, action_chunk_size
-                )
+                base_env = ACTTemporalEnsemblerWrapper(base_env, 0.1, action_chunk_size)
             elif mode == "eval" or mode == "demo":
-                base_env = ACTTemporalEnsemblerWrapper(
-                    base_env, 0.01, action_chunk_size
-                )
+                base_env = ACTTemporalEnsemblerWrapper(base_env, 0.1, action_chunk_size)
 
         if monitor:
             base_env = Monitor(base_env)

@@ -20,16 +20,19 @@ environment:
   # text_instruction: "Move the blue cup from the right to the left"
   # text_instruction: "Put the blue cup on the red plate"
   # text_instruction: "Open the red trash bin"
-  text_instruction: "Put the can in the box"
+  # text_instruction: "Put the can in the box"
+  # policy_text_instruction: "Put the blue cup in the box"
   # text_instruction: "Put the blue cup in the box"
   # text_instruction: "separate the red and green cups" # unseen task
   # text_instruction: "Separate the blue and red cups"
+  text_instruction: "Put the fruit-colored cup in the box"
+  policy_text_instruction: "Put the fruit-colored cup in the box"
   n_envs: 1
   train_freq_num: 1
   train_freq_type: 'episode'
   ignore_language: false
   image_keys: ['observation.images.main', 'observation.images.side']
-  max_episode_steps: 350
+  max_episode_steps: 250
   use_proprio: true
 
 online_training:

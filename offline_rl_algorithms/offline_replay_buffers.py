@@ -671,6 +671,13 @@ class CombinedBuffer(ReplayBuffer):
             to normalize the observations/rewards when sampling
         :return:
         """
+        # print(
+        #     "Sampling from CombinedBuffer",
+        #     self.old_buffer,
+        #     self.old_buffer.size(),
+        #     self.new_buffer,
+        #     self.new_buffer.size(),
+        # )
         old_batch_size = int(batch_size * self.ratio)
         new_batch_size = batch_size - old_batch_size
 
@@ -983,7 +990,6 @@ class ActionChunkedReplayBuffer(ReplayBuffer):
     def clone(self):
         # we should clone this class but we have to make sure not to
         # deep copy ['action_space', and 'observation_space']
-
         new_buffer = type(self).__new__(type(self))
         output_dict = {}
         for key, value in self.__dict__.items():
@@ -1069,6 +1075,107 @@ class SuccessFailSplitBuffer(CombinedBuffer):
         :return: The current size of the buffer
         """
         return self.success_buffer.size() + self.failure_buffer.size()
+
+    def sample(self, batch_size: int, env: Optional[VecNormalize] = None):
+        """
+        :param batch_size: Number of element to sample
+        :param env: associated gym VecEnv
+            to normalize the observations/rewards when sampling
+        :return:
+        """
+        # print(
+        #     "Sampling from SuccessFailSplitBuffer",
+        #     self.success_buffer,
+        #     self.success_buffer.size(),
+        #     self.failure_buffer,
+        #     self.failure_buffer.size(),
+        # )
+        old_batch_size = int(batch_size * self.ratio)
+        new_batch_size = batch_size - old_batch_size
+
+        old_size = self.success_buffer.size()
+        new_size = self.failure_buffer.size()
+
+        if old_size == 0 and new_size == 0:
+            return CombinedBufferSamples(
+                observations=th.empty(0),
+                actions=th.empty(0),
+                next_observations=th.empty(0),
+                dones=th.empty(0),
+                rewards=th.empty(0),
+                mc_returns=th.empty(0),
+                offline_data_mask=th.empty(0),
+                valid_length=th.empty(0),
+            )
+
+        if old_size == 0:
+            new_samples = self.failure_buffer.sample(batch_size, env=env)
+            old_samples = None
+        elif new_size == 0:
+            old_samples = self.success_buffer.sample(batch_size, env=env)
+            new_samples = None
+        else:
+            old_batch_size = int(batch_size * self.ratio)
+            new_batch_size = batch_size - old_batch_size
+            old_samples = self.success_buffer.sample(old_batch_size, env=env)
+            new_samples = self.failure_buffer.sample(new_batch_size, env=env)
+        # Concatenate the samples into old_samples
+        cat_names = [
+            "observations",
+            "actions",
+            "next_observations",
+            "dones",
+            "rewards",
+            "mc_returns",
+            "offline_data_mask",
+            "valid_length",
+        ]
+        attributes = {}
+        for name in cat_names:
+            # NOTE: This is incorrect when using this as a success/fail buffer
+            if name == "offline_data_mask":
+                # 1 for the old data, 0 for the new data
+                old_data = th.ones(old_batch_size, 1)
+                new_data = th.zeros(new_batch_size, 1)
+
+            # TODO: This is incorrect when using this as a success/fail buffer
+            elif name == "mc_returns":
+                if old_samples is not None:
+                    old_data = getattr(old_samples, name)
+                if new_samples is not None:
+                    new_data = th.zeros_like(
+                        old_data
+                    )  # set all mc_returns to 0 for new data as it's currently not supported
+            else:
+                if old_samples is None:
+                    old_data = th.empty(0)
+                else:
+                    try:
+                        old_data = getattr(old_samples, name)
+                    except AttributeError:
+                        # print("old_samples failed on " + name)
+                        old_data = th.ones(old_batch_size).to(old_data.device)
+                if new_samples is None:
+                    new_data = th.empty(0)
+                else:
+                    try:
+                        new_data = getattr(new_samples, name)
+                    except AttributeError:
+                        # print("new_samples failed on " + name)
+                        new_data = th.ones(new_batch_size).to(old_data.device)
+
+            try:
+                if old_samples is not None and new_samples is not None:
+                    attributes[name] = th.cat((old_data, new_data), dim=0)
+                elif old_samples is not None:
+                    attributes[name] = old_data
+                elif new_samples is not None:
+                    attributes[name] = new_data
+            except:
+                breakpoint()
+
+        old_samples = CombinedBufferSamples(**attributes)
+        return old_samples
 
 
 if __name__ == "__main__":

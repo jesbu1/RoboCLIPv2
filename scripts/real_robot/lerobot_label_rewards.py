@@ -170,6 +170,10 @@ def lerobot_to_reward_hdf5(
         prev_task = None
         episode_start_idx = 0
         episode_items = []
+
+        # prev_task = "scrub the blue plate with the sponge"
+        # task = prev_task
+
         prev_episode_idx = None
         episode_index = None
 
@@ -294,7 +298,9 @@ def lerobot_to_reward_hdf5(
                     sum_rewards /= len(image_keys)
                     reward = sum_rewards
                     rewards_dataset[current_idx] = reward
-                    print(f"Reward: {rewards} for task: {task}")
+                    print(
+                        f"Reward: {np.array(rewards).round(3).reshape(-1).tolist()} for task: {task}"
+                    )
 
                 # Reset for next episode
                 episode_items = [item]
@@ -333,6 +339,9 @@ if __name__ == "__main__":
         "usc_koch_rewind/put_the_red_tape_in_the_box_on_the_right",
     ]
 
+    # /home/abrar/.cache/huggingface/lerobot/usc_koch_rewind/Scrub_the_yellow_plate_with_the_sponge_2
+    dataset_ids = ["usc_koch_rewind/Scrub_the_blue_plate_with_the_yellow_sponge_2"]
+
     # remove eval tasks from dataset_ids
     # dataset_ids = [x for x in dataset_ids if x not in eval_tasks]
 
@@ -350,7 +359,9 @@ if __name__ == "__main__":
     reward_at_every_step = True
     # dataset_id = "test/orange_left_right_handover"
     reward_model_type = "rewind"
-    output_path = f"./data/real_robot/updated_trajs/usc_koch_rewind_new_data_only_new_reward_{reward_model_type}_{reward_at_every_step}.h5"
+    # output_path = f"./data/real_robot/updated_trajs/usc_koch_rewind_new_data_only_new_reward_{reward_model_type}_{reward_at_every_step}.h5"
+
+    output_path = f"./data/real_robot/updated_trajs/testing_kitchen_{reward_model_type}_{reward_at_every_step}.h5"
     lerobot_to_reward_hdf5(
         dataset_id=dataset_ids,
         output_path=output_path,

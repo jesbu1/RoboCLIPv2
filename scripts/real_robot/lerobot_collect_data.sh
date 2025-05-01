@@ -15,7 +15,7 @@ python lerobot/scripts/control_robot.py record \
   --repo-id $repo_id \
   --tags rewind \
   --warmup-time-s 5 \
-  --episode-time-s 25 \
+  --episode-time-s 60 \
   --reset-time-s 12 \
   --num-episodes 5 \
   --single-task "$string_task" \
