@@ -25,8 +25,8 @@ environment:
   # text_instruction: "Put the blue cup in the box"
   # text_instruction: "separate the red and green cups" # unseen task
   # text_instruction: "Separate the blue and red cups"
-  text_instruction: "Put the fruit-colored cup in the box"
-  policy_text_instruction: "Put the fruit-colored cup in the box"
+  text_instruction: "Fold the blue towel"
+  policy_text_instruction: "Fold the blue towel"
   n_envs: 1
   train_freq_num: 1
   train_freq_type: 'episode'

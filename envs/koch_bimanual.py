@@ -303,7 +303,7 @@ class KochBimanualEnv(Env):
             90,
             90,
             90,
-            180,
+            -180,
             30,
         ]
 
@@ -524,6 +524,11 @@ def create_wrapped_env(
 
         if monitor:
             base_env = Monitor(base_env)
+
+        if reward_model.name == "vlc" and mode == "train":
+            base_env = RewardNormalize(base_env, epsilon=1e-8)
+            # base_env = NormalizeReward(base_env, epsilon=1e-8)
+            # base_env = RecordRewardWrapper(base_env, reward_model)
 
         base_env = LoggingWrapper(base_env, logger, prefix=mode)
 

@@ -57,9 +57,7 @@ def lerobot_to_reward_hdf5(
             batch_size=batch_size,
         )
     elif reward_model_type == "vlc":
-        reward_model = VLCRewardModel(
-            encoder_path, device=device, batch_size=batch_size
-        )
+        reward_model = VLCRewardModel()
     elif reward_model_type in ["sparse", "dense"]:
         reward_model = EnvRewardModel(model_path=None)  # LIV encoder
     elif reward_model_type == "rewind":
@@ -81,19 +79,25 @@ def lerobot_to_reward_hdf5(
     action_shape = sample_item["action"].numpy()[None, :].shape[1:]
 
     # Get embedding dimensions from reward model
-    text_embedding_shape = reward_model.encode_text(sample_task)[0].shape
     policy_embedding_shape = reward_model.encode_text_for_policy(sample_task)[0].shape
 
     # Get image embedding shape by encoding a sample image
     sample_image = sample_item[image_keys[0]].numpy()[None, None, :, :, :]
-    img_embedding_shape = reward_model.encode_images(sample_image).squeeze().shape
+    img_embedding_shape = (
+        reward_model.encode_images_for_policy(sample_image).squeeze().shape
+    )
 
     print(f"Total dataset size: {total_size}")
     print(f"State shape: {state_shape}")
     print(f"Action shape: {action_shape}")
-    print(f"Text embedding shape: {text_embedding_shape}")
     print(f"Policy embedding shape: {policy_embedding_shape}")
     print(f"Image embedding shape: {img_embedding_shape}")
+
+    try:
+        text_embedding_shape = reward_model.encode_text(sample_task)[0].shape
+        print(f"Text embedding shape: {text_embedding_shape}")
+    except Exception as e:
+        text_embedding_shape = None
 
     with h5py.File(output_path, "w") as h5_file:
         # Create fixed-size datasets with chunks and maxshape for resizing
@@ -133,14 +137,25 @@ def lerobot_to_reward_hdf5(
                 dtype=np.float32,
             )
 
-        # Create embedding datasets
-        lang_embedding_dataset = h5_file.create_dataset(
-            "lang_embedding",
-            shape=(total_size, *text_embedding_shape),
-            maxshape=(None, *text_embedding_shape),
-            chunks=True,
-            dtype=np.float32,
-        )
+        if text_embedding_shape is not None:
+            # Create embedding datasets
+            lang_embedding_dataset = h5_file.create_dataset(
+                "lang_embedding",
+                shape=(total_size, *text_embedding_shape),
+                maxshape=(None, *text_embedding_shape),
+                chunks=True,
+                dtype=np.float32,
+            )
+        else:
+            # Then we store only the string
+            lang_embedding_dataset = h5_file.create_dataset(
+                "lang_embedding",
+                shape=(total_size,),
+                maxshape=(None,),
+                chunks=True,
+                dtype=h5py.string_dtype(),
+            )
+
         policy_lang_embedding_dataset = h5_file.create_dataset(
             "policy_lang_embedding",
             shape=(total_size, *policy_embedding_shape),
@@ -170,9 +185,6 @@ def lerobot_to_reward_hdf5(
         prev_task = None
         episode_start_idx = 0
         episode_items = []
-
-        # prev_task = "scrub the blue plate with the sponge"
-        # task = prev_task
 
         prev_episode_idx = None
         episode_index = None
@@ -250,10 +262,16 @@ def lerobot_to_reward_hdf5(
                     timestep_image_embeddings = []
                     for key in image_keys:
                         image = ep_item[key].numpy()[None, None, :, :, :]
-                        image_embedding = reward_model.encode_images(image).squeeze()
+                        image_embedding = reward_model.encode_images_for_policy(
+                            image
+                        ).squeeze()
                         image_embeds_datasets[key][current_idx] = image_embedding
 
-                        timestep_image_embeddings.append(image_embedding)
+                        reward_image_embedding = reward_model.encode_images(
+                            image
+                        ).squeeze()
+
+                        timestep_image_embeddings.append(reward_image_embedding)
                     image_embeddings.append(timestep_image_embeddings)
 
                     # Write embeddings and strings
@@ -269,8 +287,10 @@ def lerobot_to_reward_hdf5(
                         # Compute the rewards
                         sum_rewards = 0
                         for i, image_key in enumerate(image_keys):
+                            if isinstance(text_embedding, np.ndarray):
+                                text_embedding = text_embedding[None, None, :]
                             sum_rewards += reward_model.calculate_rewards(
-                                text_embedding[None, None, :],
+                                text_embedding,
                                 embeddings[None, :, i],
                                 image_key,
                             )
@@ -290,8 +310,10 @@ def lerobot_to_reward_hdf5(
                     # Compute the rewards
                     sum_rewards = 0
                     for i, image_key in enumerate(image_keys):
+                        if isinstance(text_embedding, np.ndarray):
+                            text_embedding = text_embedding[None, None, :]
                         sum_rewards += reward_model.calculate_rewards(
-                            text_embedding[None, None, :],
+                            text_embedding,
                             image_embeddings[None, :, i],
                             image_key,
                         )
@@ -316,7 +338,10 @@ def lerobot_to_reward_hdf5(
             actions_dataset.resize((current_idx, *action_shape))
             rewards_dataset.resize((current_idx,))
             dones_dataset.resize((current_idx,))
-            lang_embedding_dataset.resize((current_idx, *text_embedding_shape))
+            if text_embedding_shape is not None:
+                lang_embedding_dataset.resize((current_idx, *text_embedding_shape))
+            else:
+                lang_embedding_dataset.resize((current_idx,))
             policy_lang_embedding_dataset.resize((current_idx, *policy_embedding_shape))
             string_dataset.resize((current_idx,))
             env_id_dataset.resize((current_idx,))
@@ -340,13 +365,13 @@ if __name__ == "__main__":
     ]
 
     # /home/abrar/.cache/huggingface/lerobot/usc_koch_rewind/Scrub_the_yellow_plate_with_the_sponge_2
-    dataset_ids = ["usc_koch_rewind/Scrub_the_blue_plate_with_the_yellow_sponge_2"]
+    # dataset_ids = ["usc_koch_rewind/Scrub_the_blue_plate_with_the_yellow_sponge_2"]
 
     # remove eval tasks from dataset_ids
     # dataset_ids = [x for x in dataset_ids if x not in eval_tasks]
 
     # remove anything without a _2 on it
-    dataset_ids = [x for x in dataset_ids if "_2" in x]
+    # dataset_ids = [x for x in dataset_ids if "_2" in x]
 
     # reward_model_path = "weights/rewind/one_step_transformer.pth"
     # reward_model_path = ["weights/rewind/all/model_49.pth"] * 2
@@ -358,10 +383,10 @@ if __name__ == "__main__":
 
     reward_at_every_step = True
     # dataset_id = "test/orange_left_right_handover"
-    reward_model_type = "rewind"
+    reward_model_type = "vlc"
     # output_path = f"./data/real_robot/updated_trajs/usc_koch_rewind_new_data_only_new_reward_{reward_model_type}_{reward_at_every_step}.h5"
 
-    output_path = f"./data/real_robot/updated_trajs/testing_kitchen_{reward_model_type}_{reward_at_every_step}.h5"
+    output_path = f"./data/real_robot/updated_trajs/usc_koch_rewind_new_old_data_new_reward_{reward_model_type}_{reward_at_every_step}.h5"
     lerobot_to_reward_hdf5(
         dataset_id=dataset_ids,
         output_path=output_path,

@@ -117,6 +117,12 @@ class BaseRewardModel(abc.ABC):
                 )
         return encoded_images_all
 
+    def encode_images_for_policy(self, images: np.ndarray) -> np.ndarray:
+        """
+        Simply returns the same as encode_images for now
+        """
+        return self.encode_images(images)
+
     @abc.abstractmethod
     def _encode_image_batch(self, images: torch.Tensor) -> np.ndarray:
         """

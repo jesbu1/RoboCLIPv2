@@ -826,3 +826,209 @@ class ACTTemporalEnsemblerWrapper(gym.Wrapper):
     def __setstate__(self, state):
         """Custom method for unpickling"""
         self.__dict__.update(state)
+
+
+class VLC_GVL_RewardWrapper(gym.Wrapper):
+    def __init__(
+        self,
+        env: gym.Env,
+        reward_model: BaseRewardModel,
+        image_encoder,
+        language_features_reward: str,
+        use_proprio: bool = False,
+        is_state_based: bool = False,
+        dense_eval: bool = False,
+    ):
+        super(VLC_GVL_RewardWrapper, self).__init__(env)
+        self.reward_model = reward_model
+        self.image_encoder = image_encoder
+        self.use_proprio = use_proprio
+        self.language_features = language_features_reward
+        self.is_state_based = is_state_based
+        self.dense_eval = dense_eval
+        # VLC and GVL needs raw image and text
+        self.past_observations: List[np.ndarray] = []
+        self.counter = 0
+        self.raw_observations = []
+        self.episode_counter = 0
+        self.total_success_bonus = 0
+        self.reward_divisor = self.reward_model.reward_divisor
+        self.reward_at_every_step = self.reward_model.reward_at_every_step
+
+        if self.is_state_based is False:
+            self.observation_space = spaces.Box(
+                low=-np.inf,
+                high=np.inf,
+                shape=(
+                    self.image_encoder.img_output_dim + (4 if self.use_proprio else 0),
+                ),
+                dtype=np.float32,
+            )
+
+        # =========  视频处理参数  ========= #
+        # 允许从 reward_model 继承 max_frames，否则默认 32
+        self.max_frames: int = getattr(self.reward_model, "max_frames", 12)
+        # 若帧数不足也要拉伸到 max_frames
+        self.stretch_partial_videos: bool = True
+
+    def _padding_frames(self, video_np: "np.ndarray") -> "np.ndarray":
+        """According to max_frames, padding/sampling frames of video, directly operate on numpy, keep [T,H,W,C] layout."""
+        import numpy as np
+
+        num_frames = video_np.shape[0]
+
+        if num_frames >= self.max_frames or self.stretch_partial_videos:
+            float_indices = np.linspace(0, num_frames - 1, self.max_frames)
+            indices = np.round(float_indices).astype(int)
+        else:
+            indices = np.arange(num_frames)
+
+        # Optional custom frame sequence
+        if (
+            hasattr(self, "frame_indices_to_use")
+            and self.frame_indices_to_use is not None
+        ):
+            if len(indices) > len(self.frame_indices_to_use):
+                indices = indices[self.frame_indices_to_use]
+
+        return video_np[indices]
+
+    def step(self, action):
+        self.counter += 1
+        obs, original_reward, done, info = self.env.step(action)
+        proprio = obs[0:4]
+        frame = self.env.render()
+        self.raw_observations.append(frame)
+        # Input should be of shape (batch_size, num_frames, height, width, channels)
+        # However, the input is of shape (height, width, channels)
+        image_for_model = frame[None, None, :, :, :]
+        encoded_image = self.image_encoder.encode_images(image_for_model).squeeze()
+        obs = encoded_image
+        if self.use_proprio:
+            obs = np.concatenate([obs, proprio])
+
+        if self.dense_eval:
+            # reward = original_reward / self.reward_divisor
+            reward = original_reward
+            if info.get("success", False):
+                reward += self.reward_model.success_bonus
+                if self.dense_eval:
+                    print(f"eval success reward: {reward}")
+            # print(f"obs: {obs.shape}") # 772 = 768 + 4
+            if self.dense_eval:
+                wandb.log(
+                    {
+                        "eval/eval_original_reward": original_reward,
+                        "eval/eval_reward_with_success_bonus": reward,
+                    }
+                )
+            return obs, reward, done, info
+
+        if done or self.reward_at_every_step:
+            video_frames = np.stack(self.raw_observations, axis=0)
+
+            # ---------  Padding/sampling frames of video  --------- #
+            video_frames = self._padding_frames(video_frames)
+            # print(f"video_frames shape: {video_frames.shape}")
+            reward = self.reward_model.calculate_rewards(
+                video_frames, self.language_features
+            )
+            if self.counter == 1:
+                self.offset = reward
+            reward -= self.offset
+            if done:
+                wandb.log({"train/learned_reward": reward})
+            else:
+                wandb.log({"train/learned_reward_per_step": reward})
+
+        reward /= self.reward_divisor
+        if info.get("success", False):
+            # reward += self.reward_model.success_bonus
+            self.total_success_bonus += self.reward_model.success_bonus
+            print(
+                f"The {self.episode_counter}th episode {self.counter}th step, train success reward: {reward}"
+            )
+        if done:
+            self.episode_counter += 1
+            # wandb.log({"train/learned_reward_with_success_bonus": reward})
+
+        return obs, reward, done, info
+
+    def reset(self):
+        self.raw_observations = []
+        self.counter = 0
+        wandb.log({"train/total_success_bonus": self.total_success_bonus})
+        self.total_success_bonus = 0
+        obs = self.env.reset()
+        proprio = obs[0:4]
+        frame = self.env.render()
+        image_for_model = frame[None, None, :, :, :]
+        encoded_image = self.image_encoder.encode_images(image_for_model).squeeze()
+
+        if self.is_state_based is False:
+            if self.use_proprio:
+                proprio = obs[0:4]
+                obs = np.concatenate([encoded_image, proprio])
+
+            else:
+                obs = encoded_image
+
+        return obs
+
+
+class RunningMeanStd:
+    """Running mean & std, numpy 版（与 OpenAI Baselines 一致）"""
+
+    def __init__(self, epsilon: float = 1e-4, shape=()):
+        self.mean = np.zeros(shape, dtype=np.float64)
+        self.var = np.ones(shape, dtype=np.float64)
+        self.count = epsilon
+
+    def update(self, x: np.ndarray):
+        """x: (...,) 任意维度 batch"""
+        batch_mean = np.mean(x, axis=0)
+        batch_var = np.var(x, axis=0)
+        batch_count = x.shape[0]
+        self._update_from_moments(batch_mean, batch_var, batch_count)
+
+    def _update_from_moments(self, batch_mean, batch_var, batch_count):
+        delta = batch_mean - self.mean
+        tot_count = self.count + batch_count
+
+        new_mean = self.mean + delta * batch_count / tot_count
+        m_a = self.var * self.count
+        m_b = batch_var * batch_count
+        M2 = m_a + m_b + np.square(delta) * self.count * batch_count / tot_count
+        new_var = M2 / tot_count
+
+        self.mean, self.var, self.count = new_mean, new_var, tot_count
+
+
+# used during VLC training
+class RewardNormalize(gym.Wrapper):
+    def __init__(self, env: gym.Env, gamma: float = 0.99, epsilon: float = 1e-8):
+        super().__init__(env)
+        self.gamma = gamma
+        self.epsilon = epsilon
+        self.num_envs = getattr(env, "num_envs", 1)
+        self.is_vector_env = getattr(env, "is_vector_env", False)
+        self.return_rms = RunningMeanStd(shape=())
+        self.returns = np.zeros(self.num_envs, dtype=np.float64)
+
+    def step(self, action):
+        obs, rewards, dones, infos = self.env.step(action)
+        if not self.is_vector_env:
+            rewards = np.array([rewards], dtype=np.float64)
+            dones = np.array([dones], dtype=np.float64)
+
+        self.returns = self.returns * self.gamma * (1.0 - dones) + rewards
+        self.return_rms.update(self.returns)
+
+        norm_rews = rewards / np.sqrt(self.return_rms.var + self.epsilon)
+
+        if not self.is_vector_env:
+            norm_rews = norm_rews[0]
+        return obs, norm_rews, dones if self.is_vector_env else bool(dones[0]), infos
+
+    def reset(self, **kwargs):
+        return self.env.reset(**kwargs)
