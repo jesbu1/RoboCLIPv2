@@ -122,12 +122,13 @@ def parse_reward_model(reward_cfg: DictConfig) -> BaseRewardModel:
             reward_cfg.model_path,
             batch_size=reward_cfg.batch_size,
             success_bonus=reward_cfg.success_bonus,
+            reward_at_every_step=reward_cfg.reward_at_every_step,
         )
     elif reward_string == "vlc":
         reward_model = VLCRewardModel(
-            reward_cfg.model_path,
             batch_size=reward_cfg.batch_size,
             success_bonus=reward_cfg.success_bonus,
+            reward_at_every_step=reward_cfg.reward_at_every_step,
         )
     elif reward_string == "roboclipv2":
         reward_model = RoboclipV2RewardModel(
@@ -606,7 +607,9 @@ def create_envs(cfg: DictConfig, reward_model: BaseRewardModel, logger=None):
         policy_lang_feat = reward_model.encode_text_for_policy(
             env_config.policy_text_instruction
         ).squeeze()
-        lang_feat = reward_model.encode_text(text_instruction).squeeze()
+        lang_feat = reward_model.encode_text(text_instruction)
+        if isinstance(lang_feat, th.Tensor):
+            lang_feat = lang_feat.squeeze()
 
     ignore_language = env_config.ignore_language
 

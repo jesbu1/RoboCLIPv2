@@ -282,6 +282,7 @@ def lerobot_to_reward_hdf5(
 
                     if not reward_at_every_step or ep_idx == 0:
                         rewards_dataset[current_idx] = 0
+                        rewards.append(0)
                     else:
                         embeddings = np.array(image_embeddings)
                         # Compute the rewards

@@ -490,13 +490,24 @@ def create_wrapped_env(
             base_env = SuccessWrapper(base_env)
 
         dense_eval = True if (mode == "eval" or mode == "demo") else False
-        base_env = LearnedRewardWrapper(
-            base_env,
-            reward_model,
-            is_state_based=is_state_based,
-            language_features=language_features,
-            dense_eval=dense_eval,
-        )
+
+        if reward_model.name == "vlc":
+            base_env = VLC_GVL_RewardWrapper(
+                base_env,
+                reward_model,
+                language_features,
+                use_proprio,
+                is_state_based,
+                dense_eval,
+            )
+        else:
+            base_env = LearnedRewardWrapper(
+                base_env,
+                reward_model,
+                is_state_based=is_state_based,
+                language_features=language_features,
+                dense_eval=dense_eval,
+            )
 
         # This is all for koch, so this is fine.
         # if reward_model.name == "sparse":

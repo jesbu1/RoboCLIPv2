@@ -56,6 +56,9 @@ class VLCRewardModel(BaseRewardModel):
         self.reward_at_every_step = reward_at_every_step
         self.success_bonus = success_bonus
 
+        # NOTE: manually set to true for now
+        self.multiple_cameras = True
+
         # Load minilm-12v2
         # Load model from HuggingFace Hub
         self.tokenizer = AutoTokenizer.from_pretrained(
@@ -139,11 +142,13 @@ class VLCRewardModel(BaseRewardModel):
         """
         # Image is (1, num_frames, 3, height, width)
         # We need to: pad num_frames to 12, and make sure height and width are 224
+        print(videos.shape)
         videos = self.padding_video(videos[0], 12)
 
         # make sure height and width are 224
         # videos = torchvision.transforms.functional.center_crop(videos, (224, 224))
-        videos = videos.numpy()
+        videos = videos.cpu().numpy()
+        print(videos.shape)
 
         # put the channels at the end
         videos = np.transpose(videos, (0, 2, 3, 1))
@@ -156,6 +161,8 @@ class VLCRewardModel(BaseRewardModel):
 
         request_data = {"video": video_encoded, "text": texts}
         request_data = pickle.dumps(request_data)
+
+        print("Sending request to server", texts, videos.shape)
 
         response = requests.post(f"{self.server_url}/compute_reward", data=request_data)
         response.raise_for_status()

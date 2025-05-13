@@ -285,6 +285,10 @@ class H5ReplayBuffer(ReplayBuffer):
         # Use the reward divisor
         rewards /= reward_divisor
 
+        if reward_model.name == "vlc":
+            # take only the dones as the reward, everythign else as zero
+            rewards = rewards * dones
+
         if dense_rewards_at_end:
             new_rewards = np.zeros_like(rewards)
             prev_start = 0

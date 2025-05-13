@@ -1,0 +1,25 @@
+# @package _global_
+
+general_training:
+  dense_rewards_at_end: false
+
+reward_model: 
+  name: 'vlc'
+  batch_size: 64
+  model_path: ["weights/rewind/all/model_49.pth", "weights/rewind/all/model_49.pth"]
+  camera_names: ["observation.images.main", "observation.images.side"]
+  reward_at_every_step: false
+
+  success_bonus: 125.0
+
+environment:
+  is_state_based: false
+  reward_image_key: 'observation.images.main'
+
+# environment:
+#   is_state_based: false
+
+# offline_training:
+#   offline_training_steps: 1
+
+# data/h5_buffers/updated_trajs/metaworld_traj_15_demos_roboclipv2.h5
