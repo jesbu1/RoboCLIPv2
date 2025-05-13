@@ -44,6 +44,7 @@ general_training:
   use_calibrated_q: false # calibrated QL https://arxiv.org/pdf/2303.05479
 
   action_chunk_size: 15
+  ensembling_param: 0.1
 
   # below not used for now
   random_reset: false

@@ -441,6 +441,7 @@ def create_wrapped_env(
     robot_disabled=False,
     max_episode_steps=500,
     logger=None,
+    ensembling_param=0.1,
 ):
     """
     Creates a wrapped MetaWorld environment with the given options.
@@ -522,6 +523,8 @@ def create_wrapped_env(
 
         base_env = FlattenDictObservationWrapper(base_env, use_proprio=use_proprio)
 
+        ensembling_param = 0.1
+
         if action_chunk_size > 1:
             if mode == "train":
                 # base_env = ActionChunkingWrapper(
@@ -529,9 +532,13 @@ def create_wrapped_env(
                 #     chunk_size=action_chunk_size,
                 #     n_action_steps=action_chunk_size,
                 # )
-                base_env = ACTTemporalEnsemblerWrapper(base_env, 0.1, action_chunk_size)
+                base_env = ACTTemporalEnsemblerWrapper(
+                    base_env, ensembling_param, action_chunk_size
+                )
             elif mode == "eval" or mode == "demo":
-                base_env = ACTTemporalEnsemblerWrapper(base_env, 0.1, action_chunk_size)
+                base_env = ACTTemporalEnsemblerWrapper(
+                    base_env, ensembling_param, action_chunk_size
+                )
 
         if monitor:
             base_env = Monitor(base_env)

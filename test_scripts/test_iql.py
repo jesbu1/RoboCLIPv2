@@ -631,6 +631,7 @@ def create_envs(cfg: DictConfig, reward_model: BaseRewardModel, logger=None):
                         action_chunk_size=cfg.general_training.action_chunk_size,
                         logger=logger,
                         terminate_on_success=cfg.general_training.terminate_on_success,
+                        ensembling_param=cfg.general_training.ensembling_param,
                     )
                     for _ in range(env_config.n_envs)
                 ]
@@ -651,6 +652,7 @@ def create_envs(cfg: DictConfig, reward_model: BaseRewardModel, logger=None):
                         action_chunk_size=cfg.general_training.action_chunk_size,
                         logger=logger,
                         terminate_on_success=cfg.general_training.terminate_on_success,
+                        ensembling_param=cfg.general_training.ensembling_param,
                     )
                     for _ in range(1)
                 ]
@@ -672,6 +674,7 @@ def create_envs(cfg: DictConfig, reward_model: BaseRewardModel, logger=None):
                         action_chunk_size=cfg.general_training.action_chunk_size,
                         logger=logger,
                         terminate_on_success=cfg.general_training.terminate_on_success,
+                        ensembling_param=cfg.general_training.ensembling_param,
                     )
                 ]
             )
@@ -690,6 +693,7 @@ def create_envs(cfg: DictConfig, reward_model: BaseRewardModel, logger=None):
                         action_chunk_size=cfg.general_training.action_chunk_size,
                         logger=logger,
                         terminate_on_success=cfg.general_training.terminate_on_success,
+                        ensembling_param=cfg.general_training.ensembling_param,
                     )
                 ]
             )  # KitchenEnvDenseOriginalReward(time=True)
@@ -714,6 +718,7 @@ def create_envs(cfg: DictConfig, reward_model: BaseRewardModel, logger=None):
             robot_disabled=env_config.robot_disabled,
             max_episode_steps=env_config.max_episode_steps,
             logger=logger,
+            ensembling_param=cfg.general_training.ensembling_param,
         )
 
         # Define envs (dummy example for illustration)
