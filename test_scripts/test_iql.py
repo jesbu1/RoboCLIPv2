@@ -711,34 +711,44 @@ def get_policy_algorithm(cfg: DictConfig, envs: VecEnv, log_dir: str):
         model_class = IQL
 
         # policy = SACPolicy(observation_space=envs.observation_space, action_space=envs.action_space, net_arch=[32, 32], lr_schedule=None)
-        if not args.pretrained:
-            model = model_class(
-                "MlpPolicy",
-                envs,
-                verbose=1,
-                tensorboard_log=log_dir,
-                buffer_size=cfg.online_training.total_time_steps,
-                learning_starts=cfg.online_training.learning_starts,
-                seed=args.seed,
-                action_noise=action_noise,
-                policy_kwargs=policy_kwargs,
-                learning_rate=args.learning_rate,
-                train_freq=(
-                    cfg.environment.train_freq_num,
-                    cfg.environment.train_freq_type,
-                ),
-                online_critic_update_ratio=cfg.online_training.critic_update_ratio,
-                offline_critic_update_ratio=cfg.offline_training.critic_update_ratio,
-                policy_extraction=cfg.general_training.policy_extraction,
-                advantage_temp=cfg.general_training.awr_advantage_temp,
-                ddpg_bc_weight=cfg.general_training.ddpg_bc_weight,
-                n_critics_to_sample=cfg.general_training.n_critics_to_sample,
-                warm_start_online_rl=cfg.online_training.warm_start_online_rl,
-                gamma=cfg.general_training.gamma,
-                # expectile=cfg.general_training.expectile,
+        # if not args.pretrained:
+        model = model_class(
+            "MlpPolicy",
+            envs,
+            verbose=1,
+            tensorboard_log=log_dir,
+            buffer_size=cfg.online_training.total_time_steps,
+            learning_starts=cfg.online_training.learning_starts,
+            seed=args.seed,
+            action_noise=action_noise,
+            policy_kwargs=policy_kwargs,
+            learning_rate=args.learning_rate,
+            train_freq=(
+                cfg.environment.train_freq_num,
+                cfg.environment.train_freq_type,
+            ),
+            online_critic_update_ratio=cfg.online_training.critic_update_ratio,
+            offline_critic_update_ratio=cfg.offline_training.critic_update_ratio,
+            policy_extraction=cfg.general_training.policy_extraction,
+            advantage_temp=cfg.general_training.awr_advantage_temp,
+            ddpg_bc_weight=cfg.general_training.ddpg_bc_weight,
+            n_critics_to_sample=cfg.general_training.n_critics_to_sample,
+            warm_start_online_rl=cfg.online_training.warm_start_online_rl,
+            gamma=cfg.general_training.gamma,
+            # expectile=cfg.general_training.expectile,
+        )
+        if args.pretrained:
+            print("Resuming model from", cfg.general_training.resume_ckpt_path)
+            model = model.load(
+                cfg.general_training.resume_ckpt_path,
+                env=envs,
+                custom_objects={
+                    "observation_space": envs.observation_space,
+                    "action_space": envs.action_space,
+                },
+                print_system_info=True,
+                load_torch_params_only=True,  # new argument to make sure config isn't overwritten
             )
-        else:
-            model = model_class.load(args.pretrained, env=envs, tensorboard_log=log_dir)
     elif algo == "bc":
         model_class = BC
         if not args.pretrained:
@@ -765,33 +775,45 @@ def get_policy_algorithm(cfg: DictConfig, envs: VecEnv, log_dir: str):
         offline_model = model
         model_class = RLPD
 
-        if not args.pretrained:
-            model = model_class(
-                "MlpPolicy",
-                envs,
-                offline_algo=model,
-                verbose=1,
-                tensorboard_log=log_dir,
-                buffer_size=cfg.online_training.total_time_steps,
-                learning_starts=cfg.online_training.learning_starts,
-                seed=args.seed,
-                action_noise=action_noise,  # should be null
-                ent_coef=args.entropy_term,
-                policy_kwargs=policy_kwargs,
-                learning_rate=args.learning_rate,
-                train_freq=(
-                    cfg.environment.train_freq_num,
-                    cfg.environment.train_freq_type,
-                ),  # useless
-                online_critic_update_ratio=cfg.online_training.critic_update_ratio,
-                offline_critic_update_ratio=cfg.offline_training.critic_update_ratio,
-                n_critics_to_sample=cfg.general_training.n_critics_to_sample,
-                train_critic_with_entropy=cfg.general_training.rlpd_train_critic_with_entropy,
-                warm_start_online_rl=cfg.online_training.warm_start_online_rl,
-                gamma=cfg.general_training.gamma,
+        # if not args.pretrained:
+        model = model_class(
+            "MlpPolicy",
+            envs,
+            offline_algo=model,
+            verbose=1,
+            tensorboard_log=log_dir,
+            buffer_size=cfg.online_training.total_time_steps,
+            learning_starts=cfg.online_training.learning_starts,
+            seed=args.seed,
+            action_noise=action_noise,  # should be null
+            ent_coef=args.entropy_term,
+            policy_kwargs=policy_kwargs,
+            learning_rate=args.learning_rate,
+            train_freq=(
+                cfg.environment.train_freq_num,
+                cfg.environment.train_freq_type,
+            ),  # useless
+            online_critic_update_ratio=cfg.online_training.critic_update_ratio,
+            offline_critic_update_ratio=cfg.offline_training.critic_update_ratio,
+            n_critics_to_sample=cfg.general_training.n_critics_to_sample,
+            train_critic_with_entropy=cfg.general_training.rlpd_train_critic_with_entropy,
+            warm_start_online_rl=cfg.online_training.warm_start_online_rl,
+            gamma=cfg.general_training.gamma,
+        )
+        # load the current model
+        if args.pretrained:
+            print("Resuming model from", cfg.general_training.resume_ckpt_path)
+            model = model.load(
+                cfg.general_training.resume_ckpt_path,
+                env=envs,
+                custom_objects={
+                    "observation_space": envs.observation_space,
+                    "action_space": envs.action_space,
+                },
+                print_system_info=True,
+                load_torch_params_only=True,  # new argument to make sure config isn't overwritten
             )
-        else:
-            model = model_class.load(args.pretrained, env=envs, tensorboard_log=log_dir)
+
 
     assert model is not None, "Model is None. Something went wrong."
 
