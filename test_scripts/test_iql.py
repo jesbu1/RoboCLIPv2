@@ -89,6 +89,8 @@ def create_exp_name(cfg: DictConfig):
 
     exp_name += cfg.general_training.name + "_"
 
+    exp_name += "_longer_online"
+
     if cfg.general_training.algo == "iql":
         # add policy_extraction and awr/ddpg params
         exp_name += f"pe_{cfg.general_training.policy_extraction}_"

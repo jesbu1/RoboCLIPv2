@@ -11,7 +11,7 @@ import _frozen_importlib
 import io
 
 
-def offline_eval(policy, reward_model: BaseRewardModel, image_encoder, rollout_num = 10):
+def offline_eval(policy, reward_model: BaseRewardModel, image_encoder, rollout_num = 25):
     # Extract configuration
     # env_id = env_config.env_id
     # env_id = instruction_to_environment[env_config.text_string]
