@@ -98,12 +98,11 @@ def load_vlc_args(vlc_ckpt: str):
     """
     与原脚本一致的加载逻辑
     """
-    init_model_path = os.path.join("/home/yusenluo/vlc_rl/vlc_ckpts/vlc_ckpts", vlc_ckpt)
+    init_model_path = os.path.join("/home/jzhang96/RoboCLIPv2/scripts", vlc_ckpt)
     vlc_args_path = os.path.join(init_model_path + '_config.pkl')
-
     with open(vlc_args_path, 'rb') as f:
         vlc_args = pickle.load(f)['args']
-    vlc_args.init_model = "/home/yusenluo/vlc_rl/VLC_trained_with_mw19/pytorch_model.bin.20" #"/scr/yusenluo/video_language_critic/experiments/mw50_training/pytorch_model.bin.20" 
+    vlc_args.init_model = "/home/jzhang96/RoboCLIPv2/scripts/pytorch_model.bin.20" #"/scr/yusenluo/video_language_critic/experiments/mw50_training/pytorch_model.bin.20" 
     vlc_args.resume_from_latest = False
     return vlc_args
 

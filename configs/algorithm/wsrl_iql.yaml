@@ -9,7 +9,6 @@ logging:
   video_freq: 10000
   wandb_group_name: "${reward_model.name}_${general_training.algo}_${environment.env_id}_online_longer_steps"
 
-
 general_training:
   algo: rlpd
   name: wsrl_iql
@@ -33,7 +32,7 @@ model:
 
 offline_training:
   offline_training_steps: 100000
-  # ckpt_path: "/home/yusenluo/RoboCLIP_offline/RoboCLIPv2/outputs/2025-04-24/05-08-57/logs/rewind_rlpd/last_offline"  # Path to load checkpoint from, if provided will skip offline training
+  # ckpt_path: "/data/shared/roboclip/metaworld_pretrain_policy/metaworld_sparse_pretrain_100k/last_offline"  # Path to load checkpoint from, if provided will skip offline training
   #"/home/yusenluo/RoboCLIP_offline/RoboCLIPv2/outputs/2025-04-24/05-08-57/logs/rewind_rlpd/last_offline" Rewind dense 100k
   #"/home/yusenluo/RoboCLIP_offline/RoboCLIPv2/outputs/2025-04-24/21-56-25/logs/rewind_rlpd/last_offline" Rewind dense 100k + policy layer NO norm
   #"/home/yusenluo/RoboCLIP_offline/RoboCLIPv2/outputs/2025-04-27/14-23-57/logs/liv_rlpd_button-press-wall-v2_final/last_offline" VLC 100k
