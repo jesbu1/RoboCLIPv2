@@ -7,7 +7,7 @@ defaults:
 logging:
   eval_freq: 10000
   video_freq: 10000
-  wandb_group_name: "${reward_model.name}_${general_training.algo}_${environment.env_id}_online_longer_steps"
+  wandb_group_name: "${reward_model.name}_${general_training.algo}_${environment.env_id}_ckpt_seed_24_online_longer_steps"
 
 general_training:
   algo: rlpd
