@@ -5,8 +5,8 @@ defaults:
 
 # Because RLPD is slower, we will log more frequently
 logging:
-  eval_freq: 0
-  video_freq: 0
+  eval_freq: 2
+  video_freq: 10000
 
 general_training:
   algo: rlpd
@@ -38,12 +38,12 @@ model:
   qf_net_arch: [768, 512, 512]
 
 offline_training:
-  offline_training_steps: 15_000
-  ckpt_path: null  # Path to load checkpoint from, if provided will skip offline training
+  offline_training_steps: 100000
+  ckpt_path: "/home/yusenluo/RoboCLIPv2/outputs/2025-06-03/04-55-23/logs/rewind_rlpd_button-press-wall-v2_action_chunk_10/last_offline" #null  # Path to load checkpoint from, if provided will skip offline training
   critic_update_ratio: 1
 
 online_training:
-  total_time_steps: 50000
+  total_time_steps: 100000
   mix_buffers_ratio: 0.5 # WSRL does not use old replay buffer
   warm_start_online_rl: true # main change for WSRL
   learning_starts: 4000

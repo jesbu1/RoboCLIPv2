@@ -22,6 +22,7 @@ from stable_baselines3.common.callbacks import (
     CheckpointCallback,
 )
 
+from test_scripts.eval_utils import offline_eval
 
 # from kitchen_env_wrappers import readGif
 import imageio
@@ -509,6 +510,9 @@ def main(cfg: DictConfig):
             if logging_config.wandb:
                 wandb.run.log({"model_dir": absolute_save_dir})
 
+    # offline_eval(model, reward_model)
+    # exit()
+
     # Set the replay buffer back to the original one
     if (
         isinstance(model, OfflineRLAlgorithm)
@@ -604,7 +608,7 @@ def create_envs(cfg: DictConfig, reward_model: BaseRewardModel, logger=None):
 
     with th.no_grad():
         policy_lang_feat = reward_model.encode_text_for_policy(
-            env_config.policy_text_instruction
+            text_instruction
         ).squeeze()
         lang_feat = reward_model.encode_text(text_instruction).squeeze()
 
@@ -982,8 +986,8 @@ def get_policy_algorithm(cfg: DictConfig, envs: VecEnv, log_dir: str, reward_mod
 def generate_callback_list(args: DictConfig, eval_callback: EvalCallback):
     if args.wandb:
         customwandbcallback = CustomWandbCallback()
-        # callbacks = [eval_callback, customwandbcallback]
-        callbacks = [customwandbcallback]
+        callbacks = [eval_callback, customwandbcallback]
+        #callbacks = [customwandbcallback]
     else:
         # callbacks = [eval_callback]
         callbacks = []

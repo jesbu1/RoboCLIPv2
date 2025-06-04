@@ -630,7 +630,7 @@ class ActionChunkingWrapper(gym.Wrapper):
             obs, reward, done, info = self.env.step(chunked_action)
             info["action"] = chunked_action[None, :]
             return obs, reward, done, info
-
+        print(chunked_action)
         if self.is_chunk_empty or self.chunk is None:
             # Then let the action replace the chunk
             self.chunk = chunked_action
