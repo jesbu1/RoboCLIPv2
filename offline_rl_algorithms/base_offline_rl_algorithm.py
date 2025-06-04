@@ -911,13 +911,15 @@ class OfflineRLAlgorithm(OffPolicyAlgorithm):
             envs_to_predict_for = []
             for i in range(env.num_envs):
                 episode_start[i] = True
-
-                if episode_start[i] is True:
+                # print(f"episode_start: {episode_start[i]}")
+                if episode_start[i]:
                     env.envs[i].chunk = []
                     envs_to_predict_for.append(i)
+                    # print(f"envs_to_predict_for 1: {envs_to_predict_for}") # [0]
                 elif env.envs[i].is_chunk_empty:
                     # print("calling predict")
                     envs_to_predict_for.append(i)
+                    # print(f"envs_to_predict_for 2: {envs_to_predict_for}") # [0]
                     # try:
                     #     action, _ = super().predict(
                     #         observation, state, episode_start, deterministic
@@ -930,8 +932,10 @@ class OfflineRLAlgorithm(OffPolicyAlgorithm):
                 #     # print("not calling predict")
                 #     return [None] * env.num_envs, None
             # print("calling predict")
-
+            # print(f"envs_to_predict_for 3: {envs_to_predict_for}") # [0]
             if len(envs_to_predict_for) == 0:
+                # print("No envs to predict for")
+                # breakpoint()
                 return [None] * env.num_envs, None
 
         action, _ = policy.predict(observation, state, episode_start, deterministic)
