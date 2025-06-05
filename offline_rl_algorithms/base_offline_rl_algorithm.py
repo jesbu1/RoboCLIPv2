@@ -910,16 +910,17 @@ class OfflineRLAlgorithm(OffPolicyAlgorithm):
             assert episode_start is not None, "Need episode_start for action chunking"
             envs_to_predict_for = []
             for i in range(env.num_envs):
-                episode_start[i] = True
-                # print(f"episode_start: {episode_start[i]}")
-                if episode_start[i]:
+                # episode_start[i] = True
+                # print(f"dense_eval, {env.envs[0].dense_eval}")
+                # print(f"episode_start: {episode_start[i]}, chunk: {env.envs[i].chunk}, is_chunk_empty: {env.envs[i].is_chunk_empty}")
+                if env.envs[i].is_chunk_empty:
                     env.envs[i].chunk = []
                     envs_to_predict_for.append(i)
                     # print(f"envs_to_predict_for 1: {envs_to_predict_for}") # [0]
-                elif env.envs[i].is_chunk_empty:
-                    # print("calling predict")
-                    envs_to_predict_for.append(i)
-                    # print(f"envs_to_predict_for 2: {envs_to_predict_for}") # [0]
+                # if env.envs[i].is_chunk_empty:
+                #     # print("calling predict")
+                #     envs_to_predict_for.append(i)
+                #     print(f"envs_to_predict_for 2: {envs_to_predict_for}") # [0]
                     # try:
                     #     action, _ = super().predict(
                     #         observation, state, episode_start, deterministic
@@ -932,6 +933,7 @@ class OfflineRLAlgorithm(OffPolicyAlgorithm):
                 #     # print("not calling predict")
                 #     return [None] * env.num_envs, None
             # print("calling predict")
+            # print(f"chunk: {env.envs[0].chunk}")
             # print(f"envs_to_predict_for 3: {envs_to_predict_for}") # [0]
             if len(envs_to_predict_for) == 0:
                 # print("No envs to predict for")
