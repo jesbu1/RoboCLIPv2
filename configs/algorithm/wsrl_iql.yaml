@@ -5,7 +5,7 @@ defaults:
 
 # Because RLPD is slower, we will log more frequently
 logging:
-  eval_freq: 200
+  eval_freq: 10000
   video_freq: 10000
 
 general_training:
@@ -32,14 +32,14 @@ general_training:
   learning_starts: 5
 
 model:
-  policy_layer_norm: false
-  critic_layer_norm: false
-  pi_net_arch: [768, 512, 512]
-  qf_net_arch: [768, 512, 512]
+  policy_layer_norm: true
+  critic_layer_norm: true
+  pi_net_arch: [768, 512, 256]
+  qf_net_arch: [768, 512, 256]
 
 offline_training:
   offline_training_steps: 100000
-  ckpt_path: "/home/yusenluo/RoboCLIPv2/outputs/2025-06-03/04-55-23/logs/rewind_rlpd_button-press-wall-v2_action_chunk_10/last_offline"
+  #ckpt_path: "/home/yusenluo/RoboCLIPv2/outputs/2025-06-03/04-55-23/logs/rewind_rlpd_button-press-wall-v2_action_chunk_10/last_offline"
   #"/home/yusenluo/RoboCLIPv2/outputs/2025-06-04/01-59-26/logs/rewind_rlpd_button-press-wall-v2_action_chunk_10/last_offline" #null  # Path to load checkpoint from, if provided will skip offline training
   critic_update_ratio: 1
 
