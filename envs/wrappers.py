@@ -631,7 +631,7 @@ class ActionChunkingWrapper(gym.Wrapper):
             info["action"] = chunked_action[None, :]
             return obs, reward, done, info
         # print(chunked_action)
-        # print(f"in wrapper chunk: {self.chunk}, chunked_action: {chunked_action}")
+        print(f"in wrapper chunk: {self.chunk}, chunked_action: {chunked_action}")
         if self.is_chunk_empty or self.chunk is None:
             # Then let the action replace the chunk
             self.chunk = chunked_action
@@ -656,7 +656,7 @@ class ActionChunkingWrapper(gym.Wrapper):
         if actions_taken >= self.n_action_steps:
             self.chunk = []
 
-        # print(f"in wrapper chunk: {self.chunk}, is_chunk_empty: {self.is_chunk_empty}")
+        print(f"in wrapper chunk: {self.chunk}, is_chunk_empty: {self.is_chunk_empty}")
 
         return obs, reward, done, info
 

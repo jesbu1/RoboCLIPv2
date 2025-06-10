@@ -20,7 +20,7 @@ general_training:
 
   # RLPD-specific parameters
   rlpd_train_critic_with_entropy: false
-  entropy_term: 0.1
+  entropy_term: 'auto'
   # Note: RLPD's offline step uses default params defined in base_config.yaml
   rlpd_offline_algo: iql
   action_chunk_size: 60
