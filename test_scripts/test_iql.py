@@ -22,7 +22,7 @@ from stable_baselines3.common.callbacks import (
     CheckpointCallback,
 )
 
-from test_scripts.eval_utils import offline_eval
+# from test_scripts.eval_utils import offline_eval
 
 # from kitchen_env_wrappers import readGif
 import imageio
