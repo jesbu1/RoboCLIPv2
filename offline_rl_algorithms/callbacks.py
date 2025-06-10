@@ -317,7 +317,7 @@ class OfflineEvalCallback(EvalCallback):
         # result = super(OfflineEvalCallback, self)._on_step()
 
         continue_training = True
-        print(self.eval_env.envs[0].chunk)
+        # print(self.eval_env.envs[0].chunk)
         if self.eval_freq > 0 and self.n_calls % self.eval_freq == 0:
             print("Evaluating")
             # Sync training and eval env if there is VecNormalize

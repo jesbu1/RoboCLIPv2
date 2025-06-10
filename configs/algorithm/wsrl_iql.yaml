@@ -12,7 +12,7 @@ general_training:
   algo: rlpd
   name: wsrl_iql
   action_noise: 0.0 # sigma
-  learning_rate: 1e-3
+  learning_rate: 2e-4
 
   # offline rl parameters
   n_critics: 5
@@ -20,7 +20,7 @@ general_training:
 
   # RLPD-specific parameters
   rlpd_train_critic_with_entropy: false
-  entropy_term: 0.1
+  entropy_term: 'auto'
   # Note: RLPD's offline step uses default params defined in base_config.yaml
   rlpd_offline_algo: iql
   action_chunk_size: 60
@@ -32,15 +32,14 @@ general_training:
   learning_starts: 5
 
 model:
-  policy_layer_norm: true
-  critic_layer_norm: true
+  policy_layer_norm: false
+  critic_layer_norm: false
   pi_net_arch: [768, 512, 256]
   qf_net_arch: [768, 512, 256]
 
 offline_training:
   offline_training_steps: 100000
-  #ckpt_path: "/home/yusenluo/RoboCLIPv2/outputs/2025-06-03/04-55-23/logs/rewind_rlpd_button-press-wall-v2_action_chunk_10/last_offline"
-  #"/home/yusenluo/RoboCLIPv2/outputs/2025-06-04/01-59-26/logs/rewind_rlpd_button-press-wall-v2_action_chunk_10/last_offline" #null  # Path to load checkpoint from, if provided will skip offline training
+  ckpt_path: "/home/yusenluo/RoboCLIPv2/outputs/2025-06-05/04-06-55/logs/rewind_rlpd_button-press-wall-v2_entropy_auto_layer_norm_False/last_offline"
   critic_update_ratio: 1
 
 online_training:
