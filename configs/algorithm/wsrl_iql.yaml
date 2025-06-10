@@ -32,10 +32,10 @@ general_training:
   learning_starts: 5
 
 model:
-  policy_layer_norm: true
-  critic_layer_norm: true
-  pi_net_arch: [768, 512, 512]
-  qf_net_arch: [768, 512, 512]
+  policy_layer_norm: false
+  critic_layer_norm: false
+  pi_net_arch: [768, 512, 256]
+  qf_net_arch: [768, 512, 256]
 
 offline_training:
   offline_training_steps: 100000

@@ -631,6 +631,7 @@ class ActionChunkingWrapper(gym.Wrapper):
             info["action"] = chunked_action[None, :]
             return obs, reward, done, info
         # print(chunked_action)
+        # print(f"in wrapper chunk: {self.chunk}, chunked_action: {chunked_action}")
         if self.is_chunk_empty or self.chunk is None:
             # Then let the action replace the chunk
             self.chunk = chunked_action
@@ -638,8 +639,11 @@ class ActionChunkingWrapper(gym.Wrapper):
         #     # If chunk is not empty, we will assert that chunked_action is None
         #     breakpoint()
         #     assert chunked_action is None
-        popped_action = self.chunk[0]
-        self.chunk = self.chunk[1:]
+        try:
+            popped_action = self.chunk[0]
+            self.chunk = self.chunk[1:]
+        except:
+            breakpoint()
         # print("Chunk is empty")
         # return self.env.step(None)
 
@@ -652,6 +656,8 @@ class ActionChunkingWrapper(gym.Wrapper):
         if actions_taken >= self.n_action_steps:
             self.chunk = []
 
+        # print(f"in wrapper chunk: {self.chunk}, is_chunk_empty: {self.is_chunk_empty}")
+
         return obs, reward, done, info
 
     @property
@@ -659,6 +665,7 @@ class ActionChunkingWrapper(gym.Wrapper):
         return len(self.chunk) == 0 or self.chunk is None
 
     def reset(self):
+        # print("Resetting chunk")
         self.chunk = []
         return self.env.reset()
 
@@ -718,7 +725,7 @@ class ACTTemporalEnsemblerWrapper(gym.Wrapper):
 
     def reset(self):
         """Resets the online computation variables."""
-        self.chunk = None
+        self.chunk = []
         # (chunk_size,) count of how many actions are in the ensemble for each time step in the sequence.
         self.chunk_count = None
         return self.env.reset()
