@@ -12,7 +12,7 @@ general_training:
   algo: rlpd
   name: wsrl_iql
   action_noise: 0.0 # sigma
-  learning_rate: 3e-4
+  learning_rate: 2e-4
 
   # offline rl parameters
   n_critics: 5
@@ -39,8 +39,7 @@ model:
 
 offline_training:
   offline_training_steps: 100000
-  #ckpt_path: "/home/yusenluo/RoboCLIP_offline/RoboCLIPv2/models/reward_model/pretrained_rewind/rewind_rlpd_button-press-wall-v2_action_chunk_10/last_offline"
-  #"/home/yusenluo/RoboCLIPv2/outputs/2025-06-04/01-59-26/logs/rewind_rlpd_button-press-wall-v2_action_chunk_10/last_offline" #null  # Path to load checkpoint from, if provided will skip offline training
+  ckpt_path: "/home/yusenluo/RoboCLIP_offline/RoboCLIPv2/models/reward_model/pretrained_rewind/rewind_rlpd_button-press-wall-v2_entropy_auto_layer_norm_False/last_offline"
   critic_update_ratio: 1
 
 online_training:
