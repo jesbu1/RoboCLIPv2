@@ -14,7 +14,7 @@ reward_model:
   camera_names: ["image"]
 
 
-  success_bonus: 200.0
+  success_bonus: 64
 
 environment:
   is_state_based: false

@@ -3,7 +3,7 @@ import numpy as np
 import torch as th
 import torch.nn.functional as F
 from gym import spaces
-
+import wandb
 from reward_model.base_reward_model import BaseRewardModel
 
 
@@ -400,6 +400,9 @@ class LearnedRewardWrapper(gym.Wrapper):
 
         if self.reward_at_every_step:
             reward = self._compute_reward()
+            wandb.log({"train/learned_reward_per_step": reward})
+        if done:
+            wandb.log({"train/learned_reward": reward})
 
         else:
             if done:
@@ -418,6 +421,7 @@ class LearnedRewardWrapper(gym.Wrapper):
         if info.get("success", False):
             reward += self.reward_model.success_bonus
             print("adding success bonus", reward)
+            wandb.log({"train/learned_reward_with_success_bonus": reward})
 
         if isinstance(reward, np.ndarray):
             # All wrappers act on 1 env at a time

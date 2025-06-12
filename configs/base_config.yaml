@@ -13,7 +13,7 @@ logging:
   wandb: true
   wandb_entity_name: "clvr"
   wandb_project_name: "roboclip-v2"
-  wandb_group_name: "${reward_model.name}_${general_training.algo}_${environment.env_id}_entropy_${general_training.entropy_term}_layer_norm_${model.policy_layer_norm}"
+  wandb_group_name: "${reward_model.name}_${general_training.algo}_${environment.env_id}_entropy_${general_training.entropy_term}_layer_norm_${model.policy_layer_norm}_bonus_${reward_model.success_bonus}"
   log_dir: "./logs/${logging.wandb_group_name}"
   eval_freq: 5000
   video_freq: 5000

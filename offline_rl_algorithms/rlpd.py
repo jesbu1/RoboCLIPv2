@@ -152,7 +152,7 @@ class RLPD(OfflineRLAlgorithm):
         warm_start_online_rl: bool = True,
         action_chunk_size: int = 1,
         success_bonus: float = 0.0,
-        use_kl_against_old: bool = True,
+        use_kl_against_old: bool = False,
     ):
         # NOTE: Asserntions currently commonted out due to saving/loading logic. Must fix this later TODO
         # assert (

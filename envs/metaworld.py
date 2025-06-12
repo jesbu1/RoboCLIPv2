@@ -225,6 +225,9 @@ class MetaworldBase(Env):
 
         state = self.base_env.reset()
 
+        import gc
+        gc.collect()
+        
         obs = self.get_obs(state)
 
         return obs
