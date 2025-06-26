@@ -1,0 +1,1 @@
+python train_reward.py --rewind --subsample_video --max_length 16 --cosine_scheduler --clip_grad --progress_loss --extra_data_ratio 0.20 --text_embedding_model minilm --worker 1 --openx_data --rewind_ratio 0.8 --epochs 25 --extra_data_type metaworld --end_rewind_ratio 0.1 --view all --data_type new
