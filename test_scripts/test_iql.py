@@ -107,6 +107,8 @@ def create_exp_name(cfg: DictConfig):
     if cfg.environment.use_proprio:
         exp_name += "use_proprio_"
 
+    exp_name += f"action_chunk_{cfg.general_training.action_chunk_size}_Seed_{cfg.general_training.seed}"
+
     # if the last character is an underscore, remove it
     if exp_name[-1] == "_":
         exp_name = exp_name[:-1]
