@@ -276,9 +276,10 @@ def main(cfg: DictConfig):
     # Set eval freq and video freq if not set
     # if it's rlpd, video_freq should be never
     if training_config.algo == "rlpd":
-        video_freq = 0
-        eval_freq = 0
-        # eval_freq = offline_config.offline_training_steps * env_config.n_envs // (2)
+        # video_freq = 0
+        # eval_freq = 0
+        eval_freq = offline_config.offline_training_steps * env_config.n_envs // (5)
+        video_freq = eval_freq
     else:
         video_freq = offline_config.offline_training_steps * env_config.n_envs // 1
         eval_freq = offline_config.offline_training_steps * env_config.n_envs // (1)
@@ -432,7 +433,7 @@ def main(cfg: DictConfig):
                 
 
     # add eval policy on all tasks
-    # offline_eval(model, reward_model, image_encoder)
+    offline_eval(model, reward_model, image_encoder)
     # exit()
 
 

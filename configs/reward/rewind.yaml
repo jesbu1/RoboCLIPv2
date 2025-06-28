@@ -3,7 +3,7 @@
 reward_model: 
   name: 'rewind'
   batch_size: 64
-  model_path: '/home/jzhang96/RoboCLIPv2/models/reward_model/model_20.pth'
+  model_path: '/home/yusenluo/RoboCLIP_offline/RoboCLIPv2/models/reward_model/rewind_model/model_27.pth'
   use_pca: false
   success_bonus: 200
   reward_divisor: 1
