@@ -12,10 +12,10 @@ general_training:
   algo: rlpd
   name: wsrl_iql
   action_noise: 0.0 # sigma
-  learning_rate: 1e-4
+  learning_rate: 0.00015
 
   # offline rl parameters
-  n_critics: 10
+  n_critics: 5
   n_critics_to_sample: 2
 
   # RLPD-specific parameters
@@ -39,7 +39,8 @@ model:
 
 offline_training:
   offline_training_steps: 100000
-  ckpt_path: null
+  ckpt_path: "/home/yusenluo/RoboCLIP_offline/RoboCLIPv2/outputs/2025-06-28/10-39-12/logs/rewind_rlpd_button-press-wall-v2_entropy_auto_layer_norm_False_rebuttal_flint/last_offline" # 15k false n_critics 5
+  #"/home/yusenluo/RoboCLIP_offline/RoboCLIPv2/outputs/2025-06-28/03-33-53/logs/rewind_rlpd_button-press-wall-v2_entropy_auto_layer_norm_False_rebuttal_flint/last_offline" # 5k false n_critics 10
   #"/home/yusenluo/RoboCLIP_offline/RoboCLIPv2/outputs/2025-06-23/23-00-21/logs/rewind_rlpd_window-close-v2_entropy_auto_layer_norm_False_bonus_64/last_offline" # 5k false 512
   #"/home/yusenluo/RoboCLIP_offline/RoboCLIPv2/outputs/2025-06-23/01-40-02/logs/rewind_rlpd_window-close-v2_entropy_auto_layer_norm_True_bonus_64/last_offline" #8k true 
   #"/home/yusenluo/RoboCLIP_offline/RoboCLIPv2/outputs/2025-06-23/01-26-16/logs/rewind_rlpd_window-close-v2_entropy_auto_layer_norm_False_bonus_64/last_offline" 5k false 

@@ -6,7 +6,7 @@ general_training:
 reward_model: 
   name: 'sparse'
   encoder: null # default and only option is vlc
-  success_bonus: 10.0
+  success_bonus: 64.0
   reward_divisor: 1.0
 
 environment:
