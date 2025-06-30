@@ -9,7 +9,7 @@ reward_model:
   name: 'rewind'
   batch_size: 64
   # model_path: "weights/rewind/real_world_PosEmb_Rewind_ratio_0.8_EMA_momentum_0.3_End_Rewind_ratio_0.1/model_20.pth"
-  model_path: "/home/yusenluo/RoboCLIP_offline/RoboCLIPv2/models/reward_model/rewind_model/model_27.pth"
+  model_path: "/home/yusenluo/RoboCLIP_offline/RoboCLIPv2/models/reward_model/rewind_model/no_rewind/model_17.pth"
   reward_at_every_step: true
   camera_names: ["image"]
 

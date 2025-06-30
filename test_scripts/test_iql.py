@@ -6,6 +6,8 @@ from stable_baselines3 import PPO, SAC
 import torch as th
 from stable_baselines3.common.vec_env.subproc_vec_env import SubprocVecEnv
 import os
+import sys
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 import json
 
 os.environ["TOKENIZERS_PARALLELISM"] = "false"  # to get rid of the warning message

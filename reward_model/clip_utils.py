@@ -20,7 +20,7 @@ device = "cuda" if torch.cuda.is_available() else "cpu"
 
 
 dino_transform_image = T.Compose(
-    [T.ToTensor(), T.Resize(244), T.CenterCrop(224), T.Normalize([0.5], [0.5])]
+    [T.ToTensor(), T.CenterCrop(224), T.Normalize([0.5], [0.5])]
 )
 
 
