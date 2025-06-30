@@ -7,7 +7,7 @@ defaults:
 logging:
   eval_freq: 10000
   video_freq: 10000
-  wandb_group_name: "${reward_model.name}_${general_training.algo}_${environment.env_id}_rebuttal_no_action_chunk"
+  wandb_group_name: "${reward_model.name}_${general_training.algo}_${environment.env_id}_rebuttal_no_action_chunk_snoopy"
 
 general_training:
   algo: rlpd
@@ -16,7 +16,7 @@ general_training:
   learning_rate: 1e-3
 
   # offline rl parameters
-  n_critics: 10
+  n_critics: 5
   n_critics_to_sample: 2
 
   # RLPD-specific parameters
