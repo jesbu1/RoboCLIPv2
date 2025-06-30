@@ -7,7 +7,7 @@ defaults:
 logging:
   eval_freq: 10000
   video_freq: 10000
-  wandb_group_name: "${reward_model.name}_${general_training.algo}_${environment.env_id}_rebuttal_no_action_chunk_snoopy"
+  wandb_group_name: "${reward_model.name}_${general_training.algo}_${environment.env_id}_rebuttal_flint_no_rewind_ablation"
 
 general_training:
   algo: rlpd
