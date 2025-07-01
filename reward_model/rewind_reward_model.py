@@ -9,6 +9,7 @@ import torch.nn.functional as F
 import clip
 
 from reward_model.models.rewind_one_step_transformer import ClassProgressTransformer
+from reward_model.models_full_pe import ClassProgressTransformer as ClassProgressTransformer_full_pe
 from reward_model.clip_utils import dino_load_image, mean_pooling
 from transformers import AutoTokenizer, AutoModel
 

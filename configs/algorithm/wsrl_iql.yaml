@@ -12,7 +12,7 @@ general_training:
   algo: rlpd
   name: wsrl_iql
   action_noise: 0.0 # sigma
-  learning_rate: 0.00015
+  learning_rate: 1e-4
 
   # offline rl parameters
   n_critics: 5
@@ -39,7 +39,14 @@ model:
 
 offline_training:
   offline_training_steps: 100000
-  ckpt_path: "/home/yusenluo/RoboCLIP_offline/RoboCLIPv2/outputs/2025-06-28/10-39-12/logs/rewind_rlpd_button-press-wall-v2_entropy_auto_layer_norm_False_rebuttal_flint/last_offline" # 15k false n_critics 5
+  ckpt_path: "/home/yusenluo/RoboCLIP_offline/RoboCLIPv2/outputs/2025-06-28/10-39-12/logs/rewind_rlpd_button-press-wall-v2_entropy_auto_layer_norm_False_rebuttal_flint/last_offline"
+  #"/home/yusenluo/RoboCLIP_offline/RoboCLIPv2/outputs/2025-06-30/23-36-17/logs/rewind_rlpd_button-press-wall-v2_rebuttal_flint_full_pe_ablation/last_offline" #full pe ablation
+   #"/home/yusenluo/RoboCLIP_offline/RoboCLIPv2/outputs/2025-06-30/21-15-21/logs/rewind_rlpd_button-press-wall-v2_rebuttal_flint_5_task_ablation/last_offline" # 5 task ablation
+  #"/home/yusenluo/RoboCLIP_offline/RoboCLIPv2/outputs/2025-06-30/14-38-44/logs/rewind_rlpd_button-press-wall-v2_rebuttal_flint_10_task_ablation/last_offline" # 10 task ablation
+  #"/home/yusenluo/RoboCLIP_offline/RoboCLIPv2/outputs/2025-06-30/13-09-22/logs/rewind_rlpd_button-press-wall-v2_rebuttal_flint_no_rewind_ablation/last_offline" # no rewind ablation
+  #"/home/yusenluo/RoboCLIP_offline/RoboCLIPv2/outputs/2025-06-28/10-39-12/logs/rewind_rlpd_button-press-wall-v2_entropy_auto_layer_norm_False_rebuttal_flint/last_offline"
+  #"/home/yusenluo/RoboCLIP_offline/RoboCLIPv2/outputs/2025-06-29/23-59-04/logs/sparse_rlpd_button-press-wall-v2_entropy_auto_layer_norm_False_rebuttal_flint/last_offline" # 15k false n_critics 5 sparse
+  #"/home/yusenluo/RoboCLIP_offline/RoboCLIPv2/outputs/2025-06-28/10-39-12/logs/rewind_rlpd_button-press-wall-v2_entropy_auto_layer_norm_False_rebuttal_flint/last_offline" # 15k false n_critics 5 rewind
   #"/home/yusenluo/RoboCLIP_offline/RoboCLIPv2/outputs/2025-06-28/03-33-53/logs/rewind_rlpd_button-press-wall-v2_entropy_auto_layer_norm_False_rebuttal_flint/last_offline" # 5k false n_critics 10
   #"/home/yusenluo/RoboCLIP_offline/RoboCLIPv2/outputs/2025-06-23/23-00-21/logs/rewind_rlpd_window-close-v2_entropy_auto_layer_norm_False_bonus_64/last_offline" # 5k false 512
   #"/home/yusenluo/RoboCLIP_offline/RoboCLIPv2/outputs/2025-06-23/01-40-02/logs/rewind_rlpd_window-close-v2_entropy_auto_layer_norm_True_bonus_64/last_offline" #8k true 
