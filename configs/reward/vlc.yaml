@@ -3,5 +3,16 @@
 reward_model: 
   name: 'vlc'
   batch_size: 64
-  model_path: null
-  success_bonus: 10.0
+  server_url: "http://10.137.28.55:5000"
+  success_bonus: 64.0
+  reward_at_every_step: true
+  camera_names: ["image"]
+
+general_training:
+  dense_rewards_at_end: false
+  entropy_term: "auto"
+
+
+environment:
+  is_state_based: false
+  reward_image_key: 'image'
