@@ -12,7 +12,7 @@ from torch.utils.data import Dataset
 class ReWiNDVideoDataset(Dataset):
 
     def __init__(self, args, h5_file, sample_neg=False):
-        h5_file = h5py.File(h5_file, "r")
+        # h5_file = h5py.File(h5_file, "r")
         self.h5_file = h5_file
         self.args = args
         self.keys = list(self.h5_file.keys())
@@ -20,14 +20,9 @@ class ReWiNDVideoDataset(Dataset):
 
 
     def sample_text_feature(self, data_group):
-        if self.args.text_embedding_model == "minilm":
-            lang_embedding = np.array(data_group["minilm_lang_embedding"])
-        else:
-            lang_embedding = np.array(data_group["liv_lang_embedding"])
-        if lang_embedding.shape[0] == 1024:
-            lang_embedding = np.expand_dims(lang_embedding, axis=0)
-        elif lang_embedding.shape[0] == 384:
-            lang_embedding = np.expand_dims(lang_embedding, axis=0)
+
+        lang_embedding = np.array(data_group["minilm_lang_embedding"])
+        lang_embedding = np.expand_dims(lang_embedding, axis=0) # extract lang_embedding from the group
 
         len_lang_embedding = lang_embedding.shape[0]
         if len_lang_embedding > 1:
@@ -43,14 +38,8 @@ class ReWiNDVideoDataset(Dataset):
         while random_key == key:
             random_key = random.choice(self.keys)
         data_group = self.h5_file[random_key]
-        if self.args.text_embedding_model == "minilm":
-            lang_embedding = np.array(data_group["minilm_lang_embedding"])
-        else:
-            lang_embedding = np.array(data_group["liv_lang_embedding"])
-        if lang_embedding.shape[0] == 1024:
-            lang_embedding = np.expand_dims(lang_embedding, axis=0)
-        elif lang_embedding.shape[0] == 384:
-            lang_embedding = np.expand_dims(lang_embedding, axis=0)
+        lang_embedding = np.array(data_group["minilm_lang_embedding"])
+        lang_embedding = np.expand_dims(lang_embedding, axis=0)
 
         len_lang_embedding = lang_embedding.shape[0]
         if len_lang_embedding > 1:
@@ -85,17 +74,12 @@ class ReWiNDVideoDataset(Dataset):
             video_progress = self.padding_video(video_progress, self.args.max_length).detach().cpu().numpy()
             video_progress = np.squeeze(video_progress, axis=1)
 
-
-
         return video_frames, video_progress, np.ones(video_progress.shape[0])
 
 
 
     def sample_reverse_video_feature(self, data_group):
         traj_lists = list(data_group.keys())
-        # traj_lists.remove("lang_embedding")
-        # if "lang_embedding_individual" in traj_lists:
-        #     traj_lists.remove("lang_embedding_individual")  
         traj_lists = [traj for traj in traj_lists if "lang" not in traj] 
 
         random_name = random.choice(traj_lists)
@@ -104,38 +88,23 @@ class ReWiNDVideoDataset(Dataset):
 
         start_idx = random.randint(0, len(progress_dataset)//2)
 
-        close_succ_sanple = False
-        if self.args.end_rewind_ratio == 0:
-            end_idx = random.randint(len(progress_dataset)//2, len(progress_dataset)) # end_idx start from len(progress_dataset)//2
-            
-        else:
-            if random.random() < self.args.end_rewind_ratio:
-                    end_idx = len(progress_dataset) - random.randint(0, 2)
-                    close_succ_sanple = True
-            else:
-                end_idx = random.randint(len(progress_dataset)//2, len(progress_dataset))
+        end_idx = random.randint(len(progress_dataset)//2, len(progress_dataset)) # end_idx start from len(progress_dataset)//2
+
         while end_idx - start_idx < 3:
             start_idx = random.randint(0, len(progress_dataset)//2)
             end_idx = random.randint(len(progress_dataset)//2, len(progress_dataset))
-            close_succ_sanple = False
-
 
         video_frames = np.array(progress_dataset)[start_idx:end_idx]
         full_frames = np.array(progress_dataset)[start_idx:]
         progress_idx= np.arange(0, video_frames.shape[0]) + 1
         progress = progress_idx / len(full_frames)
 
-
-
         # rewind the video
         # reverse_frame = video_frames[::-1][1:]
         # reverse_progress = progress[::-1][1:]
 
         # random start rewind
-        if close_succ_sanple:
-            selected_end_point = random.randint(1, min(3, len(video_frames)))
-        else:
-            selected_end_point = random.randint(2, len(video_frames))
+        selected_end_point = random.randint(2, len(video_frames))
         reverse_frame = video_frames[::-1][1:selected_end_point]
         reverse_progress = progress[::-1][1:selected_end_point]
 
@@ -194,10 +163,6 @@ class ReWiNDVideoDataset(Dataset):
         else:
             
             video_array, progress, class_label = self.sample_video_feature(data_group)
-            if len(video_array.shape) != 2:
-                import pdb; pdb.set_trace()
-            if video_array.shape[0] != 16 or video_array.shape[1] != 768:
-                import pdb; pdb.set_trace()
 
         # sample text sample
         if self.sample_neg:
