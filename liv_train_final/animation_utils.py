@@ -67,7 +67,7 @@ def animate_video_with_rewards(frames, rewards, fps=10, _class = False):
     for frame_idx in range(n):
         update(frame_idx)  # Manually update the frame
         fig.canvas.draw()
-        img_array = np.frombuffer(fig.canvas.tostring_rgb(), dtype=np.uint8)
+        img_array = np.frombuffer(fig.canvas.tostring_argb(), dtype=np.uint8)
         img_array = img_array.reshape(fig.canvas.get_width_height()[::-1] + (3,))
         images.append(Image.fromarray(img_array))
 

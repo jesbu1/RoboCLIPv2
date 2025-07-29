@@ -334,7 +334,13 @@ class ClassProgressTransformer(nn.Module):
         # Pass through transformer
         
 
-        transformed = self.transformer(sequence, is_causal=True, mask = self.attention_mask)
+        if sequence.shape[1] < 18:
+            input_attention_mask = nn.Transformer.generate_square_subsequent_mask(sequence.shape[1]).to(sequence.device)
+        else:
+            input_attention_mask = self.attention_mask
+
+
+        transformed = self.transformer(sequence, is_causal=True, mask = input_attention_mask)
         
         # Get class prediction from class token
         # class_pred = self.classification_head(transformed[:, 0])  # Use class token

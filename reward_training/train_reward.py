@@ -11,7 +11,7 @@ from torch.utils.data import DataLoader
 
 from utils.train_utils import compute_metrics_multi, CosineWithMinLRScheduler
 from model import ClassProgressTransformer 
-from dataset import LivRealVideoTrainDataset
+from dataset import ReWiNDVideoDataset
 
 from utils.eval_progress import plot_progress
 from utils.ema_utils import make_train_step_progress_fn
@@ -43,11 +43,9 @@ def main(args):
     WANDB_ENTITY_NAME = "clvr"
     WANDB_PROJECT_NAME = "roboclip-v2"
 
-    experiment_name = str(args.extra_data_type) + "_full_PE"
+    experiment_name = "ReWiND_Release" + str(args.extra_data_type)
 
-
-
-    group_name = args.extra_data_type + "code_release"
+    group_name = args.extra_data_type 
     run = wandb.init(
         entity=WANDB_ENTITY_NAME,
         project=WANDB_PROJECT_NAME,
@@ -57,54 +55,22 @@ def main(args):
     )
 
     if args.extra_data_type == "metaworld":
-        if args.text_embedding_model == "minilm":
-            h5_train_eval_file = h5py.File("data/metaworld/metaworld_train_embeddings.h5", "r")
-            h5_eval_file = h5py.File("data/metaworld/metaworld_eval_embeddings.h5", "r")
-            in_domain_data_path = "data/metaworld/metaworld_train_embeddings.h5"
+        h5_train_eval_file = h5py.File("data/metaworld/metaworld_train_embeddings.h5", "r")
+        h5_eval_file = h5py.File("data/metaworld/metaworld_eval_embeddings.h5", "r")
+        in_domain_data_path = "data/metaworld/metaworld_train_embeddings.h5"
 
     else:
-
-        if args.view == "side":
-            h5_train_eval_file = h5py.File("usc_koch_rewind_dino_reward_side_new_train.h5", "r")
-            h5_eval_file = h5py.File("usc_koch_rewind_dino_reward_side_new_eval.h5", "r")
-            if args.full_set:
-                in_domain_data_path = "usc_koch_rewind_dino_reward_side_new.h5"
-            else:
-                in_domain_data_path = "usc_koch_rewind_dino_reward_side_new_train.h5"
-
-        elif args.view == "top":
-            h5_train_eval_file = h5py.File("usc_koch_rewind_dino_reward_main_new_train.h5", "r")
-            h5_eval_file = h5py.File("usc_koch_rewind_dino_reward_main_new_eval.h5", "r")
-            if args.full_set:
-                in_domain_data_path = "usc_koch_rewind_dino_reward_main_new.h5"
-            else:
-                in_domain_data_path = "usc_koch_rewind_dino_reward_main_new_train.h5"
-        
-        elif args.view == "all":
-            h5_train_eval_file = h5py.File("usc_koch_rewind_dino_reward_new_train_combine.h5", "r")
-            h5_eval_file = h5py.File("usc_koch_rewind_dino_reward_new_eval_combine.h5", "r")
-            if args.full_set:
-                if args.data_type == "old":
-                    in_domain_data_path = "usc_koch_rewind_dino_reward_all.h5"
-                elif args.data_type == "new":
-                    in_domain_data_path = "usc_koch_rewind_dino_reward_all_new.h5"
-                elif args.data_type == "all":
-                    in_domain_data_path = "usc_koch_rewind_dino_reward_all_combine.h5"  
-                print("Using all data new generated")
-            else:
-                in_domain_data_path = "usc_koch_rewind_dino_reward_new_train_combine.h5"
+        h5_train_eval_file = h5py.File("usc_koch_rewind_dino_reward_new_train_combine.h5", "r")
+        h5_eval_file = h5py.File("usc_koch_rewind_dino_reward_new_eval_combine.h5", "r")
+        in_domain_data_path = "usc_koch_rewind_dino_reward_new_train_combine.h5"
 
 
-        print("Using side view new generated", args.view)
-        print("Using side view new generated", args.view)
-        print("Using side view new generated", args.view)
 
-
-    openx_dataset = LivRealVideoTrainDataset(args, args.openx_embedding_path, sample_neg=False)
+    openx_dataset = ReWiNDVideoDataset(args, args.openx_embedding_path, sample_neg=False)
     if args.extra_data_type == "metaworld":
-        extra_dataset = LivRealVideoTrainDataset(args, in_domain_data_path, sample_neg=True)
+        extra_dataset = ReWiNDVideoDataset(args, h5_train_eval_file, sample_neg=True)
     else:
-        extra_dataset = LivRealVideoTrainDataset(args, in_domain_data_path, sample_neg=True)
+        extra_dataset = ReWiNDVideoDataset(args, h5_train_eval_file, sample_neg=True)
     
     openx_batch_size = int(round(args.batch_size * (1 - args.extra_data_ratio)))
     extra_batch_size = int(round(args.batch_size * args.extra_data_ratio))

@@ -9,7 +9,7 @@ from torch.utils.data import Dataset
 
 
 
-class LivRealVideoTrainDataset(Dataset):
+class ReWiNDVideoDataset(Dataset):
 
     def __init__(self, args, h5_file, sample_neg=False):
         h5_file = h5py.File(h5_file, "r")
