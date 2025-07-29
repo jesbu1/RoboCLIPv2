@@ -116,7 +116,6 @@ def main(args):
         training_loader = zip(openx_dataloader, extra_dataloader)
         # call the ema trainer
         trainer.run(training_loader, max_epochs=1, epoch_length=len(openx_dataloader))
-        import pdb ; pdb.set_trace()
 
         ema_model.eval()
         self_attention_model.eval()
@@ -128,18 +127,7 @@ def main(args):
                 plot_progress(h5_train_eval_file, "train", self_attention_model, args, epoch = epoch)
                 plot_progress(h5_eval_file, "eval", self_attention_model, args, epoch = epoch)
 
-                if epoch % 2 == 0:
-                    compute_gif = True
-                else:
-                    compute_gif = False
 
-                compute_metrics_multi(args, ema_model, threshold=0.5, compute_gif = compute_gif, epoch = epoch)
-
-            # else: # real world data
-            #     plot_confusion_matrix(h5_file = h5_train_eval_file, set = "train",self_attention_model = ema_model, args = args, epoch = epoch, ema=True, run_name = experiment_name)
-            #     plot_confusion_matrix(h5_file = h5_eval_file, set = "eval", self_attention_model = ema_model, args = args, epoch = epoch, ema=True, run_name = experiment_name)
-            #     plot_progress(h5_train_eval_file, "train", self_attention_model, args, epoch = epoch)
-            #     plot_progress(h5_eval_file, "eval", self_attention_model, args, epoch = epoch)
 
         ema_model.train()
         self_attention_model.train()
@@ -157,7 +145,7 @@ if __name__ == "__main__":
     argparser.add_argument('--worker', type=int, default=1)
     argparser.add_argument('--rewind', action='store_true')
     argparser.add_argument('--subsample_video', action='store_true')
-    argparser.add_argument('--max_length', type=int, default=32)
+    argparser.add_argument('--max_length', type=int, default=16)
     argparser.add_argument('--cosine_scheduler', action='store_true')
     argparser.add_argument('--clip_grad', action='store_true')
     argparser.add_argument('--extra_data_ratio', type=float, default=0.2)

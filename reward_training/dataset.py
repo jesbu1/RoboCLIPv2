@@ -22,14 +22,13 @@ class ReWiNDVideoDataset(Dataset):
     def sample_text_feature(self, data_group):
 
         lang_embedding = np.array(data_group["minilm_lang_embedding"])
-        lang_embedding = np.expand_dims(lang_embedding, axis=0) # extract lang_embedding from the group
+        # lang_embedding = np.expand_dims(lang_embedding, axis=0) # extract lang_embedding from the group
 
         len_lang_embedding = lang_embedding.shape[0]
         if len_lang_embedding > 1:
             lang_embedding = lang_embedding[random.randint(0, len_lang_embedding-1)]
 
         lang_embedding = th.from_numpy(lang_embedding).float()
-
         return lang_embedding
     
 
@@ -39,14 +38,13 @@ class ReWiNDVideoDataset(Dataset):
             random_key = random.choice(self.keys)
         data_group = self.h5_file[random_key]
         lang_embedding = np.array(data_group["minilm_lang_embedding"])
-        lang_embedding = np.expand_dims(lang_embedding, axis=0)
-
+        # lang_embedding = np.expand_dims(lang_embedding, axis=0)
         len_lang_embedding = lang_embedding.shape[0]
         if len_lang_embedding > 1:
             lang_embedding = lang_embedding[random.randint(0, len_lang_embedding-1)]
 
         lang_embedding = th.from_numpy(lang_embedding).float()
-
+        
         return lang_embedding
 
 
@@ -119,6 +117,8 @@ class ReWiNDVideoDataset(Dataset):
             progress = np.expand_dims(progress, axis=1)
             progress = self.padding_video(progress, self.args.max_length).detach().cpu().numpy()
             progress = np.squeeze(progress, axis=1)
+            if len(video_frames.shape) == 1:
+                import pdb; pdb.set_trace()
             return video_frames, progress, np.ones(progress.shape[0])
         else:
             return video_frames, progress, np.ones(progress.shape[0])
@@ -160,6 +160,7 @@ class ReWiNDVideoDataset(Dataset):
                 video_array, progress, class_label = self.sample_reverse_video_feature(data_group)
             else:
                 video_array, progress, class_label = self.sample_video_feature(data_group)
+                
         else:
             
             video_array, progress, class_label = self.sample_video_feature(data_group)

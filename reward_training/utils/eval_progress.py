@@ -61,10 +61,8 @@ def plot_progress(h5_file, set, self_attention_model, args, epoch = 0):
     for key in tqdm(eval_envs):
         video_group = h5_file[key]
 
-        if args.text_embedding_model == "minilm":
-            text_embedding = np.asarray(video_group["minilm_lang_embedding"])[0].reshape(1, -1)
-        else:
-            text_embedding = np.asarray(video_group["liv_lang_embedding"])[0].reshape(1, -1)
+        text_embedding = np.asarray(video_group["minilm_lang_embedding"])[0].reshape(1, -1)
+
         text_embedding = torch.from_numpy(text_embedding).to(device).float()
         
         # Get all trajectory keys (exclude language embeddings)
@@ -76,7 +74,6 @@ def plot_progress(h5_file, set, self_attention_model, args, epoch = 0):
         # Plot each trajectory with a different color
         colors = plt.cm.rainbow(np.linspace(0, 1, len(traj_keys)))
         
-        # 存储当前环境的相关系数
         env_spearmans = []
         env_pearsons = []
         
@@ -91,7 +88,7 @@ def plot_progress(h5_file, set, self_attention_model, args, epoch = 0):
             
             traj_data = traj_data.view(-1, 768).unsqueeze(0).repeat(text_embedding.shape[0], 1, 1)
 
-            pred_class, _ = self_attention_model(traj_data, text_embedding)
+            pred_class = self_attention_model(traj_data, text_embedding)
 
             pred_class = pred_class 
 

@@ -187,10 +187,8 @@ def plot_confusion_matrix(h5_file, set, self_attention_model, args, epoch = None
     text_embeddings = []
     text_list = []
     for key in eval_envs:
-        if args.text_embedding_model == "minilm":
-            embedding = np.asarray(h5_file[key]["minilm_lang_embedding"])[0].reshape(1, -1)
-        else:
-            embedding = np.asarray(h5_file[key]["liv_lang_embedding"])[0].reshape(1, -1)
+        embedding = np.asarray(h5_file[key]["minilm_lang_embedding"])[0].reshape(1, -1)
+
         text_embeddings.append(embedding)
         text_list.append(key)
     text_embeddings = np.concatenate(text_embeddings, axis=0)
@@ -220,7 +218,7 @@ def plot_confusion_matrix(h5_file, set, self_attention_model, args, epoch = None
         progress_org_list = []
         for id in range(traj_data_all.shape[0]):
             traj_data = traj_data_all[id].unsqueeze(0).repeat(text_embeddings.shape[0], 1, 1)
-            pred_class, two_step_class = self_attention_model(traj_data, text_embeddings)
+            pred_class = self_attention_model(traj_data, text_embeddings)
             
             pred_class = pred_class[:, -1].squeeze()
             progress_org_list.append(pred_class.clone().cpu().detach().numpy())

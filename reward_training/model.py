@@ -41,7 +41,7 @@ class ClassProgressTransformer(nn.Module):
             nn.Sigmoid()
         )
         # Attention mask for causal self-attention
-        self.attention_mask = nn.Transformer.generate_square_subsequent_mask(18).to('cuda')
+        self.attention_mask = nn.Transformer.generate_square_subsequent_mask(17).to('cuda')
     
     def forward(self, video_frames, text_embed, attention_mask=None):
         batch_size = video_frames.shape[0]
