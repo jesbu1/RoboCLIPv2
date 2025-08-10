@@ -40,7 +40,7 @@ class Dino_miniLM_Encoder(BaseEncoder):
         self.dinov2_vits14 = torch.hub.load("facebookresearch/dinov2", "dinov2_vitb14", force_reload=False)
         self.dinov2_vits14 = self.dinov2_vits14.to(self.device)
         self.dino_transform_image = T.Compose(
-            [T.ToTensor(), T.CenterCrop(224), T.Resize(244), T.CenterCrop(224), T.Normalize([0.5], [0.5])]
+            [T.ToTensor(), T.CenterCrop(224), T.Normalize([0.5], [0.5])]
         )
         self.minilm_tokenizer = AutoTokenizer.from_pretrained(
             "sentence-transformers/all-MiniLM-L12-v2"
