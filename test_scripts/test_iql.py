@@ -1,3 +1,6 @@
+import os
+import sys
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 from gym import Env, spaces
 from offline_rl_algorithms.offline_replay_buffers import H5ReplayBuffer
 import torch.nn as nn

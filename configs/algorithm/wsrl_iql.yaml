@@ -39,7 +39,7 @@ model:
 
 offline_training:
   offline_training_steps: 100000
-  ckpt_path: "/scr2/yusenluo/RoboCLIPv2/models/reward_model/pretrained_rewind/rewind_rlpd_button-press-wall-v2_rebuttal_flint_no_rewind_ablation/last_offline" 
+  ckpt_path: "/scr2/yusenluo/RoboCLIPv2/outputs/2025-08-12/10-26-30/logs/rewind_rlpd_button-press-wall-v2_reproduce_action_chunk/last_offline"
   #"/scr2/yusenluo/RoboCLIPv2/models/reward_model/pretrained_rewind/rewind_rlpd_button-press-wall-v2_entropy_auto_layer_norm_False_rebuttal_flint/last_offline" # 15k false n_critics 5
   #"/home/yusenluo/RoboCLIP_offline/RoboCLIPv2/outputs/2025-06-28/03-33-53/logs/rewind_rlpd_button-press-wall-v2_entropy_auto_layer_norm_False_rebuttal_flint/last_offline" # 5k false n_critics 10
   #"/home/yusenluo/RoboCLIP_offline/RoboCLIPv2/outputs/2025-06-23/23-00-21/logs/rewind_rlpd_window-close-v2_entropy_auto_layer_norm_False_bonus_64/last_offline" # 5k false 512

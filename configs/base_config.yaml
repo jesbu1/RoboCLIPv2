@@ -13,7 +13,7 @@ logging:
   wandb: true
   wandb_entity_name: "clvr"
   wandb_project_name: "roboclip-v2"
-  wandb_group_name: "${reward_model.name}_${general_training.algo}_${environment.env_id}_rebuttal_flint_no_rewind_ablation"
+  wandb_group_name: "${reward_model.name}_${general_training.algo}_${environment.env_id}_reproduce_action_chunk"
   log_dir: "./logs/${logging.wandb_group_name}"
   eval_freq: 5000
   video_freq: 5000
