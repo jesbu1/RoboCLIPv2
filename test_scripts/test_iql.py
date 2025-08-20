@@ -625,10 +625,14 @@ def create_envs(cfg: DictConfig, reward_model: BaseRewardModel, logger=None):
         env_id = "koch_bimanual"  # Doesn't matter
 
     with th.no_grad():
+        # 策略用的语言特征 (MiniLM 384维)
         policy_lang_feat = reward_model.encode_text_for_policy(
             text_instruction
         ).squeeze()
-        lang_feat = reward_model.encode_text(text_instruction).squeeze()
+        
+        # 对于策略输入，应该使用策略编码器的文本特征，而不是奖励模型的
+        # 这里我们使用 policy_lang_feat 作为 language_features
+        lang_feat = policy_lang_feat
 
     ignore_language = env_config.ignore_language
 
@@ -778,11 +782,16 @@ def get_policy_algorithm(cfg: DictConfig, envs: VecEnv, log_dir: str, reward_mod
     if "language_feature" in orig_obs_keys:
         dim_ranges.append(orig_obs_space["language_feature"].shape[0])
         projection_dims.append(128)
-    # then images
-    for key in orig_obs_keys:
-        if "image_feature" in key:
-            dim_ranges.append(orig_obs_space["image_feature_0"].shape[0])
+    # then images (策略必须使用policy_image_feature)
+    policy_image_keys = [key for key in orig_obs_keys if "policy_image_feature" in key]
+    
+    if policy_image_keys:
+        # 策略必须使用策略编码器的图像特征
+        for key in sorted(policy_image_keys):
+            dim_ranges.append(orig_obs_space[key].shape[0])
             projection_dims.append(512)
+    else:
+        raise KeyError("policy_image_feature_* not found in observation space. Policy requires policy encoder encoded features.")
 
     # then proprio
     if "proprio" in orig_obs_keys:

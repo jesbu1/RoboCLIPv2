@@ -1,3 +1,5 @@
+# @package _global_
+
 reward_model: 
   name: 'liv'
   batch_size: 64

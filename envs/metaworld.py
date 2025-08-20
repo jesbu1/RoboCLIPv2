@@ -14,6 +14,7 @@ from metaworld.envs import (
 
 from envs.wrappers import *
 from reward_model.env_reward_model import EnvRewardModel
+from reward_model.policy_encoder import PolicyEncoder
 
 import torch
 from torchvision import transforms
@@ -273,9 +274,10 @@ class MetaworldBase(Env):
 
 
 class MetaworldImageEmbeddingWrapper(gym.Wrapper):
-    def __init__(self, env, reward_model):
+    def __init__(self, env, reward_model, policy_encoder=None):
         super(MetaworldImageEmbeddingWrapper, self).__init__(env)
         self.reward_model = reward_model
+        self.policy_encoder = policy_encoder  # 独立的策略编码器
 
         # The observation space is a dict
         # Let us add image_feature to the observation space
@@ -289,13 +291,25 @@ class MetaworldImageEmbeddingWrapper(gym.Wrapper):
 
         # Define the new observation space
         new_spaces = current_obs_space.spaces.copy()
-        # Add a new key for the image feature corresponding to each image key
-        new_spaces["image_feature_0"] = spaces.Box(
+        
+        # 为奖励计算添加图像特征 (使用奖励模型的编码器)
+        new_spaces["reward_image_feature_0"] = spaces.Box(
             low=-np.inf,
             high=np.inf,
             shape=(reward_model.img_output_dim,),
             dtype=np.float32,
         )
+        
+        # 为策略添加图像特征 (必须使用策略编码器)
+        if policy_encoder is not None:
+            new_spaces["policy_image_feature_0"] = spaces.Box(
+                low=-np.inf,
+                high=np.inf,
+                shape=(policy_encoder.img_output_dim,),
+                dtype=np.float32,
+            )
+        else:
+            raise ValueError("policy_encoder is required for generating policy input features")
 
         # Set the updated observation space
         self.observation_space = spaces.Dict(new_spaces)
@@ -315,12 +329,22 @@ class MetaworldImageEmbeddingWrapper(gym.Wrapper):
         self.reward_model = None
 
     def _observation(self, observation):
-        # image = observation["image"]
-        # observation["image"] = image
         image = observation["image"]
         image = image[None, None, :, :, :]
-        image_feature = self.reward_model.encode_images(image).squeeze()
-        observation["image_feature_0"] = image_feature
+        
+        # 为奖励计算编码图像 (使用奖励模型的编码器)
+        reward_image_feature = self.reward_model.encode_images(image).squeeze()
+        observation["reward_image_feature_0"] = reward_image_feature
+        
+        # 为策略编码图像 (必须使用策略编码器)
+        if self.policy_encoder is not None:
+            policy_image_feature = self.policy_encoder.encode_images(image).squeeze()
+            observation["policy_image_feature_0"] = policy_image_feature
+        else:
+            raise ValueError("policy_encoder is required for generating policy input features")
+        
+        # 为了向后兼容，保留原有的 image_feature_0 (使用奖励模型编码)
+        observation["image_feature_0"] = reward_image_feature
 
         return observation
 
@@ -373,6 +397,11 @@ def create_wrapped_env(
     """
 
     def _init():
+        policy_encoder = PolicyEncoder(
+            device=reward_model.device,
+            batch_size=64
+        )
+        
         if mode == "eval":
             base_env = MetaworldBase(
                 env_id,
@@ -411,7 +440,7 @@ def create_wrapped_env(
 
         dense_eval = True if (mode == "eval" or mode == "demo") else False
 
-        base_env = MetaworldImageEmbeddingWrapper(base_env, reward_model)
+        base_env = MetaworldImageEmbeddingWrapper(base_env, reward_model, policy_encoder)
 
         base_env = LearnedRewardWrapper(
             base_env,

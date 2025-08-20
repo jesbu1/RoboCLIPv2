@@ -10,7 +10,6 @@ import torch.nn.functional as F
 import clip
 
 from reward_model.models.rewind_one_step_transformer import ClassProgressTransformer
-from reward_model.models_full_pe import ClassProgressTransformer as ClassProgressTransformer_full_pe
 from reward_model.clip_utils import dino_load_image, mean_pooling
 from transformers import AutoTokenizer, AutoModel
 
@@ -197,10 +196,12 @@ class ReWiNDRewardModel(BaseRewardModel):
             # remove batch dimension for video_encoding_model not supported and then only
             encoded_texts = encoded_texts.squeeze(0)
             encoded_videos = encoded_videos.squeeze(0)
-
-            encoded_videos = self.padding_video(
-                encoded_videos, self.args.max_length
-            ).unsqueeze(0)
+            if self.args.normalize_embedding:
+                encoded_videos = normalize_embeddings(encoded_videos)
+            if self.args.subsample_video:
+                encoded_videos = self.padding_video(
+                    encoded_videos, self.args.max_length
+                ).unsqueeze(0)
             # TODO: add the processing for downsampling if needed @Yusen @Jiahui
             reward = (
                 model(encoded_videos.float(), encoded_texts.float())[0].cpu().numpy()

@@ -370,8 +370,11 @@ class LearnedRewardWrapper(gym.Wrapper):
 
         encoded_images = {}
         for i, key in enumerate(self.image_keys):
-            if f"image_feature_{i}" in obs:
-                encoded_images[key] = obs[f"image_feature_{i}"]
+            # 奖励计算只能使用奖励模型编码的特征
+            if f"reward_image_feature_{i}" in obs:
+                encoded_images[key] = obs[f"reward_image_feature_{i}"]
+            else:
+                raise KeyError(f"reward_image_feature_{i} not found in observation. Reward calculation requires reward model encoded features.")
 
         if self.reward_model.name == "dense" or self.dense_eval:
             reward = original_reward / self.reward_divisor
@@ -388,11 +391,14 @@ class LearnedRewardWrapper(gym.Wrapper):
             # Note: No reward divisor for sparse reward.
 
             return obs, sparse_reward, done, info
-
+        
         if encoded_images is not None:
             for i, key in enumerate(self.image_keys):
-                if f"image_feature_{i}" in obs:
-                    self.past_observations[key].append(obs[f"image_feature_{i}"])
+                # 奖励计算只能使用奖励模型编码的特征
+                if f"reward_image_feature_{i}" in obs:
+                    self.past_observations[key].append(obs[f"reward_image_feature_{i}"])
+                else:
+                    raise KeyError(f"reward_image_feature_{i} not found in observation. Reward calculation requires reward model encoded features.")
 
         assert self.reward_language_features is not None, (
             "Language features are None in the reward model"
@@ -410,8 +416,7 @@ class LearnedRewardWrapper(gym.Wrapper):
 
                 self.past_observations = {}
                 for key in self.image_keys:
-                    if f"image_feature_{key}" in obs:
-                        self.past_observations[key] = []
+                    self.past_observations[key] = []
             else:
                 reward = 0
 
@@ -430,6 +435,7 @@ class LearnedRewardWrapper(gym.Wrapper):
         return obs, reward, done, info
 
     def reset(self):
+        print(len(self.past_observations))
         self.past_observations = {}
         for key in self.image_keys:
             self.past_observations[key] = []
@@ -438,8 +444,11 @@ class LearnedRewardWrapper(gym.Wrapper):
         obs = self.env.reset()
 
         for i, key in enumerate(self.image_keys):
-            if f"image_feature_{i}" in obs:
-                self.past_observations[key].append(obs[f"image_feature_{i}"])
+            # 奖励计算只能使用奖励模型编码的特征
+            if f"reward_image_feature_{i}" in obs:
+                self.past_observations[key].append(obs[f"reward_image_feature_{i}"])
+            else:
+                raise KeyError(f"reward_image_feature_{i} not found in observation. Reward calculation requires reward model encoded features.")
 
         return obs
 
@@ -457,12 +466,15 @@ class FlattenDictObservationWrapper(gym.Wrapper):
 
         self.orig_obs_space = obs_space
 
-        image_feature_keys = [
-            key for key in obs_space.spaces.keys() if "image_feature" in key
+        # 策略输入只能使用策略编码器编码的图像特征
+        policy_image_keys = [
+            key for key in obs_space.spaces.keys() if "policy_image_feature" in key
         ]
-
-        # Sort the images keys in case there are multiple images
-        image_feature_keys = sorted(image_feature_keys)
+        
+        if policy_image_keys:
+            image_feature_keys = sorted(policy_image_keys)
+        else:
+            raise KeyError("policy_image_feature_* not found in observation space. Policy requires policy encoder encoded features.")
 
         # Get text keys "language_feature"
         lang_feature_key = (
@@ -491,6 +503,7 @@ class FlattenDictObservationWrapper(gym.Wrapper):
         self.lang_feature_key = lang_feature_key
         self.proprio_key = proprio_key
         self.image_feature_keys = sorted(image_feature_keys)
+
 
         self.observation_space = gym.spaces.Box(
             low=-1, high=1, shape=(total_concat_size,), dtype=np.float32
