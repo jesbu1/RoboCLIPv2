@@ -1,9 +1,7 @@
-# @package _global_
-
 reward_model: 
   name: 'liv'
   batch_size: 64
-  model_path: '/home/yusenluo/RoboCLIP_offline/RoboCLIPv2/models/reward_model/liv_model/snapshot_10000.pt'
+  model_path: '/scr2/yusenluo/RoboCLIPv2/models/reward_model/snapshot_10000.pt'
   success_bonus: 64.0
   reward_at_every_step: true
 
