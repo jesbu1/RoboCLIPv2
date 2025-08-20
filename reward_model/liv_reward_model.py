@@ -21,7 +21,7 @@ def normalize_embeddings(embeddings, return_tensor=True):
         return normalized_embeddings.detach().cpu().numpy()
 
 class LIVRewardModel(BaseRewardModel):
-    def __init__(self, model_load_path: str, device: str = 'cuda', batch_size=64, success_bonus: float = 10.0, reward_at_every_step: bool = False):
+    def __init__(self, model_load_path: str, device: str = 'cuda', batch_size=64, success_bonus: float = 10.0, reward_at_every_step: bool = False, use_pca: bool = False):
         """
         Initializes the LIV reward model.
         :param model_load_path: Path to the model checkpoint.
@@ -30,6 +30,7 @@ class LIVRewardModel(BaseRewardModel):
         :param reward_at_every_step: Whether to calculate rewards at every step (default: False).
         """
         super().__init__(device, batch_size, success_bonus=success_bonus)
+        self.use_pca = use_pca
         self.reward_at_every_step = reward_at_every_step
         self.pretrained_liv_model = self._load_model(model_load_path)
 
@@ -41,7 +42,9 @@ class LIVRewardModel(BaseRewardModel):
         :return: Loaded model.
         """
         #TODO: add support for loading the finetuned model
-        model = load_liv(model_load_path)
+        model = load_liv()
+        state_dict = torch.load(model_load_path)["liv"]
+        model.module.load_state_dict(state_dict)
         return model.to(self.device)
 
     def _encode_text_batch(self, text: List[str]) -> np.ndarray:
@@ -92,13 +95,15 @@ class LIVRewardModel(BaseRewardModel):
         # For LIV, we compute cosine similarity between text and the last video frame embedding
         # encoded_videos shape: (batch=1, T, dim)
         # encoded_texts shape: (batch=1, dim)
-        
+        #print(encoded_videos.shape)
+        # print(encoded_texts.shape)
         # Take the last frame embedding as the final state
         final_video_emb = encoded_videos[:, -1, :]  # (batch=1, dim)
         
         # Calculate cosine similarity
         similarities = F.cosine_similarity(final_video_emb, encoded_texts, dim=1)  # (batch=1,)
-        
+        #print(similarities)
+
         # Return as numpy array to match base class interface
         return similarities.detach().cpu().numpy()
 

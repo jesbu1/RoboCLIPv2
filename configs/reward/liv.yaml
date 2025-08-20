@@ -1,0 +1,17 @@
+# @package _global_
+
+reward_model: 
+  name: 'liv'
+  batch_size: 64
+  model_path: '/home/yusenluo/RoboCLIP_offline/RoboCLIPv2/models/reward_model/liv_model/snapshot_10000.pt'
+  success_bonus: 64.0
+  reward_at_every_step: true
+
+general_training:
+  dense_rewards_at_end: false
+  entropy_term: "auto"
+
+
+environment:
+  is_state_based: false
+  reward_image_key: 'image'

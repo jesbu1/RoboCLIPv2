@@ -3,7 +3,7 @@ import numpy as np
 
 import abc
 from typing import Union
-from models.reward_model.base_reward_model import BaseRewardModel
+from reward_model.base_reward_model import BaseRewardModel
 import requests
 import pickle
 import base64
