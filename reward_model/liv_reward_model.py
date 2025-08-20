@@ -21,19 +21,16 @@ def normalize_embeddings(embeddings, return_tensor=True):
         return normalized_embeddings.detach().cpu().numpy()
 
 class LIVRewardModel(BaseRewardModel):
-    def __init__(self, model_load_path: str, use_pca: bool, attention_heads: int, pca_model_dir: str = None, device: str = 'cuda', batch_size=64, success_bonus: float = 10.0):
+    def __init__(self, model_load_path: str, device: str = 'cuda', batch_size=64, success_bonus: float = 10.0, reward_at_every_step: bool = False):
         """
         Initializes the LIV reward model.
         :param model_load_path: Path to the model checkpoint.
-        :param use_pca: Whether to use PCA for the video embeddings.
-        :param attention_heads: Number of attention heads to use in the transformer model.
-        :param pca_model_dir: Path to the PCA model checkpoint directory where the `pca_text.pkl` and `pca_video.pkl` files are located.
         :param device: Device to run the model on (default: 'cuda').
         :param batch_size: Batch size to use for encoding data (default: 64).
+        :param reward_at_every_step: Whether to calculate rewards at every step (default: False).
         """
         super().__init__(device, batch_size, success_bonus=success_bonus)
-        self.use_pca = use_pca
-        self.attention_heads = attention_heads
+        self.reward_at_every_step = reward_at_every_step
         self.pretrained_liv_model = self._load_model(model_load_path)
 
 
@@ -44,7 +41,7 @@ class LIVRewardModel(BaseRewardModel):
         :return: Loaded model.
         """
         #TODO: add support for loading the finetuned model
-        model = load_liv()
+        model = load_liv(model_load_path)
         return model.to(self.device)
 
     def _encode_text_batch(self, text: List[str]) -> np.ndarray:
@@ -79,7 +76,31 @@ class LIVRewardModel(BaseRewardModel):
         :param encoded_videos: Encoded video representations.
         :return: Reward values for each text-video pair.
         """
-        pass
+        # Accept both numpy and torch tensors
+        if isinstance(encoded_texts, np.ndarray):
+            encoded_texts = torch.tensor(encoded_texts, dtype=torch.float32, device=self.device)
+        if isinstance(encoded_videos, np.ndarray):
+            encoded_videos = torch.tensor(encoded_videos, dtype=torch.float32, device=self.device)
+
+        # Shapes:
+        #   encoded_texts: (batch, 1, text_dim) or (batch, text_dim)
+        #   encoded_videos: (batch, T, img_dim)
+        if encoded_texts.dim() == 3:
+            encoded_texts = encoded_texts.squeeze(1)
+
+        assert encoded_videos.dim() == 3, "encoded_videos should be (batch, T, dim)"
+        # For LIV, we compute cosine similarity between text and the last video frame embedding
+        # encoded_videos shape: (batch=1, T, dim)
+        # encoded_texts shape: (batch=1, dim)
+        
+        # Take the last frame embedding as the final state
+        final_video_emb = encoded_videos[:, -1, :]  # (batch=1, dim)
+        
+        # Calculate cosine similarity
+        similarities = F.cosine_similarity(final_video_emb, encoded_texts, dim=1)  # (batch=1,)
+        
+        # Return as numpy array to match base class interface
+        return similarities.detach().cpu().numpy()
 
     @property
     def img_output_dim(self) -> int:
