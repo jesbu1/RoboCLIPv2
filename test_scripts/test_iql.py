@@ -55,6 +55,7 @@ from reward_model.roboclip_reward_model import RoboclipRewardModel
 from reward_model.vlc_reward_model import VLCRewardModel
 from reward_model.roboclipv2_reward_model import RoboclipV2RewardModel
 from reward_model.rewind_reward_model import ReWiNDRewardModel
+from reward_model.liv_reward_model import LIVRewardModel
 
 from reward_model.env_reward_model import EnvRewardModel
 from stable_baselines3.common.logger import configure
@@ -152,6 +153,15 @@ def parse_reward_model(reward_cfg: DictConfig) -> BaseRewardModel:
         reward_model = ReWiNDRewardModel(
             model_path,
             camera_names=reward_cfg.camera_names,
+            batch_size=reward_cfg.batch_size,
+            success_bonus=reward_cfg.success_bonus,
+            reward_at_every_step=reward_cfg.reward_at_every_step,
+        )
+    elif reward_string == "liv":
+        # turn from local to absolute path
+        model_path = to_absolute_path(reward_cfg.model_path)
+        reward_model = LIVRewardModel(
+            model_path,
             batch_size=reward_cfg.batch_size,
             success_bonus=reward_cfg.success_bonus,
             reward_at_every_step=reward_cfg.reward_at_every_step,
