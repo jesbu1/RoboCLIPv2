@@ -264,6 +264,7 @@ class LearnedRewardWrapper(gym.Wrapper):
         env: gym.Env,
         reward_model: BaseRewardModel,
         language_features: th.Tensor,
+        text_instruction: str = None,
         is_state_based: bool = False,
         dense_eval: bool = False,
     ):
@@ -282,7 +283,24 @@ class LearnedRewardWrapper(gym.Wrapper):
         self.reward_at_every_step = self.reward_model.reward_at_every_step
         self.reward_divisor = self.reward_model.reward_divisor
 
-        if language_features is not None:
+        # 策略使用的语言特征 (384维MiniLM，用于LanguageWrapper)
+        self.policy_language_features = language_features
+        
+        # 奖励计算使用的语言特征 (需要用奖励模型重新编码)
+        if text_instruction is not None:
+            # 使用奖励模型编码文本 (对于LIV是1024维)
+            with th.no_grad():
+                reward_lang_feat = self.reward_model.encode_text([text_instruction]).squeeze()
+            self.reward_language_features = (
+                th.Tensor(reward_lang_feat)
+                .float()
+                .to(self.reward_model.device)
+                .unsqueeze(0)
+                .unsqueeze(0)
+            )
+        elif language_features is not None:
+            # 如果没有原始文本，尝试使用传入的特征（可能需要适配）
+            print("Warning: Using policy language features for reward calculation. This may cause dimension mismatch for some reward models.")
             self.reward_language_features = (
                 th.Tensor(language_features)
                 .float()
@@ -295,6 +313,7 @@ class LearnedRewardWrapper(gym.Wrapper):
             print(
                 "This may be valid if the user is using sparse/dense reward in a single task"
             )
+            self.reward_language_features = None
 
         # update the observation space to have image_feature_*
         self.observation_space = self.env.observation_space
@@ -435,7 +454,6 @@ class LearnedRewardWrapper(gym.Wrapper):
         return obs, reward, done, info
 
     def reset(self):
-        print(len(self.past_observations))
         self.past_observations = {}
         for key in self.image_keys:
             self.past_observations[key] = []

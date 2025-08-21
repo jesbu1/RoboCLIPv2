@@ -39,7 +39,7 @@ model:
 
 offline_training:
   offline_training_steps: 100000
-  ckpt_path: null #"/scr2/yusenluo/RoboCLIPv2/models/reward_model/pretrained_liv/liv_rlpd_button-press-wall-v2_reproduce_action_chunk_liv/last_offline" #"/home/yusenluo/RoboCLIP_offline/RoboCLIPv2/outputs/2025-08-19/20-26-42/logs/liv_rlpd_button-press-wall-v2_reproduce_action_chunk_liv/last_offline"
+  ckpt_path: "/scr2/yusenluo/RoboCLIPv2/outputs/2025-08-20/23-14-31/logs/liv_rlpd_button-press-wall-v2_reproduce_action_chunk_liv/last_offline" #"/home/yusenluo/RoboCLIP_offline/RoboCLIPv2/outputs/2025-08-19/20-26-42/logs/liv_rlpd_button-press-wall-v2_reproduce_action_chunk_liv/last_offline"
   #"/home/yusenluo/RoboCLIP_offline/RoboCLIPv2/outputs/2025-06-28/10-39-12/logs/rewind_rlpd_button-press-wall-v2_entropy_auto_layer_norm_False_rebuttal_flint/last_offline"
   #"/home/yusenluo/RoboCLIP_offline/RoboCLIPv2/outputs/2025-06-30/23-36-17/logs/rewind_rlpd_button-press-wall-v2_rebuttal_flint_full_pe_ablation/last_offline" #full pe ablation
    #"/home/yusenluo/RoboCLIP_offline/RoboCLIPv2/outputs/2025-06-30/21-15-21/logs/rewind_rlpd_button-press-wall-v2_rebuttal_flint_5_task_ablation/last_offline" # 5 task ablation

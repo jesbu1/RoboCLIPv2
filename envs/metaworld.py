@@ -368,6 +368,7 @@ def create_wrapped_env(
     reward_model,
     pca_model=None,
     language_features=None,
+    text_instruction=None,
     use_time=False,
     monitor=False,
     goal_observable=False,
@@ -447,10 +448,11 @@ def create_wrapped_env(
             reward_model,
             is_state_based=is_state_based,
             language_features=language_features,
+            text_instruction=text_instruction,
             dense_eval=dense_eval,
         )
 
-        # This adds the language features to the observation
+        # This adds the language features to the observation (策略用的语言特征)
         if language_features is not None:
             base_env = LanguageWrapper(base_env, language_features)
 
