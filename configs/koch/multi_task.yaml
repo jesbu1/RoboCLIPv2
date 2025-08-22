@@ -25,8 +25,8 @@ environment:
   # text_instruction: "Put the blue cup in the box"
   # text_instruction: "separate the red and green cups" # unseen task
   # text_instruction: "Separate the blue and red cups"
-  text_instruction: "Put the fruit-colored object in the box"
-  policy_text_instruction: "Put the fruit-colored object in the box"
+  text_instruction: "Put the orange cup in the red plate"
+  policy_text_instruction: "Put the orange cup in the red plate"
   n_envs: 1
   train_freq_num: 1
   train_freq_type: 'episode'
@@ -34,6 +34,7 @@ environment:
   image_keys: ['observation.images.main', 'observation.images.side']
   max_episode_steps: 250
   use_proprio: true
+  reward_image_key: 'observation.images.main'
 
 online_training:
   total_time_steps: 50000

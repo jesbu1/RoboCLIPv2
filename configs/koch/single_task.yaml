@@ -7,11 +7,11 @@ defaults:
 offline_training:
   offline_h5_path: "data/real_robot/updated_trajs/usc_koch_rewind_{0}_{1}.h5"
   reward_at_every_step: false
-  offline_tasks: ["separate the orange and blue cups"]
+  offline_tasks: ["fold the blue towel"]
 
 environment:
   cfg_name: "koch_single_task"
-  text_instruction: "separate the orange and blue cups" # seen task
+  text_instruction: "fold the blue towel" # seen task
   # text_instruction: "separate the red and green cups" # unseen task
   n_envs: 1
   train_freq_num: 1
