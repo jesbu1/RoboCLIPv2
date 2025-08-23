@@ -427,7 +427,8 @@ class LearnedRewardWrapper(gym.Wrapper):
 
             else:
                 obs = encoded_image
-        # self.past_observations.append(encoded_image)
+        self.past_observations.append(encoded_image)
+        self.raw_observations.append(image_for_model)
         wandb.log({"train/total_success_bonus": self.total_success_bonus})
         self.total_success_bonus = 0
         return obs
