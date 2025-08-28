@@ -1,4 +1,4 @@
-train_gt_annotation = {
+TRAIN_GT_ANN = {
         "button-press-v2": "Pressing the button from side",
         "button-press-topdown-wall-v2": "Pressing the button from top",
         "coffee-pull-v2": "Pulling the coffee cup",
@@ -9,7 +9,7 @@ train_gt_annotation = {
         "faucet-open-v2": "Opening the faucet",
         "handle-press-v2": "Pressing the handle",
         "handle-pull-side-v2": "Pulling the handle up from the side",
-        "peg-insert-v2": "Inserting the peg",
+        "peg-insert-side-v2": "Inserting the peg from the side",
         "pick-place-v2": "Picking up the block and placing it to the goal position",
         "plate-slide-v2": "Sliding the plate into the gate",
         "plate-slide-back-side-v2": "Sliding the plate out of the gate from the side",
@@ -21,7 +21,7 @@ train_gt_annotation = {
         "hand-insert-v2": "Picking up the block and insert it into the hole",
 }
 
-eval_gt_annotation = {
+EVAL_GT_ANN = {
         "button-press-wall-v2": "Pressing the button from side",
         "button-press-topdown-v2": "Pressing the button from top",
         "coffee-push-v2": "Pushing the coffee cup",
@@ -43,7 +43,7 @@ eval_gt_annotation = {
         "sweep-into-v2": "Sweeping the block into the hole",
 }
 
-generated_gt_annotation = {
+GENERATE_TRAIN_ANN = {
     "button-press-v2":[
         "Pressing the button from the side",
         "Pressing the red button",
