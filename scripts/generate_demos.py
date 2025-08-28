@@ -1,5 +1,6 @@
 import os
 import functools
+import sys
 
 import cv2
 import numpy as np
@@ -11,8 +12,9 @@ from tests.metaworld.envs.mujoco.sawyer_xyz.test_scripted_policies import (
 import imageio
 from tqdm import tqdm
 import h5py
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
-from envs.metaworld_envs.metaworld import create_wrapped_env, environment_to_instruction
+# from envs.metaworld_envs.metaworld import create_wrapped_env, environment_to_instruction
 
 resolution = (640, 480)
 camera = "corner2"  # one of ['corner', 'topview', 'behindGripper', 'gripperPOV']
@@ -111,12 +113,13 @@ def main():
     config_range = (0, len(config))
 
     base_path = "./data/h5_buffers/orig/"
+    base_path = "./"
     if not os.path.exists(base_path):
         os.makedirs(base_path)
 
-    print("Path is", os.path.join(base_path, f"metaworld_traj_{collect_num}_demos.h5"))
+    print("Path is", os.path.join(base_path, f"metaworld_traj_{collect_num}_demos_new.h5"))
     h5_traj = h5py.File(
-        os.path.join(base_path, f"metaworld_traj_{collect_num}_demos.h5"), "w"
+        os.path.join(base_path, f"metaworld_traj_{collect_num}_demos_new.h5"), "w"
     )
     # h5_video = h5py.File(os.path.join(base_path, 'metaworld_window_video.h5'), 'w')
 
@@ -151,15 +154,15 @@ def main():
 
         for i in range(collect_num + 10):
             # env = ALL_ENVS[env_name]()
-            env = create_wrapped_env(
-                env_name,
-                reward_model=None,
-                language_features=None,
-                success_bonus=False,
-                is_state_based=True,
-                goal_observable=True,
-                mode="demo",
-            )()
+            # env = create_wrapped_env(
+            #     env_name,
+            #     reward_model=None,
+            #     # language_features=None,
+            #     success_bonus=False,
+            #     is_state_based=True,
+            #     goal_observable=True,
+            #     mode="demo",
+            # )()
             # breakpoint()
             env = env.base_env
             env._partially_observable = False
@@ -245,6 +248,7 @@ def main():
                 ).astype("S")
                 h5_traj[str(demo_number)]["img"] = np.array(imgs)
                 demo_number += 1
+                import pdb ; pdb.set_trace()
 
             if success_num > collect_num:
                 break

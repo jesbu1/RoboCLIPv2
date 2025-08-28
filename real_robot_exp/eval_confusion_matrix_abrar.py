@@ -48,7 +48,7 @@ def normalize_embeddings(embeddings, return_tensor=True):
     else:
         return normalized_embeddings.detach().cpu().numpy()
 
-def plot_matrix_as_image(matrix, names, set, text, prob = False, org_progress = False):
+def plot_matrix_as_image(matrix, names, set, text, prob = False, org_progress = False, binary_threshold = 0.5, epoch = None):
     # Create a figure and axis
     # only keep 2 decimal points
     matrix = np.round(matrix, 2)
@@ -87,12 +87,20 @@ def plot_matrix_as_image(matrix, names, set, text, prob = False, org_progress = 
     # plt.savefig(buf, format='png')
     # buf.seek(0)
     # image = Image.open(buf)
-    if prob:
-        wandb.log({f"confusion_matrix_same_class_prob/{set}_prob_confusion_matrix": wandb.Image(fig)})
-    elif org_progress:
-        wandb.log({f"confusion_matrix_org_progress_no_two_step/{set}_original_progress_confusion_matrix": wandb.Image(fig)})
+    if epoch is not None:
+        if prob:
+            wandb.log({f"confusion_matrix_same_class_prob_thrd_{binary_threshold}/{set}_prob_confusion_matrix": wandb.Image(fig, caption=f"Epoch: {epoch}")})
+        elif org_progress:
+            wandb.log({f"confusion_matrix_org_progress_no_two_step/{set}_thrd_{binary_threshold}_original_progress_confusion_matrix": wandb.Image(fig, caption=f"Epoch: {epoch}")})
+        else:
+            wandb.log({f"confusion_matrix_thrd_{binary_threshold}/{set}_confusion_matrix": wandb.Image(fig, caption=f"Epoch: {epoch}")})
     else:
-        wandb.log({f"confusion_matrix/{set}_confusion_matrix": wandb.Image(fig)})
+        if prob:
+            wandb.log({f"confusion_matrix_same_class_prob_thrd_{binary_threshold}/{set}_prob_confusion_matrix": wandb.Image(fig)})
+        elif org_progress:
+            wandb.log({f"confusion_matrix_org_progress_no_two_step/{set}_thrd_{binary_threshold}_original_progress_confusion_matrix": wandb.Image(fig)})
+        else:
+            wandb.log({f"confusion_matrix_thrd_{binary_threshold}/{set}_confusion_matrix": wandb.Image(fig)})
     # plt.savefig(f"confusion_matrix_{set}.pdf", bbox_inches="tight")
     plt.close(fig)  # Close the figure to free memory
 
@@ -101,7 +109,7 @@ def plot_matrix_as_image(matrix, names, set, text, prob = False, org_progress = 
 
 
 
-def plot_confusion_matrix(h5_file, set, self_attention_model, args):
+def plot_confusion_matrix(h5_file, set, self_attention_model, args, binary_threshold = 0.5, epoch = None):
     device = next(self_attention_model.parameters()).device
 
     keys = list(h5_file.keys())
@@ -156,7 +164,7 @@ def plot_confusion_matrix(h5_file, set, self_attention_model, args):
             pred_class = pred_class[:, -1].squeeze()
             progress_org_list.append(pred_class.clone().cpu().detach().numpy())
             two_step_prob = two_step_class.clone().float().squeeze()
-            two_step_class = two_step_class.squeeze() > args.binary_threshold
+            two_step_class = two_step_class.squeeze() > binary_threshold
 
             pred_class = pred_class * two_step_class.squeeze()
 
@@ -177,11 +185,11 @@ def plot_confusion_matrix(h5_file, set, self_attention_model, args):
     predicted_progress_row = np.array(predicted_progress_row)
     if args.two_step_training:
         pred_two_step_prob_list = np.array(pred_two_step_prob_list)
-        img = plot_matrix_as_image(predicted_progress_row, eval_envs, set, text_list, prob = False)
-        img1 = plot_matrix_as_image(pred_two_step_prob_list, eval_envs, set, text_list, prob = True)
-        img2 = plot_matrix_as_image(pred_org_progress_list, eval_envs, set, text_list, prob = False, org_progress = True)
+        img = plot_matrix_as_image(predicted_progress_row, eval_envs, set, text_list, prob = False, binary_threshold = binary_threshold, epoch = epoch)
+        img1 = plot_matrix_as_image(pred_two_step_prob_list, eval_envs, set, text_list, prob = True, binary_threshold = binary_threshold, epoch = epoch)
+        # img2 = plot_matrix_as_image(pred_org_progress_list, eval_envs, set, text_list, prob = False, org_progress = True, binary_threshold = binary_threshold)
     else:
-        img = plot_matrix_as_image(predicted_progress_row, eval_envs, set, text_list, prob = False)    
+        img = plot_matrix_as_image(predicted_progress_row, eval_envs, set, text_list, prob = False, epoch=epoch)
 
 
 

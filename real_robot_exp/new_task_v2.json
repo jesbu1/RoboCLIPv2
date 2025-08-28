@@ -10,6 +10,7 @@
         "faucet-open-v2",
         "handle-press-v2",
         "handle-pull-side-v2",
+        "peg-insert-side-v2",
         "pick-place-v2",
         "plate-slide-v2",
         "plate-slide-back-side-v2",
@@ -39,8 +40,7 @@
         "reach-wall-v2",
         "soccer-v2",
         "window-close-v2",
-        "sweep-into-v2" ,
-        "door-unlock-v2"
+        "sweep-into-v2"
 
     ]
 }
