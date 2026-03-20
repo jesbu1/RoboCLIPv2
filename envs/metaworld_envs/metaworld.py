@@ -198,7 +198,7 @@ class MetaworldBase(Env):
         Returns:
             observation (object): the current observation
         """
-        return self.base_env.render()
+        return self.base_env.render(mode=mode)
 
     # def warm_up_run(self):
     #     self.env.reset()
