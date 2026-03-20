@@ -167,12 +167,16 @@ class LearnedRewardWrapper(gym.Wrapper):
         is_state_based: bool = False,
         dense_eval: bool = False,
         use_proprio: bool = False,
+        use_progress_diff: bool = False,
     ):
         super(LearnedRewardWrapper, self).__init__(env)
         self.reward_model = reward_model
         self.image_encoder = encoder
         self.is_state_based = is_state_based
         self.use_proprio = use_proprio
+        # Progress diff mode: use reward = P(s') - P(s) instead of P(s)
+        self.use_progress_diff = use_progress_diff
+        self.prev_progress = None
         # Use absolute path
         self.video_dir = os.path.abspath("videos")
         if not os.path.exists(self.video_dir):
@@ -330,14 +334,25 @@ class LearnedRewardWrapper(gym.Wrapper):
                 )).unsqueeze(0)
                 # print(f"stacked_sequence shape: {stacked_sequence.shape}") # (1, 1, 1024)
 
-            reward = self.reward_model.calculate_rewards(
+            current_progress = self.reward_model.calculate_rewards(
                 self.reward_language_features, stacked_sequence
             )
 
-            if isinstance(reward, th.Tensor):
-                reward = reward.detach().cpu().numpy().item()
-            # print(f"reward: {reward}")
-            wandb.log({"train/learned_reward_per_step": reward})
+            if isinstance(current_progress, th.Tensor):
+                current_progress = current_progress.detach().cpu().numpy().item()
+
+            if self.use_progress_diff:
+                # Progress diff mode: reward = P(s') - P(s)
+                if self.prev_progress is not None:
+                    reward = current_progress - self.prev_progress
+                else:
+                    reward = 0.0  # First step after reset, no diff available
+                self.prev_progress = current_progress
+                wandb.log({"train/learned_reward_per_step": reward, "train/progress": current_progress})
+            else:
+                # Original mode: reward = P(s)
+                reward = current_progress
+                wandb.log({"train/learned_reward_per_step": reward})
             # print(f"reward : {reward}")
             # exit()
         else:
@@ -412,6 +427,7 @@ class LearnedRewardWrapper(gym.Wrapper):
         # print(len(self.raw_observations))
         self.raw_observations = []
         self.counter = 0
+        self.prev_progress = None
         obs = self.env.reset()
 
         # This is for the reward function
@@ -431,6 +447,20 @@ class LearnedRewardWrapper(gym.Wrapper):
         self.raw_observations.append(image_for_model)
         wandb.log({"train/total_success_bonus": self.total_success_bonus})
         self.total_success_bonus = 0
+
+        # Compute initial progress for diff mode
+        if self.use_progress_diff and self.reward_at_every_step:
+            if self.reward_model.name == "RewindRewardModel":
+                stacked_sequence = np.stack(self.past_observations, axis=0)
+                stacked_sequence = (
+                    th.from_numpy(stacked_sequence).float().to(self.reward_model.device)
+                ).unsqueeze(0)
+                initial_progress = self.reward_model.calculate_rewards(
+                    self.reward_language_features, stacked_sequence
+                )
+                if isinstance(initial_progress, th.Tensor):
+                    initial_progress = initial_progress.detach().cpu().numpy().item()
+                self.prev_progress = initial_progress
         return obs
 
 

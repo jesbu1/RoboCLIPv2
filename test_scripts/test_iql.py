@@ -492,6 +492,9 @@ def create_envs(cfg: DictConfig, reward_model: BaseRewardModel, image_encoder):
     # 
     ignore_language = env_config.ignore_language
 
+    # Get use_progress_diff from config (default to False if not specified)
+    use_progress_diff = cfg.reward_model.get("use_progress_diff", False)
+
     # Define envs (dummy example for illustration)
     # assert env_config.n_envs == 4, "Number of environments should be 4."
     if env_config.n_envs > 1:
@@ -511,6 +514,7 @@ def create_envs(cfg: DictConfig, reward_model: BaseRewardModel, image_encoder):
                     dense_rewards_at_end=cfg.general_training.dense_rewards_at_end,
                     normalize_reward=cfg.general_training.normalize_reward,
                     terminate_on_success=cfg.general_training.terminate_on_success,
+                    use_progress_diff=use_progress_diff,
                 )
                 for _ in range(env_config.n_envs)
             ]
@@ -534,6 +538,7 @@ def create_envs(cfg: DictConfig, reward_model: BaseRewardModel, image_encoder):
                     dense_rewards_at_end=cfg.general_training.dense_rewards_at_end,
                     normalize_reward=cfg.general_training.normalize_reward,
                     terminate_on_success=cfg.general_training.terminate_on_success,
+                    use_progress_diff=use_progress_diff,
                 )
             ]
         )
@@ -554,6 +559,7 @@ def create_envs(cfg: DictConfig, reward_model: BaseRewardModel, image_encoder):
                     use_proprio=env_config.use_proprio,
                     normalize_reward=cfg.general_training.normalize_reward,
                     terminate_on_success=cfg.general_training.terminate_on_success,
+                    use_progress_diff=use_progress_diff,
                 )
                 for i in range(1)
             ]
@@ -574,6 +580,7 @@ def create_envs(cfg: DictConfig, reward_model: BaseRewardModel, image_encoder):
                     use_proprio=env_config.use_proprio,
                     normalize_reward=cfg.general_training.normalize_reward,
                     terminate_on_success=cfg.general_training.terminate_on_success,
+                    use_progress_diff=use_progress_diff,
                 )
             ]
         )  # KitchenEnvDenseOriginalReward(time=True)
