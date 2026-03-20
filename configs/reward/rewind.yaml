@@ -3,7 +3,7 @@
 reward_model: 
   name: 'rewind'
   batch_size: 64
-  model_path: '/scr2/yusenluo/RoboCLIPv2/models/reward_model/rewind_model/model_27.pth'
+  model_path: '/project2/biyik_1165/haobaizh/rewind_valuemodel/checkpoints/rewind_metaworld_epoch_19.pth'
   use_pca: false
   success_bonus: 200
   reward_divisor: 1
