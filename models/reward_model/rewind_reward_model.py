@@ -168,9 +168,9 @@ class RewindRewardModel(BaseRewardModel):
         """
         # print(f"encoded_texts.shape: {encoded_texts.shape}, encoded_videos.shape: {encoded_videos.shape}")
         # TODO: add the processing for downsampling if needed @Yusen @Jiahui
-        if self.model_args.normalize_embedding:
+        if getattr(self.model_args, 'normalize_embedding', False):
             encoded_videos = self.normalize_embeddings(encoded_videos)
-        if self.model_args.subsample_video:
+        if getattr(self.model_args, 'subsample_video', True):
             processed_video_embedding = self.sample_embedding_frames(
                 encoded_videos.squeeze(0), self.model_args.max_length
             ).unsqueeze(0)
