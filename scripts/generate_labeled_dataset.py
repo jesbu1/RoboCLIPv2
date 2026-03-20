@@ -219,8 +219,10 @@ def label_trajectories(args, rewind_model, traj_h5, embedding_h5):
 
                 save_lang = lang_emb.repeat(num_steps, 1).cpu().numpy()
 
+                # state/action/done are T, img is T+1 (extra initial frame)
+                # img_embeddings[:-1] gives T embeddings corresponding to s_t
                 # Write to output H5
-                out["state"][current:current + num_steps] = save_states[:-1]
+                out["state"][current:current + num_steps] = save_states
                 out["action"][current:current + num_steps] = save_actions
                 out["done"][current:current + num_steps] = save_dones
                 out["rewards"][current:current + num_steps] = save_rewards
