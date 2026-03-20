@@ -50,16 +50,10 @@ from offline_rl_algorithms.callbacks import CustomWandbCallback, OfflineEvalCall
 # from models.reward_model.xclip_encoder import XCLIPEncoder
 # from models.reward_model import image_encoders
 
-from models.encoders.liv_encoder import LIVEncoder
-
 from models.reward_model.base_reward_model import BaseRewardModel
-from models.reward_model.roboclip_reward_model import RoboclipRewardModel
-from models.reward_model.vlc_reward_model import VLCRewardModel
 from models.reward_model.rewind_reward_model import RewindRewardModel
-from models.reward_model.gvl_reward_model import GVLRewardModel
 from models.encoders.dino_miniLM_encoder import Dino_miniLM_Encoder
 from models.reward_model.env_reward_model import EnvRewardModel
-from models.reward_model.liv_reward_model import LIVRewardModel
 
 from envs.metaworld_envs.metaworld import (
     create_wrapped_env,
@@ -149,12 +143,14 @@ def parse_reward_model(reward_cfg: DictConfig) -> BaseRewardModel:
     if reward_string is None:
         return None
     if reward_string == "roboclip":
+        from models.reward_model.roboclip_reward_model import RoboclipRewardModel
         reward_model = RoboclipRewardModel(
             model_load_path=reward_cfg.model_path,
             batch_size=reward_cfg.batch_size,
             success_bonus=reward_cfg.success_bonus,
         )
     elif reward_string == "vlc":
+        from models.reward_model.vlc_reward_model import VLCRewardModel
         reward_model = VLCRewardModel(
             server_url=reward_cfg.server_url,
             batch_size=reward_cfg.batch_size,
@@ -162,6 +158,7 @@ def parse_reward_model(reward_cfg: DictConfig) -> BaseRewardModel:
             reward_at_every_step=reward_cfg.reward_at_every_step,
         )
     elif reward_string == "gvl":
+        from models.reward_model.gvl_reward_model import GVLRewardModel
         reward_model = GVLRewardModel(
             batch_size=reward_cfg.batch_size,
             success_bonus=reward_cfg.success_bonus,
@@ -178,6 +175,7 @@ def parse_reward_model(reward_cfg: DictConfig) -> BaseRewardModel:
             reward_at_every_step=reward_cfg.reward_at_every_step,
         )
     elif reward_string == "liv":
+        from models.reward_model.liv_reward_model import LIVRewardModel
         reward_model = LIVRewardModel(
             model_load_path=reward_cfg.model_path,
             use_pca=reward_cfg.use_pca,

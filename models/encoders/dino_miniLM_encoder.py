@@ -6,9 +6,6 @@ import numpy as np
 import joblib
 from typing import List, Union
 import torch.nn.functional as F
-from models.reward_model.self_attention_utils import MultiHeadAttentionSubtraction, MultiHeadAttention
-from liv import load_liv
-import clip
 from transformers import AutoTokenizer, AutoModel
 from PIL import Image
 import torchvision.transforms as T
