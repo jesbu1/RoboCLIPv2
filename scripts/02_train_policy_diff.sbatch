@@ -26,7 +26,7 @@ export LD_PRELOAD="$(g++ -print-file-name=libstdc++.so.6)"
 export MUJOCO_GL=egl
 export MUJOCO_PY_MUJOCO_PATH="$HOME/.mujoco/mujoco210"
 GCC_LIBDIR="$(dirname "$(g++ -print-file-name=libstdc++.so.6)")"
-export LD_LIBRARY_PATH="${GCC_LIBDIR}:$HOME/.mujoco/mujoco210/bin:${LD_LIBRARY_PATH}"
+export LD_LIBRARY_PATH="${GCC_LIBDIR}:$HOME/.mujoco/mujoco210/bin:/usr/lib/nvidia:${LD_LIBRARY_PATH}"
 
 export WANDB_CONFIG_DIR="$HOME/.config/wandb"
 export WANDB_CACHE_DIR="$HOME/.cache/wandb"
