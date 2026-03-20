@@ -6,10 +6,6 @@ import numpy as np
 import joblib
 from typing import List, Union
 import torch.nn.functional as F
-from models.reward_model.self_attention_utils import MultiHeadAttentionSubtraction, MultiHeadAttention
-from models.reward_model.liv_reward_model import LIVRewardModel
-from liv import load_liv
-import clip
 from models.encoders.dino_miniLM_encoder import Dino_miniLM_Encoder
 import torch.nn as nn
 
