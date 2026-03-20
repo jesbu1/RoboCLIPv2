@@ -199,7 +199,7 @@ class MetaworldBase(Env):
             observation (object): the current observation
         """
         if mode == "rgb_array":
-            return self.base_env.env.sim.render(640, 480, mode="offscreen", camera_name="corner")[::-1]
+            return self.base_env.env.sim.render(640, 480, mode="offscreen", camera_name="corner")[::-1].copy()
         return self.base_env.render()
 
     # def warm_up_run(self):
