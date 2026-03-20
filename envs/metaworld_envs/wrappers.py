@@ -168,14 +168,16 @@ class LearnedRewardWrapper(gym.Wrapper):
         dense_eval: bool = False,
         use_proprio: bool = False,
         use_progress_diff: bool = False,
+        diff_gamma: float = 1.0,
     ):
         super(LearnedRewardWrapper, self).__init__(env)
         self.reward_model = reward_model
         self.image_encoder = encoder
         self.is_state_based = is_state_based
         self.use_proprio = use_proprio
-        # Progress diff mode: use reward = P(s') - P(s) instead of P(s)
+        # Progress diff mode: use reward = gamma * P(s') - P(s) instead of P(s)
         self.use_progress_diff = use_progress_diff
+        self.diff_gamma = diff_gamma
         self.prev_progress = None
         # Use absolute path
         self.video_dir = os.path.abspath("videos")
@@ -342,9 +344,9 @@ class LearnedRewardWrapper(gym.Wrapper):
                 current_progress = current_progress.detach().cpu().numpy().item()
 
             if self.use_progress_diff:
-                # Progress diff mode: reward = P(s') - P(s)
+                # Progress diff mode: reward = gamma * P(s') - P(s)
                 if self.prev_progress is not None:
-                    reward = current_progress - self.prev_progress
+                    reward = self.diff_gamma * current_progress - self.prev_progress
                 else:
                     reward = 0.0  # First step after reset, no diff available
                 self.prev_progress = current_progress

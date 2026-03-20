@@ -250,6 +250,7 @@ def create_wrapped_env(
     normalize_reward=False,
     terminate_on_success=False,
     use_progress_diff=False,
+    diff_gamma=1.0,
 ):
     """
     Creates a wrapped MetaWorld environment with the given options.
@@ -316,6 +317,7 @@ def create_wrapped_env(
                 dense_eval=dense_eval,
                 use_proprio=use_proprio,
                 use_progress_diff=use_progress_diff,
+                diff_gamma=diff_gamma,
             )
 
         # This adds the language features to the observation

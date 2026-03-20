@@ -38,10 +38,19 @@ srun python -u scripts/generate_labeled_dataset.py \
   --reward_model_path $REWIND_BASE/checkpoints/rewind_metaworld_epoch_19.pth \
   --output_path datasets/metaworld_labeled.h5
 
-# Generate diff reward P(s')-P(s)
+# Generate diff reward P(s')-P(s)  (gamma=1.0)
 srun python -u scripts/generate_labeled_dataset.py \
   --h5_video_path $REWIND_BASE/datasets/metaworld_generation.h5 \
   --h5_embedding_path $REWIND_BASE/datasets/metaworld_embeddings_train.h5 \
   --reward_model_path $REWIND_BASE/checkpoints/rewind_metaworld_epoch_19.pth \
   --output_path datasets/metaworld_labeled_diff.h5 \
   --use_progress_diff
+
+# Generate diff reward 0.99*P(s')-P(s)  (gamma=0.99, proper PBRS)
+srun python -u scripts/generate_labeled_dataset.py \
+  --h5_video_path $REWIND_BASE/datasets/metaworld_generation.h5 \
+  --h5_embedding_path $REWIND_BASE/datasets/metaworld_embeddings_train.h5 \
+  --reward_model_path $REWIND_BASE/checkpoints/rewind_metaworld_epoch_19.pth \
+  --output_path datasets/metaworld_labeled_diff_gamma099.h5 \
+  --use_progress_diff \
+  --diff_gamma 0.99
