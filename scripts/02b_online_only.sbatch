@@ -4,7 +4,7 @@
 #SBATCH --partition=gpu
 #SBATCH --gres=gpu:1
 #SBATCH --cpus-per-task=4
-#SBATCH --mem=48G
+#SBATCH --mem=16G
 #SBATCH --time=12:00:00
 #SBATCH --output=/project2/biyik_1165/haobaizh/rewind_no-action-chunk/logs/%x_%A_%a.out
 #SBATCH --error=/project2/biyik_1165/haobaizh/rewind_no-action-chunk/logs/%x_%A_%a.err
