@@ -64,7 +64,7 @@ LOG_DIR="logs/${ENV_ID}_nochunk_baseline_seed${SEED}"
 rm -rf "$LOG_DIR"
 
 # Paper settings: MLP policy, 100K offline, success_bonus=200, no buffer mixing,
-# LayerNorm on, lr=1e-3, 5 critics, WSRL online
+# LayerNorm on, lr=1e-3, 10 critics, WSRL online
 srun python -u test_scripts/test_iql.py \
   metaworld=off_on_15 \
   algorithm=wsrl_iql \
