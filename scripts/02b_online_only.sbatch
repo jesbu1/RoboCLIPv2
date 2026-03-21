@@ -61,6 +61,14 @@ SEED=${SEEDS[$SEED_IDX]}
 REWARD_TYPE="${REWARD_TYPE:-baseline}"
 H5_PATH="${H5_PATH:-datasets/metaworld_labeled.h5}"
 
+# Set reward mode based on REWARD_TYPE
+EXTRA_ARGS=""
+if [[ "$REWARD_TYPE" == "diff" ]]; then
+  EXTRA_ARGS="reward_model.use_progress_diff=true"
+elif [[ "$REWARD_TYPE" == "diff_gamma099" ]]; then
+  EXTRA_ARGS="reward_model.use_progress_diff=true reward_model.diff_gamma=0.99"
+fi
+
 # Checkpoint from offline-only run
 CKPT_DIR="logs/offline_${REWARD_TYPE}_seed${SEED}"
 
@@ -81,4 +89,5 @@ srun python -u test_scripts/test_iql.py \
   offline_training.ckpt_path=$CKPT_DIR/last_offline \
   logging.wandb_group_name="$GROUP_NAME" \
   logging.log_dir="$LOG_DIR" \
-  hydra.run.dir=.
+  hydra.run.dir=. \
+  $EXTRA_ARGS
