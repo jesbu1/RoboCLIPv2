@@ -74,30 +74,35 @@ def stage2a_preprocess(img_raw):
 
 
 # ═══════════════════════════════════════════════════
-# Stage 2b: Online wrapper - FULL path through BaseEncoder → _encode_image_batch
+# Stage 2b: Online wrapper - FULL path using ACTUAL encoder code
 # This is what ACTUALLY happens during online training
 # ═══════════════════════════════════════════════════
-def stage2b_preprocess_full_path(img_raw):
-    """Simulate the EXACT code path in online training."""
-    # Step 1: wrapper does image_for_model = image[None, None, :, :, :]
+def stage2b_preprocess_full_path(img_raw, dino_model_ref):
+    """Run the REAL BaseEncoder.encode_images → _encode_image_batch → dino_load_image path."""
+    from models.encoders.dino_miniLM_encoder import Dino_miniLM_Encoder
+
+    # Create the actual encoder used in online training
+    encoder = Dino_miniLM_Encoder(use_pca=False, device=str(device))
+    # Replace its DINO model with the one we already loaded to save memory
+    encoder.dinov2_vits14 = dino_model_ref
+
+    # This is exactly what the wrapper does:
     image_for_model = img_raw[None, None, :, :, :]  # (1, 1, 480, 640, 3) uint8
 
-    # Step 2: BaseEncoder.encode_images
-    images = image_for_model
-    # transpose HWC → CHW
+    # Run the REAL encode_images path and get the embedding directly
+    embedding = encoder.encode_images(image_for_model)  # returns numpy (768,) or (1, 768)
+
+    # Also get the preprocessed tensor for comparison (run dino_load_image on the image
+    # after going through the same uint8 conversion that _encode_image_batch does)
+    # We need the tensor before DINO for comparison, so reconstruct it:
+    images = image_for_model.copy()
     if images.shape[-1] == 3 and not images.shape[2] == 3:
-        images = np.transpose(images, (0, 1, 4, 2, 3))  # (1, 1, 3, 480, 640) uint8
-
-    # convert to float32 tensor (THIS IS WHERE THE PROBLEM MIGHT BE)
-    batch_images = torch.tensor(images[0:1], dtype=torch.float32)  # (1, 1, 3, 480, 640) float32
-
-    # Step 3: _encode_image_batch
-    images_np = batch_images.cpu().numpy()  # float32, values [0, 255]
-
+        images = np.transpose(images, (0, 1, 4, 2, 3))
+    batch_float = torch.tensor(images[0:1], dtype=torch.float32)
+    images_np = batch_float.cpu().numpy()
     if images_np.shape[2] == 3:
-        images_np = np.transpose(images_np, (0, 1, 3, 4, 2)).squeeze(0)  # (1, 480, 640, 3) float32
+        images_np = np.transpose(images_np, (0, 1, 3, 4, 2)).squeeze(0)
 
-    # THE SUSPICIOUS PART: dtype check and conversion
     print(f"\n  [Stage 2b debug] Before uint8 conversion:")
     print(f"    dtype: {images_np.dtype}, range: [{images_np.min():.1f}, {images_np.max():.1f}]")
 
@@ -109,22 +114,14 @@ def stage2b_preprocess_full_path(img_raw):
     print(f"  [Stage 2b debug] After uint8 conversion:")
     print(f"    dtype: {images_converted.dtype}, range: [{images_converted.min()}, {images_converted.max()}]")
 
-    # Check for overflow
-    expected_direct_cast = images_np.astype(np.uint8)
-    overflow_pixels = np.sum(images_converted != expected_direct_cast)
+    # Compare with original
+    overflow_pixels = np.sum(images_converted != img_raw[None])
     total_pixels = images_converted.size
-    print(f"  [Stage 2b debug] Pixels with overflow: {overflow_pixels}/{total_pixels} ({100*overflow_pixels/total_pixels:.1f}%)")
+    print(f"  [Stage 2b debug] Pixels different from original: {overflow_pixels}/{total_pixels} ({100*overflow_pixels/total_pixels:.1f}%)")
 
-    # Now run dino_load_image on the (possibly corrupted) image
-    img_for_dino = images_converted[0]  # (480, 640, 3) uint8
-    transform = T.Compose([
-        T.ToTensor(),
-        T.CenterCrop(224),
-        T.Normalize([0.5], [0.5]),
-    ])
-    img_pil = Image.fromarray(img_for_dino)
-    tensor = transform(img_pil)[:3].unsqueeze(0)
-    return tensor
+    img_for_dino = images_converted[0]
+    tensor = encoder.dino_load_image(img_for_dino)
+    return tensor, embedding
 
 
 # ═══════════════════════════════════════════════════
@@ -151,7 +148,7 @@ print("=" * 70)
 
 tensor1 = stage1_preprocess(raw_image)
 tensor2a = stage2a_preprocess(raw_image)
-tensor2b = stage2b_preprocess_full_path(raw_image)
+tensor2b, emb2b_real = stage2b_preprocess_full_path(raw_image, dino_model)
 tensor3 = stage3_fixed_preprocess(raw_image)
 
 stages = {
@@ -198,8 +195,22 @@ print("=" * 70)
 with torch.no_grad():
     emb1 = dino_model(tensor1.to(device)).cpu()
     emb2a = dino_model(tensor2a.to(device)).cpu()
-    emb2b = dino_model(tensor2b.to(device)).cpu()
+    emb2b_tensor = dino_model(tensor2b.to(device)).cpu()
     emb3 = dino_model(tensor3.to(device)).cpu()
+
+# Also compare with the REAL encoder output
+emb2b_real_t = torch.tensor(emb2b_real).float()
+if emb2b_real_t.ndim == 1:
+    emb2b_real_t = emb2b_real_t.unsqueeze(0)
+cos_real_vs_tensor = torch.nn.functional.cosine_similarity(emb2b_tensor, emb2b_real_t).item()
+print(f"\n  [Sanity check] Stage2b tensor-path vs real-encoder cosine: {cos_real_vs_tensor:.6f}")
+if cos_real_vs_tensor > 0.999:
+    print("  → Real encoder matches our simulation ✓")
+else:
+    print("  → Real encoder DIFFERS from simulation ✗ (check code!)")
+
+# Use the real encoder embedding for all comparisons
+emb2b = emb2b_real_t
 
 embeddings = {
     "Stage1": emb1,
