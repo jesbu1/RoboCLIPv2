@@ -86,16 +86,19 @@ def get_dino_model():
 
 
 def dino_load_image(img):
-    """Load and preprocess a single image for DINO."""
+    """Load and preprocess a single image for DINO.
+    Matches preprocessing in reward model training (rewind/utils/processing_utils.py)
+    and online wrapper (models/encoders/dino_miniLM_encoder.py).
+    """
     from torchvision import transforms
+    from PIL import Image
     transform = transforms.Compose([
-        transforms.ToPILImage(),
-        transforms.Resize(256),
-        transforms.CenterCrop(224),
         transforms.ToTensor(),
-        transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
+        transforms.CenterCrop(224),
+        transforms.Normalize([0.5], [0.5]),
     ])
-    return transform(img).unsqueeze(0)
+    img = Image.fromarray(img)
+    return transform(img)[:3].unsqueeze(0)
 
 
 def get_dino_embeddings(imgs_list):
