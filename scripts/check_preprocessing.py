@@ -29,7 +29,7 @@ env.reset()
 # Take a few steps so the scene is non-trivial
 for _ in range(20):
     env.step(env.action_space.sample())
-raw_image = env.render()  # default MetaWorld render
+raw_image = env.sim.render(640, 480, mode="offscreen", camera_name="corner2")[:, :, ::-1]
 print(f"Raw image shape: {raw_image.shape}, dtype: {raw_image.dtype}, range: [{raw_image.min()}, {raw_image.max()}]")
 
 
