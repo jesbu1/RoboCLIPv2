@@ -33,7 +33,7 @@ env = ALL_V2_ENVIRONMENTS_GOAL_OBSERVABLE["button-press-v2-goal-observable"](see
 env.reset()
 for _ in range(20):
     env.step(env.action_space.sample())
-raw_image = env.sim.render(640, 480, mode="offscreen", camera_name="corner2")[:, :, ::-1]
+raw_image = env.sim.render(640, 480, mode="offscreen", camera_name="corner2")
 print(f"Raw image shape: {raw_image.shape}, dtype: {raw_image.dtype}, range: [{raw_image.min()}, {raw_image.max()}]")
 
 
