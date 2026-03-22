@@ -102,10 +102,7 @@ def stage2b_preprocess_full_path(img_raw):
     print(f"    dtype: {images_np.dtype}, range: [{images_np.min():.1f}, {images_np.max():.1f}]")
 
     if images_np.dtype != np.uint8:
-        if images_np.dtype == np.float32 or images_np.dtype == np.float64:
-            images_converted = (images_np * 255).astype(np.uint8)
-        else:
-            images_converted = images_np.astype(np.uint8)
+        images_converted = images_np.astype(np.uint8)
     else:
         images_converted = images_np
 
