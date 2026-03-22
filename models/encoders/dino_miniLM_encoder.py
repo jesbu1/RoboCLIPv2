@@ -85,15 +85,10 @@ class Dino_miniLM_Encoder(BaseEncoder):
         # print(f"images.shape after transpose: {images.shape}") # (1,480,640,3)
         
         # Ensure data type is uint8, range 0-255
-        # print("TODO: check if images is between 0-255 already or not")
-        # breakpoint()
+        # Note: BaseEncoder.encode_images converts uint8 [0,255] to float32 [0,255],
+        # so we just need to cast back to uint8, NOT multiply by 255.
         if images.dtype != np.uint8:
-            # If data is float type, assume range 0-1, convert to 0-255
-            if images.dtype == np.float32 or images.dtype == np.float64:
-                images = (images * 255).astype(np.uint8)
-            else:
-                # For other types, try direct conversion to uint8
-                images = images.astype(np.uint8)
+            images = images.astype(np.uint8)
         # print(images)
         assert images.dtype == np.uint8, "must be uint8"
         assert np.min(images) >= 0 and np.max(images) <= 255, "must be between 0 and 255"
