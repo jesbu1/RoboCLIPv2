@@ -29,4 +29,4 @@ export LD_LIBRARY_PATH="${GCC_LIBDIR}:$HOME/.mujoco/mujoco210/bin:/usr/lib/nvidi
 
 cd /project2/biyik_1165/haobaizh/rewind_no-action-chunk
 
-srun python -u scripts/debug_reach_wall_crop.py
+srun python -u scripts/debug_all_tasks_3versions.py
