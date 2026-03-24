@@ -34,6 +34,9 @@ export WANDB_MODE=online
 
 cd /project2/biyik_1165/haobaizh/rewind_no-action-chunk
 
+SERVER_URL=$(cat logs/robometer_server_gamma099_info.txt)
+echo "Using server: $SERVER_URL"
+
 LOG_DIR="logs/offline_robometer_diff_gamma099_seed0"
 mkdir -p "$LOG_DIR"
 
@@ -41,7 +44,8 @@ srun python -u test_scripts/test_iql.py \
   metaworld=off_on_15 \
   algorithm=wsrl_iql \
   reward=robometer \
-  reward_model.use_server=false \
+  reward_model.use_server=true \
+  reward_model.server_url="$SERVER_URL" \
   reward_model.use_progress_diff=true \
   reward_model.diff_gamma=0.99 \
   general_training.seed=0 \
