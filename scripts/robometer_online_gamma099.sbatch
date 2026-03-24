@@ -49,8 +49,8 @@ ENVS=(
 ENV_ID=${ENVS[$SLURM_ARRAY_TASK_ID]}
 SEED=0
 
-# Read server URL
-SERVER_URL=$(cat logs/robometer_server_gamma099_info.txt)
+# Read server URL (each task connects to its own server)
+SERVER_URL=$(cat logs/robometer_server_info_${SLURM_ARRAY_TASK_ID}.txt)
 
 CKPT_DIR="logs/offline_robometer_diff_gamma099_seed0"
 LOG_DIR="logs/${ENV_ID}_nochunk_robometer_diff_gamma099_seed0"
