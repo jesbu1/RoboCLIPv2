@@ -46,6 +46,7 @@ srun python -u test_scripts/test_iql.py \
   reward=robometer \
   reward_model.use_server=true \
   reward_model.server_url="$SERVER_URL" \
+  reward_model.success_bonus=0 \
   general_training.seed=0 \
   environment.env_id=coffee-button-v2 \
   offline_training.offline_h5_path=datasets/metaworld_labeled_robometer.h5 \
