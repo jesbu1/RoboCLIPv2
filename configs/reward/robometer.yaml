@@ -17,6 +17,7 @@ reward_model:
   sum_reward: false
   use_progress_diff: false
   diff_gamma: 1.0
+  use_base_reward: false
 
   # Robometer-specific
   max_frames: 4
