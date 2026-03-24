@@ -111,6 +111,24 @@ class RobometerRewardModel(BaseRewardModel):
         self._frame_buffer = []
 
     # ------------------------------------------------------------------
+    # _encode_text_batch: required by BaseRewardModel.encode_text()
+    # ------------------------------------------------------------------
+    def _encode_text_batch(self, text: List[str]) -> np.ndarray:
+        """Encode text using MiniLM (from BaseRewardModel.__init__)."""
+        with torch.no_grad():
+            encoded_input = self.tokenizer(
+                text, padding=False, truncation=True, return_tensors="pt"
+            ).to(self.device)
+            model_output = self.model(**encoded_input)
+            from models.reward_model.base_reward_model import mean_pooling
+            text_embeddings = (
+                mean_pooling(model_output, encoded_input["attention_mask"])
+                .cpu()
+                .numpy()
+            )
+        return text_embeddings
+
+    # ------------------------------------------------------------------
     # Override encode_text: store raw text + return MiniLM embedding
     # ------------------------------------------------------------------
     def encode_text(self, text: Union[str, List]) -> np.ndarray:
