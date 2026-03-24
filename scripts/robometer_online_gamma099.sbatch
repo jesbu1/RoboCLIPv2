@@ -50,7 +50,20 @@ ENV_ID=${ENVS[$SLURM_ARRAY_TASK_ID]}
 SEED=0
 
 # Read server URL (each task connects to its own server)
-SERVER_URL=$(cat logs/robometer_server_info_${SLURM_ARRAY_TASK_ID}.txt)
+INFO_FILE=logs/robometer_server_info_${SLURM_ARRAY_TASK_ID}.txt
+# Wait for server info file to exist
+for i in $(seq 1 360); do
+  if [ -f "$INFO_FILE" ]; then break; fi
+  if [ $i -eq 360 ]; then echo "ERROR: Server info not found after 30min"; exit 1; fi
+  sleep 5
+done
+SERVER_URL=$(cat "$INFO_FILE")
+# Wait for server to be ready
+for i in $(seq 1 360); do
+  if curl -s "${SERVER_URL}/health" > /dev/null 2>&1; then echo "Server ready!"; break; fi
+  if [ $i -eq 360 ]; then echo "ERROR: Server not ready after 30min"; exit 1; fi
+  sleep 5
+done
 
 CKPT_DIR="logs/offline_robometer_diff_gamma099_seed0"
 LOG_DIR="logs/${ENV_ID}_nochunk_robometer_diff_gamma099_seed0"
