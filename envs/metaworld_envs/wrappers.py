@@ -272,6 +272,9 @@ class LearnedRewardWrapper(gym.Wrapper):
                 encoded_image = self.image_encoder.encode_images(
                     image_for_model
                 ).squeeze()
+                # If using Robometer, feed raw frame to its buffer
+                if self.reward_model.name == "RobometerRewardModel":
+                    self.reward_model.add_frame(image_for_model)
 
         if self.is_state_based is False and encoded_image is not None:
             # obs = np.concatenate([obs, self.reward_model(obs)])
@@ -335,6 +338,13 @@ class LearnedRewardWrapper(gym.Wrapper):
                     image_for_model
                 )).unsqueeze(0)
                 # print(f"stacked_sequence shape: {stacked_sequence.shape}") # (1, 1, 1024)
+            elif self.reward_model.name == "RobometerRewardModel":
+                # Robometer uses its internal frame buffer, but we still pass
+                # DINO embeddings as stacked_sequence (Robometer ignores them)
+                stacked_sequence = np.stack(self.past_observations, axis=0)
+                stacked_sequence = (
+                    th.from_numpy(stacked_sequence).float().to(self.reward_model.device)
+                ).unsqueeze(0)
 
             current_progress = self.reward_model.calculate_rewards(
                 self.reward_language_features, stacked_sequence
@@ -342,6 +352,8 @@ class LearnedRewardWrapper(gym.Wrapper):
 
             if isinstance(current_progress, th.Tensor):
                 current_progress = current_progress.detach().cpu().numpy().item()
+            elif isinstance(current_progress, np.ndarray):
+                current_progress = current_progress.item()
 
             if self.use_progress_diff:
                 # Progress diff mode: reward = gamma * P(s') - P(s)
@@ -430,6 +442,9 @@ class LearnedRewardWrapper(gym.Wrapper):
         self.raw_observations = []
         self.counter = 0
         self.prev_progress = None
+        # Clear Robometer frame buffer on reset
+        if self.reward_model.name == "RobometerRewardModel":
+            self.reward_model.clear_frame_buffer()
         obs = self.env.reset()
 
         # This is for the reward function
@@ -437,6 +452,9 @@ class LearnedRewardWrapper(gym.Wrapper):
         image_for_model = image[None, None, :, :, :]
         # print(image_for_model.shape)
         encoded_image = self.image_encoder.encode_images(image_for_model).squeeze()
+        # If using Robometer, feed raw frame to its buffer
+        if self.reward_model.name == "RobometerRewardModel":
+            self.reward_model.add_frame(image_for_model)
 
         if self.is_state_based is False:
             if self.use_proprio:
@@ -452,7 +470,7 @@ class LearnedRewardWrapper(gym.Wrapper):
 
         # Compute initial progress for diff mode
         if self.use_progress_diff and self.reward_at_every_step:
-            if self.reward_model.name == "RewindRewardModel":
+            if self.reward_model.name in ("RewindRewardModel", "RobometerRewardModel"):
                 stacked_sequence = np.stack(self.past_observations, axis=0)
                 stacked_sequence = (
                     th.from_numpy(stacked_sequence).float().to(self.reward_model.device)
@@ -462,6 +480,8 @@ class LearnedRewardWrapper(gym.Wrapper):
                 )
                 if isinstance(initial_progress, th.Tensor):
                     initial_progress = initial_progress.detach().cpu().numpy().item()
+                elif isinstance(initial_progress, np.ndarray):
+                    initial_progress = initial_progress.item()
                 self.prev_progress = initial_progress
         return obs
 
