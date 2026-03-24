@@ -65,7 +65,7 @@ srun python -u test_scripts/test_iql.py \
   reward=robometer \
   reward_model.use_server=true \
   reward_model.server_url="$SERVER_URL" \
-  reward_model.success_bonus=0 \
+  reward_model.success_bonus=1 \
   reward_model.use_progress_diff=true \
   reward_model.diff_gamma=0.99 \
   general_training.seed=$SEED \

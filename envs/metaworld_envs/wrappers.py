@@ -169,6 +169,7 @@ class LearnedRewardWrapper(gym.Wrapper):
         use_proprio: bool = False,
         use_progress_diff: bool = False,
         diff_gamma: float = 1.0,
+        use_base_reward: bool = False,
     ):
         super(LearnedRewardWrapper, self).__init__(env)
         self.reward_model = reward_model
@@ -179,6 +180,8 @@ class LearnedRewardWrapper(gym.Wrapper):
         self.use_progress_diff = use_progress_diff
         self.diff_gamma = diff_gamma
         self.prev_progress = None
+        # Base reward: -1 per step if not success, 0 if success
+        self.use_base_reward = use_base_reward
         # Use absolute path
         self.video_dir = os.path.abspath("videos")
         if not os.path.exists(self.video_dir):
@@ -425,6 +428,11 @@ class LearnedRewardWrapper(gym.Wrapper):
         #     reward -= self.offset
         # elif self.counter > 1:
         #     reward -= self.offset
+
+        # Base reward: -1 per step if not success, 0 if success
+        if self.use_base_reward:
+            if not info.get("success", False):
+                reward += -1.0
 
         # Success bonus
         if info.get("success", False):

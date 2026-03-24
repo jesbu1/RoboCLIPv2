@@ -66,6 +66,7 @@ srun python -u test_scripts/test_iql.py \
   reward_model.use_server=true \
   reward_model.server_url="$SERVER_URL" \
   reward_model.success_bonus=0 \
+  reward_model.use_base_reward=true \
   general_training.seed=$SEED \
   environment.env_id=$ENV_ID \
   offline_training.offline_h5_path=datasets/metaworld_labeled_robometer.h5 \

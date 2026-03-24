@@ -506,6 +506,7 @@ def create_envs(cfg: DictConfig, reward_model: BaseRewardModel, image_encoder):
     # Get use_progress_diff from config (default to False if not specified)
     use_progress_diff = cfg.reward_model.get("use_progress_diff", False)
     diff_gamma = cfg.reward_model.get("diff_gamma", 1.0)
+    use_base_reward = cfg.reward_model.get("use_base_reward", False)
 
     # Define envs (dummy example for illustration)
     # assert env_config.n_envs == 4, "Number of environments should be 4."
@@ -528,6 +529,7 @@ def create_envs(cfg: DictConfig, reward_model: BaseRewardModel, image_encoder):
                     terminate_on_success=cfg.general_training.terminate_on_success,
                     use_progress_diff=use_progress_diff,
                     diff_gamma=diff_gamma,
+                    use_base_reward=use_base_reward,
                 )
                 for _ in range(env_config.n_envs)
             ]
@@ -553,6 +555,7 @@ def create_envs(cfg: DictConfig, reward_model: BaseRewardModel, image_encoder):
                     terminate_on_success=cfg.general_training.terminate_on_success,
                     use_progress_diff=use_progress_diff,
                     diff_gamma=diff_gamma,
+                    use_base_reward=use_base_reward,
                 )
             ]
         )
@@ -575,6 +578,7 @@ def create_envs(cfg: DictConfig, reward_model: BaseRewardModel, image_encoder):
                     terminate_on_success=cfg.general_training.terminate_on_success,
                     use_progress_diff=use_progress_diff,
                     diff_gamma=diff_gamma,
+                    use_base_reward=use_base_reward,
                 )
                 for i in range(1)
             ]
@@ -597,6 +601,7 @@ def create_envs(cfg: DictConfig, reward_model: BaseRewardModel, image_encoder):
                     terminate_on_success=cfg.general_training.terminate_on_success,
                     use_progress_diff=use_progress_diff,
                     diff_gamma=diff_gamma,
+                    use_base_reward=use_base_reward,
                 )
             ]
         )  # KitchenEnvDenseOriginalReward(time=True)
