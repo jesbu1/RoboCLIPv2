@@ -122,8 +122,8 @@ def robometer_progress_per_step(frames, task_text, server_url, max_frames=4):
 # ─── Main ───
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--h5_video_path", default="/project2/biyik_1165/haobaizh/rewind_valuemodel/datasets/metaworld_generation.h5")
-    parser.add_argument("--h5_embedding_path", default="/project2/biyik_1165/haobaizh/rewind_valuemodel/datasets/metaworld_embeddings_train.h5")
+    parser.add_argument("--h5_video_path", default="datasets/metaworld_generation.h5")
+    parser.add_argument("--h5_embedding_path", default="datasets/metaworld_embeddings_train.h5")
     parser.add_argument("--output_path", default="datasets/metaworld_labeled_robometer.h5")
     parser.add_argument("--server_url", default="http://localhost:8000")
     parser.add_argument("--max_frames", type=int, default=4)

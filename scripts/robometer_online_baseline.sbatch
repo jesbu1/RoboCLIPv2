@@ -6,11 +6,13 @@
 #SBATCH --cpus-per-task=4
 #SBATCH --mem=16G
 #SBATCH --time=48:00:00
-#SBATCH --output=/project2/biyik_1165/haobaizh/rewind_no-action-chunk/logs/%x_%A_%a.out
-#SBATCH --error=/project2/biyik_1165/haobaizh/rewind_no-action-chunk/logs/%x_%A_%a.err
+#SBATCH --output=logs/%x_%A_%a.out
+#SBATCH --error=logs/%x_%A_%a.err
 #SBATCH --array=0-7
 
 set -e
+
+PROJECT_DIR="${PROJECT_DIR:-${SLURM_SUBMIT_DIR}}"
 
 module purge
 module load gcc/13.3.0
@@ -20,7 +22,7 @@ module load glew/2.2.0
 module load glx/1.4
 
 source /apps/conda/miniforge3/25.11.0-1/etc/profile.d/conda.sh
-conda activate /project2/biyik_1165/haobaizh/rewind_no-action-chunk/conda_envs/rewind_nochunk
+conda activate "${PROJECT_DIR}/conda_envs/rewind_nochunk"
 
 export LD_PRELOAD="$(g++ -print-file-name=libstdc++.so.6)"
 export MUJOCO_GL=egl
@@ -33,7 +35,7 @@ export WANDB_CACHE_DIR="$HOME/.cache/wandb"
 export WANDB_DIR="$HOME/wandb"
 export WANDB_MODE=online
 
-cd /project2/biyik_1165/haobaizh/rewind_no-action-chunk
+cd "$PROJECT_DIR"
 
 ENVS=(
   window-close-v2

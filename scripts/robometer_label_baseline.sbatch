@@ -6,27 +6,31 @@
 #SBATCH --cpus-per-task=4
 #SBATCH --mem=24G
 #SBATCH --time=8:00:00
-#SBATCH --output=/project2/biyik_1165/haobaizh/rewind_no-action-chunk/logs/%x_%j.out
-#SBATCH --error=/project2/biyik_1165/haobaizh/rewind_no-action-chunk/logs/%x_%j.err
+#SBATCH --output=logs/%x_%j.out
+#SBATCH --error=logs/%x_%j.err
 
 set -e
+
+PROJECT_DIR="${PROJECT_DIR:-${SLURM_SUBMIT_DIR}}"
+RAW_DATA_DIR="${RAW_DATA_DIR:-${PROJECT_DIR}/datasets}"
 
 module purge
 module load gcc/13.3.0
 
 source /apps/conda/miniforge3/25.11.0-1/etc/profile.d/conda.sh
-conda activate /project2/biyik_1165/haobaizh/rewind_no-action-chunk/conda_envs/rewind_nochunk
+conda activate "${PROJECT_DIR}/conda_envs/rewind_nochunk"
 
 export LD_PRELOAD="$(g++ -print-file-name=libstdc++.so.6)"
 
-cd /project2/biyik_1165/haobaizh/rewind_no-action-chunk
+cd "$PROJECT_DIR"
 
-# Read server URL
+# Wait for server info file to exist
 INFO_FILE=logs/robometer_server_baseline_info.txt
-if [ ! -f "$INFO_FILE" ]; then
-  echo "ERROR: Server info not found. Start robometer_server_baseline first."
-  exit 1
-fi
+for i in $(seq 1 360); do
+  if [ -f "$INFO_FILE" ]; then break; fi
+  if [ $i -eq 360 ]; then echo "ERROR: Server info not found after 30min"; exit 1; fi
+  sleep 5
+done
 SERVER_URL=$(cat "$INFO_FILE")
 echo "Using server: $SERVER_URL"
 
@@ -41,5 +45,7 @@ for i in $(seq 1 360); do
 done
 
 srun python -u scripts/generate_labeled_dataset_robometer.py \
+  --h5_video_path "$RAW_DATA_DIR/metaworld_generation.h5" \
+  --h5_embedding_path "$RAW_DATA_DIR/metaworld_embeddings_train.h5" \
   --server_url "$SERVER_URL" \
   --output_path datasets/metaworld_labeled_robometer.h5

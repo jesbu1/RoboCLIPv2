@@ -7,19 +7,23 @@
 #SBATCH --cpus-per-task=4
 #SBATCH --mem=64G
 #SBATCH --time=48:00:00
-#SBATCH --output=/project2/biyik_1165/haobaizh/rewind_no-action-chunk/logs/robometer_server_baseline_%j.out
-#SBATCH --error=/project2/biyik_1165/haobaizh/rewind_no-action-chunk/logs/robometer_server_baseline_%j.err
+#SBATCH --output=logs/robometer_server_baseline_%j.out
+#SBATCH --error=logs/robometer_server_baseline_%j.err
 
 set -e
 
+PROJECT_DIR="${PROJECT_DIR:-${SLURM_SUBMIT_DIR}}"
+ROBOMETER_CONDA="${ROBOMETER_CONDA:-${PROJECT_DIR}/conda_envs/robometer}"
+
 source /apps/conda/miniforge3/25.11.0-1/etc/profile.d/conda.sh
-conda activate /project2/biyik_1165/haobaizh/rewind_robometer_valuemodel/conda_envs/robometer
+conda activate "$ROBOMETER_CONDA"
 
 SERVER_HOST=$(hostname)
 SERVER_PORT=8000
-INFO_FILE=/project2/biyik_1165/haobaizh/rewind_no-action-chunk/logs/robometer_server_baseline_info.txt
+INFO_FILE="${PROJECT_DIR}/logs/robometer_server_baseline_info.txt"
+mkdir -p "$(dirname "$INFO_FILE")"
 echo "http://${SERVER_HOST}:${SERVER_PORT}" > "$INFO_FILE"
 echo "Server at: http://${SERVER_HOST}:${SERVER_PORT}"
 
-cd /project2/biyik_1165/haobaizh/rewind_robometer_valuemodel
-python -u robometer_server.py
+cd "$PROJECT_DIR"
+python -u scripts/robometer_server.py
