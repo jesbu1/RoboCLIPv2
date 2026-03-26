@@ -81,4 +81,4 @@ srun python -u test_scripts/test_iql.py \
   logging.wandb_group_name="$GROUP_NAME" \
   logging.log_dir="$LOG_DIR" \
   hydra.run.dir=. \
-  algorithm.n_critics=10
+  general_training.n_critics=10
