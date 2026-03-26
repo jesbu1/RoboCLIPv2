@@ -169,7 +169,9 @@ class LearnedRewardWrapper(gym.Wrapper):
         use_proprio: bool = False,
         use_progress_diff: bool = False,
         diff_gamma: float = 1.0,
+        diff_reward_scale: float = 1.0,
         use_base_reward: bool = False,
+        base_reward_value: float = -1.0,
     ):
         super(LearnedRewardWrapper, self).__init__(env)
         self.reward_model = reward_model
@@ -179,9 +181,10 @@ class LearnedRewardWrapper(gym.Wrapper):
         # Progress diff mode: use reward = gamma * P(s') - P(s) instead of P(s)
         self.use_progress_diff = use_progress_diff
         self.diff_gamma = diff_gamma
+        self.diff_reward_scale = diff_reward_scale
         self.prev_progress = None
-        # Base reward: -1 per step if not success, 0 if success
         self.use_base_reward = use_base_reward
+        self.base_reward_value = base_reward_value
         # Use absolute path
         self.video_dir = os.path.abspath("videos")
         if not os.path.exists(self.video_dir):
@@ -359,9 +362,9 @@ class LearnedRewardWrapper(gym.Wrapper):
                 current_progress = current_progress.item()
 
             if self.use_progress_diff:
-                # Progress diff mode: reward = gamma * P(s') - P(s)
+                # Progress diff mode: reward = scale * (gamma * P(s') - P(s))
                 if self.prev_progress is not None:
-                    reward = self.diff_gamma * current_progress - self.prev_progress
+                    reward = self.diff_reward_scale * (self.diff_gamma * current_progress - self.prev_progress)
                 else:
                     reward = 0.0  # First step after reset, no diff available
                 self.prev_progress = current_progress
@@ -429,10 +432,10 @@ class LearnedRewardWrapper(gym.Wrapper):
         # elif self.counter > 1:
         #     reward -= self.offset
 
-        # Base reward: -1 per step if not success, 0 if success
+        # Base reward per step if not success
         if self.use_base_reward:
             if not info.get("success", False):
-                reward += -1.0
+                reward += self.base_reward_value
 
         # Success bonus
         if info.get("success", False):

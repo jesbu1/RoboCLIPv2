@@ -11,7 +11,9 @@ reward_model:
   sum_reward: false
   use_progress_diff: false
   diff_gamma: 1.0
+  diff_reward_scale: 1.0
   use_base_reward: false
+  base_reward_value: -1.0
   
 general_training:
   dense_rewards_at_end: false
