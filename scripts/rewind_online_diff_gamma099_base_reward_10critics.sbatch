@@ -58,10 +58,11 @@ ENV_ID=${ENVS[$ENV_IDX]}
 SEED=${SEEDS[$SEED_IDX]}
 
 CKPT_DIR="logs/offline_rewind_diff_gamma099_bonus0_10critics_seed${SEED}"
-LOG_DIR="logs/${ENV_ID}_nochunk_rewind_diff_gamma099_base_reward_10critics_seed${SEED}"
+LOG_DIR="/scratch1/haobaizh/rewind_nochunk_online_logs/${ENV_ID}_nochunk_rewind_diff_gamma099_base_reward_10critics_seed${SEED}"
 GROUP_NAME="${ENV_ID}_nochunk_rewind_diff_gamma099_base_reward_10critics"
 export WANDB_RUN_NAME="${ENV_ID}_nochunk_rewind_diff_gamma099_base_reward_10critics_seed${SEED}"
 
+mkdir -p /scratch1/haobaizh/rewind_nochunk_online_logs
 rm -rf "$LOG_DIR"
 
 srun python -u test_scripts/test_iql.py \
