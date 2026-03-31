@@ -44,7 +44,7 @@ class RobometerRewardModel(BaseRewardModel):
         self.server_url = server_url.rstrip("/")
         self.model_path = model_path
 
-        # Frame buffer: stores raw frames (H, W, C) uint8
+        # Frame buffer: stores cropped raw frames (H, W, C) uint8
         self._frame_buffer: List[np.ndarray] = []
         # Task text: stored when encode_text is called
         self._task_text: str = ""
@@ -90,6 +90,21 @@ class RobometerRewardModel(BaseRewardModel):
     # ------------------------------------------------------------------
     # Frame buffer management
     # ------------------------------------------------------------------
+    def _center_crop_frame(self, frame: np.ndarray, crop_size: int = 224) -> np.ndarray:
+        """Center-crop frames before Robometer inference to keep payloads compact."""
+        if frame.ndim != 3:
+            return frame
+
+        frame = frame[..., :3]
+        height, width = frame.shape[:2]
+        crop_height = min(crop_size, height)
+        crop_width = min(crop_size, width)
+        top = max((height - crop_height) // 2, 0)
+        left = max((width - crop_width) // 2, 0)
+        return np.ascontiguousarray(
+            frame[top : top + crop_height, left : left + crop_width]
+        )
+
     def add_frame(self, image_for_model: np.ndarray):
         """
         Store a raw frame in the buffer. Called by the wrapper during step/reset.
@@ -104,6 +119,7 @@ class RobometerRewardModel(BaseRewardModel):
             frame = np.transpose(frame, (1, 2, 0))  # CHW -> HWC
         if frame.dtype != np.uint8:
             frame = np.clip(frame, 0, 255).astype(np.uint8)
+        frame = self._center_crop_frame(frame)
         self._frame_buffer.append(frame.copy())
 
     def clear_frame_buffer(self):
@@ -145,7 +161,7 @@ class RobometerRewardModel(BaseRewardModel):
     def calculate_rewards(
         self,
         encoded_texts: Union[np.ndarray, torch.Tensor],
-        encoded_videos: Union[np.ndarray, torch.Tensor],
+        encoded_videos: Union[np.ndarray, torch.Tensor, None] = None,
         *args,
         **kwargs,
     ) -> np.ndarray:
@@ -156,7 +172,9 @@ class RobometerRewardModel(BaseRewardModel):
         Robometer ignores them and uses self._frame_buffer and self._task_text instead.
         """
         # Sync buffer length with wrapper's sequence length
-        if isinstance(encoded_videos, torch.Tensor):
+        if encoded_videos is None:
+            T = len(self._frame_buffer)
+        elif isinstance(encoded_videos, torch.Tensor):
             T = encoded_videos.shape[1]
         else:
             T = encoded_videos.shape[1] if encoded_videos.ndim >= 2 else len(self._frame_buffer)

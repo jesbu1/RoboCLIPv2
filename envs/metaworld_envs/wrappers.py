@@ -271,7 +271,11 @@ class LearnedRewardWrapper(gym.Wrapper):
                 # Input should be of shape (batch_size, num_frames, height, width, channels)
                 # However, the input is of shape (height, width, channels)
                 image_for_model = image[None, None, :, :, :]
-                self.raw_observations.append(image_for_model)
+                if (
+                    self.reward_model.name != "RobometerRewardModel"
+                    or not self.reward_at_every_step
+                ):
+                    self.raw_observations.append(image_for_model)
                 # encoded_image = self.reward_model.encode_images(
                 #     image_for_model
                 # ).squeeze()
@@ -314,7 +318,7 @@ class LearnedRewardWrapper(gym.Wrapper):
             return obs, sparse_reward, done, info
 
         
-        if encoded_image is not None:
+        if encoded_image is not None and self.reward_model.name != "RobometerRewardModel":
             self.past_observations.append(encoded_image)
 
         assert (
@@ -339,22 +343,23 @@ class LearnedRewardWrapper(gym.Wrapper):
                 stacked_sequence = (
                     th.from_numpy(stacked_sequence).float().to(self.reward_model.device)
                 ).unsqueeze(0)
+                current_progress = self.reward_model.calculate_rewards(
+                    self.reward_language_features, stacked_sequence
+                )
             elif self.reward_model.name == "LIVRewardModel":
                 stacked_sequence = th.from_numpy(self.reward_model.encode_images(
                     image_for_model
                 )).unsqueeze(0)
                 # print(f"stacked_sequence shape: {stacked_sequence.shape}") # (1, 1, 1024)
+                current_progress = self.reward_model.calculate_rewards(
+                    self.reward_language_features, stacked_sequence
+                )
             elif self.reward_model.name == "RobometerRewardModel":
-                # Robometer uses its internal frame buffer, but we still pass
-                # DINO embeddings as stacked_sequence (Robometer ignores them)
-                stacked_sequence = np.stack(self.past_observations, axis=0)
-                stacked_sequence = (
-                    th.from_numpy(stacked_sequence).float().to(self.reward_model.device)
-                ).unsqueeze(0)
-
-            current_progress = self.reward_model.calculate_rewards(
-                self.reward_language_features, stacked_sequence
-            )
+                # Robometer uses its internal frame buffer and does not need
+                # the 768-dim DINO history tensor that other reward models use.
+                current_progress = self.reward_model.calculate_rewards(
+                    self.reward_language_features, None
+                )
 
             if isinstance(current_progress, th.Tensor):
                 current_progress = current_progress.detach().cpu().numpy().item()
@@ -377,33 +382,38 @@ class LearnedRewardWrapper(gym.Wrapper):
             # exit()
         else:
             if done:
-                # stacked_sequence = np.stack(self.past_observations, axis=0)
-                # stacked_sequence = (
-                #     th.from_numpy(stacked_sequence).float().to(self.reward_model.device)
-                # )
-                # print(f"stacked_sequence shape: {stacked_sequence.shape}")
-                # print(f"raw_observations shape: {len(self.raw_observations)}")
-                # print(f"raw_observations shape: {self.raw_observations[0].shape}")
-                frames = [
-                          frame[
-                            :,
-                            :, 
-                            (frame.shape[2] - 224) // 2 : (frame.shape[2] + 224) // 2,
-                            (frame.shape[3] - 224) // 2 : (frame.shape[3] + 224) // 2,
-                            :3 
+                if self.reward_model.name == "RobometerRewardModel":
+                    reward = self.reward_model.calculate_rewards(
+                        self.reward_language_features, None
+                    )
+                else:
+                    # stacked_sequence = np.stack(self.past_observations, axis=0)
+                    # stacked_sequence = (
+                    #     th.from_numpy(stacked_sequence).float().to(self.reward_model.device)
+                    # )
+                    # print(f"stacked_sequence shape: {stacked_sequence.shape}")
+                    # print(f"raw_observations shape: {len(self.raw_observations)}")
+                    # print(f"raw_observations shape: {self.raw_observations[0].shape}")
+                    frames = [
+                              frame[
+                                :,
+                                :, 
+                                (frame.shape[2] - 224) // 2 : (frame.shape[2] + 224) // 2,
+                                (frame.shape[3] - 224) // 2 : (frame.shape[3] + 224) // 2,
+                                :3 
+                            ]
+                            for frame in self.raw_observations
                         ]
-                        for frame in self.raw_observations
-                    ]
-                
-                frames = np.stack(frames, axis=1).squeeze(2)
-                # print(f"frames shape: {frames.shape}") # (1, 128, 224, 224, 3)
-                frames_embeddings = th.from_numpy(self.reward_model.encode_images(
-                    frames
-                )).unsqueeze(0)
-                # print(f"frames_embeddings shape: {frames_embeddings.shape}") # (1, 32, 768)
-                reward = self.reward_model.calculate_rewards(
-                    self.reward_language_features, frames_embeddings
-                )
+                    
+                    frames = np.stack(frames, axis=1).squeeze(2)
+                    # print(f"frames shape: {frames.shape}") # (1, 128, 224, 224, 3)
+                    frames_embeddings = th.from_numpy(self.reward_model.encode_images(
+                        frames
+                    )).unsqueeze(0)
+                    # print(f"frames_embeddings shape: {frames_embeddings.shape}") # (1, 32, 768)
+                    reward = self.reward_model.calculate_rewards(
+                        self.reward_language_features, frames_embeddings
+                    )
                 # print(f"reward: {reward}")
                 # exit()
                 if self.episode_counter % 350 == 0:
@@ -412,6 +422,8 @@ class LearnedRewardWrapper(gym.Wrapper):
                     self.save_video(frames_np, reward)
                 if isinstance(reward, th.Tensor):
                     reward = reward.detach().cpu().numpy().item()
+                elif isinstance(reward, np.ndarray):
+                    reward = reward.item()
                 
                 self.past_observations = []
                 self.raw_observations = []
@@ -474,14 +486,19 @@ class LearnedRewardWrapper(gym.Wrapper):
 
             else:
                 obs = encoded_image
-        self.past_observations.append(encoded_image)
-        self.raw_observations.append(image_for_model)
+        if self.reward_model.name != "RobometerRewardModel":
+            self.past_observations.append(encoded_image)
+        if (
+            self.reward_model.name != "RobometerRewardModel"
+            or not self.reward_at_every_step
+        ):
+            self.raw_observations.append(image_for_model)
         wandb.log({"train/total_success_bonus": self.total_success_bonus})
         self.total_success_bonus = 0
 
         # Compute initial progress for diff mode
         if self.use_progress_diff and self.reward_at_every_step:
-            if self.reward_model.name in ("RewindRewardModel", "RobometerRewardModel"):
+            if self.reward_model.name == "RewindRewardModel":
                 stacked_sequence = np.stack(self.past_observations, axis=0)
                 stacked_sequence = (
                     th.from_numpy(stacked_sequence).float().to(self.reward_model.device)
@@ -489,6 +506,13 @@ class LearnedRewardWrapper(gym.Wrapper):
                 initial_progress = self.reward_model.calculate_rewards(
                     self.reward_language_features, stacked_sequence
                 )
+            elif self.reward_model.name == "RobometerRewardModel":
+                initial_progress = self.reward_model.calculate_rewards(
+                    self.reward_language_features, None
+                )
+            else:
+                initial_progress = None
+            if initial_progress is not None:
                 if isinstance(initial_progress, th.Tensor):
                     initial_progress = initial_progress.detach().cpu().numpy().item()
                 elif isinstance(initial_progress, np.ndarray):
