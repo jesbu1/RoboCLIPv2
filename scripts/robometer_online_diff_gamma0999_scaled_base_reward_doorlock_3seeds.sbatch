@@ -59,11 +59,13 @@ for i in $(seq 1 360); do
 done
 
 CKPT_DIR="logs/offline_robometer_diff_gamma0999_bonus0_scaled_seed${SEED}"
-LOG_DIR="logs/${ENV_ID}_nochunk_robometer_diff_gamma0999_scaled_base_reward_seed${SEED}"
+LOG_ROOT="/scratch1/haobaizh/rewind_nochunk_online_logs/robometer"
+LOG_DIR="${LOG_ROOT}/${ENV_ID}_nochunk_robometer_diff_gamma0999_scaled_base_reward_seed${SEED}"
 GROUP_NAME="${ENV_ID}_nochunk_robometer_diff_gamma0999_scaled_base_reward"
 export WANDB_RUN_NAME="${ENV_ID}_nochunk_robometer_diff_gamma0999_scaled_base_reward_seed${SEED}"
 
-mkdir -p "$LOG_DIR"
+mkdir -p "$LOG_ROOT"
+rm -rf "$LOG_DIR"
 
 srun python -u test_scripts/test_iql.py \
   metaworld=off_on_15 \
