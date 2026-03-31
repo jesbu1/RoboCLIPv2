@@ -12,7 +12,7 @@
 #SBATCH --exclude=d23-[10,13-16],e21-[01-16],e22-[01-16],e23-01
 #SBATCH --cpus-per-task=4
 #SBATCH --mem=64G
-#SBATCH --time=72:00:00
+#SBATCH --time=48:00:00
 #SBATCH --output=logs/robometer_server_doorlock_%j.out
 #SBATCH --error=logs/robometer_server_doorlock_%j.err
 
