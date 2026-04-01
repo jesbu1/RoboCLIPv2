@@ -12,10 +12,19 @@
 #SBATCH --error=logs/%x_%A_%a.err
 #SBATCH --array=0-2
 
-set -euo pipefail
+set -e
 
 PROJECT_DIR="${PROJECT_DIR:-${SLURM_SUBMIT_DIR}}"
 INFO_FILE="${PROJECT_DIR}/logs/robometer_server_doorlock_pipeline_info.txt"
+
+if [ ! -f "${PROJECT_DIR}/test_scripts/test_iql.py" ]; then
+  echo "ERROR: PROJECT_DIR does not look like rewind_no-action-chunk: ${PROJECT_DIR}"
+  exit 1
+fi
+if [ ! -d "${PROJECT_DIR}/conda_envs/rewind_nochunk" ]; then
+  echo "ERROR: rewind_nochunk conda env not found under ${PROJECT_DIR}/conda_envs/rewind_nochunk"
+  exit 1
+fi
 
 module purge
 module load gcc/13.3.0
@@ -24,6 +33,7 @@ module load mesa-glu/9.0.2
 module load glew/2.2.0
 module load glx/1.4
 
+export QT_XCB_GL_INTEGRATION="${QT_XCB_GL_INTEGRATION:-none}"
 source /apps/conda/miniforge3/25.11.0-1/etc/profile.d/conda.sh
 conda activate "${PROJECT_DIR}/conda_envs/rewind_nochunk"
 
@@ -31,7 +41,7 @@ export LD_PRELOAD="$(g++ -print-file-name=libstdc++.so.6)"
 export MUJOCO_GL=egl
 export MUJOCO_PY_MUJOCO_PATH="$HOME/.mujoco/mujoco210"
 GCC_LIBDIR="$(dirname "$(g++ -print-file-name=libstdc++.so.6)")"
-export LD_LIBRARY_PATH="${GCC_LIBDIR}:$HOME/.mujoco/mujoco210/bin:/usr/lib/nvidia:${LD_LIBRARY_PATH}"
+export LD_LIBRARY_PATH="${GCC_LIBDIR}:$HOME/.mujoco/mujoco210/bin:/usr/lib/nvidia:${LD_LIBRARY_PATH:-}"
 
 export WANDB_CONFIG_DIR="$HOME/.config/wandb"
 export WANDB_CACHE_DIR="$HOME/.cache/wandb"
@@ -45,11 +55,12 @@ SEED=${SEEDS[$SLURM_ARRAY_TASK_ID]}
 ENV_ID="door-lock-v2"
 
 for i in $(seq 1 360); do
-  if [ -f "$INFO_FILE" ]; then break; fi
+  if [ -s "$INFO_FILE" ]; then break; fi
   if [ $i -eq 360 ]; then echo "ERROR: Server info not found after 30min"; exit 1; fi
   sleep 5
 done
-SERVER_URL=$(cat "$INFO_FILE")
+SERVER_URL=$(tr -d '\r\n' < "$INFO_FILE")
+if [ -z "$SERVER_URL" ]; then echo "ERROR: Server URL is empty"; exit 1; fi
 
 for i in $(seq 1 360); do
   if curl -s "${SERVER_URL}/health" > /dev/null 2>&1; then echo "Server ready!"; break; fi

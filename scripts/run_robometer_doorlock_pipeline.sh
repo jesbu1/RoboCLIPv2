@@ -16,6 +16,7 @@ PROJECT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$PROJECT_DIR"
 
 mkdir -p logs
+rm -f logs/robometer_server_doorlock_pipeline_info.txt
 
 SERVER_JOB=$(sbatch --parsable scripts/robometer_server_doorlock_pipeline.sbatch)
 

@@ -11,15 +11,25 @@
 #SBATCH --output=logs/%x_%j.out
 #SBATCH --error=logs/%x_%j.err
 
-set -euo pipefail
+set -e
 
 PROJECT_DIR="${PROJECT_DIR:-${SLURM_SUBMIT_DIR}}"
 RAW_DATA_DIR="${RAW_DATA_DIR:-${PROJECT_DIR}/datasets}"
 INFO_FILE="${PROJECT_DIR}/logs/robometer_server_doorlock_pipeline_info.txt"
 
+if [ ! -f "${PROJECT_DIR}/scripts/generate_labeled_dataset_robometer.py" ]; then
+  echo "ERROR: PROJECT_DIR does not look like rewind_no-action-chunk: ${PROJECT_DIR}"
+  exit 1
+fi
+if [ ! -d "${PROJECT_DIR}/conda_envs/rewind_nochunk" ]; then
+  echo "ERROR: rewind_nochunk conda env not found under ${PROJECT_DIR}/conda_envs/rewind_nochunk"
+  exit 1
+fi
+
 module purge
 module load gcc/13.3.0
 
+export QT_XCB_GL_INTEGRATION="${QT_XCB_GL_INTEGRATION:-none}"
 source /apps/conda/miniforge3/25.11.0-1/etc/profile.d/conda.sh
 conda activate "${PROJECT_DIR}/conda_envs/rewind_nochunk"
 
@@ -28,11 +38,12 @@ export LD_PRELOAD="$(g++ -print-file-name=libstdc++.so.6)"
 cd "$PROJECT_DIR"
 
 for i in $(seq 1 360); do
-  if [ -f "$INFO_FILE" ]; then break; fi
+  if [ -s "$INFO_FILE" ]; then break; fi
   if [ $i -eq 360 ]; then echo "ERROR: Server info not found after 30min"; exit 1; fi
   sleep 5
 done
-SERVER_URL=$(cat "$INFO_FILE")
+SERVER_URL=$(tr -d '\r\n' < "$INFO_FILE")
+if [ -z "$SERVER_URL" ]; then echo "ERROR: Server URL is empty"; exit 1; fi
 echo "Using server: $SERVER_URL"
 
 for i in $(seq 1 360); do
