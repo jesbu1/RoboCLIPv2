@@ -14,7 +14,7 @@
 set -e
 
 PROJECT_DIR="${PROJECT_DIR:-${SLURM_SUBMIT_DIR}}"
-RAW_DATA_DIR="${RAW_DATA_DIR:-${PROJECT_DIR}/datasets}"
+RAW_DATA_DIR="${RAW_DATA_DIR:-/project2/biyik_1165/haobaizh/rewind_robometer_valuemodel/datasets}"
 INFO_FILE="${PROJECT_DIR}/logs/robometer_server_doorlock_pipeline_info.txt"
 
 if [ ! -f "${PROJECT_DIR}/scripts/generate_labeled_dataset_robometer.py" ]; then
@@ -23,6 +23,14 @@ if [ ! -f "${PROJECT_DIR}/scripts/generate_labeled_dataset_robometer.py" ]; then
 fi
 if [ ! -d "${PROJECT_DIR}/conda_envs/rewind_nochunk" ]; then
   echo "ERROR: rewind_nochunk conda env not found under ${PROJECT_DIR}/conda_envs/rewind_nochunk"
+  exit 1
+fi
+if [ ! -f "${RAW_DATA_DIR}/metaworld_generation.h5" ]; then
+  echo "ERROR: metaworld_generation.h5 not found under ${RAW_DATA_DIR}"
+  exit 1
+fi
+if [ ! -f "${RAW_DATA_DIR}/metaworld_embeddings_train.h5" ]; then
+  echo "ERROR: metaworld_embeddings_train.h5 not found under ${RAW_DATA_DIR}"
   exit 1
 fi
 
