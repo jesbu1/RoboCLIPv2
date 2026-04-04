@@ -207,6 +207,7 @@ class LearnedRewardWrapper(gym.Wrapper):
         self.episode_counter = 0
         self.dense_eval = dense_eval
         self.total_success_bonus = 0
+        self.is_robometer = self.reward_model.name == "RobometerRewardModel"
 
         self.reward_at_every_step = self.reward_model.reward_at_every_step
         self.reward_divisor = self.reward_model.reward_divisor
@@ -223,6 +224,16 @@ class LearnedRewardWrapper(gym.Wrapper):
             print(
                 "This may be valid if the user is using sparse/dense reward in a single task"
             )
+
+    def _get_image_for_encoder(self, image: np.ndarray) -> np.ndarray:
+        """Prepare the image tensor for the policy encoder.
+
+        Robometer uses the same center crop helper as its reward path so DINO's
+        own CenterCrop(224) becomes a no-op on identical pixels.
+        """
+        if self.is_robometer:
+            image = self.reward_model._center_crop_frame(image)
+        return image[None, None, :, :, :]
     # @profile #not here
     def save_video(self, frames, reward):
         if not frames:
@@ -268,22 +279,18 @@ class LearnedRewardWrapper(gym.Wrapper):
                 not self.is_state_based
             ):
                 image = self.env.render()
-                # Input should be of shape (batch_size, num_frames, height, width, channels)
-                # However, the input is of shape (height, width, channels)
-                image_for_model = image[None, None, :, :, :]
+                full_image_for_model = image[None, None, :, :, :]
+                image_for_model = self._get_image_for_encoder(image)
                 if (
-                    self.reward_model.name != "RobometerRewardModel"
+                    not self.is_robometer
                     or not self.reward_at_every_step
                 ):
-                    self.raw_observations.append(image_for_model)
-                # encoded_image = self.reward_model.encode_images(
-                #     image_for_model
-                # ).squeeze()
+                    self.raw_observations.append(full_image_for_model)
                 encoded_image = self.image_encoder.encode_images(
                     image_for_model
                 ).squeeze()
                 # If using Robometer, feed raw frame to its buffer
-                if self.reward_model.name == "RobometerRewardModel":
+                if self.is_robometer and not self.dense_eval:
                     self.reward_model.add_frame(image_for_model)
 
         if self.is_state_based is False and encoded_image is not None:
@@ -300,8 +307,7 @@ class LearnedRewardWrapper(gym.Wrapper):
                 reward += self.reward_model.success_bonus
                 if self.dense_eval:
                     print(f"eval success reward: {reward}")
-            # print(f"obs: {obs.shape}") # 772 = 768 + 4
-            if self.dense_eval:
+            if self.dense_eval and not self.is_robometer:
                 wandb.log({
                     "eval/eval_original_reward": original_reward,
                     "eval/eval_reward_with_success_bonus": reward
@@ -318,7 +324,7 @@ class LearnedRewardWrapper(gym.Wrapper):
             return obs, sparse_reward, done, info
 
         
-        if encoded_image is not None and self.reward_model.name != "RobometerRewardModel":
+        if encoded_image is not None and not self.is_robometer:
             self.past_observations.append(encoded_image)
 
         assert (
@@ -354,7 +360,7 @@ class LearnedRewardWrapper(gym.Wrapper):
                 current_progress = self.reward_model.calculate_rewards(
                     self.reward_language_features, stacked_sequence
                 )
-            elif self.reward_model.name == "RobometerRewardModel":
+            elif self.is_robometer:
                 # Robometer uses its internal frame buffer and does not need
                 # the 768-dim DINO history tensor that other reward models use.
                 current_progress = self.reward_model.calculate_rewards(
@@ -373,16 +379,18 @@ class LearnedRewardWrapper(gym.Wrapper):
                 else:
                     reward = 0.0  # First step after reset, no diff available
                 self.prev_progress = current_progress
-                wandb.log({"train/learned_reward_per_step": reward, "train/progress": current_progress})
+                if not self.is_robometer:
+                    wandb.log({"train/learned_reward_per_step": reward, "train/progress": current_progress})
             else:
                 # Original mode: reward = P(s)
                 reward = current_progress
-                wandb.log({"train/learned_reward_per_step": reward})
+                if not self.is_robometer:
+                    wandb.log({"train/learned_reward_per_step": reward})
             # print(f"reward : {reward}")
             # exit()
         else:
             if done:
-                if self.reward_model.name == "RobometerRewardModel":
+                if self.is_robometer:
                     reward = self.reward_model.calculate_rewards(
                         self.reward_language_features, None
                     )
@@ -466,17 +474,17 @@ class LearnedRewardWrapper(gym.Wrapper):
         self.counter = 0
         self.prev_progress = None
         # Clear Robometer frame buffer on reset
-        if self.reward_model.name == "RobometerRewardModel":
+        if self.is_robometer:
             self.reward_model.clear_frame_buffer()
         obs = self.env.reset()
 
         # This is for the reward function
         image = self.env.render()
-        image_for_model = image[None, None, :, :, :]
-        # print(image_for_model.shape)
+        full_image_for_model = image[None, None, :, :, :]
+        image_for_model = self._get_image_for_encoder(image)
         encoded_image = self.image_encoder.encode_images(image_for_model).squeeze()
         # If using Robometer, feed raw frame to its buffer
-        if self.reward_model.name == "RobometerRewardModel":
+        if self.is_robometer and not self.dense_eval:
             self.reward_model.add_frame(image_for_model)
 
         if self.is_state_based is False:
@@ -486,13 +494,13 @@ class LearnedRewardWrapper(gym.Wrapper):
 
             else:
                 obs = encoded_image
-        if self.reward_model.name != "RobometerRewardModel":
+        if not self.is_robometer:
             self.past_observations.append(encoded_image)
         if (
-            self.reward_model.name != "RobometerRewardModel"
+            not self.is_robometer
             or not self.reward_at_every_step
         ):
-            self.raw_observations.append(image_for_model)
+            self.raw_observations.append(full_image_for_model)
         wandb.log({"train/total_success_bonus": self.total_success_bonus})
         self.total_success_bonus = 0
 
@@ -506,7 +514,7 @@ class LearnedRewardWrapper(gym.Wrapper):
                 initial_progress = self.reward_model.calculate_rewards(
                     self.reward_language_features, stacked_sequence
                 )
-            elif self.reward_model.name == "RobometerRewardModel":
+            elif self.is_robometer and not self.dense_eval:
                 initial_progress = self.reward_model.calculate_rewards(
                     self.reward_language_features, None
                 )

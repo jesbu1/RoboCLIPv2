@@ -48,6 +48,8 @@ class RobometerRewardModel(BaseRewardModel):
         self._frame_buffer: List[np.ndarray] = []
         # Task text: stored when encode_text is called
         self._task_text: str = ""
+        # Lazily initialized so env construction/pickling stays unchanged.
+        self._requests_session = None
 
         if use_server:
             print(f"[RobometerRewardModel] Using HTTP server at {self.server_url}")
@@ -126,6 +128,12 @@ class RobometerRewardModel(BaseRewardModel):
         """Clear the frame buffer. Called by the wrapper on reset."""
         self._frame_buffer = []
 
+    def _select_frame_indices(self, num_frames: int) -> np.ndarray:
+        """Return the exact indices used for Robometer frame subsampling."""
+        if num_frames <= self.max_frames:
+            return np.arange(num_frames, dtype=int)
+        return np.linspace(0, num_frames - 1, self.max_frames, dtype=int)
+
     # ------------------------------------------------------------------
     # _encode_text_batch: required by BaseRewardModel.encode_text()
     # ------------------------------------------------------------------
@@ -185,7 +193,9 @@ class RobometerRewardModel(BaseRewardModel):
         if len(self._frame_buffer) == 0:
             return np.array([0.0])
 
-        frames = np.stack(self._frame_buffer, axis=0)  # (T, H, W, C) uint8
+        indices = self._select_frame_indices(len(self._frame_buffer))
+        selected_frames = [self._frame_buffer[idx] for idx in indices]
+        frames = np.stack(selected_frames, axis=0)  # (T, H, W, C) uint8
 
         if self.use_server:
             progress = self._infer_server(frames, self._task_text)
@@ -261,11 +271,22 @@ class RobometerRewardModel(BaseRewardModel):
         }
 
         try:
-            resp = requests.post(
-                f"{self.server_url}/predict",
-                json=payload,
-                timeout=30,
-            )
+            if self._requests_session is None:
+                self._requests_session = requests.Session()
+            try:
+                resp = self._requests_session.post(
+                    f"{self.server_url}/predict",
+                    json=payload,
+                    timeout=30,
+                )
+            except Exception:
+                # Fall back to a one-shot request if the pooled connection is stale.
+                self._requests_session = None
+                resp = requests.post(
+                    f"{self.server_url}/predict",
+                    json=payload,
+                    timeout=30,
+                )
             resp.raise_for_status()
             result = resp.json()
             progress = result.get("progress", result.get("reward", 0.0))

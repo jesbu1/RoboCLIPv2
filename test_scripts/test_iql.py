@@ -279,6 +279,9 @@ def main(cfg: DictConfig):
     reward_model, image_encoder = parse_reward_model(cfg.reward_model)
 
     ### Create environment and callbacks ###
+    is_robometer = reward_model.name == "RobometerRewardModel"
+    histogram_freq = 5000 if is_robometer else 500
+    wandb_dump_freq = 100 if is_robometer else 1
     envs, eval_env = create_envs(cfg, reward_model, image_encoder)
     model, model_class, policy_kwargs = get_policy_algorithm(cfg, envs, log_dir)
 
@@ -300,12 +303,17 @@ def main(cfg: DictConfig):
         log_path=log_dir,
         eval_freq=eval_freq,
         video_freq=video_freq,
+        histogram_freq=histogram_freq,
         deterministic=True,
         render=False,
         n_eval_episodes=25,
     )
 
-    callback_list = generate_callback_list(logging_config, eval_callback)
+    callback_list = generate_callback_list(
+        logging_config,
+        eval_callback,
+        wandb_dump_freq=wandb_dump_freq,
+    )
 
     # Create the logger
     wandb_logger = WandBLogger()
@@ -857,9 +865,13 @@ def get_policy_algorithm(cfg: DictConfig, envs: VecEnv, log_dir: str):
     return model, model_class, policy_kwargs
 
 
-def generate_callback_list(args: DictConfig, eval_callback: EvalCallback):
+def generate_callback_list(
+    args: DictConfig,
+    eval_callback: EvalCallback,
+    wandb_dump_freq: int = 1,
+):
     if args.wandb:
-        customwandbcallback = CustomWandbCallback()
+        customwandbcallback = CustomWandbCallback(log_frequency=wandb_dump_freq)
         callback = CallbackList([eval_callback, customwandbcallback])
     else:
         callback = eval_callback
