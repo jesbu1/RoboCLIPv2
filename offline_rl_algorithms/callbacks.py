@@ -9,10 +9,9 @@ import io
 
 
 class OfflineEvalCallback(EvalCallback):
-    def __init__(self, *args, video_freq, histogram_freq=500, **kwargs):
+    def __init__(self, *args, video_freq, **kwargs):
         super(OfflineEvalCallback, self).__init__(*args, **kwargs)
         self.video_freq = video_freq
-        self.histogram_freq = histogram_freq
         # we need to overide num_timesteps as EvalCallback uses it to align the built in logger's x-axis
         # we are using wandb so now we're using self.n_calls as the step for everything
         self.num_timesteps = lambda x: self.n_calls  # convert num_timst
@@ -20,7 +19,7 @@ class OfflineEvalCallback(EvalCallback):
     def _on_step(self) -> bool:
         # print(self.n_calls, self.n_calls % self.video_freq)
         # Log policy gradients
-        if self.n_calls % self.histogram_freq == 0:
+        if self.n_calls % 500 == 0:
             # 检查算法类型
             if hasattr(self.model, 'policy') and hasattr(self.model.policy, 'actor'):
                 # SAC/TD3 类型的算法
@@ -149,21 +148,9 @@ class OfflineEvalCallback(EvalCallback):
 
 
 class CustomWandbCallback(WandbCallback):
-    def __init__(self, *args, log_frequency=1, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.log_frequency = max(int(log_frequency), 1)
-
     def _on_step(self):
         if "metrics" in self.locals:
             self.logger.record_dict(self.locals["metrics"])
-        logger_values = getattr(self.logger, "name_to_value", {})
-        has_eval_payload = any(str(key).startswith("eval/") for key in logger_values)
-        if self.n_calls % self.log_frequency == 0 or has_eval_payload:
-            self.logger.dump(
-                self.n_calls
-            )  # this ensures that dump gets called, otherwise it's only called in EvalCallback whenever an eval happens
-
-    def _on_training_end(self):
-        if self.log_frequency > 1 and getattr(self.logger, "name_to_value", None):
-            if len(self.logger.name_to_value) > 0:
-                self.logger.dump(self.n_calls)
+        self.logger.dump(
+            self.n_calls
+        )  # this ensures that dump gets called, otherwise it's only called in EvalCallback whenever an eval happens
