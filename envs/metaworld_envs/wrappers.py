@@ -250,6 +250,24 @@ class LearnedRewardWrapper(gym.Wrapper):
             print(f"Error saving video: {e}")
             print(f"Current working directory: {os.getcwd()}")
 
+    def _is_robometer_reward(self) -> bool:
+        return self.reward_model.name == "RobometerRewardModel"
+
+    def _prepare_image_for_model(self, image: np.ndarray) -> np.ndarray:
+        """
+        Prepare the render used by the encoder/reward model.
+
+        Robometer and DINO should see the same center crop so we crop once here
+        using Robometer's own helper, then let DINO's CenterCrop(224) become a no-op.
+        Other reward models keep the original full render.
+        """
+        processed_image = image
+        if self._is_robometer_reward():
+            crop_fn = getattr(self.reward_model, "_center_crop_frame", None)
+            if callable(crop_fn):
+                processed_image = crop_fn(image)
+        return processed_image[None, None, :, :, :]
+
     def step(self, action):
         self.counter += 1
         obs, original_reward, done, info = self.env.step(action)
@@ -268,14 +286,13 @@ class LearnedRewardWrapper(gym.Wrapper):
                 not self.is_state_based
             ):
                 image = self.env.render()
-                # Input should be of shape (batch_size, num_frames, height, width, channels)
-                # However, the input is of shape (height, width, channels)
-                image_for_model = image[None, None, :, :, :]
+                raw_image_for_model = image[None, None, :, :, :]
+                image_for_model = self._prepare_image_for_model(image)
                 if (
                     self.reward_model.name != "RobometerRewardModel"
                     or not self.reward_at_every_step
                 ):
-                    self.raw_observations.append(image_for_model)
+                    self.raw_observations.append(raw_image_for_model)
                 # encoded_image = self.reward_model.encode_images(
                 #     image_for_model
                 # ).squeeze()
@@ -283,7 +300,7 @@ class LearnedRewardWrapper(gym.Wrapper):
                     image_for_model
                 ).squeeze()
                 # If using Robometer, feed raw frame to its buffer
-                if self.reward_model.name == "RobometerRewardModel":
+                if self._is_robometer_reward() and not self.dense_eval:
                     self.reward_model.add_frame(image_for_model)
 
         if self.is_state_based is False and encoded_image is not None:
@@ -301,7 +318,7 @@ class LearnedRewardWrapper(gym.Wrapper):
                 if self.dense_eval:
                     print(f"eval success reward: {reward}")
             # print(f"obs: {obs.shape}") # 772 = 768 + 4
-            if self.dense_eval:
+            if self.dense_eval and not self._is_robometer_reward():
                 wandb.log({
                     "eval/eval_original_reward": original_reward,
                     "eval/eval_reward_with_success_bonus": reward
@@ -472,11 +489,12 @@ class LearnedRewardWrapper(gym.Wrapper):
 
         # This is for the reward function
         image = self.env.render()
-        image_for_model = image[None, None, :, :, :]
+        raw_image_for_model = image[None, None, :, :, :]
+        image_for_model = self._prepare_image_for_model(image)
         # print(image_for_model.shape)
         encoded_image = self.image_encoder.encode_images(image_for_model).squeeze()
         # If using Robometer, feed raw frame to its buffer
-        if self.reward_model.name == "RobometerRewardModel":
+        if self._is_robometer_reward() and not self.dense_eval:
             self.reward_model.add_frame(image_for_model)
 
         if self.is_state_based is False:
@@ -492,7 +510,7 @@ class LearnedRewardWrapper(gym.Wrapper):
             self.reward_model.name != "RobometerRewardModel"
             or not self.reward_at_every_step
         ):
-            self.raw_observations.append(image_for_model)
+            self.raw_observations.append(raw_image_for_model)
         wandb.log({"train/total_success_bonus": self.total_success_bonus})
         self.total_success_bonus = 0
 
@@ -507,9 +525,12 @@ class LearnedRewardWrapper(gym.Wrapper):
                     self.reward_language_features, stacked_sequence
                 )
             elif self.reward_model.name == "RobometerRewardModel":
-                initial_progress = self.reward_model.calculate_rewards(
-                    self.reward_language_features, None
-                )
+                if self.dense_eval:
+                    initial_progress = None
+                else:
+                    initial_progress = self.reward_model.calculate_rewards(
+                        self.reward_language_features, None
+                    )
             else:
                 initial_progress = None
             if initial_progress is not None:

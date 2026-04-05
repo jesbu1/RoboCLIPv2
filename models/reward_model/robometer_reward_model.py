@@ -48,8 +48,12 @@ class RobometerRewardModel(BaseRewardModel):
         self._frame_buffer: List[np.ndarray] = []
         # Task text: stored when encode_text is called
         self._task_text: str = ""
+        self._session = None
 
         if use_server:
+            import requests
+
+            self._session = requests.Session()
             print(f"[RobometerRewardModel] Using HTTP server at {self.server_url}")
         else:
             print(f"[RobometerRewardModel] Loading model from {model_path} ...")
@@ -119,12 +123,34 @@ class RobometerRewardModel(BaseRewardModel):
             frame = np.transpose(frame, (1, 2, 0))  # CHW -> HWC
         if frame.dtype != np.uint8:
             frame = np.clip(frame, 0, 255).astype(np.uint8)
-        frame = self._center_crop_frame(frame)
+        if frame.ndim == 3:
+            frame = frame[..., :3]
+            if frame.shape[0] == 224 and frame.shape[1] == 224:
+                frame = np.ascontiguousarray(frame)
+            else:
+                frame = self._center_crop_frame(frame)
         self._frame_buffer.append(frame.copy())
 
     def clear_frame_buffer(self):
         """Clear the frame buffer. Called by the wrapper on reset."""
         self._frame_buffer = []
+
+    def _subsample_frames(
+        self, frames: Union[List[np.ndarray], np.ndarray]
+    ) -> Union[List[np.ndarray], np.ndarray]:
+        """Keep Robometer frame selection identical while avoiding extra stacking work."""
+        if isinstance(frames, np.ndarray):
+            num_frames = frames.shape[0]
+        else:
+            num_frames = len(frames)
+
+        if num_frames <= self.max_frames:
+            return frames
+
+        indices = np.linspace(0, num_frames - 1, self.max_frames, dtype=int)
+        if isinstance(frames, np.ndarray):
+            return frames[indices]
+        return [frames[idx] for idx in indices]
 
     # ------------------------------------------------------------------
     # _encode_text_batch: required by BaseRewardModel.encode_text()
@@ -185,7 +211,8 @@ class RobometerRewardModel(BaseRewardModel):
         if len(self._frame_buffer) == 0:
             return np.array([0.0])
 
-        frames = np.stack(self._frame_buffer, axis=0)  # (T, H, W, C) uint8
+        selected_frames = self._subsample_frames(self._frame_buffer)
+        frames = np.stack(selected_frames, axis=0)  # (T, H, W, C) uint8
 
         if self.use_server:
             progress = self._infer_server(frames, self._task_text)
@@ -201,11 +228,8 @@ class RobometerRewardModel(BaseRewardModel):
         from robometer.data.dataset_types import ProgressSample, Trajectory
         from robometer.evals.eval_server import compute_batch_outputs
 
+        frames = self._subsample_frames(frames)
         T = frames.shape[0]
-        if T > self.max_frames:
-            indices = np.linspace(0, T - 1, self.max_frames, dtype=int)
-            frames = frames[indices]
-            T = self.max_frames
         traj = Trajectory(
             frames=frames,
             frames_shape=tuple(frames.shape),
@@ -245,10 +269,7 @@ class RobometerRewardModel(BaseRewardModel):
         import io
         import base64
 
-        T = frames.shape[0]
-        if T > self.max_frames:
-            indices = np.linspace(0, T - 1, self.max_frames, dtype=int)
-            frames = frames[indices]
+        frames = self._subsample_frames(frames)
 
         buf = io.BytesIO()
         np.save(buf, frames)
@@ -261,11 +282,18 @@ class RobometerRewardModel(BaseRewardModel):
         }
 
         try:
-            resp = requests.post(
-                f"{self.server_url}/predict",
-                json=payload,
-                timeout=30,
-            )
+            if self._session is not None:
+                resp = self._session.post(
+                    f"{self.server_url}/predict",
+                    json=payload,
+                    timeout=30,
+                )
+            else:
+                resp = requests.post(
+                    f"{self.server_url}/predict",
+                    json=payload,
+                    timeout=30,
+                )
             resp.raise_for_status()
             result = resp.json()
             progress = result.get("progress", result.get("reward", 0.0))
@@ -273,6 +301,25 @@ class RobometerRewardModel(BaseRewardModel):
                 return float(progress[-1])
             return float(progress)
         except Exception as e:
+            if self._session is not None:
+                try:
+                    resp = requests.post(
+                        f"{self.server_url}/predict",
+                        json=payload,
+                        timeout=30,
+                    )
+                    resp.raise_for_status()
+                    result = resp.json()
+                    progress = result.get("progress", result.get("reward", 0.0))
+                    if isinstance(progress, list):
+                        return float(progress[-1])
+                    return float(progress)
+                except Exception as fallback_error:
+                    print(
+                        "[RobometerRewardModel] Server inference failed: "
+                        f"{e}; fallback failed: {fallback_error}"
+                    )
+                    return 0.0
             print(f"[RobometerRewardModel] Server inference failed: {e}")
             return 0.0
 
