@@ -20,6 +20,7 @@ set -e
 
 PROJECT_DIR="${PROJECT_DIR:-${SLURM_SUBMIT_DIR}}"
 INFO_FILE="${PROJECT_DIR}/logs/robometer_server_seed0_group7_info.txt"
+EXPECTED_SERVER_JOB_ID="${EXPECTED_SERVER_JOB_ID:-}"
 SEED=0
 LOG_ROOT="/scratch1/haobaizh/rewind_nochunk_online_logs/robometer"
 
@@ -56,12 +57,36 @@ export WANDB_MODE=online
 
 cd "$PROJECT_DIR"
 
+read_server_url() {
+  local info_line server_job_id server_url
+  info_line=$(tr -d '\r\n' < "$INFO_FILE")
+  if [ -z "$info_line" ]; then
+    return 1
+  fi
+
+  if [[ "$info_line" == http* ]]; then
+    printf '%s\n' "$info_line"
+    return 0
+  fi
+
+  server_job_id="${info_line%% *}"
+  server_url="${info_line#* }"
+  if [ -n "$EXPECTED_SERVER_JOB_ID" ] && [ "$server_job_id" != "$EXPECTED_SERVER_JOB_ID" ]; then
+    return 1
+  fi
+  if [ -z "$server_url" ] || [[ "$server_url" != http* ]]; then
+    return 1
+  fi
+
+  printf '%s\n' "$server_url"
+  return 0
+}
+
 for i in $(seq 1 360); do
-  if [ -s "$INFO_FILE" ]; then break; fi
+  if [ -s "$INFO_FILE" ] && SERVER_URL="$(read_server_url)"; then break; fi
   if [ $i -eq 360 ]; then echo "ERROR: Server info not found after 30min"; exit 1; fi
   sleep 5
 done
-SERVER_URL=$(tr -d '\r\n' < "$INFO_FILE")
 if [ -z "$SERVER_URL" ]; then echo "ERROR: Server URL is empty"; exit 1; fi
 
 for i in $(seq 1 360); do

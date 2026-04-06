@@ -20,6 +20,7 @@ ROBOMETER_CONDA="${ROBOMETER_CONDA:-${ROBOMETER_PROJECT_DIR}/conda_envs/robomete
 SERVER_PORT="${SERVER_PORT:-8006}"
 INFO_FILE="${PROJECT_DIR}/logs/robometer_server_seed0_group7_info.txt"
 TMP_INFO_FILE="${INFO_FILE}.tmp"
+SERVER_PID=""
 
 if [ ! -f "${PROJECT_DIR}/test_scripts/test_iql.py" ]; then
   echo "ERROR: PROJECT_DIR does not look like rewind_no-action-chunk: ${PROJECT_DIR}"
@@ -46,11 +47,70 @@ which python
 python --version
 nvidia-smi
 
+cleanup() {
+  if [ -n "${SERVER_PID}" ] && kill -0 "${SERVER_PID}" 2>/dev/null; then
+    kill "${SERVER_PID}" 2>/dev/null || true
+    wait "${SERVER_PID}" 2>/dev/null || true
+  fi
+}
+trap cleanup EXIT
+
+pick_port() {
+  local candidate
+  for candidate in "$SERVER_PORT" $(seq 18006 18038); do
+    if python - "$candidate" <<'PY'
+import socket
+import sys
+
+port = int(sys.argv[1])
+sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+try:
+    sock.bind(("0.0.0.0", port))
+except OSError:
+    sys.exit(1)
+sock.close()
+sys.exit(0)
+PY
+    then
+      echo "$candidate"
+      return 0
+    fi
+  done
+
+  echo "ERROR: Could not find a free server port for group7" >&2
+  return 1
+}
+
 SERVER_HOST=$(hostname)
 mkdir -p "$(dirname "$INFO_FILE")"
-echo "http://${SERVER_HOST}:${SERVER_PORT}" > "$TMP_INFO_FILE"
-mv "$TMP_INFO_FILE" "$INFO_FILE"
-echo "Server at: http://${SERVER_HOST}:${SERVER_PORT}"
+rm -f "$INFO_FILE" "$TMP_INFO_FILE"
+SERVER_PORT="$(pick_port)"
+HEALTH_URL="http://${SERVER_HOST}:${SERVER_PORT}/health"
+
+echo "Server will use: http://${SERVER_HOST}:${SERVER_PORT}"
 
 cd "$ROBOMETER_PROJECT_DIR"
-python -u robometer_server.py --port "$SERVER_PORT"
+python -u robometer_server.py --port "$SERVER_PORT" &
+SERVER_PID=$!
+
+for i in $(seq 1 360); do
+  if curl -s "${HEALTH_URL}" > /dev/null 2>&1; then
+    echo "${SLURM_JOB_ID} http://${SERVER_HOST}:${SERVER_PORT}" > "$TMP_INFO_FILE"
+    mv "$TMP_INFO_FILE" "$INFO_FILE"
+    echo "Server ready at: http://${SERVER_HOST}:${SERVER_PORT}"
+    wait "${SERVER_PID}"
+    exit $?
+  fi
+
+  if ! kill -0 "${SERVER_PID}" 2>/dev/null; then
+    echo "ERROR: Robometer server process exited before becoming healthy"
+    wait "${SERVER_PID}"
+    exit 1
+  fi
+
+  sleep 5
+done
+
+echo "ERROR: Robometer server did not become healthy within 30 minutes"
+exit 1
