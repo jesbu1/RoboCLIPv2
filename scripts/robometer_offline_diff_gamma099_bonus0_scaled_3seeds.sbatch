@@ -15,7 +15,7 @@
 set -e
 
 PROJECT_DIR="${PROJECT_DIR:-${SLURM_SUBMIT_DIR}}"
-INFO_FILE="${PROJECT_DIR}/logs/robometer_server_doorlock_pipeline_info.txt"
+INFO_FILE="${INFO_FILE:-${PROJECT_DIR}/logs/robometer_server_doorlock_pipeline_info.txt}"
 
 if [ ! -f "${PROJECT_DIR}/test_scripts/test_iql.py" ]; then
   echo "ERROR: PROJECT_DIR does not look like rewind_no-action-chunk: ${PROJECT_DIR}"

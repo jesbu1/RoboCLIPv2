@@ -21,7 +21,7 @@ set -e
 
 PROJECT_DIR="${PROJECT_DIR:-${SLURM_SUBMIT_DIR}}"
 INFO_FILE="${PROJECT_DIR}/logs/robometer_server_seed0_group9_info.txt"
-SEED=32
+SEED=0
 LOG_ROOT="/scratch1/haobaizh/rewind_nochunk_online_logs/robometer"
 
 if [ ! -f "${PROJECT_DIR}/test_scripts/test_iql.py" ]; then
