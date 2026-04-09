@@ -59,16 +59,16 @@ for idx in "${!GROUP_IDS[@]}"; do
   RERUN_JOB_IDS+=("${rerun_job_id}")
 done
 
-SERVER_JOB_IDS_CSV="$(IFS=,; echo "${SERVER_JOB_IDS[*]}")"
-INFO_FILES_CSV="$(IFS=,; echo "${INFO_FILES[*]}")"
-RERUN_JOB_IDS_CSV="$(IFS=,; echo "${RERUN_JOB_IDS[*]}")"
+SERVER_JOB_IDS_LIST="$(IFS='|'; echo "${SERVER_JOB_IDS[*]}")"
+INFO_FILES_LIST="$(IFS='|'; echo "${INFO_FILES[*]}")"
+RERUN_JOB_IDS_LIST="$(IFS='|'; echo "${RERUN_JOB_IDS[*]}")"
 MANIFEST="logs/robometer_baseline_gamma0_bundle_$(date +%Y%m%d_%H%M%S).txt"
 
 LAUNCHER_JOB_ID=$(sbatch --parsable \
   --job-name="robo_launch_bg0" \
   --output="logs/robo_launch_bg0_%j.out" \
   --error="logs/robo_launch_bg0_%j.err" \
-  --export=ALL,PROJECT_DIR="${PROJECT_DIR}",SERVER_JOB_IDS="${SERVER_JOB_IDS_CSV}",SERVER_INFO_FILES="${INFO_FILES_CSV}",RERUN_JOB_IDS="${RERUN_JOB_IDS_CSV}",SUBMIT_MANIFEST="${PROJECT_DIR}/${MANIFEST}" \
+  --export=ALL,PROJECT_DIR="${PROJECT_DIR}",SERVER_JOB_IDS="${SERVER_JOB_IDS_LIST}",SERVER_INFO_FILES="${INFO_FILES_LIST}",RERUN_JOB_IDS="${RERUN_JOB_IDS_LIST}",SUBMIT_MANIFEST="${PROJECT_DIR}/${MANIFEST}" \
   scripts/robometer_launch_baseline_base_reward_gamma0_bundle.sbatch)
 
 {

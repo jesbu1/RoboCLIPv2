@@ -56,8 +56,9 @@ export WANDB_MODE=online
 
 cd "$PROJECT_DIR"
 
-IFS=',' read -r -a INFO_FILES <<< "$SERVER_INFO_FILES"
-ALLOWED_SERVER_IDS=",$(echo "$SERVER_JOB_IDS" | tr -d ' '),"
+IFS='|' read -r -a INFO_FILES <<< "$SERVER_INFO_FILES"
+IFS='|' read -r -a SERVER_IDS <<< "$SERVER_JOB_IDS"
+ALLOWED_SERVER_IDS="|$(IFS='|'; echo "${SERVER_IDS[*]}")|"
 
 read_server_url() {
   local info_file="$1"
@@ -72,7 +73,7 @@ read_server_url() {
   fi
   server_job_id="${info_line%% *}"
   server_url="${info_line#* }"
-  if [ -n "$SERVER_JOB_IDS" ] && [[ "$ALLOWED_SERVER_IDS" != *",${server_job_id},"* ]]; then
+  if [ -n "$SERVER_JOB_IDS" ] && [[ "$ALLOWED_SERVER_IDS" != *"|${server_job_id}|"* ]]; then
     return 1
   fi
   if [ -z "$server_url" ] || [[ "$server_url" != http* ]]; then

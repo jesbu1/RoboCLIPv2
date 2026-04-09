@@ -27,14 +27,17 @@ fi
 cd "$PROJECT_DIR"
 mkdir -p "$(dirname "$SUBMIT_MANIFEST")"
 
-IFS=',' read -r -a SERVER_IDS <<< "$SERVER_JOB_IDS"
-IFS=',' read -r -a INFO_FILES <<< "$SERVER_INFO_FILES"
-IFS=',' read -r -a RERUN_IDS <<< "$RERUN_JOB_IDS"
+IFS='|' read -r -a SERVER_IDS <<< "$SERVER_JOB_IDS"
+IFS='|' read -r -a INFO_FILES <<< "$SERVER_INFO_FILES"
+IFS='|' read -r -a RERUN_IDS <<< "$RERUN_JOB_IDS"
 
 if [ "${#SERVER_IDS[@]}" -ne 8 ] || [ "${#INFO_FILES[@]}" -ne 8 ] || [ "${#RERUN_IDS[@]}" -ne 8 ]; then
   echo "ERROR: Expected 8 SERVER_JOB_IDS, 8 SERVER_INFO_FILES, and 8 RERUN_JOB_IDS"
   exit 1
 fi
+
+SERVER_IDS_CSV="$(IFS=,; echo "${SERVER_IDS[*]}")"
+ALLOWED_SERVER_IDS="|$(IFS='|'; echo "${SERVER_IDS[*]}")|"
 
 read_server_url() {
   local info_file="$1"
@@ -49,7 +52,7 @@ read_server_url() {
   fi
   server_job_id="${info_line%% *}"
   server_url="${info_line#* }"
-  if [[ ",${SERVER_JOB_IDS}," != *",${server_job_id},"* ]]; then
+  if [[ "$ALLOWED_SERVER_IDS" != *"|${server_job_id}|"* ]]; then
     return 1
   fi
   if [ -z "$server_url" ] || [[ "$server_url" != http* ]]; then
@@ -69,7 +72,7 @@ for i in $(seq 1 34560); do
       fi
     fi
   done
-  if ! squeue -h -j "$SERVER_JOB_IDS" | grep -q .; then
+  if ! squeue -h -j "$SERVER_IDS_CSV" | grep -q .; then
     echo "ERROR: All server jobs left the queue before any healthy server became available"
     exit 1
   fi
