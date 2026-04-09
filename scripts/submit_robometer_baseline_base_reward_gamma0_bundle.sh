@@ -12,6 +12,7 @@ GROUP_IDS=(15 16 17 18 19 20 21 22)
 SERVER_PORTS=(8040 8041 8042 8043 8044 8045 8046 8047)
 FALLBACK_STARTS=(18368 18374 18380 18386 18392 18398 18404 18410)
 FALLBACK_ENDS=(18373 18379 18385 18391 18397 18403 18409 18415)
+STARTUP_DELAYS=(0 90 180 270 360 450 540 630)
 
 RERUN_ENVS=(
   "faucet-close-v2"
@@ -36,7 +37,7 @@ for idx in "${!GROUP_IDS[@]}"; do
     --job-name="robo_srv_mix_g${group_id}" \
     --output="logs/robometer_server_mixed_group${group_id}_%j.out" \
     --error="logs/robometer_server_mixed_group${group_id}_%j.err" \
-    --export=ALL,PROJECT_DIR="${PROJECT_DIR}",GROUP_ID="${group_id}",SERVER_LABEL="mixed_group_${group_id}",INFO_FILE="${info_file}",SERVER_PORT="${SERVER_PORTS[$idx]}",FALLBACK_START="${FALLBACK_STARTS[$idx]}",FALLBACK_END="${FALLBACK_ENDS[$idx]}" \
+    --export=ALL,PROJECT_DIR="${PROJECT_DIR}",GROUP_ID="${group_id}",SERVER_LABEL="mixed_group_${group_id}",INFO_FILE="${info_file}",SERVER_PORT="${SERVER_PORTS[$idx]}",FALLBACK_START="${FALLBACK_STARTS[$idx]}",FALLBACK_END="${FALLBACK_ENDS[$idx]}",STARTUP_DELAY_SEC="${STARTUP_DELAYS[$idx]}",STARTUP_MAX_ATTEMPTS=6,STARTUP_BACKOFF_BASE_SEC=120 \
     scripts/robometer_server_mixed_group_generic.sbatch)
   SERVER_JOB_IDS+=("${server_job_id}")
   INFO_FILES+=("${info_file}")

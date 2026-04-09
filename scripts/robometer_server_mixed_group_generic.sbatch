@@ -24,6 +24,9 @@ FALLBACK_START="${FALLBACK_START:-18368}"
 FALLBACK_END="${FALLBACK_END:-18373}"
 INFO_FILE="${INFO_FILE:-${PROJECT_DIR}/logs/robometer_server_mixed_group${GROUP_ID}_info.txt}"
 TMP_INFO_FILE="${INFO_FILE}.tmp"
+STARTUP_DELAY_SEC="${STARTUP_DELAY_SEC:-0}"
+STARTUP_MAX_ATTEMPTS="${STARTUP_MAX_ATTEMPTS:-6}"
+STARTUP_BACKOFF_BASE_SEC="${STARTUP_BACKOFF_BASE_SEC:-120}"
 SERVER_PID=""
 
 if [ ! -f "${PROJECT_DIR}/test_scripts/test_iql.py" ]; then
@@ -50,6 +53,9 @@ echo "========== Robometer Server (${SERVER_LABEL}) =========="
 which python
 python --version
 nvidia-smi
+echo "Startup delay: ${STARTUP_DELAY_SEC}s"
+echo "Startup max attempts: ${STARTUP_MAX_ATTEMPTS}"
+echo "Startup backoff base: ${STARTUP_BACKOFF_BASE_SEC}s"
 
 cleanup() {
   if [ -n "${SERVER_PID}" ] && kill -0 "${SERVER_PID}" 2>/dev/null; then
@@ -89,32 +95,63 @@ PY
 SERVER_HOST=$(hostname)
 mkdir -p "$(dirname "$INFO_FILE")"
 rm -f "$INFO_FILE" "$TMP_INFO_FILE"
-SERVER_PORT="$(pick_port)"
-HEALTH_URL="http://${SERVER_HOST}:${SERVER_PORT}/health"
-
-echo "Server will use: http://${SERVER_HOST}:${SERVER_PORT}"
-
 cd "$ROBOMETER_PROJECT_DIR"
-python -u robometer_server.py --port "$SERVER_PORT" &
-SERVER_PID=$!
 
-for i in $(seq 1 360); do
-  if curl -s "${HEALTH_URL}" > /dev/null 2>&1; then
-    echo "${SLURM_JOB_ID} http://${SERVER_HOST}:${SERVER_PORT}" > "$TMP_INFO_FILE"
-    mv "$TMP_INFO_FILE" "$INFO_FILE"
-    echo "Server ready at: http://${SERVER_HOST}:${SERVER_PORT}"
-    wait "${SERVER_PID}"
-    exit $?
+if [ "$STARTUP_DELAY_SEC" -gt 0 ]; then
+  sleep "$STARTUP_DELAY_SEC"
+fi
+
+for attempt in $(seq 1 "$STARTUP_MAX_ATTEMPTS"); do
+  SERVER_PORT="$(pick_port)"
+  HEALTH_URL="http://${SERVER_HOST}:${SERVER_PORT}/health"
+
+  echo "Launch attempt ${attempt}/${STARTUP_MAX_ATTEMPTS}"
+  echo "Server will use: http://${SERVER_HOST}:${SERVER_PORT}"
+
+  python -u robometer_server.py --port "$SERVER_PORT" &
+  SERVER_PID=$!
+
+  attempt_failed=0
+  for i in $(seq 1 360); do
+    if curl -s "${HEALTH_URL}" > /dev/null 2>&1; then
+      echo "${SLURM_JOB_ID} http://${SERVER_HOST}:${SERVER_PORT}" > "$TMP_INFO_FILE"
+      mv "$TMP_INFO_FILE" "$INFO_FILE"
+      echo "Server ready at: http://${SERVER_HOST}:${SERVER_PORT}"
+      wait "${SERVER_PID}"
+      exit $?
+    fi
+
+    if ! kill -0 "${SERVER_PID}" 2>/dev/null; then
+      if wait "${SERVER_PID}"; then
+        server_rc=0
+      else
+        server_rc=$?
+      fi
+      SERVER_PID=""
+      echo "ERROR: Robometer server process exited before becoming healthy (attempt ${attempt}/${STARTUP_MAX_ATTEMPTS}, exit=${server_rc})"
+      attempt_failed=1
+      break
+    fi
+
+    sleep 5
+  done
+
+  if [ "$attempt_failed" -eq 0 ]; then
+    if kill -0 "${SERVER_PID}" 2>/dev/null; then
+      kill "${SERVER_PID}" 2>/dev/null || true
+      wait "${SERVER_PID}" 2>/dev/null || true
+    fi
+    SERVER_PID=""
+    echo "ERROR: Robometer server did not become healthy within 30 minutes (attempt ${attempt}/${STARTUP_MAX_ATTEMPTS})"
+    attempt_failed=1
   fi
 
-  if ! kill -0 "${SERVER_PID}" 2>/dev/null; then
-    echo "ERROR: Robometer server process exited before becoming healthy"
-    wait "${SERVER_PID}"
-    exit 1
+  if [ "$attempt" -lt "$STARTUP_MAX_ATTEMPTS" ]; then
+    backoff_sec=$((STARTUP_BACKOFF_BASE_SEC * attempt + RANDOM % 60))
+    echo "Retrying after ${backoff_sec}s"
+    sleep "$backoff_sec"
   fi
-
-  sleep 5
 done
 
-echo "ERROR: Robometer server did not become healthy within 30 minutes"
+echo "ERROR: Exhausted Robometer server startup attempts for ${SERVER_LABEL}"
 exit 1
