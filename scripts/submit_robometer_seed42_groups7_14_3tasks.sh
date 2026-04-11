@@ -14,23 +14,26 @@ STOP_JOB_IDS=()
 
 MANIFEST="logs/robometer_seed42_groups7_14_$(date +%Y%m%d_%H%M%S).txt"
 
-if [ "${SKIP_CKPT_PREFLIGHT:-0}" != "1" ]; then
-  REQUIRED_CKPTS=(
+if [ "${SKIP_INPUT_PREFLIGHT:-0}" != "1" ]; then
+  REQUIRED_INPUTS=(
     "logs/offline_robometer_baseline_bonus0_seed42/last_offline.zip"
     "logs/offline_robometer_diff_gamma099_bonus0_scaled_seed42/last_offline.zip"
     "logs/offline_robometer_diff_gamma0999_bonus0_scaled_seed42/last_offline.zip"
+    "datasets/metaworld_labeled_robometer.h5"
+    "datasets/metaworld_labeled_robometer_diff_gamma099.h5"
+    "datasets/metaworld_labeled_robometer_diff_gamma0999.h5"
   )
-  missing_ckpts=()
-  for ckpt in "${REQUIRED_CKPTS[@]}"; do
-    if [ ! -f "$ckpt" ]; then
-      missing_ckpts+=("$ckpt")
+  missing_inputs=()
+  for input_path in "${REQUIRED_INPUTS[@]}"; do
+    if [ ! -f "$input_path" ]; then
+      missing_inputs+=("$input_path")
     fi
   done
 
-  if [ "${#missing_ckpts[@]}" -gt 0 ]; then
-    echo "ERROR: Missing required seed42 offline checkpoints:"
-    printf '  %s\n' "${missing_ckpts[@]}"
-    echo "Run the seed42 offline jobs first, or set SKIP_CKPT_PREFLIGHT=1 if you intentionally want to submit anyway."
+  if [ "${#missing_inputs[@]}" -gt 0 ]; then
+    echo "ERROR: Missing required seed42 inputs:"
+    printf '  %s\n' "${missing_inputs[@]}"
+    echo "Create the missing inputs first, or set SKIP_INPUT_PREFLIGHT=1 if you intentionally want to submit anyway."
     exit 1
   fi
 fi

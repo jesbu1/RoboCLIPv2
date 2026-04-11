@@ -399,6 +399,10 @@ if [ ! -f "${CKPT_DIR}/last_offline.zip" ]; then
   echo "ERROR: Offline checkpoint not found at ${CKPT_DIR}/last_offline.zip"
   exit 1
 fi
+if [ ! -f "$OFFLINE_H5_PATH" ]; then
+  echo "ERROR: Offline dataset not found at ${OFFLINE_H5_PATH}"
+  exit 1
+fi
 
 GROUP_NAME="${ENV_ID}_nochunk_robometer_${VARIANT_TAG}_10critics"
 LOG_DIR="${LOG_ROOT}/${ENV_ID}_nochunk_robometer_${VARIANT_TAG}_10critics_seed${SEED}"
