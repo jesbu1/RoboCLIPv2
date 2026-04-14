@@ -4,7 +4,7 @@
 #SBATCH --partition=main
 #SBATCH --cpus-per-task=1
 #SBATCH --mem=8G
-#SBATCH --time=00:05:00
+#SBATCH --time=00:15:00
 #SBATCH --output=logs/%x_%j.out
 #SBATCH --error=logs/%x_%j.err
 
@@ -31,10 +31,11 @@ conda activate "${CONDA_ENV}"
 which python
 python --version
 
-python - <<'PY'
+python -u <<'PY'
 import importlib.util
 import os
 import sys
+import time
 
 topreward_dir = os.environ.get("TOPREWARD_DIR", "/scratch1/haobaizh/rewind_topreward")
 checks = [
@@ -45,12 +46,14 @@ checks = [
 ]
 
 for module_name, _ in checks:
+    start = time.time()
+    print(f"TRY import {module_name}", flush=True)
     spec = importlib.util.find_spec(module_name)
     if spec is None:
         raise RuntimeError(f"Missing Python module: {module_name}")
     module = __import__(module_name)
     version = getattr(module, "__version__", "unknown")
-    print(f"FOUND {module_name} version={version}")
+    print(f"FOUND {module_name} version={version} elapsed={time.time() - start:.1f}s", flush=True)
 
 paths = [
     "data_preprocessing/topreward_label_reward.py",
@@ -62,7 +65,7 @@ for rel in paths:
     path = os.path.join(topreward_dir, rel)
     if not os.path.exists(path):
         raise RuntimeError(f"Missing file: {path}")
-    print(f"FOUND {path}")
+    print(f"FOUND {path}", flush=True)
 
-print("TOPReward preflight import test PASSED")
+print("TOPReward preflight import test PASSED", flush=True)
 PY
