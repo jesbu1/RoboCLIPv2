@@ -160,7 +160,7 @@ srun python -u test_scripts/test_iql.py \
   offline_training.offline_h5_path="$H5_PATH" \
   reward_model.server_url="$TOPREWARD_API_URL" \
   reward_model.success_bonus="$SUCCESS_BONUS" \
-  reward_model.num_prefix_samples="$NUM_PREFIX_SAMPLES" \
+  reward_model.max_frames="$NUM_PREFIX_SAMPLES" \
   reward_model.request_timeout="$REQUEST_TIMEOUT" \
   reward_model.request_retries="$REQUEST_RETRIES" \
   reward_model.lock_path="$LOCK_PATH" \
