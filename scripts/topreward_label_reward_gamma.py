@@ -23,6 +23,59 @@ from tqdm import tqdm
 
 DINO_BATCH_SIZE = 64
 
+ENVIRONMENT_TO_INSTRUCTION = {
+    "assembly-v2": "assembly",
+    "basketball-v2": "play basketball",
+    "bin-picking-v2": "pick bin",
+    "box-close-v2": "closing box",
+    "button-press-topdown-v2": "Press the button from top",
+    "button-press-topdown-wall-v2": "Press the button from top",
+    "button-press-v2": "Press the button from side",
+    "button-press-wall-v2": "Press the button from side",
+    "coffee-button-v2": "Press the coffee button",
+    "coffee-pull-v2": "Pull the coffee cup",
+    "coffee-push-v2": "Push the coffee cup",
+    "dial-turn-v2": "Turn the dial",
+    "disassemble-v2": "disassemble",
+    "door-close-v2": "Close the door",
+    "door-lock-v2": "Turn door lock counter-clockwise",
+    "door-open-v2": "Open the door",
+    "door-unlock-v2": "Turn door lock clockwise",
+    "hand-insert-v2": "Pick up the block and insert it into the hole",
+    "drawer-close-v2": "Close the drawer",
+    "drawer-open-v2": "open drawer",
+    "faucet-open-v2": "Open the faucet",
+    "faucet-close-v2": "Close the faucet",
+    "hammer-v2": "hammer nail",
+    "handle-press-side-v2": "Press the handle from side",
+    "handle-press-v2": "Press the handle",
+    "handle-pull-side-v2": "Pull the handle up from the side",
+    "handle-pull-v2": "Pull the handle",
+    "lever-pull-v2": "pull lever",
+    "peg-insert-side-v2": "Insert the peg",
+    "pick-place-wall-v2": "Pick up the block and placing it to the goal position",
+    "pick-out-of-hole-v2": "pick bin",
+    "reach-v2": "Reach the goal",
+    "push-back-v2": "Push the block back to the goal",
+    "push-v2": "Push the block to the goal",
+    "pick-place-v2": "Pick up the block and placing it to the goal position",
+    "plate-slide-v2": "Slide the plate into the gate",
+    "plate-slide-side-v2": "Slide the plate into the gate from the side",
+    "plate-slide-back-v2": "Slide the plate out of the gate",
+    "plate-slide-back-side-v2": "Slide the plate out of the gate from the side",
+    "peg-unplug-side-v2": "unplug peg",
+    "soccer-v2": "Slide the ball into the gate",
+    "stick-push-v2": "Push the stick",
+    "stick-pull-v2": "Pull the stick",
+    "push-wall-v2": "push bin",
+    "reach-wall-v2": "Reach the goal",
+    "shelf-place-v2": "place bin to shelf",
+    "sweep-into-v2": "Sweep the block into the hole",
+    "sweep-v2": "sweep block",
+    "window-open-v2": "Open the window",
+    "window-close-v2": "Close the window",
+}
+
 
 @contextmanager
 def optional_file_lock(lock_path):
@@ -129,12 +182,10 @@ def compute_prefix_rewards(api_url, model_name, video_frames, instruction, num_s
 
 def load_topreward_helpers(topreward_dir):
     sys.path.insert(0, topreward_dir)
-    sys.path.insert(0, os.path.join(topreward_dir, "metaworld_policy_training"))
 
-    from envs.metaworld import environment_to_instruction
     from utils.processing_utils import dino_load_image
 
-    return environment_to_instruction, dino_load_image
+    return ENVIRONMENT_TO_INSTRUCTION, dino_load_image
 
 
 def get_dino_embeddings(dinov2_vits14, dino_load_image, imgs_list, device):
