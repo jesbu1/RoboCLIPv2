@@ -21,6 +21,9 @@ SUBMIT_MANIFEST="${SUBMIT_MANIFEST:-${PROJECT_DIR}/logs/topreward_baseline_diff9
 SUCCESS_BONUS="${SUCCESS_BONUS:-64.0}"
 DIFF_GAMMA="${DIFF_GAMMA:-0.999}"
 DIFF_REWARD_SCALE="${DIFF_REWARD_SCALE:-1.0}"
+NUM_PREFIX_SAMPLES="${NUM_PREFIX_SAMPLES:-4}"
+REQUEST_TIMEOUT="${REQUEST_TIMEOUT:-600}"
+REQUEST_RETRIES="${REQUEST_RETRIES:-2}"
 
 cd "$PROJECT_DIR"
 mkdir -p "$(dirname "$SUBMIT_MANIFEST")"
@@ -90,19 +93,21 @@ fi
   echo "launcher_first_ready_server=${FIRST_READY}"
   echo "launcher_first_ready_info_file=${FIRST_INFO_FILE}"
   echo "launcher_first_ready_server_job=${FIRST_SERVER_JOB_ID}"
+  echo "num_prefix_samples=${NUM_PREFIX_SAMPLES}"
+  echo "request_timeout=${REQUEST_TIMEOUT}"
 } | tee -a "$SUBMIT_MANIFEST"
 
 LABEL_LOCK="${TOPREWARD_DIR}/logs/topreward_label_${FIRST_SERVER_JOB_ID}.lock"
 
 BASELINE_LABEL_ID=$(sbatch --parsable \
   --dependency="after:${FIRST_SERVER_JOB_ID}" \
-  --export=ALL,PROJECT_DIR="$PROJECT_DIR",TOPREWARD_DIR="$TOPREWARD_DIR",INFO_FILE="$FIRST_INFO_FILE",EXPECTED_SERVER_JOB_ID="$FIRST_SERVER_JOB_ID",LABEL_VARIANT=baseline,LOCK_PATH="$LABEL_LOCK" \
+  --export=ALL,PROJECT_DIR="$PROJECT_DIR",TOPREWARD_DIR="$TOPREWARD_DIR",INFO_FILE="$FIRST_INFO_FILE",EXPECTED_SERVER_JOB_ID="$FIRST_SERVER_JOB_ID",LABEL_VARIANT=baseline,LOCK_PATH="$LABEL_LOCK",NUM_PREFIX_SAMPLES="$NUM_PREFIX_SAMPLES",REQUEST_TIMEOUT="$REQUEST_TIMEOUT",REQUEST_RETRIES="$REQUEST_RETRIES" \
   scripts/topreward_label_variant.sbatch)
 echo "label_baseline=${BASELINE_LABEL_ID}" | tee -a "$SUBMIT_MANIFEST"
 
 DIFF999_LABEL_ID=$(sbatch --parsable \
   --dependency="after:${FIRST_SERVER_JOB_ID}" \
-  --export=ALL,PROJECT_DIR="$PROJECT_DIR",TOPREWARD_DIR="$TOPREWARD_DIR",INFO_FILE="$FIRST_INFO_FILE",EXPECTED_SERVER_JOB_ID="$FIRST_SERVER_JOB_ID",LABEL_VARIANT=diff_gamma0999,DIFF_GAMMA="$DIFF_GAMMA",DIFF_REWARD_SCALE="$DIFF_REWARD_SCALE",LOCK_PATH="$LABEL_LOCK" \
+  --export=ALL,PROJECT_DIR="$PROJECT_DIR",TOPREWARD_DIR="$TOPREWARD_DIR",INFO_FILE="$FIRST_INFO_FILE",EXPECTED_SERVER_JOB_ID="$FIRST_SERVER_JOB_ID",LABEL_VARIANT=diff_gamma0999,DIFF_GAMMA="$DIFF_GAMMA",DIFF_REWARD_SCALE="$DIFF_REWARD_SCALE",LOCK_PATH="$LABEL_LOCK",NUM_PREFIX_SAMPLES="$NUM_PREFIX_SAMPLES",REQUEST_TIMEOUT="$REQUEST_TIMEOUT",REQUEST_RETRIES="$REQUEST_RETRIES" \
   scripts/topreward_label_variant.sbatch)
 echo "label_diff_gamma0999=${DIFF999_LABEL_ID}" | tee -a "$SUBMIT_MANIFEST"
 
@@ -139,13 +144,13 @@ for idx in "${!GROUP_IDS[@]}"; do
 
   baseline_online_id=$(sbatch --parsable \
     --dependency="after:${server_job_id},afterok:${BASELINE_OFFLINE_ID}" \
-    --export=ALL,TOPREWARD_DIR="$TOPREWARD_DIR",INFO_FILE="$info_file",EXPECTED_SERVER_JOB_ID="$server_job_id",GROUP_ID="$group_id",ENV_ID="$env_id",VARIANT=baseline,SUCCESS_BONUS="$SUCCESS_BONUS",LOCK_PATH="$online_lock" \
+    --export=ALL,TOPREWARD_DIR="$TOPREWARD_DIR",INFO_FILE="$info_file",EXPECTED_SERVER_JOB_ID="$server_job_id",GROUP_ID="$group_id",ENV_ID="$env_id",VARIANT=baseline,SUCCESS_BONUS="$SUCCESS_BONUS",LOCK_PATH="$online_lock",NUM_PREFIX_SAMPLES="$NUM_PREFIX_SAMPLES" \
     scripts/topreward_online_seed0_env_variant.sbatch)
   echo "online_group${group_id}_baseline=${baseline_online_id}" | tee -a "$SUBMIT_MANIFEST"
 
   diff999_online_id=$(sbatch --parsable \
     --dependency="after:${server_job_id},afterok:${DIFF999_OFFLINE_ID}" \
-    --export=ALL,TOPREWARD_DIR="$TOPREWARD_DIR",INFO_FILE="$info_file",EXPECTED_SERVER_JOB_ID="$server_job_id",GROUP_ID="$group_id",ENV_ID="$env_id",VARIANT=diff_gamma0999,SUCCESS_BONUS="$SUCCESS_BONUS",DIFF_GAMMA="$DIFF_GAMMA",DIFF_REWARD_SCALE="$DIFF_REWARD_SCALE",LOCK_PATH="$online_lock" \
+    --export=ALL,TOPREWARD_DIR="$TOPREWARD_DIR",INFO_FILE="$info_file",EXPECTED_SERVER_JOB_ID="$server_job_id",GROUP_ID="$group_id",ENV_ID="$env_id",VARIANT=diff_gamma0999,SUCCESS_BONUS="$SUCCESS_BONUS",DIFF_GAMMA="$DIFF_GAMMA",DIFF_REWARD_SCALE="$DIFF_REWARD_SCALE",LOCK_PATH="$online_lock",NUM_PREFIX_SAMPLES="$NUM_PREFIX_SAMPLES" \
     scripts/topreward_online_seed0_env_variant.sbatch)
   echo "online_group${group_id}_diff_gamma0999=${diff999_online_id}" | tee -a "$SUBMIT_MANIFEST"
 

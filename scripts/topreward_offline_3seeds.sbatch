@@ -16,11 +16,13 @@ set -euo pipefail
 
 TOPREWARD_DIR="${TOPREWARD_DIR:-/scratch1/haobaizh/rewind_topreward}"
 TOPREWARD_CONDA="${TOPREWARD_CONDA:-${TOPREWARD_DIR}/conda_envs/rewind}"
-PROJECT_CACHE="${PROJECT_CACHE:-/scratch1/haobaizh/.cache}"
+PROJECT_CACHE="${PROJECT_CACHE:-/home1/haobaizh/.cache}"
 VARIANT="${VARIANT:?VARIANT must be baseline or diff_gamma0999}"
 SUCCESS_BONUS="${SUCCESS_BONUS:-64.0}"
 DIFF_GAMMA="${DIFF_GAMMA:-0.999}"
 DIFF_REWARD_SCALE="${DIFF_REWARD_SCALE:-1.0}"
+NUM_PREFIX_SAMPLES="${NUM_PREFIX_SAMPLES:-4}"
+TOPREWARD_LOCK_PATH="${TOPREWARD_LOCK_PATH:-${TOPREWARD_DIR}/logs/topreward_offline_${VARIANT}.lock}"
 
 SEEDS=(0 32 42)
 SEED="${SEEDS[$SLURM_ARRAY_TASK_ID]}"
@@ -28,14 +30,14 @@ SEED="${SEEDS[$SLURM_ARRAY_TASK_ID]}"
 case "$VARIANT" in
   baseline)
     H5_PATH="../datasets/metaworld_topreward_labeled.h5"
-    LOG_GROUP="offline_topreward_baseline_bonus64"
-    LOG_DIR="logs/offline_topreward_baseline_bonus64_seed${SEED}"
+    LOG_GROUP="offline_topreward_baseline_bonus64_10critics"
+    LOG_DIR="logs/offline_topreward_baseline_bonus64_10critics_seed${SEED}"
     EXTRA_ARGS=(reward_model.use_progress_diff=false)
     ;;
   diff_gamma0999)
     H5_PATH="../datasets/metaworld_topreward_labeled_diff_gamma0999.h5"
-    LOG_GROUP="offline_topreward_diff_gamma0999_bonus64"
-    LOG_DIR="logs/offline_topreward_diff_gamma0999_bonus64_seed${SEED}"
+    LOG_GROUP="offline_topreward_diff_gamma0999_bonus64_10critics"
+    LOG_DIR="logs/offline_topreward_diff_gamma0999_bonus64_10critics_seed${SEED}"
     EXTRA_ARGS=(
       reward_model.use_progress_diff=true
       reward_model.diff_gamma="$DIFF_GAMMA"
@@ -80,13 +82,18 @@ export WANDB_CACHE_DIR="$HOME/.cache/wandb"
 export WANDB_DIR="$HOME/wandb"
 export WANDB_MODE=online
 export WANDB_RUN_NAME="${LOG_GROUP}_seed${SEED}"
-mkdir -p "$HF_HOME" "$TORCH_HOME" "$XDG_CACHE_HOME"
+export TOPREWARD_LOCK_PATH
+mkdir -p "$HF_HOME" "$TORCH_HOME" "$XDG_CACHE_HOME" "$(dirname "$TOPREWARD_LOCK_PATH")"
 
 cd "${TOPREWARD_DIR}/metaworld_policy_training"
 rm -rf "$LOG_DIR"
 mkdir -p "$LOG_DIR"
 
 echo "========== TOPReward offline ${VARIANT} seed ${SEED} =========="
+echo "HF_HOME=${HF_HOME}"
+echo "TORCH_HOME=${TORCH_HOME}"
+echo "TOPREWARD_LOCK_PATH=${TOPREWARD_LOCK_PATH}"
+echo "NUM_PREFIX_SAMPLES=${NUM_PREFIX_SAMPLES}"
 which python
 python --version
 nvidia-smi
@@ -98,8 +105,11 @@ srun python -u train_policy.py \
   offline_training.offline_training_steps=15000 \
   online_training.total_time_steps=0 \
   general_training.seed="$SEED" \
+  general_training.n_critics=10 \
+  general_training.n_critics_to_sample=2 \
   offline_training.offline_h5_path="$H5_PATH" \
   reward_model.success_bonus="$SUCCESS_BONUS" \
+  reward_model.num_prefix_samples="$NUM_PREFIX_SAMPLES" \
   logging.eval_freq=0 \
   logging.video_freq=0 \
   logging.wandb_group_name="$LOG_GROUP" \

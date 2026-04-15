@@ -106,7 +106,15 @@ def frames_to_base64(frames):
     return b64_list
 
 
-def query_vlm_reward(api_url, model_name, frames_b64, instruction, lock_path):
+def query_vlm_reward(
+    api_url,
+    model_name,
+    frames_b64,
+    instruction,
+    lock_path,
+    request_timeout,
+    request_retries,
+):
     prompt_text = (
         "The above video shows a robot manipulation trajectory "
         "that completes the following task: "
@@ -135,14 +143,29 @@ def query_vlm_reward(api_url, model_name, frames_b64, instruction, lock_path):
         "top_logprobs": 20,
     }
 
-    with optional_file_lock(lock_path):
-        resp = requests.post(
-            f"{api_url.rstrip('/')}/v1/chat/completions",
-            json=payload,
-            timeout=120,
-        )
-        resp.raise_for_status()
-        result = resp.json()
+    last_error = None
+    for attempt in range(1, request_retries + 1):
+        try:
+            with optional_file_lock(lock_path):
+                resp = requests.post(
+                    f"{api_url.rstrip('/')}/v1/chat/completions",
+                    json=payload,
+                    timeout=request_timeout,
+                )
+                resp.raise_for_status()
+                result = resp.json()
+            break
+        except requests.exceptions.RequestException as exc:
+            last_error = exc
+            print(
+                f"[TOPReward label] request failed on attempt "
+                f"{attempt}/{request_retries}: {exc}",
+                flush=True,
+            )
+            if attempt == request_retries:
+                raise
+    else:
+        raise RuntimeError(f"TOPReward request failed: {last_error}")
 
     logprobs_content = result["choices"][0]["logprobs"]["content"]
     if logprobs_content:
@@ -156,7 +179,16 @@ def query_vlm_reward(api_url, model_name, frames_b64, instruction, lock_path):
     return -10.0
 
 
-def compute_prefix_rewards(api_url, model_name, video_frames, instruction, num_samples, lock_path):
+def compute_prefix_rewards(
+    api_url,
+    model_name,
+    video_frames,
+    instruction,
+    num_samples,
+    lock_path,
+    request_timeout,
+    request_retries,
+):
     num_frames = len(video_frames)
     num_samples = min(num_samples, num_frames)
 
@@ -174,7 +206,15 @@ def compute_prefix_rewards(api_url, model_name, video_frames, instruction, num_s
             prefix = [prefix[i] for i in indices]
         b64 = frames_to_base64(prefix)
         prefix_rewards.append(
-            query_vlm_reward(api_url, model_name, b64, instruction, lock_path)
+            query_vlm_reward(
+                api_url,
+                model_name,
+                b64,
+                instruction,
+                lock_path,
+                request_timeout,
+                request_retries,
+            )
         )
 
     all_steps = np.arange(1, num_frames + 1)
@@ -327,6 +367,8 @@ def label_trajectories(args):
                         instruction,
                         args.num_prefix_samples,
                         args.lock_path,
+                        args.request_timeout,
+                        args.request_retries,
                     )
 
                     if args.mode == "diff":
@@ -367,7 +409,9 @@ def main():
     parser.add_argument("--output_path", required=True)
     parser.add_argument("--api_url", required=True)
     parser.add_argument("--model_name", default="Qwen/Qwen3-VL-8B-Instruct")
-    parser.add_argument("--num_prefix_samples", type=int, default=15)
+    parser.add_argument("--num_prefix_samples", type=int, default=4)
+    parser.add_argument("--request_timeout", type=float, default=600.0)
+    parser.add_argument("--request_retries", type=int, default=2)
     parser.add_argument("--mode", choices=["baseline", "diff"], required=True)
     parser.add_argument("--diff_gamma", type=float, default=1.0)
     parser.add_argument("--reward_scale", type=float, default=1.0)

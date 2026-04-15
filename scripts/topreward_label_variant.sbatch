@@ -21,7 +21,9 @@ INFO_FILE="${INFO_FILE:?INFO_FILE must point to a ready TOPReward server info fi
 EXPECTED_SERVER_JOB_ID="${EXPECTED_SERVER_JOB_ID:-}"
 LABEL_VARIANT="${LABEL_VARIANT:?LABEL_VARIANT must be baseline or diff_gamma0999}"
 MODEL_NAME="${MODEL_NAME:-Qwen/Qwen3-VL-8B-Instruct}"
-NUM_PREFIX_SAMPLES="${NUM_PREFIX_SAMPLES:-15}"
+NUM_PREFIX_SAMPLES="${NUM_PREFIX_SAMPLES:-4}"
+REQUEST_TIMEOUT="${REQUEST_TIMEOUT:-600}"
+REQUEST_RETRIES="${REQUEST_RETRIES:-2}"
 DIFF_GAMMA="${DIFF_GAMMA:-0.999}"
 DIFF_REWARD_SCALE="${DIFF_REWARD_SCALE:-1.0}"
 LOCK_PATH="${LOCK_PATH:-${TOPREWARD_DIR}/logs/topreward_label.lock}"
@@ -108,6 +110,8 @@ echo "========== TOPReward label ${JOB_TAG} =========="
 echo "TOPREWARD_API_URL=${TOPREWARD_API_URL}"
 echo "OUTPUT_PATH=${OUTPUT_PATH}"
 echo "LOCK_PATH=${LOCK_PATH}"
+echo "NUM_PREFIX_SAMPLES=${NUM_PREFIX_SAMPLES}"
+echo "REQUEST_TIMEOUT=${REQUEST_TIMEOUT}"
 which python
 python --version
 nvidia-smi
@@ -123,6 +127,8 @@ srun python -u scripts/topreward_label_reward_gamma.py \
   --api_url "$TOPREWARD_API_URL" \
   --model_name "$MODEL_NAME" \
   --num_prefix_samples "$NUM_PREFIX_SAMPLES" \
+  --request_timeout "$REQUEST_TIMEOUT" \
+  --request_retries "$REQUEST_RETRIES" \
   --mode "$MODE" \
   --diff_gamma "$DIFF_GAMMA" \
   --reward_scale "$DIFF_REWARD_SCALE" \

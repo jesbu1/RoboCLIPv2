@@ -9,6 +9,9 @@ TOPREWARD_DIR="${TOPREWARD_DIR:-/scratch1/haobaizh/rewind_topreward}"
 SUCCESS_BONUS="${SUCCESS_BONUS:-64.0}"
 DIFF_GAMMA="${DIFF_GAMMA:-0.999}"
 DIFF_REWARD_SCALE="${DIFF_REWARD_SCALE:-1.0}"
+NUM_PREFIX_SAMPLES="${NUM_PREFIX_SAMPLES:-4}"
+REQUEST_TIMEOUT="${REQUEST_TIMEOUT:-600}"
+REQUEST_RETRIES="${REQUEST_RETRIES:-2}"
 
 cd "$PROJECT_DIR"
 mkdir -p logs
@@ -54,6 +57,8 @@ MANIFEST="${PROJECT_DIR}/logs/topreward_baseline_diff999_pipeline_$(date +%Y%m%d
   echo "success_bonus=${SUCCESS_BONUS}"
   echo "diff_gamma=${DIFF_GAMMA}"
   echo "diff_reward_scale=${DIFF_REWARD_SCALE}"
+  echo "num_prefix_samples=${NUM_PREFIX_SAMPLES}"
+  echo "request_timeout=${REQUEST_TIMEOUT}"
 } | tee "$MANIFEST"
 
 for group_id in "${GROUP_IDS[@]}"; do
@@ -76,7 +81,7 @@ launcher_job_id=$(sbatch --parsable \
   --job-name="top_launch" \
   --output="logs/top_launch_%j.out" \
   --error="logs/top_launch_%j.err" \
-  --export=ALL,PROJECT_DIR="$PROJECT_DIR",TOPREWARD_DIR="$TOPREWARD_DIR",SERVER_JOB_IDS="$SERVER_JOB_IDS_JOINED",SERVER_INFO_FILES="$SERVER_INFO_FILES_JOINED",SUBMIT_MANIFEST="$MANIFEST",SUCCESS_BONUS="$SUCCESS_BONUS",DIFF_GAMMA="$DIFF_GAMMA",DIFF_REWARD_SCALE="$DIFF_REWARD_SCALE" \
+  --export=ALL,PROJECT_DIR="$PROJECT_DIR",TOPREWARD_DIR="$TOPREWARD_DIR",SERVER_JOB_IDS="$SERVER_JOB_IDS_JOINED",SERVER_INFO_FILES="$SERVER_INFO_FILES_JOINED",SUBMIT_MANIFEST="$MANIFEST",SUCCESS_BONUS="$SUCCESS_BONUS",DIFF_GAMMA="$DIFF_GAMMA",DIFF_REWARD_SCALE="$DIFF_REWARD_SCALE",NUM_PREFIX_SAMPLES="$NUM_PREFIX_SAMPLES",REQUEST_TIMEOUT="$REQUEST_TIMEOUT",REQUEST_RETRIES="$REQUEST_RETRIES" \
   scripts/topreward_launch_label_offline_online.sbatch)
 
 echo "launcher=${launcher_job_id}" | tee -a "$MANIFEST"

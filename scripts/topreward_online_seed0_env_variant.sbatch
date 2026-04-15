@@ -15,7 +15,7 @@ set -euo pipefail
 
 TOPREWARD_DIR="${TOPREWARD_DIR:-/scratch1/haobaizh/rewind_topreward}"
 TOPREWARD_CONDA="${TOPREWARD_CONDA:-${TOPREWARD_DIR}/conda_envs/rewind}"
-PROJECT_CACHE="${PROJECT_CACHE:-/scratch1/haobaizh/.cache}"
+PROJECT_CACHE="${PROJECT_CACHE:-/home1/haobaizh/.cache}"
 INFO_FILE="${INFO_FILE:?INFO_FILE must point to this task TOPReward server info file}"
 EXPECTED_SERVER_JOB_ID="${EXPECTED_SERVER_JOB_ID:-}"
 GROUP_ID="${GROUP_ID:-unknown}"
@@ -25,6 +25,7 @@ SEED="${SEED:-0}"
 SUCCESS_BONUS="${SUCCESS_BONUS:-64.0}"
 DIFF_GAMMA="${DIFF_GAMMA:-0.999}"
 DIFF_REWARD_SCALE="${DIFF_REWARD_SCALE:-1.0}"
+NUM_PREFIX_SAMPLES="${NUM_PREFIX_SAMPLES:-4}"
 SERVER_WAIT_ATTEMPTS="${SERVER_WAIT_ATTEMPTS:-1440}"
 LOCK_PATH="${LOCK_PATH:-${TOPREWARD_DIR}/logs/topreward_online_group${GROUP_ID}.lock}"
 LOG_ROOT="${LOG_ROOT:-${TOPREWARD_DIR}/metaworld_policy_training/logs}"
@@ -32,18 +33,18 @@ LOG_ROOT="${LOG_ROOT:-${TOPREWARD_DIR}/metaworld_policy_training/logs}"
 case "$VARIANT" in
   baseline)
     H5_PATH="../datasets/metaworld_topreward_labeled.h5"
-    CKPT_PATH="logs/offline_topreward_baseline_bonus64_seed${SEED}/last_offline"
-    GROUP_NAME="topreward_wsrl_iql_${ENV_ID}_baseline"
-    RUN_NAME="${ENV_ID}_topreward_baseline_seed${SEED}"
-    LOG_DIR="${LOG_ROOT}/${ENV_ID}_topreward_baseline_seed${SEED}"
+    CKPT_PATH="logs/offline_topreward_baseline_bonus64_10critics_seed${SEED}/last_offline"
+    GROUP_NAME="topreward_wsrl_iql_${ENV_ID}_baseline_10critics"
+    RUN_NAME="${ENV_ID}_topreward_baseline_10critics_seed${SEED}"
+    LOG_DIR="${LOG_ROOT}/${ENV_ID}_topreward_baseline_10critics_seed${SEED}"
     EXTRA_ARGS=(reward_model.use_progress_diff=false)
     ;;
   diff_gamma0999)
     H5_PATH="../datasets/metaworld_topreward_labeled_diff_gamma0999.h5"
-    CKPT_PATH="logs/offline_topreward_diff_gamma0999_bonus64_seed${SEED}/last_offline"
-    GROUP_NAME="topreward_wsrl_iql_${ENV_ID}_diff_gamma0999"
-    RUN_NAME="${ENV_ID}_topreward_diff_gamma0999_seed${SEED}"
-    LOG_DIR="${LOG_ROOT}/${ENV_ID}_topreward_diff_gamma0999_seed${SEED}"
+    CKPT_PATH="logs/offline_topreward_diff_gamma0999_bonus64_10critics_seed${SEED}/last_offline"
+    GROUP_NAME="topreward_wsrl_iql_${ENV_ID}_diff_gamma0999_10critics"
+    RUN_NAME="${ENV_ID}_topreward_diff_gamma0999_10critics_seed${SEED}"
+    LOG_DIR="${LOG_ROOT}/${ENV_ID}_topreward_diff_gamma0999_10critics_seed${SEED}"
     EXTRA_ARGS=(
       reward_model.use_progress_diff=true
       reward_model.diff_gamma="$DIFF_GAMMA"
@@ -129,6 +130,9 @@ mkdir -p "$LOG_DIR"
 echo "========== TOPReward online ${ENV_ID} ${VARIANT} seed ${SEED} =========="
 echo "TOPREWARD_API_URL=${TOPREWARD_API_URL}"
 echo "TOPREWARD_LOCK_PATH=${TOPREWARD_LOCK_PATH}"
+echo "HF_HOME=${HF_HOME}"
+echo "TORCH_HOME=${TORCH_HOME}"
+echo "NUM_PREFIX_SAMPLES=${NUM_PREFIX_SAMPLES}"
 echo "CKPT_PATH=${CKPT_PATH}"
 echo "H5_PATH=${H5_PATH}"
 which python
@@ -143,9 +147,12 @@ srun python -u train_policy.py \
   offline_training.ckpt_path="$CKPT_PATH" \
   online_training.total_time_steps=100000 \
   general_training.seed="$SEED" \
+  general_training.n_critics=10 \
+  general_training.n_critics_to_sample=2 \
   environment.env_id="$ENV_ID" \
   offline_training.offline_h5_path="$H5_PATH" \
   reward_model.success_bonus="$SUCCESS_BONUS" \
+  reward_model.num_prefix_samples="$NUM_PREFIX_SAMPLES" \
   logging.wandb_group_name="$GROUP_NAME" \
   logging.log_dir="$LOG_DIR" \
   hydra.run.dir=. \
