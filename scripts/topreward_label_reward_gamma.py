@@ -94,11 +94,28 @@ def optional_file_lock(lock_path):
         lock_file.close()
 
 
+def center_crop_frame(frame, crop_size=224):
+    """Match the Robometer 224x224 center-crop input budget."""
+    if frame.dtype != np.uint8:
+        frame = np.clip(frame, 0, 255).astype(np.uint8)
+    if frame.ndim != 3:
+        return frame
+
+    frame = frame[..., :3]
+    height, width = frame.shape[:2]
+    crop_height = min(crop_size, height)
+    crop_width = min(crop_size, width)
+    top = max((height - crop_height) // 2, 0)
+    left = max((width - crop_width) // 2, 0)
+    return np.ascontiguousarray(
+        frame[top : top + crop_height, left : left + crop_width]
+    )
+
+
 def frames_to_base64(frames):
     b64_list = []
     for frame in frames:
-        if frame.dtype != np.uint8:
-            frame = frame.astype(np.uint8)
+        frame = center_crop_frame(frame)
         img = Image.fromarray(frame)
         buf = io.BytesIO()
         img.save(buf, format="PNG")
