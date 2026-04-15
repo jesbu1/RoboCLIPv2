@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Wait for any TOPReward server to become healthy, then submit:
-# baseline/diff999 labels -> 3-seed offline jobs -> seed0 online jobs.
+# TOPReward labels -> no-action-chunk 3-seed offline -> no-action-chunk seed0 online.
 
 #SBATCH --job-name=top_launch
 #SBATCH --account=biyik_1165
@@ -22,7 +22,7 @@ SUCCESS_BONUS="${SUCCESS_BONUS:-0.0}"
 DIFF_GAMMA="${DIFF_GAMMA:-0.999}"
 DIFF_REWARD_SCALE="${DIFF_REWARD_SCALE:-1000.0}"
 NUM_PREFIX_SAMPLES="${NUM_PREFIX_SAMPLES:-4}"
-REQUEST_TIMEOUT="${REQUEST_TIMEOUT:-600}"
+REQUEST_TIMEOUT="${REQUEST_TIMEOUT:-900}"
 REQUEST_RETRIES="${REQUEST_RETRIES:-2}"
 
 cd "$PROJECT_DIR"
@@ -93,6 +93,9 @@ fi
   echo "launcher_first_ready_server=${FIRST_READY}"
   echo "launcher_first_ready_info_file=${FIRST_INFO_FILE}"
   echo "launcher_first_ready_server_job=${FIRST_SERVER_JOB_ID}"
+  echo "training_entry=${PROJECT_DIR}/test_scripts/test_iql.py"
+  echo "training_env=${PROJECT_DIR}/conda_envs/rewind_nochunk"
+  echo "offline_training_steps=100000"
   echo "success_bonus=${SUCCESS_BONUS}"
   echo "diff_gamma=${DIFF_GAMMA}"
   echo "diff_reward_scale=${DIFF_REWARD_SCALE}"

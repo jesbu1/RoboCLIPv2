@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Submit TOPReward baseline + diff-gamma0999 pipeline:
-# 8 servers, first-ready labels, 3-seed offline, seed0 online.
+# 8 TOPReward servers, first-ready labels, then no-action-chunk offline/online training.
 
 set -euo pipefail
 
@@ -10,7 +10,7 @@ SUCCESS_BONUS="${SUCCESS_BONUS:-0.0}"
 DIFF_GAMMA="${DIFF_GAMMA:-0.999}"
 DIFF_REWARD_SCALE="${DIFF_REWARD_SCALE:-1000.0}"
 NUM_PREFIX_SAMPLES="${NUM_PREFIX_SAMPLES:-4}"
-REQUEST_TIMEOUT="${REQUEST_TIMEOUT:-600}"
+REQUEST_TIMEOUT="${REQUEST_TIMEOUT:-900}"
 REQUEST_RETRIES="${REQUEST_RETRIES:-2}"
 
 cd "$PROJECT_DIR"
@@ -25,12 +25,19 @@ if [ ! -d "${TOPREWARD_DIR}/conda_envs/vllm" ]; then
   exit 1
 fi
 if [ ! -d "${TOPREWARD_DIR}/conda_envs/rewind" ]; then
-  echo "ERROR: rewind env not found: ${TOPREWARD_DIR}/conda_envs/rewind"
+  echo "ERROR: TOPReward label env not found: ${TOPREWARD_DIR}/conda_envs/rewind"
   exit 1
 fi
-if ! grep -q "diff_gamma" "${TOPREWARD_DIR}/metaworld_policy_training/envs/wrappers.py"; then
-  echo "ERROR: ${TOPREWARD_DIR} does not appear to have diff_gamma support."
-  echo "Run: cd ${TOPREWARD_DIR} && git pull origin main"
+if [ ! -f "${PROJECT_DIR}/test_scripts/test_iql.py" ]; then
+  echo "ERROR: PROJECT_DIR does not look like rewind_no-action-chunk: ${PROJECT_DIR}"
+  exit 1
+fi
+if [ ! -d "${PROJECT_DIR}/conda_envs/rewind_nochunk" ]; then
+  echo "ERROR: no-action conda env not found: ${PROJECT_DIR}/conda_envs/rewind_nochunk"
+  exit 1
+fi
+if [ ! -f "${PROJECT_DIR}/configs/reward/topreward.yaml" ]; then
+  echo "ERROR: TOPReward reward config missing from no-action repo: ${PROJECT_DIR}/configs/reward/topreward.yaml"
   exit 1
 fi
 
@@ -54,6 +61,9 @@ MANIFEST="${PROJECT_DIR}/logs/topreward_baseline_diff999_bonus0_base_reward_pipe
 {
   echo "manifest=${MANIFEST}"
   echo "topreward_dir=${TOPREWARD_DIR}"
+  echo "training_entry=${PROJECT_DIR}/test_scripts/test_iql.py"
+  echo "training_env=${PROJECT_DIR}/conda_envs/rewind_nochunk"
+  echo "offline_training_steps=100000"
   echo "success_bonus=${SUCCESS_BONUS}"
   echo "diff_gamma=${DIFF_GAMMA}"
   echo "diff_reward_scale=${DIFF_REWARD_SCALE}"

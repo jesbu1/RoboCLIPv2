@@ -15,16 +15,14 @@
 set -euo pipefail
 
 TOPREWARD_DIR="${TOPREWARD_DIR:-/scratch1/haobaizh/rewind_topreward}"
-TOPREWARD_CONDA="${TOPREWARD_CONDA:-${TOPREWARD_DIR}/conda_envs/rewind}"
 PROJECT_DIR="${PROJECT_DIR:-/project2/biyik_1165/haobaizh/rewind_no-action-chunk}"
-METAWORLD_DIR="${METAWORLD_DIR:-}"
 PROJECT_CACHE="${PROJECT_CACHE:-/home1/haobaizh/.cache}"
 VARIANT="${VARIANT:?VARIANT must be baseline or diff_gamma0999}"
 SUCCESS_BONUS="${SUCCESS_BONUS:-0.0}"
 DIFF_GAMMA="${DIFF_GAMMA:-0.999}"
 DIFF_REWARD_SCALE="${DIFF_REWARD_SCALE:-1000.0}"
 NUM_PREFIX_SAMPLES="${NUM_PREFIX_SAMPLES:-4}"
-REQUEST_TIMEOUT="${REQUEST_TIMEOUT:-600}"
+REQUEST_TIMEOUT="${REQUEST_TIMEOUT:-900}"
 REQUEST_RETRIES="${REQUEST_RETRIES:-2}"
 TOPREWARD_LOCK_PATH="${TOPREWARD_LOCK_PATH:-${TOPREWARD_DIR}/logs/topreward_offline_${VARIANT}.lock}"
 
@@ -33,13 +31,13 @@ SEED="${SEEDS[$SLURM_ARRAY_TASK_ID]}"
 
 case "$VARIANT" in
   baseline)
-    H5_PATH="../datasets/metaworld_topreward_labeled.h5"
+    H5_PATH="${TOPREWARD_DIR}/datasets/metaworld_topreward_labeled.h5"
     LOG_GROUP="offline_topreward_baseline_bonus0_10critics"
     LOG_DIR="logs/offline_topreward_baseline_bonus0_10critics_seed${SEED}"
     EXTRA_ARGS=(reward_model.use_progress_diff=false)
     ;;
   diff_gamma0999)
-    H5_PATH="../datasets/metaworld_topreward_labeled_diff_gamma0999.h5"
+    H5_PATH="${TOPREWARD_DIR}/datasets/metaworld_topreward_labeled_diff_gamma0999.h5"
     LOG_GROUP="offline_topreward_diff_gamma0999_bonus0_scaled_10critics"
     LOG_DIR="logs/offline_topreward_diff_gamma0999_bonus0_scaled_10critics_seed${SEED}"
     EXTRA_ARGS=(
@@ -56,9 +54,10 @@ case "$VARIANT" in
 esac
 
 if [ ! -d "$TOPREWARD_DIR" ]; then echo "ERROR: TOPREWARD_DIR not found: $TOPREWARD_DIR"; exit 1; fi
-if [ ! -d "$TOPREWARD_CONDA" ]; then echo "ERROR: TopReward conda env not found: $TOPREWARD_CONDA"; exit 1; fi
-if [ ! -f "${TOPREWARD_DIR}/metaworld_policy_training/${H5_PATH}" ]; then
-  echo "ERROR: offline H5 not found: ${TOPREWARD_DIR}/metaworld_policy_training/${H5_PATH}"
+if [ ! -f "${PROJECT_DIR}/test_scripts/test_iql.py" ]; then echo "ERROR: PROJECT_DIR does not look like rewind_no-action-chunk: ${PROJECT_DIR}"; exit 1; fi
+if [ ! -d "${PROJECT_DIR}/conda_envs/rewind_nochunk" ]; then echo "ERROR: rewind_nochunk conda env not found: ${PROJECT_DIR}/conda_envs/rewind_nochunk"; exit 1; fi
+if [ ! -f "${H5_PATH}" ]; then
+  echo "ERROR: offline H5 not found: ${H5_PATH}"
   exit 1
 fi
 
@@ -71,29 +70,7 @@ module load glx/1.4
 
 export QT_XCB_GL_INTEGRATION="${QT_XCB_GL_INTEGRATION:-none}"
 source /apps/conda/miniforge3/25.11.0-1/etc/profile.d/conda.sh
-conda activate "$TOPREWARD_CONDA"
-
-configure_metaworld_source() {
-  local candidates=()
-  [ -n "$METAWORLD_DIR" ] && candidates+=("$METAWORLD_DIR")
-  candidates+=(
-    "${TOPREWARD_DIR}/metaworld_policy_training/Metaworld"
-    "${PROJECT_DIR}/Metaworld"
-  )
-
-  local d
-  for d in "${candidates[@]}"; do
-    if [ -d "${d}/metaworld" ]; then
-      export PYTHONPATH="${d}:${PYTHONPATH:-}"
-      echo "Using Metaworld source: ${d}"
-      return 0
-    fi
-  done
-
-  echo "WARNING: Metaworld source not found in candidates; relying on installed package."
-}
-
-configure_metaworld_source
+conda activate "${PROJECT_DIR}/conda_envs/rewind_nochunk"
 
 export LD_PRELOAD="$(g++ -print-file-name=libstdc++.so.6)"
 export MUJOCO_GL=egl
@@ -112,7 +89,7 @@ export WANDB_RUN_NAME="${LOG_GROUP}_seed${SEED}"
 export TOPREWARD_LOCK_PATH
 mkdir -p "$HF_HOME" "$TORCH_HOME" "$XDG_CACHE_HOME" "$(dirname "$TOPREWARD_LOCK_PATH")"
 
-cd "${TOPREWARD_DIR}/metaworld_policy_training"
+cd "$PROJECT_DIR"
 rm -rf "$LOG_DIR"
 mkdir -p "$LOG_DIR"
 
@@ -126,11 +103,11 @@ which python
 python --version
 nvidia-smi
 
-srun python -u train_policy.py \
+srun python -u test_scripts/test_iql.py \
   metaworld=off_on_15 \
   algorithm=wsrl_iql \
   reward=topreward \
-  offline_training.offline_training_steps=15000 \
+  offline_training.offline_training_steps=100000 \
   online_training.total_time_steps=0 \
   general_training.seed="$SEED" \
   general_training.n_critics=10 \
@@ -140,6 +117,7 @@ srun python -u train_policy.py \
   reward_model.num_prefix_samples="$NUM_PREFIX_SAMPLES" \
   reward_model.request_timeout="$REQUEST_TIMEOUT" \
   reward_model.request_retries="$REQUEST_RETRIES" \
+  reward_model.lock_path="$TOPREWARD_LOCK_PATH" \
   logging.eval_freq=0 \
   logging.video_freq=0 \
   logging.wandb_group_name="$LOG_GROUP" \

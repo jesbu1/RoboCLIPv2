@@ -344,12 +344,17 @@ def label_trajectories(args):
 
         total_timesteps = 0
         for key in training_keys:
+            task_num_annotations = len(
+                np.array(embedding_h5[key]["minilm_lang_embedding"])
+            )
             for traj_id in traj_h5[key].keys():
-                total_timesteps += len(traj_h5[key][traj_id]["reward"])
-        total_timesteps = int(total_timesteps * 5)
+                total_timesteps += (
+                    len(traj_h5[key][traj_id]["reward"]) * task_num_annotations
+                )
 
         os.makedirs(os.path.dirname(args.output_path), exist_ok=True)
         with h5py.File(args.output_path, "w") as labeled_dataset:
+            labeled_dataset.create_dataset("state", (total_timesteps, 39), dtype="float32")
             labeled_dataset.create_dataset("action", (total_timesteps, 4), dtype="float32")
             labeled_dataset.create_dataset("rewards", (total_timesteps,), dtype="float32")
             labeled_dataset.create_dataset("done", (total_timesteps,), dtype="float32")
@@ -373,6 +378,7 @@ def label_trajectories(args):
 
                     save_actions = np.array(traj_data["action"])
                     save_dones = np.array(traj_data["done"])
+                    save_states = np.array(traj_data["state"])
                     save_video_slices = get_dino_embeddings(
                         dinov2_vits14, dino_load_image, video_frames_list, device
                     )
@@ -405,6 +411,7 @@ def label_trajectories(args):
                     lang_embeddings = np.array(embedding_h5[key]["minilm_lang_embedding"])
                     for lang_embedding in lang_embeddings:
                         sl = slice(current_timestep, current_timestep + num_steps)
+                        labeled_dataset["state"][sl] = save_states
                         labeled_dataset["action"][sl] = save_actions
                         labeled_dataset["done"][sl] = save_dones
                         labeled_dataset["rewards"][sl] = save_reward_outputs

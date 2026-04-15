@@ -185,6 +185,19 @@ def parse_reward_model(reward_cfg: DictConfig) -> BaseRewardModel:
             use_server=reward_cfg.get("use_server", False),
             server_url=reward_cfg.get("server_url", "http://localhost:8000"),
         )
+    elif reward_string == "topreward":
+        from models.reward_model.topreward_reward_model import TOPRewardModel
+        reward_model = TOPRewardModel(
+            model_name=reward_cfg.get("vlm_model_name", "Qwen/Qwen3-VL-8B-Instruct"),
+            batch_size=reward_cfg.batch_size,
+            success_bonus=reward_cfg.success_bonus,
+            reward_at_every_step=reward_cfg.reward_at_every_step,
+            max_frames=reward_cfg.get("max_frames", 4),
+            server_url=reward_cfg.get("server_url", "http://localhost:8000"),
+            request_timeout=reward_cfg.get("request_timeout", 900),
+            request_retries=reward_cfg.get("request_retries", 3),
+            lock_path=reward_cfg.get("lock_path", ""),
+        )
     elif reward_string == "liv":
         from models.reward_model.liv_reward_model import LIVRewardModel
         reward_model = LIVRewardModel(
