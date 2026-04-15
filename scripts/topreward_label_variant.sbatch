@@ -39,7 +39,9 @@ case "$LABEL_VARIANT" in
     MODE="diff"
     OUTPUT_PATH="${OUTPUT_PATH:-${TOPREWARD_DIR}/datasets/metaworld_topreward_labeled_diff_gamma0999.h5}"
     JOB_TAG="diff_gamma0999"
-    REWARD_SCALE="$DIFF_REWARD_SCALE"
+    # Match ReWiND/Robometer: store raw gamma * P(s') - P(s) in H5.
+    # The 1000x scale is applied by offline reward_divisor=0.001 and online diff_reward_scale=1000.
+    REWARD_SCALE="${DIFF_LABEL_REWARD_SCALE:-1.0}"
     ;;
   *)
     echo "ERROR: Unknown LABEL_VARIANT=${LABEL_VARIANT}"

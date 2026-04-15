@@ -57,6 +57,7 @@ MANIFEST="${PROJECT_DIR}/logs/topreward_baseline_diff999_bonus0_base_reward_pipe
   echo "success_bonus=${SUCCESS_BONUS}"
   echo "diff_gamma=${DIFF_GAMMA}"
   echo "diff_reward_scale=${DIFF_REWARD_SCALE}"
+  echo "diff_offline_reward_divisor=0.001"
   echo "num_prefix_samples=${NUM_PREFIX_SAMPLES}"
   echo "request_timeout=${REQUEST_TIMEOUT}"
 } | tee "$MANIFEST"

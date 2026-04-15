@@ -28,6 +28,8 @@ SUCCESS_BONUS="${SUCCESS_BONUS:-0.0}"
 DIFF_GAMMA="${DIFF_GAMMA:-0.999}"
 DIFF_REWARD_SCALE="${DIFF_REWARD_SCALE:-1000.0}"
 NUM_PREFIX_SAMPLES="${NUM_PREFIX_SAMPLES:-4}"
+REQUEST_TIMEOUT="${REQUEST_TIMEOUT:-600}"
+REQUEST_RETRIES="${REQUEST_RETRIES:-2}"
 SERVER_WAIT_ATTEMPTS="${SERVER_WAIT_ATTEMPTS:-1440}"
 LOCK_PATH="${LOCK_PATH:-${TOPREWARD_DIR}/logs/topreward_online_group${GROUP_ID}.lock}"
 LOG_ROOT="${LOG_ROOT:-${TOPREWARD_DIR}/metaworld_policy_training/logs}"
@@ -163,6 +165,7 @@ echo "TOPREWARD_LOCK_PATH=${TOPREWARD_LOCK_PATH}"
 echo "HF_HOME=${HF_HOME}"
 echo "TORCH_HOME=${TORCH_HOME}"
 echo "NUM_PREFIX_SAMPLES=${NUM_PREFIX_SAMPLES}"
+echo "REQUEST_TIMEOUT=${REQUEST_TIMEOUT}"
 echo "CKPT_PATH=${CKPT_PATH}"
 echo "H5_PATH=${H5_PATH}"
 which python
@@ -183,6 +186,8 @@ srun python -u train_policy.py \
   offline_training.offline_h5_path="$H5_PATH" \
   reward_model.success_bonus="$SUCCESS_BONUS" \
   reward_model.num_prefix_samples="$NUM_PREFIX_SAMPLES" \
+  reward_model.request_timeout="$REQUEST_TIMEOUT" \
+  reward_model.request_retries="$REQUEST_RETRIES" \
   logging.wandb_group_name="$GROUP_NAME" \
   logging.log_dir="$LOG_DIR" \
   hydra.run.dir=. \
