@@ -101,6 +101,7 @@ fi
   echo "diff_reward_scale=${DIFF_REWARD_SCALE}"
   echo "diff_offline_reward_divisor=0.001"
   echo "num_prefix_samples=${NUM_PREFIX_SAMPLES}"
+  echo "max_frames_per_query=${NUM_PREFIX_SAMPLES}"
   echo "request_timeout=${REQUEST_TIMEOUT}"
 } | tee -a "$SUBMIT_MANIFEST"
 

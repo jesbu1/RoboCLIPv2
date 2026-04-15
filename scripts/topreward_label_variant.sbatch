@@ -7,7 +7,7 @@
 #SBATCH --gres=gpu:1
 #SBATCH --cpus-per-task=4
 #SBATCH --mem=48G
-#SBATCH --time=12:00:00
+#SBATCH --time=48:00:00
 #SBATCH --output=logs/%x_%j.out
 #SBATCH --error=logs/%x_%j.err
 
@@ -114,7 +114,7 @@ echo "========== TOPReward label ${JOB_TAG} =========="
 echo "TOPREWARD_API_URL=${TOPREWARD_API_URL}"
 echo "OUTPUT_PATH=${OUTPUT_PATH}"
 echo "LOCK_PATH=${LOCK_PATH}"
-echo "NUM_PREFIX_SAMPLES=${NUM_PREFIX_SAMPLES}"
+echo "MAX_FRAMES_PER_QUERY=${NUM_PREFIX_SAMPLES}"
 echo "REQUEST_TIMEOUT=${REQUEST_TIMEOUT}"
 echo "REWARD_SCALE=${REWARD_SCALE}"
 which python

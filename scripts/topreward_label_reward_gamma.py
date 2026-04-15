@@ -201,25 +201,24 @@ def compute_prefix_rewards(
     model_name,
     video_frames,
     instruction,
-    num_samples,
+    max_frames_per_query,
     lock_path,
     request_timeout,
     request_retries,
 ):
     num_frames = len(video_frames)
-    num_samples = min(num_samples, num_frames)
-
-    if num_frames > 2:
-        prefix_lengths = np.linspace(1, num_frames, num_samples, dtype=int)
-        prefix_lengths = sorted(set(int(x) for x in prefix_lengths))
-    else:
-        prefix_lengths = [num_frames]
+    max_frames_per_query = min(max_frames_per_query, num_frames)
 
     prefix_rewards = []
-    for length in prefix_lengths:
+    for length in range(1, num_frames + 1):
         prefix = video_frames[:length]
-        if len(prefix) > num_samples:
-            indices = np.linspace(0, len(prefix) - 1, num_samples, dtype=int)
+        if len(prefix) > max_frames_per_query:
+            indices = np.linspace(
+                0,
+                len(prefix) - 1,
+                max_frames_per_query,
+                dtype=int,
+            )
             prefix = [prefix[i] for i in indices]
         b64 = frames_to_base64(prefix)
         prefix_rewards.append(
@@ -234,8 +233,7 @@ def compute_prefix_rewards(
             )
         )
 
-    all_steps = np.arange(1, num_frames + 1)
-    return np.interp(all_steps, prefix_lengths, prefix_rewards)
+    return np.asarray(prefix_rewards, dtype=np.float32)
 
 
 def load_topreward_helpers(topreward_dir):
@@ -383,6 +381,8 @@ def label_trajectories(args):
                         dinov2_vits14, dino_load_image, video_frames_list, device
                     )
 
+                    # Match Robometer labeling: query every prefix step, but
+                    # cap each request to a small uniform sample of frames.
                     per_step_rewards = compute_prefix_rewards(
                         args.api_url,
                         args.model_name,
