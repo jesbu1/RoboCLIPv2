@@ -8,6 +8,7 @@ TopReward datasets without editing the TopReward project scripts.
 import argparse
 import base64
 import fcntl
+import glob
 import io
 import os
 import sys
@@ -188,6 +189,74 @@ def load_topreward_helpers(topreward_dir):
     return ENVIRONMENT_TO_INSTRUCTION, dino_load_image
 
 
+def _unique_existing_order(paths):
+    seen = set()
+    unique = []
+    for path in paths:
+        if not path:
+            continue
+        path = os.path.abspath(os.path.expanduser(path))
+        if path in seen:
+            continue
+        seen.add(path)
+        unique.append(path)
+    return unique
+
+
+def load_dinov2_vitb14_offline(device):
+    """Load DINOv2 from an existing torch hub cache without touching the network."""
+
+    user = os.environ.get("USER", "haobaizh")
+    torch_homes = _unique_existing_order(
+        [
+            os.environ.get("TORCH_HOME"),
+            f"/home1/{user}/.cache/torch",
+            "/home1/haobaizh/.cache/torch",
+            f"/scratch1/{user}/.cache/torch",
+            "/scratch1/haobaizh/.cache/torch",
+        ]
+    )
+
+    candidates = []
+    explicit_repo = os.environ.get("DINOV2_REPO_DIR")
+    if explicit_repo:
+        candidates.append((os.path.abspath(os.path.expanduser(explicit_repo)), os.environ.get("TORCH_HOME")))
+    for torch_home in torch_homes:
+        candidates.append(
+            (
+                os.path.join(torch_home, "hub", "facebookresearch_dinov2_main"),
+                torch_home,
+            )
+        )
+
+    checked = []
+    for repo_dir, torch_home in candidates:
+        if not torch_home:
+            torch_home = os.path.dirname(os.path.dirname(repo_dir))
+        torch_home = os.path.abspath(os.path.expanduser(torch_home))
+        hubconf = os.path.join(repo_dir, "hubconf.py")
+        ckpts = sorted(
+            glob.glob(os.path.join(torch_home, "hub", "checkpoints", "dinov2_vitb14*.pth"))
+        )
+        checked.append(f"repo={repo_dir} hubconf={os.path.isfile(hubconf)} ckpts={len(ckpts)}")
+        if os.path.isfile(hubconf) and ckpts:
+            os.environ["TORCH_HOME"] = torch_home
+            print(f"Loading DINOv2 from local repo: {repo_dir}", flush=True)
+            print(f"Using TORCH_HOME={torch_home}", flush=True)
+            print(f"Using checkpoint={ckpts[0]}", flush=True)
+            return torch.hub.load(
+                repo_dir,
+                "dinov2_vitb14",
+                source="local",
+                force_reload=False,
+            ).to(device)
+
+    raise RuntimeError(
+        "DINOv2 local cache not found, and label jobs are not allowed to fetch it "
+        "from GitHub at runtime. Checked:\n  " + "\n  ".join(checked)
+    )
+
+
 def get_dino_embeddings(dinov2_vits14, dino_load_image, imgs_list, device):
     episode_images_dino = [dino_load_image(img) for img in imgs_list]
     episode_images_dino = [
@@ -209,10 +278,7 @@ def label_trajectories(args):
     environment_to_instruction, dino_load_image = load_topreward_helpers(args.topreward_dir)
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    dinov2_model = torch.hub.load(
-        "facebookresearch/dinov2", "dinov2_vitb14", force_reload=False
-    )
-    dinov2_vits14 = dinov2_model.to(device)
+    dinov2_vits14 = load_dinov2_vitb14_offline(device)
 
     with h5py.File(args.h5_video_path, "r") as traj_h5, h5py.File(
         args.h5_embedding_path, "r"
