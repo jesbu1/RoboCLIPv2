@@ -25,6 +25,7 @@ test -d "${CONDA_ENV}"
 test -f "${TOPREWARD_DIR}/data_preprocessing/topreward_label_reward.py"
 test -f "${TOPREWARD_DIR}/metaworld_policy_training/reward_model/topreward_reward_model.py"
 
+export QT_XCB_GL_INTEGRATION="${QT_XCB_GL_INTEGRATION:-none}"
 source /apps/conda/miniforge3/25.11.0-1/etc/profile.d/conda.sh
 conda activate "${CONDA_ENV}"
 
