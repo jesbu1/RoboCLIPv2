@@ -20,9 +20,9 @@ PROJECT_DIR="${PROJECT_DIR:-/project2/biyik_1165/haobaizh/rewind_no-action-chunk
 METAWORLD_DIR="${METAWORLD_DIR:-}"
 PROJECT_CACHE="${PROJECT_CACHE:-/home1/haobaizh/.cache}"
 VARIANT="${VARIANT:?VARIANT must be baseline or diff_gamma0999}"
-SUCCESS_BONUS="${SUCCESS_BONUS:-64.0}"
+SUCCESS_BONUS="${SUCCESS_BONUS:-0.0}"
 DIFF_GAMMA="${DIFF_GAMMA:-0.999}"
-DIFF_REWARD_SCALE="${DIFF_REWARD_SCALE:-1.0}"
+DIFF_REWARD_SCALE="${DIFF_REWARD_SCALE:-1000.0}"
 NUM_PREFIX_SAMPLES="${NUM_PREFIX_SAMPLES:-4}"
 TOPREWARD_LOCK_PATH="${TOPREWARD_LOCK_PATH:-${TOPREWARD_DIR}/logs/topreward_offline_${VARIANT}.lock}"
 
@@ -32,14 +32,14 @@ SEED="${SEEDS[$SLURM_ARRAY_TASK_ID]}"
 case "$VARIANT" in
   baseline)
     H5_PATH="../datasets/metaworld_topreward_labeled.h5"
-    LOG_GROUP="offline_topreward_baseline_bonus64_10critics"
-    LOG_DIR="logs/offline_topreward_baseline_bonus64_10critics_seed${SEED}"
+    LOG_GROUP="offline_topreward_baseline_bonus0_10critics"
+    LOG_DIR="logs/offline_topreward_baseline_bonus0_10critics_seed${SEED}"
     EXTRA_ARGS=(reward_model.use_progress_diff=false)
     ;;
   diff_gamma0999)
     H5_PATH="../datasets/metaworld_topreward_labeled_diff_gamma0999.h5"
-    LOG_GROUP="offline_topreward_diff_gamma0999_bonus64_10critics"
-    LOG_DIR="logs/offline_topreward_diff_gamma0999_bonus64_10critics_seed${SEED}"
+    LOG_GROUP="offline_topreward_diff_gamma0999_bonus0_scaled_10critics"
+    LOG_DIR="logs/offline_topreward_diff_gamma0999_bonus0_scaled_10critics_seed${SEED}"
     EXTRA_ARGS=(
       reward_model.use_progress_diff=true
       reward_model.diff_gamma="$DIFF_GAMMA"

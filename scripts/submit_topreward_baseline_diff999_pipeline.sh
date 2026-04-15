@@ -6,9 +6,9 @@ set -euo pipefail
 
 PROJECT_DIR="${PROJECT_DIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"
 TOPREWARD_DIR="${TOPREWARD_DIR:-/scratch1/haobaizh/rewind_topreward}"
-SUCCESS_BONUS="${SUCCESS_BONUS:-64.0}"
+SUCCESS_BONUS="${SUCCESS_BONUS:-0.0}"
 DIFF_GAMMA="${DIFF_GAMMA:-0.999}"
-DIFF_REWARD_SCALE="${DIFF_REWARD_SCALE:-1.0}"
+DIFF_REWARD_SCALE="${DIFF_REWARD_SCALE:-1000.0}"
 NUM_PREFIX_SAMPLES="${NUM_PREFIX_SAMPLES:-4}"
 REQUEST_TIMEOUT="${REQUEST_TIMEOUT:-600}"
 REQUEST_RETRIES="${REQUEST_RETRIES:-2}"
@@ -49,7 +49,7 @@ GROUP_IDS=(1 2 3 4 5 6 7 8)
 SERVER_JOB_IDS=()
 SERVER_INFO_FILES=()
 
-MANIFEST="${PROJECT_DIR}/logs/topreward_baseline_diff999_pipeline_$(date +%Y%m%d_%H%M%S).txt"
+MANIFEST="${PROJECT_DIR}/logs/topreward_baseline_diff999_bonus0_base_reward_pipeline_$(date +%Y%m%d_%H%M%S).txt"
 
 {
   echo "manifest=${MANIFEST}"

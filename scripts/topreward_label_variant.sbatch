@@ -25,7 +25,7 @@ NUM_PREFIX_SAMPLES="${NUM_PREFIX_SAMPLES:-4}"
 REQUEST_TIMEOUT="${REQUEST_TIMEOUT:-600}"
 REQUEST_RETRIES="${REQUEST_RETRIES:-2}"
 DIFF_GAMMA="${DIFF_GAMMA:-0.999}"
-DIFF_REWARD_SCALE="${DIFF_REWARD_SCALE:-1.0}"
+DIFF_REWARD_SCALE="${DIFF_REWARD_SCALE:-1000.0}"
 LOCK_PATH="${LOCK_PATH:-${TOPREWARD_DIR}/logs/topreward_label.lock}"
 
 case "$LABEL_VARIANT" in
@@ -33,11 +33,13 @@ case "$LABEL_VARIANT" in
     MODE="baseline"
     OUTPUT_PATH="${OUTPUT_PATH:-${TOPREWARD_DIR}/datasets/metaworld_topreward_labeled.h5}"
     JOB_TAG="baseline"
+    REWARD_SCALE="${BASELINE_REWARD_SCALE:-1.0}"
     ;;
   diff_gamma0999)
     MODE="diff"
     OUTPUT_PATH="${OUTPUT_PATH:-${TOPREWARD_DIR}/datasets/metaworld_topreward_labeled_diff_gamma0999.h5}"
     JOB_TAG="diff_gamma0999"
+    REWARD_SCALE="$DIFF_REWARD_SCALE"
     ;;
   *)
     echo "ERROR: Unknown LABEL_VARIANT=${LABEL_VARIANT}"
@@ -112,6 +114,7 @@ echo "OUTPUT_PATH=${OUTPUT_PATH}"
 echo "LOCK_PATH=${LOCK_PATH}"
 echo "NUM_PREFIX_SAMPLES=${NUM_PREFIX_SAMPLES}"
 echo "REQUEST_TIMEOUT=${REQUEST_TIMEOUT}"
+echo "REWARD_SCALE=${REWARD_SCALE}"
 which python
 python --version
 nvidia-smi
@@ -131,5 +134,5 @@ srun python -u scripts/topreward_label_reward_gamma.py \
   --request_retries "$REQUEST_RETRIES" \
   --mode "$MODE" \
   --diff_gamma "$DIFF_GAMMA" \
-  --reward_scale "$DIFF_REWARD_SCALE" \
+  --reward_scale "$REWARD_SCALE" \
   --lock_path "$LOCK_PATH"

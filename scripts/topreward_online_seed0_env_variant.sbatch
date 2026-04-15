@@ -24,9 +24,9 @@ GROUP_ID="${GROUP_ID:-unknown}"
 ENV_ID="${ENV_ID:?ENV_ID must be set}"
 VARIANT="${VARIANT:?VARIANT must be baseline or diff_gamma0999}"
 SEED="${SEED:-0}"
-SUCCESS_BONUS="${SUCCESS_BONUS:-64.0}"
+SUCCESS_BONUS="${SUCCESS_BONUS:-0.0}"
 DIFF_GAMMA="${DIFF_GAMMA:-0.999}"
-DIFF_REWARD_SCALE="${DIFF_REWARD_SCALE:-1.0}"
+DIFF_REWARD_SCALE="${DIFF_REWARD_SCALE:-1000.0}"
 NUM_PREFIX_SAMPLES="${NUM_PREFIX_SAMPLES:-4}"
 SERVER_WAIT_ATTEMPTS="${SERVER_WAIT_ATTEMPTS:-1440}"
 LOCK_PATH="${LOCK_PATH:-${TOPREWARD_DIR}/logs/topreward_online_group${GROUP_ID}.lock}"
@@ -35,22 +35,28 @@ LOG_ROOT="${LOG_ROOT:-${TOPREWARD_DIR}/metaworld_policy_training/logs}"
 case "$VARIANT" in
   baseline)
     H5_PATH="../datasets/metaworld_topreward_labeled.h5"
-    CKPT_PATH="logs/offline_topreward_baseline_bonus64_10critics_seed${SEED}/last_offline"
-    GROUP_NAME="topreward_wsrl_iql_${ENV_ID}_baseline_10critics"
-    RUN_NAME="${ENV_ID}_topreward_baseline_10critics_seed${SEED}"
-    LOG_DIR="${LOG_ROOT}/${ENV_ID}_topreward_baseline_10critics_seed${SEED}"
-    EXTRA_ARGS=(reward_model.use_progress_diff=false)
+    CKPT_PATH="logs/offline_topreward_baseline_bonus0_10critics_seed${SEED}/last_offline"
+    GROUP_NAME="topreward_wsrl_iql_${ENV_ID}_baseline_base_reward_10critics"
+    RUN_NAME="${ENV_ID}_topreward_baseline_base_reward_10critics_seed${SEED}"
+    LOG_DIR="${LOG_ROOT}/${ENV_ID}_topreward_baseline_base_reward_10critics_seed${SEED}"
+    EXTRA_ARGS=(
+      reward_model.use_progress_diff=false
+      reward_model.use_base_reward=true
+      reward_model.base_reward_value=-1.0
+    )
     ;;
   diff_gamma0999)
     H5_PATH="../datasets/metaworld_topreward_labeled_diff_gamma0999.h5"
-    CKPT_PATH="logs/offline_topreward_diff_gamma0999_bonus64_10critics_seed${SEED}/last_offline"
-    GROUP_NAME="topreward_wsrl_iql_${ENV_ID}_diff_gamma0999_10critics"
-    RUN_NAME="${ENV_ID}_topreward_diff_gamma0999_10critics_seed${SEED}"
-    LOG_DIR="${LOG_ROOT}/${ENV_ID}_topreward_diff_gamma0999_10critics_seed${SEED}"
+    CKPT_PATH="logs/offline_topreward_diff_gamma0999_bonus0_scaled_10critics_seed${SEED}/last_offline"
+    GROUP_NAME="topreward_wsrl_iql_${ENV_ID}_diff_gamma0999_scaled_base_reward_10critics"
+    RUN_NAME="${ENV_ID}_topreward_diff_gamma0999_scaled_base_reward_10critics_seed${SEED}"
+    LOG_DIR="${LOG_ROOT}/${ENV_ID}_topreward_diff_gamma0999_scaled_base_reward_10critics_seed${SEED}"
     EXTRA_ARGS=(
       reward_model.use_progress_diff=true
       reward_model.diff_gamma="$DIFF_GAMMA"
       reward_model.diff_reward_scale="$DIFF_REWARD_SCALE"
+      reward_model.use_base_reward=true
+      reward_model.base_reward_value=-1.0
     )
     ;;
   *)
