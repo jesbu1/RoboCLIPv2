@@ -113,13 +113,13 @@ echo "label_diff_gamma0999=${DIFF999_LABEL_ID}" | tee -a "$SUBMIT_MANIFEST"
 
 BASELINE_OFFLINE_ID=$(sbatch --parsable \
   --dependency="afterok:${BASELINE_LABEL_ID}" \
-  --export=ALL,TOPREWARD_DIR="$TOPREWARD_DIR",VARIANT=baseline,SUCCESS_BONUS="$SUCCESS_BONUS" \
+  --export=ALL,PROJECT_DIR="$PROJECT_DIR",TOPREWARD_DIR="$TOPREWARD_DIR",VARIANT=baseline,SUCCESS_BONUS="$SUCCESS_BONUS" \
   scripts/topreward_offline_3seeds.sbatch)
 echo "offline_baseline_3seeds=${BASELINE_OFFLINE_ID}" | tee -a "$SUBMIT_MANIFEST"
 
 DIFF999_OFFLINE_ID=$(sbatch --parsable \
   --dependency="afterok:${DIFF999_LABEL_ID}" \
-  --export=ALL,TOPREWARD_DIR="$TOPREWARD_DIR",VARIANT=diff_gamma0999,SUCCESS_BONUS="$SUCCESS_BONUS",DIFF_GAMMA="$DIFF_GAMMA",DIFF_REWARD_SCALE="$DIFF_REWARD_SCALE" \
+  --export=ALL,PROJECT_DIR="$PROJECT_DIR",TOPREWARD_DIR="$TOPREWARD_DIR",VARIANT=diff_gamma0999,SUCCESS_BONUS="$SUCCESS_BONUS",DIFF_GAMMA="$DIFF_GAMMA",DIFF_REWARD_SCALE="$DIFF_REWARD_SCALE" \
   scripts/topreward_offline_3seeds.sbatch)
 echo "offline_diff_gamma0999_3seeds=${DIFF999_OFFLINE_ID}" | tee -a "$SUBMIT_MANIFEST"
 
@@ -144,13 +144,13 @@ for idx in "${!GROUP_IDS[@]}"; do
 
   baseline_online_id=$(sbatch --parsable \
     --dependency="after:${server_job_id},afterok:${BASELINE_OFFLINE_ID}" \
-    --export=ALL,TOPREWARD_DIR="$TOPREWARD_DIR",INFO_FILE="$info_file",EXPECTED_SERVER_JOB_ID="$server_job_id",GROUP_ID="$group_id",ENV_ID="$env_id",VARIANT=baseline,SUCCESS_BONUS="$SUCCESS_BONUS",LOCK_PATH="$online_lock",NUM_PREFIX_SAMPLES="$NUM_PREFIX_SAMPLES" \
+    --export=ALL,PROJECT_DIR="$PROJECT_DIR",TOPREWARD_DIR="$TOPREWARD_DIR",INFO_FILE="$info_file",EXPECTED_SERVER_JOB_ID="$server_job_id",GROUP_ID="$group_id",ENV_ID="$env_id",VARIANT=baseline,SUCCESS_BONUS="$SUCCESS_BONUS",LOCK_PATH="$online_lock",NUM_PREFIX_SAMPLES="$NUM_PREFIX_SAMPLES" \
     scripts/topreward_online_seed0_env_variant.sbatch)
   echo "online_group${group_id}_baseline=${baseline_online_id}" | tee -a "$SUBMIT_MANIFEST"
 
   diff999_online_id=$(sbatch --parsable \
     --dependency="after:${server_job_id},afterok:${DIFF999_OFFLINE_ID}" \
-    --export=ALL,TOPREWARD_DIR="$TOPREWARD_DIR",INFO_FILE="$info_file",EXPECTED_SERVER_JOB_ID="$server_job_id",GROUP_ID="$group_id",ENV_ID="$env_id",VARIANT=diff_gamma0999,SUCCESS_BONUS="$SUCCESS_BONUS",DIFF_GAMMA="$DIFF_GAMMA",DIFF_REWARD_SCALE="$DIFF_REWARD_SCALE",LOCK_PATH="$online_lock",NUM_PREFIX_SAMPLES="$NUM_PREFIX_SAMPLES" \
+    --export=ALL,PROJECT_DIR="$PROJECT_DIR",TOPREWARD_DIR="$TOPREWARD_DIR",INFO_FILE="$info_file",EXPECTED_SERVER_JOB_ID="$server_job_id",GROUP_ID="$group_id",ENV_ID="$env_id",VARIANT=diff_gamma0999,SUCCESS_BONUS="$SUCCESS_BONUS",DIFF_GAMMA="$DIFF_GAMMA",DIFF_REWARD_SCALE="$DIFF_REWARD_SCALE",LOCK_PATH="$online_lock",NUM_PREFIX_SAMPLES="$NUM_PREFIX_SAMPLES" \
     scripts/topreward_online_seed0_env_variant.sbatch)
   echo "online_group${group_id}_diff_gamma0999=${diff999_online_id}" | tee -a "$SUBMIT_MANIFEST"
 

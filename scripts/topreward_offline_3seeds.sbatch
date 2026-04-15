@@ -16,6 +16,8 @@ set -euo pipefail
 
 TOPREWARD_DIR="${TOPREWARD_DIR:-/scratch1/haobaizh/rewind_topreward}"
 TOPREWARD_CONDA="${TOPREWARD_CONDA:-${TOPREWARD_DIR}/conda_envs/rewind}"
+PROJECT_DIR="${PROJECT_DIR:-/project2/biyik_1165/haobaizh/rewind_no-action-chunk}"
+METAWORLD_DIR="${METAWORLD_DIR:-}"
 PROJECT_CACHE="${PROJECT_CACHE:-/home1/haobaizh/.cache}"
 VARIANT="${VARIANT:?VARIANT must be baseline or diff_gamma0999}"
 SUCCESS_BONUS="${SUCCESS_BONUS:-64.0}"
@@ -67,6 +69,28 @@ module load glx/1.4
 export QT_XCB_GL_INTEGRATION="${QT_XCB_GL_INTEGRATION:-none}"
 source /apps/conda/miniforge3/25.11.0-1/etc/profile.d/conda.sh
 conda activate "$TOPREWARD_CONDA"
+
+configure_metaworld_source() {
+  local candidates=()
+  [ -n "$METAWORLD_DIR" ] && candidates+=("$METAWORLD_DIR")
+  candidates+=(
+    "${TOPREWARD_DIR}/metaworld_policy_training/Metaworld"
+    "${PROJECT_DIR}/Metaworld"
+  )
+
+  local d
+  for d in "${candidates[@]}"; do
+    if [ -d "${d}/metaworld" ]; then
+      export PYTHONPATH="${d}:${PYTHONPATH:-}"
+      echo "Using Metaworld source: ${d}"
+      return 0
+    fi
+  done
+
+  echo "WARNING: Metaworld source not found in candidates; relying on installed package."
+}
+
+configure_metaworld_source
 
 export LD_PRELOAD="$(g++ -print-file-name=libstdc++.so.6)"
 export MUJOCO_GL=egl
