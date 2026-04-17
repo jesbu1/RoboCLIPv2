@@ -10,7 +10,7 @@
 #SBATCH --error=logs/%x_%A_%a.err
 #SBATCH --array=0-2
 
-# Offline IQL: diff_gamma=1.0, diff_reward_scale=10000, 10 critics
+# Offline IQL: diff_gamma=1.0, reward_divisor=0.0001 (scale=10000), 10 critics
 # 3 seeds (array 0→seed42, 1→seed32, 2→seed0)
 # Trains on all 20 offline tasks in metaworld_labeled_diff_gamma1.h5
 

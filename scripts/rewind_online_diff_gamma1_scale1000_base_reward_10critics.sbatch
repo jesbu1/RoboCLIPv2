@@ -10,7 +10,7 @@
 #SBATCH --error=logs/%x_%A_%a.err
 #SBATCH --array=0-23
 
-# Online IQL: diff_gamma=1.0, scale=1000 (reward_divisor=0.001), base_reward=-1, success_bonus=0, 10 critics
+# Online IQL: diff_gamma=1.0, scale=1000 (diff_reward_scale=1000), base_reward=-1, success_bonus=0, 10 critics
 # 8 tasks x 3 seeds = 24 (array 0-23)
 
 set -e
@@ -75,11 +75,12 @@ srun python -u test_scripts/test_iql.py \
   reward_model.success_bonus=0 \
   reward_model.use_progress_diff=true \
   reward_model.diff_gamma=1.0 \
-  reward_model.reward_divisor=0.001 \
+  reward_model.diff_reward_scale=1000 \
   reward_model.use_base_reward=true \
   reward_model.base_reward_value=-1.0 \
   general_training.seed=$SEED \
   environment.env_id=$ENV_ID \
+  offline_training.offline_training_steps=0 \
   offline_training.offline_h5_path=datasets/metaworld_labeled_diff_gamma1.h5 \
   offline_training.ckpt_path=$CKPT_DIR/last_offline \
   logging.wandb_group_name="$GROUP_NAME" \
