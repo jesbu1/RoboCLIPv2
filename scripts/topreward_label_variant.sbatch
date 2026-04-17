@@ -27,6 +27,11 @@ REQUEST_RETRIES="${REQUEST_RETRIES:-2}"
 DIFF_GAMMA="${DIFF_GAMMA:-0.999}"
 DIFF_REWARD_SCALE="${DIFF_REWARD_SCALE:-1000.0}"
 LOCK_PATH="${LOCK_PATH:-${TOPREWARD_DIR}/logs/topreward_label.lock}"
+USE_REVERSE_PROGRESS_DIFF="${USE_REVERSE_PROGRESS_DIFF:-false}"
+REVERSE_DIFF_ARG=()
+if [ "$USE_REVERSE_PROGRESS_DIFF" = "true" ]; then
+  REVERSE_DIFF_ARG=(--use_reverse_progress_diff)
+fi
 
 case "$LABEL_VARIANT" in
   baseline)
@@ -117,6 +122,7 @@ echo "LOCK_PATH=${LOCK_PATH}"
 echo "MAX_FRAMES_PER_QUERY=${NUM_PREFIX_SAMPLES}"
 echo "REQUEST_TIMEOUT=${REQUEST_TIMEOUT}"
 echo "REWARD_SCALE=${REWARD_SCALE}"
+echo "USE_REVERSE_PROGRESS_DIFF=${USE_REVERSE_PROGRESS_DIFF}"
 which python
 python --version
 nvidia-smi
@@ -135,6 +141,7 @@ srun python -u scripts/topreward_label_reward_gamma.py \
   --request_timeout "$REQUEST_TIMEOUT" \
   --request_retries "$REQUEST_RETRIES" \
   --mode "$MODE" \
+  "${REVERSE_DIFF_ARG[@]}" \
   --diff_gamma "$DIFF_GAMMA" \
   --reward_scale "$REWARD_SCALE" \
   --lock_path "$LOCK_PATH"

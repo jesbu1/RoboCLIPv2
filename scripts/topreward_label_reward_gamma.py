@@ -395,10 +395,11 @@ def label_trajectories(args):
                     )
 
                     if args.mode == "diff":
-                        save_reward_outputs = (
-                            args.reward_scale
-                            * (args.diff_gamma * per_step_rewards[1:] - per_step_rewards[:-1])
-                        )
+                        if args.use_reverse_progress_diff:
+                            raw_diff = per_step_rewards[1:] - args.diff_gamma * per_step_rewards[:-1]
+                        else:
+                            raw_diff = args.diff_gamma * per_step_rewards[1:] - per_step_rewards[:-1]
+                        save_reward_outputs = args.reward_scale * raw_diff
                     else:
                         save_reward_outputs = args.reward_scale * per_step_rewards[1:]
 
@@ -437,6 +438,7 @@ def main():
     parser.add_argument("--request_timeout", type=float, default=600.0)
     parser.add_argument("--request_retries", type=int, default=2)
     parser.add_argument("--mode", choices=["baseline", "diff"], required=True)
+    parser.add_argument("--use_reverse_progress_diff", action="store_true")
     parser.add_argument("--diff_gamma", type=float, default=1.0)
     parser.add_argument("--reward_scale", type=float, default=1.0)
     parser.add_argument("--lock_path", default="")

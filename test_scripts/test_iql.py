@@ -518,6 +518,7 @@ def create_envs(cfg: DictConfig, reward_model: BaseRewardModel, image_encoder):
 
     # Get use_progress_diff from config (default to False if not specified)
     use_progress_diff = cfg.reward_model.get("use_progress_diff", False)
+    use_reverse_progress_diff = cfg.reward_model.get("use_reverse_progress_diff", False)
     diff_gamma = cfg.reward_model.get("diff_gamma", 1.0)
     diff_reward_scale = cfg.reward_model.get("diff_reward_scale", 1.0)
     use_base_reward = cfg.reward_model.get("use_base_reward", False)
@@ -543,6 +544,7 @@ def create_envs(cfg: DictConfig, reward_model: BaseRewardModel, image_encoder):
                     normalize_reward=cfg.general_training.normalize_reward,
                     terminate_on_success=cfg.general_training.terminate_on_success,
                     use_progress_diff=use_progress_diff,
+                    use_reverse_progress_diff=use_reverse_progress_diff,
                     diff_gamma=diff_gamma,
                     diff_reward_scale=diff_reward_scale,
                     use_base_reward=use_base_reward,
@@ -571,6 +573,7 @@ def create_envs(cfg: DictConfig, reward_model: BaseRewardModel, image_encoder):
                     normalize_reward=cfg.general_training.normalize_reward,
                     terminate_on_success=cfg.general_training.terminate_on_success,
                     use_progress_diff=use_progress_diff,
+                    use_reverse_progress_diff=use_reverse_progress_diff,
                     diff_gamma=diff_gamma,
                     diff_reward_scale=diff_reward_scale,
                     use_base_reward=use_base_reward,
@@ -596,6 +599,7 @@ def create_envs(cfg: DictConfig, reward_model: BaseRewardModel, image_encoder):
                     normalize_reward=cfg.general_training.normalize_reward,
                     terminate_on_success=cfg.general_training.terminate_on_success,
                     use_progress_diff=use_progress_diff,
+                    use_reverse_progress_diff=use_reverse_progress_diff,
                     diff_gamma=diff_gamma,
                     diff_reward_scale=diff_reward_scale,
                     use_base_reward=use_base_reward,
@@ -621,6 +625,7 @@ def create_envs(cfg: DictConfig, reward_model: BaseRewardModel, image_encoder):
                     normalize_reward=cfg.general_training.normalize_reward,
                     terminate_on_success=cfg.general_training.terminate_on_success,
                     use_progress_diff=use_progress_diff,
+                    use_reverse_progress_diff=use_reverse_progress_diff,
                     diff_gamma=diff_gamma,
                     diff_reward_scale=diff_reward_scale,
                     use_base_reward=use_base_reward,

@@ -16,6 +16,7 @@ reward_model:
   reward_at_every_step: true
   sum_reward: false
   use_progress_diff: false
+  use_reverse_progress_diff: false
   diff_gamma: 1.0
   diff_reward_scale: 1.0
   use_base_reward: false

@@ -128,6 +128,7 @@ def main():
     parser.add_argument("--server_url", default="http://localhost:8000")
     parser.add_argument("--max_frames", type=int, default=4)
     parser.add_argument("--use_progress_diff", action="store_true")
+    parser.add_argument("--use_reverse_progress_diff", action="store_true")
     parser.add_argument("--diff_gamma", type=float, default=1.0)
     args = parser.parse_args()
 
@@ -176,7 +177,10 @@ def main():
             )
 
             if args.use_progress_diff:
-                save_rewards = args.diff_gamma * progress_values[1:] - progress_values[:-1]
+                if args.use_reverse_progress_diff:
+                    save_rewards = progress_values[1:] - args.diff_gamma * progress_values[:-1]
+                else:
+                    save_rewards = args.diff_gamma * progress_values[1:] - progress_values[:-1]
             else:
                 save_rewards = progress_values[1:]
 

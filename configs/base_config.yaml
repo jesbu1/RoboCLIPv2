@@ -75,6 +75,7 @@ reward_model:
   success_bonus: 10.0
   normalize_reward: false
   reward_at_every_step: true
+  use_reverse_progress_diff: false
 
 environment:
   text_string: null # Set to null so you must set environment yaml

@@ -215,8 +215,12 @@ def label_trajectories(args, rewind_model, traj_h5, embedding_h5):
                     progress_values = reward_outputs.cpu().numpy()
 
                     if args.use_progress_diff:
-                        # r_t = gamma * P(s_{t+1}) - P(s_t)
-                        save_rewards = args.diff_gamma * progress_values[1:] - progress_values[:-1]
+                        if args.use_reverse_progress_diff:
+                            # r_t = P(s_{t+1}) - gamma * P(s_t)
+                            save_rewards = progress_values[1:] - args.diff_gamma * progress_values[:-1]
+                        else:
+                            # r_t = gamma * P(s_{t+1}) - P(s_t)
+                            save_rewards = args.diff_gamma * progress_values[1:] - progress_values[:-1]
                     else:
                         save_rewards = progress_values[1:]
 
@@ -254,6 +258,8 @@ def main():
     parser.add_argument("--output_path", default="datasets/metaworld_labeled.h5")
     parser.add_argument("--use_progress_diff", action="store_true",
                         help="Use gamma*P(s')-P(s) instead of P(s) as reward.")
+    parser.add_argument("--use_reverse_progress_diff", action="store_true",
+                        help="With --use_progress_diff, use P(s')-gamma*P(s) instead.")
     parser.add_argument("--diff_gamma", type=float, default=1.0,
                         help="Discount factor for PBRS diff: r = gamma*P(s') - P(s). Default 1.0.")
     args = parser.parse_args()

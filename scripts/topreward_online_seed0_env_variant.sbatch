@@ -25,6 +25,7 @@ SEED="${SEED:-0}"
 SUCCESS_BONUS="${SUCCESS_BONUS:-0.0}"
 DIFF_GAMMA="${DIFF_GAMMA:-0.999}"
 DIFF_REWARD_SCALE="${DIFF_REWARD_SCALE:-1000.0}"
+USE_REVERSE_PROGRESS_DIFF="${USE_REVERSE_PROGRESS_DIFF:-false}"
 NUM_PREFIX_SAMPLES="${NUM_PREFIX_SAMPLES:-4}"
 REQUEST_TIMEOUT="${REQUEST_TIMEOUT:-900}"
 REQUEST_RETRIES="${REQUEST_RETRIES:-2}"
@@ -53,6 +54,7 @@ case "$VARIANT" in
     LOG_DIR="${LOG_ROOT}/${ENV_ID}_topreward_diff_gamma0999_scaled_base_reward_10critics_seed${SEED}"
     EXTRA_ARGS=(
       reward_model.use_progress_diff=true
+      reward_model.use_reverse_progress_diff="$USE_REVERSE_PROGRESS_DIFF"
       reward_model.diff_gamma="$DIFF_GAMMA"
       reward_model.diff_reward_scale="$DIFF_REWARD_SCALE"
       reward_model.use_base_reward=true
@@ -141,6 +143,7 @@ echo "HF_HOME=${HF_HOME}"
 echo "TORCH_HOME=${TORCH_HOME}"
 echo "NUM_PREFIX_SAMPLES=${NUM_PREFIX_SAMPLES}"
 echo "REQUEST_TIMEOUT=${REQUEST_TIMEOUT}"
+echo "USE_REVERSE_PROGRESS_DIFF=${USE_REVERSE_PROGRESS_DIFF}"
 echo "CKPT_PATH=${CKPT_PATH}"
 echo "H5_PATH=${H5_PATH}"
 which python

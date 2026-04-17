@@ -168,6 +168,7 @@ class LearnedRewardWrapper(gym.Wrapper):
         dense_eval: bool = False,
         use_proprio: bool = False,
         use_progress_diff: bool = False,
+        use_reverse_progress_diff: bool = False,
         diff_gamma: float = 1.0,
         diff_reward_scale: float = 1.0,
         use_base_reward: bool = False,
@@ -178,8 +179,10 @@ class LearnedRewardWrapper(gym.Wrapper):
         self.image_encoder = encoder
         self.is_state_based = is_state_based
         self.use_proprio = use_proprio
-        # Progress diff mode: use reward = gamma * P(s') - P(s) instead of P(s)
+        # Progress diff mode defaults to gamma * P(s') - P(s). The reverse
+        # variant switches to P(s') - gamma * P(s) only when explicitly enabled.
         self.use_progress_diff = use_progress_diff
+        self.use_reverse_progress_diff = use_reverse_progress_diff
         self.diff_gamma = diff_gamma
         self.diff_reward_scale = diff_reward_scale
         self.prev_progress = None
@@ -387,9 +390,15 @@ class LearnedRewardWrapper(gym.Wrapper):
                 current_progress = current_progress.item()
 
             if self.use_progress_diff:
-                # Progress diff mode: reward = scale * (gamma * P(s') - P(s))
+                # Progress diff mode:
+                #   default: scale * (gamma * P(s') - P(s))
+                #   reverse: scale * (P(s') - gamma * P(s))
                 if self.prev_progress is not None:
-                    reward = self.diff_reward_scale * (self.diff_gamma * current_progress - self.prev_progress)
+                    if self.use_reverse_progress_diff:
+                        raw_diff = current_progress - self.diff_gamma * self.prev_progress
+                    else:
+                        raw_diff = self.diff_gamma * current_progress - self.prev_progress
+                    reward = self.diff_reward_scale * raw_diff
                 else:
                     reward = 0.0  # First step after reset, no diff available
                 self.prev_progress = current_progress
