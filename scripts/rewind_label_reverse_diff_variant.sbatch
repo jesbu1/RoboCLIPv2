@@ -40,6 +40,7 @@ esac
 module purge
 module load gcc/13.3.0
 
+export QT_XCB_GL_INTEGRATION="${QT_XCB_GL_INTEGRATION:-none}"
 source /apps/conda/miniforge3/25.11.0-1/etc/profile.d/conda.sh
 conda activate "${PROJECT_DIR}/conda_envs/rewind_nochunk"
 

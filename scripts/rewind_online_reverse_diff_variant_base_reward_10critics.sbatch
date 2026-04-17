@@ -50,6 +50,7 @@ module load mesa-glu/9.0.2
 module load glew/2.2.0
 module load glx/1.4
 
+export QT_XCB_GL_INTEGRATION="${QT_XCB_GL_INTEGRATION:-none}"
 source /apps/conda/miniforge3/25.11.0-1/etc/profile.d/conda.sh
 conda activate "${PROJECT_DIR}/conda_envs/rewind_nochunk"
 
