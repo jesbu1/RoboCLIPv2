@@ -71,7 +71,7 @@ mkdir -p /scratch1/haobaizh/rewind_nochunk_online_logs
 
 LOG_DIR="/scratch1/haobaizh/rewind_nochunk_online_logs/${ENV_ID}_nochunk_rewind_diff_gamma1_scale100_base_reward_10critics_seed${SEED}_rep${REP_IDX}_${SLURM_ARRAY_JOB_ID}"
 GROUP_NAME="${ENV_ID}_nochunk_rewind_diff_gamma1_scale100_base_reward_10critics"
-export WANDB_RUN_NAME="${ENV_ID}_nochunk_rewind_diff_gamma1_scale100_base_reward_10critics_seed${SEED}_rep${REP_IDX}_${SLURM_ARRAY_JOB_ID}"
+export WANDB_RUN_NAME="${ENV_ID}_nochunk_rewind_diff_gamma1_scale100_base_reward_10critics_seed${SEED}"
 
 rm -rf "$LOG_DIR"
 
