@@ -46,6 +46,7 @@ if [ ! -f "${ROBOMETER_PROJECT_DIR}/robometer_server.py" ]; then
   exit 1
 fi
 
+export QT_XCB_GL_INTEGRATION="${QT_XCB_GL_INTEGRATION:-none}"
 source /apps/conda/miniforge3/25.11.0-1/etc/profile.d/conda.sh
 conda activate "$ROBOMETER_CONDA"
 
