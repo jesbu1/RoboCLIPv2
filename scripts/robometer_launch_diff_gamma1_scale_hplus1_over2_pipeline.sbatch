@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Wait for any Robometer server to become healthy, then submit:
-# optional label -> offline horizon-scale 3 seeds -> online 8 envs x 3 seeds.
+# optional label -> 3 independent offline seed jobs -> 24 independent online jobs.
 
 #SBATCH --job-name=robo_launch_d1_h
 #SBATCH --account=biyik_1165
@@ -112,16 +112,24 @@ if [ "$FORCE_LABEL" = "true" ] || [ ! -f "$LABEL_H5" ]; then
     --export=ALL,PROJECT_DIR="$PROJECT_DIR",INFO_FILE="$FIRST_INFO_FILE",EXPECTED_SERVER_JOB_ID="$FIRST_SERVER_JOB_ID",MAX_FRAMES="$MAX_FRAMES" \
     scripts/robometer_label_diff_gamma1.sbatch)
   echo "label_diff_gamma1=${LABEL_ID}" | tee -a "$SUBMIT_MANIFEST"
-  OFFLINE_DEP="--dependency=after:${FIRST_SERVER_JOB_ID},afterok:${LABEL_ID}"
+  OFFLINE_DEP="after:${FIRST_SERVER_JOB_ID},afterok:${LABEL_ID}"
 else
   echo "label_diff_gamma1=(skipped_existing_h5)" | tee -a "$SUBMIT_MANIFEST"
-  OFFLINE_DEP="--dependency=after:${FIRST_SERVER_JOB_ID}"
+  OFFLINE_DEP="after:${FIRST_SERVER_JOB_ID}"
 fi
 
-OFFLINE_ID=$(sbatch --parsable $OFFLINE_DEP \
-  --export=ALL,PROJECT_DIR="$PROJECT_DIR",INFO_FILE="$FIRST_INFO_FILE",EXPECTED_SERVER_JOB_ID="$FIRST_SERVER_JOB_ID",MAX_FRAMES="$MAX_FRAMES",HORIZON="$HORIZON" \
-  scripts/robometer_offline_diff_gamma1_scale_hplus1_over2_bonus0_3seeds.sbatch)
-echo "offline_diff_gamma1_scale_hplus1_over2_3seeds=${OFFLINE_ID}" | tee -a "$SUBMIT_MANIFEST"
+SEEDS=(42 32 0)
+OFFLINE_IDS=()
+for seed in "${SEEDS[@]}"; do
+  offline_id=$(sbatch --parsable \
+    --dependency="$OFFLINE_DEP" \
+    --export=ALL,PROJECT_DIR="$PROJECT_DIR",INFO_FILE="$FIRST_INFO_FILE",EXPECTED_SERVER_JOB_ID="$FIRST_SERVER_JOB_ID",MAX_FRAMES="$MAX_FRAMES",HORIZON="$HORIZON",SEED="$seed" \
+    scripts/robometer_offline_diff_gamma1_scale_hplus1_over2_bonus0_single_seed.sbatch)
+  OFFLINE_IDS+=("$offline_id")
+  echo "offline_diff_gamma1_scale_hplus1_over2_seed${seed}=${offline_id}" | tee -a "$SUBMIT_MANIFEST"
+done
+OFFLINE_IDS_JOINED="$(IFS=:; echo "${OFFLINE_IDS[*]}")"
+echo "offline_diff_gamma1_scale_hplus1_over2_all_seeds=${OFFLINE_IDS_JOINED}" | tee -a "$SUBMIT_MANIFEST"
 
 GROUP_IDS=(41 42 43 44 45 46 47 48)
 ENV_IDS=(
@@ -141,11 +149,13 @@ for idx in "${!GROUP_IDS[@]}"; do
   server_job_id="${SERVER_IDS[$idx]}"
   info_file="${INFO_FILES[$idx]}"
 
-  online_id=$(sbatch --parsable \
-    --dependency="after:${server_job_id},afterok:${OFFLINE_ID}" \
-    --export=ALL,PROJECT_DIR="$PROJECT_DIR",INFO_FILE="$info_file",EXPECTED_SERVER_JOB_ID="$server_job_id",GROUP_ID="$group_id",ENV_ID="$env_id",MAX_FRAMES="$MAX_FRAMES",HORIZON="$HORIZON" \
-    scripts/robometer_online_diff_gamma1_scale_hplus1_over2_base_reward_env_3seeds.sbatch)
-  echo "online_group${group_id}_${env_id}=${online_id}" | tee -a "$SUBMIT_MANIFEST"
+  for seed in "${SEEDS[@]}"; do
+    online_id=$(sbatch --parsable \
+      --dependency="after:${server_job_id},afterok:${OFFLINE_IDS_JOINED}" \
+      --export=ALL,PROJECT_DIR="$PROJECT_DIR",INFO_FILE="$info_file",EXPECTED_SERVER_JOB_ID="$server_job_id",GROUP_ID="$group_id",ENV_ID="$env_id",SEED="$seed",MAX_FRAMES="$MAX_FRAMES",HORIZON="$HORIZON" \
+      scripts/robometer_online_diff_gamma1_scale_hplus1_over2_base_reward_env_single_seed.sbatch)
+    echo "online_group${group_id}_${env_id}_seed${seed}=${online_id}" | tee -a "$SUBMIT_MANIFEST"
+  done
 
   echo "stop_group${group_id}=(disabled_no_auto_cancel)" | tee -a "$SUBMIT_MANIFEST"
 done
