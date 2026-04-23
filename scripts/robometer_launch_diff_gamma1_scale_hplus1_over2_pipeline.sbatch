@@ -13,7 +13,7 @@
 
 set -euo pipefail
 
-PROJECT_DIR="${PROJECT_DIR:-${SLURM_SUBMIT_DIR}}"
+PROJECT_DIR="${PROJECT_DIR:-${SLURM_SUBMIT_DIR:-$(pwd)}}"
 SERVER_JOB_IDS="${SERVER_JOB_IDS:?SERVER_JOB_IDS must be provided}"
 SERVER_INFO_FILES="${SERVER_INFO_FILES:?SERVER_INFO_FILES must be provided}"
 SUBMIT_MANIFEST="${SUBMIT_MANIFEST:-${PROJECT_DIR}/logs/robometer_diff_gamma1_scale_hplus1_over2_manifest.txt}"

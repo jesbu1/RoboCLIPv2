@@ -14,12 +14,16 @@
 
 set -euo pipefail
 
-PROJECT_DIR="${PROJECT_DIR:-${SLURM_SUBMIT_DIR}}"
+PROJECT_DIR="${PROJECT_DIR:-${SLURM_SUBMIT_DIR:-$(pwd)}}"
 INFO_FILE="${INFO_FILE:?INFO_FILE must point to this Robometer server info file}"
 EXPECTED_SERVER_JOB_ID="${EXPECTED_SERVER_JOB_ID:-}"
 GROUP_ID="${GROUP_ID:-unknown}"
 ENV_ID="${ENV_ID:?ENV_ID must be set}"
 SEED="${SEED:?SEED must be set to one of 42,32,0}"
+if [[ "$SEED" != "42" && "$SEED" != "32" && "$SEED" != "0" ]]; then
+  echo "ERROR: SEED must be one of 42,32,0; got ${SEED}"
+  exit 1
+fi
 MAX_FRAMES="${MAX_FRAMES:-4}"
 LOG_ROOT="${LOG_ROOT:-/scratch1/haobaizh/rewind_nochunk_online_logs/robometer}"
 SERVER_WAIT_ATTEMPTS="${SERVER_WAIT_ATTEMPTS:-1440}"

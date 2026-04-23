@@ -14,12 +14,16 @@
 
 set -euo pipefail
 
-PROJECT_DIR="${PROJECT_DIR:-${SLURM_SUBMIT_DIR}}"
+PROJECT_DIR="${PROJECT_DIR:-${SLURM_SUBMIT_DIR:-$(pwd)}}"
 INFO_FILE="${INFO_FILE:?INFO_FILE must point to a ready Robometer server info file}"
 EXPECTED_SERVER_JOB_ID="${EXPECTED_SERVER_JOB_ID:-}"
 MAX_FRAMES="${MAX_FRAMES:-4}"
 HORIZON="${HORIZON:-128}"
 SEED="${SEED:?SEED must be set to one of 42,32,0}"
+if [[ "$SEED" != "42" && "$SEED" != "32" && "$SEED" != "0" ]]; then
+  echo "ERROR: SEED must be one of 42,32,0; got ${SEED}"
+  exit 1
+fi
 
 if [ ! -f "${PROJECT_DIR}/test_scripts/test_iql.py" ]; then
   echo "ERROR: PROJECT_DIR does not look like rewind_no-action-chunk: ${PROJECT_DIR}"
