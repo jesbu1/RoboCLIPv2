@@ -147,12 +147,5 @@ for idx in "${!GROUP_IDS[@]}"; do
     scripts/robometer_online_diff_gamma1_scale_hplus1_over2_base_reward_env_3seeds.sbatch)
   echo "online_group${group_id}_${env_id}=${online_id}" | tee -a "$SUBMIT_MANIFEST"
 
-  stop_id=$(sbatch --parsable \
-    --job-name="stop_robo_d1_h_g${group_id}" \
-    --output="logs/stop_robo_d1_h_g${group_id}_%j.out" \
-    --error="logs/stop_robo_d1_h_g${group_id}_%j.err" \
-    --dependency="afterany:${online_id}_*" \
-    --export=ALL,TARGET_JOB_ID="$server_job_id" \
-    scripts/stop_slurm_job_by_id.sbatch)
-  echo "stop_group${group_id}=${stop_id}" | tee -a "$SUBMIT_MANIFEST"
+  echo "stop_group${group_id}=(disabled_no_auto_cancel)" | tee -a "$SUBMIT_MANIFEST"
 done
