@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # Submit 9 selected Robometer H128 online task-seed combos, 3 reruns each.
 # Each existing server runs its 3 online reruns sequentially via afterok.
-# The first 6 groups include handle-press-side and window-close so they can
-# start as soon as the currently running group40..45 servers are ready.
+# The first 6 groups cover all selected task families, including sweep-into,
+# and balance seeds as much as the selected combos allow.
 # No Slurm arrays. WandB names are produced by the single-task sbatch unchanged.
 
 set -euo pipefail
@@ -43,15 +43,15 @@ for group_id in "${GROUP_IDS[@]}"; do
 done
 
 TASK_SPECS=(
-  "faucet-close-v2:42"
-  "faucet-close-v2:32"
   "faucet-close-v2:0"
-  "reach-wall-v2:42"
+  "reach-wall-v2:32"
   "handle-press-side-v2:32"
   "window-close-v2:42"
-  "reach-wall-v2:32"
-  "reach-wall-v2:0"
   "sweep-into-v2:42"
+  "reach-wall-v2:0"
+  "faucet-close-v2:42"
+  "faucet-close-v2:32"
+  "reach-wall-v2:42"
 )
 
 DIFF_REWARD_SCALE=$(awk -v h="$HORIZON" 'BEGIN { printf "%.10g", (h + 1) / 2 }')
