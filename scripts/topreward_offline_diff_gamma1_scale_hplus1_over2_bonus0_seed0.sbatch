@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
-# TOPReward offline, diff gamma=1.0, scale=100, success_bonus=0, seed0 only.
+# TOPReward offline, diff gamma=1.0, scale=(HORIZON+1)/2, success_bonus=0, seed0 only.
 
-#SBATCH --job-name=top_off_d1_s100
+#SBATCH --job-name=top_off_d1_h
 #SBATCH --account=biyik_1165
 #SBATCH --partition=gpu
 #SBATCH --gres=gpu:1
@@ -18,14 +18,18 @@ PROJECT_DIR="${PROJECT_DIR:-/project2/biyik_1165/haobaizh/rewind_no-action-chunk
 PROJECT_CACHE="${PROJECT_CACHE:-/home1/haobaizh/.cache}"
 INFO_FILE="${INFO_FILE:?INFO_FILE must point to a ready TOPReward server info file}"
 EXPECTED_SERVER_JOB_ID="${EXPECTED_SERVER_JOB_ID:-}"
+HORIZON="${HORIZON:-128}"
 MAX_FRAMES="${MAX_FRAMES:-4}"
 REQUEST_TIMEOUT="${REQUEST_TIMEOUT:-900}"
 REQUEST_RETRIES="${REQUEST_RETRIES:-2}"
 TOPREWARD_LOCK_PATH="${TOPREWARD_LOCK_PATH:-${TOPREWARD_DIR}/logs/topreward_offline_diff_gamma1.lock}"
 SEED=0
 H5_PATH="${TOPREWARD_DIR}/datasets/metaworld_topreward_labeled_diff_gamma1.h5"
-LOG_GROUP="offline_topreward_diff_gamma1_scale100_10critics"
-LOG_DIR="logs/offline_topreward_diff_gamma1_scale100_10critics_seed${SEED}"
+DIFF_REWARD_SCALE=$(awk -v h="$HORIZON" 'BEGIN { printf "%.10g", (h + 1) / 2 }')
+REWARD_DIVISOR=$(awk -v h="$HORIZON" 'BEGIN { printf "%.10g", 2 / (h + 1) }')
+TAG="diff_gamma1_scale_hplus1_over2_H${HORIZON}"
+LOG_GROUP="offline_topreward_${TAG}_10critics"
+LOG_DIR="logs/offline_topreward_${TAG}_10critics_seed${SEED}"
 
 if [ ! -d "$TOPREWARD_DIR" ]; then
   echo "ERROR: TOPREWARD_DIR not found: $TOPREWARD_DIR"
@@ -116,12 +120,14 @@ cd "$PROJECT_DIR"
 rm -rf "$LOG_DIR"
 mkdir -p "$LOG_DIR"
 
-echo "========== TOPReward offline diff_gamma1_scale100 seed ${SEED} =========="
+echo "========== TOPReward offline ${TAG} seed ${SEED} =========="
 echo "H5_PATH=${H5_PATH}"
 echo "TOPREWARD_LOCK_PATH=${TOPREWARD_LOCK_PATH}"
+echo "HORIZON=${HORIZON}"
+echo "diff_reward_scale=(HORIZON+1)/2=${DIFF_REWARD_SCALE}"
+echo "reward_divisor=2/(HORIZON+1)=${REWARD_DIVISOR}"
 echo "MAX_FRAMES=${MAX_FRAMES}"
 echo "REQUEST_TIMEOUT=${REQUEST_TIMEOUT}"
-echo "reward_divisor=0.01"
 echo "TOPREWARD_API_URL=${TOPREWARD_API_URL}"
 which python
 python --version
@@ -145,7 +151,7 @@ srun python -u test_scripts/test_iql.py \
   reward_model.lock_path="$TOPREWARD_LOCK_PATH" \
   reward_model.use_progress_diff=true \
   reward_model.diff_gamma=1.0 \
-  reward_model.reward_divisor=0.01 \
+  reward_model.reward_divisor="$REWARD_DIVISOR" \
   logging.eval_freq=0 \
   logging.video_freq=0 \
   logging.wandb_group_name="$LOG_GROUP" \

@@ -108,7 +108,7 @@ echo "OUTPUT_PATH=${OUTPUT_PATH}"
 echo "LOCK_PATH=${LOCK_PATH}"
 echo "MAX_FRAMES=${MAX_FRAMES}"
 echo "REQUEST_TIMEOUT=${REQUEST_TIMEOUT}"
-echo "Stored H5 rewards are raw diff values; scale=100 is applied later by offline reward_divisor=0.01 and online diff_reward_scale=100."
+echo "Stored H5 rewards are raw diff values; downstream offline/online jobs apply the selected scale."
 which python
 python --version
 nvidia-smi

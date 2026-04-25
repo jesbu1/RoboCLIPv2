@@ -1,11 +1,12 @@
 #!/usr/bin/env bash
-# Submit TOPReward diff gamma=1.0, scale=100, seed0 pipeline:
+# Submit TOPReward diff gamma=1.0, scale=(HORIZON+1)/2, seed0 pipeline:
 # 4 servers -> first-ready label -> seed0 offline -> 8 seed0 online tasks (2 per server).
 
 set -euo pipefail
 
 PROJECT_DIR="${PROJECT_DIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"
 TOPREWARD_DIR="${TOPREWARD_DIR:-/scratch1/haobaizh/rewind_topreward}"
+HORIZON="${HORIZON:-128}"
 MAX_FRAMES="${MAX_FRAMES:-4}"
 REQUEST_TIMEOUT="${REQUEST_TIMEOUT:-900}"
 REQUEST_RETRIES="${REQUEST_RETRIES:-2}"
@@ -59,20 +60,25 @@ TASK_GROUPS=(
 SERVER_JOB_IDS=()
 SERVER_INFO_FILES=()
 
-MANIFEST="${PROJECT_DIR}/logs/topreward_diff_gamma1_scale100_seed0_4servers_$(date +%Y%m%d_%H%M%S).txt"
+DIFF_REWARD_SCALE=$(awk -v h="$HORIZON" 'BEGIN { printf "%.10g", (h + 1) / 2 }')
+REWARD_DIVISOR=$(awk -v h="$HORIZON" 'BEGIN { printf "%.10g", 2 / (h + 1) }')
+TAG="diff_gamma1_scale_hplus1_over2_H${HORIZON}"
+
+MANIFEST="${PROJECT_DIR}/logs/topreward_${TAG}_seed0_4servers_$(date +%Y%m%d_%H%M%S).txt"
 
 {
   echo "manifest=${MANIFEST}"
   echo "project_dir=${PROJECT_DIR}"
   echo "topreward_dir=${TOPREWARD_DIR}"
-  echo "variant=diff_gamma1_scale100_base_reward"
+  echo "variant=${TAG}_base_reward"
   echo "label_output=${TOPREWARD_DIR}/datasets/metaworld_topreward_labeled_diff_gamma1.h5"
   echo "offline_training_steps=100000"
   echo "online_seed=0"
   echo "success_bonus=0"
   echo "diff_gamma=1.0"
-  echo "diff_reward_scale=100"
-  echo "offline_reward_divisor=0.01"
+  echo "horizon=${HORIZON}"
+  echo "diff_reward_scale=(HORIZON+1)/2=${DIFF_REWARD_SCALE}"
+  echo "offline_reward_divisor=2/(HORIZON+1)=${REWARD_DIVISOR}"
   echo "max_frames=${MAX_FRAMES}"
   echo "request_timeout=${REQUEST_TIMEOUT}"
   echo "request_retries=${REQUEST_RETRIES}"
@@ -109,10 +115,10 @@ SERVER_JOB_IDS_JOINED="$(IFS='|'; echo "${SERVER_JOB_IDS[*]}")"
 SERVER_INFO_FILES_JOINED="$(IFS='|'; echo "${SERVER_INFO_FILES[*]}")"
 
 launcher_job_id=$(sbatch --parsable \
-  --job-name="top_lau_d1_s100" \
-  --output="logs/top_lau_d1_s100_%j.out" \
-  --error="logs/top_lau_d1_s100_%j.err" \
-  --export=ALL,PROJECT_DIR="$PROJECT_DIR",TOPREWARD_DIR="$TOPREWARD_DIR",SERVER_JOB_IDS="$SERVER_JOB_IDS_JOINED",SERVER_INFO_FILES="$SERVER_INFO_FILES_JOINED",SUBMIT_MANIFEST="$MANIFEST",MAX_FRAMES="$MAX_FRAMES",REQUEST_TIMEOUT="$REQUEST_TIMEOUT",REQUEST_RETRIES="$REQUEST_RETRIES" \
-  scripts/topreward_launch_diff_gamma1_scale100_seed0_pipeline.sbatch)
+  --job-name="top_lau_d1_h" \
+  --output="logs/top_lau_d1_h_%j.out" \
+  --error="logs/top_lau_d1_h_%j.err" \
+  --export=ALL,PROJECT_DIR="$PROJECT_DIR",TOPREWARD_DIR="$TOPREWARD_DIR",SERVER_JOB_IDS="$SERVER_JOB_IDS_JOINED",SERVER_INFO_FILES="$SERVER_INFO_FILES_JOINED",SUBMIT_MANIFEST="$MANIFEST",HORIZON="$HORIZON",MAX_FRAMES="$MAX_FRAMES",REQUEST_TIMEOUT="$REQUEST_TIMEOUT",REQUEST_RETRIES="$REQUEST_RETRIES" \
+  scripts/topreward_launch_diff_gamma1_scale_hplus1_over2_seed0_pipeline.sbatch)
 
 echo "launcher=${launcher_job_id}" | tee -a "$MANIFEST"

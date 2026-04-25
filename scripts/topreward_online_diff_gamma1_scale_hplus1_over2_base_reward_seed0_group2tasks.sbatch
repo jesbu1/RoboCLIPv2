@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
-# TOPReward online, diff gamma=1.0, scale=100, base reward=-1, seed0 only.
+# TOPReward online, diff gamma=1.0, scale=(HORIZON+1)/2, base reward=-1, seed0 only.
 # Each server handles exactly two envs through a 2-task array.
 
-#SBATCH --job-name=top_on_d1_s100
+#SBATCH --job-name=top_on_d1_h
 #SBATCH --account=biyik_1165
 #SBATCH --partition=gpu
 #SBATCH --gres=gpu:1
@@ -22,6 +22,7 @@ INFO_FILE="${INFO_FILE:?INFO_FILE must point to this task TOPReward server info 
 EXPECTED_SERVER_JOB_ID="${EXPECTED_SERVER_JOB_ID:-}"
 GROUP_ID="${GROUP_ID:-unknown}"
 TASK_ENVS="${TASK_ENVS:?TASK_ENVS must contain exactly 2 env ids separated by |}"
+HORIZON="${HORIZON:-128}"
 MAX_FRAMES="${MAX_FRAMES:-4}"
 REQUEST_TIMEOUT="${REQUEST_TIMEOUT:-900}"
 REQUEST_RETRIES="${REQUEST_RETRIES:-2}"
@@ -30,7 +31,9 @@ LOCK_PATH="${LOCK_PATH:-${TOPREWARD_DIR}/logs/topreward_online_group${GROUP_ID}.
 LOG_ROOT="${LOG_ROOT:-/scratch1/haobaizh/rewind_nochunk_online_logs/topreward}"
 SEED=0
 H5_PATH="${TOPREWARD_DIR}/datasets/metaworld_topreward_labeled_diff_gamma1.h5"
-CKPT_PATH="logs/offline_topreward_diff_gamma1_scale100_10critics_seed${SEED}/last_offline"
+DIFF_REWARD_SCALE=$(awk -v h="$HORIZON" 'BEGIN { printf "%.10g", (h + 1) / 2 }')
+TAG="diff_gamma1_scale_hplus1_over2_H${HORIZON}"
+CKPT_PATH="logs/offline_topreward_${TAG}_10critics_seed${SEED}/last_offline"
 
 IFS='|' read -r -a ENV_IDS <<< "$TASK_ENVS"
 if [ "${#ENV_IDS[@]}" -ne 2 ]; then
@@ -115,19 +118,21 @@ if [ ! -f "${CKPT_PATH}.zip" ]; then
   exit 1
 fi
 
-GROUP_NAME="topreward_wsrl_iql_${ENV_ID}_diff_gamma1_scale100_base_reward_10critics"
-RUN_NAME="${ENV_ID}_topreward_diff_gamma1_scale100_base_reward_10critics_seed${SEED}"
+GROUP_NAME="topreward_wsrl_iql_${ENV_ID}_${TAG}_base_reward_10critics"
+RUN_NAME="${ENV_ID}_topreward_${TAG}_base_reward_10critics_seed${SEED}"
 LOG_DIR="${LOG_ROOT}/${RUN_NAME}"
 export WANDB_RUN_NAME="$RUN_NAME"
 
 rm -rf "$LOG_DIR"
 mkdir -p "$LOG_DIR"
 
-echo "========== TOPReward online ${ENV_ID} diff_gamma1_scale100 seed ${SEED} =========="
+echo "========== TOPReward online ${ENV_ID} ${TAG} seed ${SEED} =========="
 echo "TOPREWARD_API_URL=${TOPREWARD_API_URL}"
 echo "LOCK_PATH=${LOCK_PATH}"
 echo "CKPT_PATH=${CKPT_PATH}"
 echo "H5_PATH=${H5_PATH}"
+echo "HORIZON=${HORIZON}"
+echo "diff_reward_scale=(HORIZON+1)/2=${DIFF_REWARD_SCALE}"
 echo "MAX_FRAMES=${MAX_FRAMES}"
 echo "REQUEST_TIMEOUT=${REQUEST_TIMEOUT}"
 echo "offline_training.offline_training_steps=0"
@@ -157,7 +162,7 @@ srun python -u test_scripts/test_iql.py \
   reward_model.lock_path="$LOCK_PATH" \
   reward_model.use_progress_diff=true \
   reward_model.diff_gamma=1.0 \
-  reward_model.diff_reward_scale=100 \
+  reward_model.diff_reward_scale="$DIFF_REWARD_SCALE" \
   reward_model.use_base_reward=true \
   reward_model.base_reward_value=-1.0 \
   logging.wandb_group_name="$GROUP_NAME" \
