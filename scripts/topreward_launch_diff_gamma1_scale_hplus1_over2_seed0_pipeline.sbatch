@@ -145,13 +145,5 @@ for idx in "${!GROUP_IDS[@]}"; do
     --export=ALL,PROJECT_DIR="$PROJECT_DIR",TOPREWARD_DIR="$TOPREWARD_DIR",INFO_FILE="$info_file",EXPECTED_SERVER_JOB_ID="$server_job_id",GROUP_ID="$group_id",TASK_ENVS="$task_envs",HORIZON="$HORIZON",MAX_FRAMES="$MAX_FRAMES",REQUEST_TIMEOUT="$REQUEST_TIMEOUT",REQUEST_RETRIES="$REQUEST_RETRIES",LOCK_PATH="$online_lock" \
     scripts/topreward_online_diff_gamma1_scale_hplus1_over2_base_reward_seed0_group2tasks.sbatch)
   echo "online_group${group_id}=${online_id} tasks=${task_envs}" | tee -a "$SUBMIT_MANIFEST"
-
-  stop_id=$(sbatch --parsable \
-    --job-name="stop_top_d1_g${group_id}" \
-    --output="logs/stop_top_d1_g${group_id}_%j.out" \
-    --error="logs/stop_top_d1_g${group_id}_%j.err" \
-    --dependency="afterany:${online_id}_0:${online_id}_1" \
-    --export=ALL,TARGET_JOB_ID="$server_job_id" \
-    scripts/stop_slurm_job_by_id.sbatch)
-  echo "stop_group${group_id}=${stop_id}" | tee -a "$SUBMIT_MANIFEST"
+  echo "stop_group${group_id}=(disabled_no_auto_cancel)" | tee -a "$SUBMIT_MANIFEST"
 done

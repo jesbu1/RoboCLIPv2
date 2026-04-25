@@ -163,13 +163,5 @@ for idx in "${!GROUP_IDS[@]}"; do
     --export=ALL,PROJECT_DIR="$PROJECT_DIR",TOPREWARD_DIR="$TOPREWARD_DIR",INFO_FILE="$info_file",EXPECTED_SERVER_JOB_ID="$server_job_id",GROUP_ID="$group_id",ENV_ID="$env_id",VARIANT=diff_gamma0999,SUCCESS_BONUS="$SUCCESS_BONUS",DIFF_GAMMA="$DIFF_GAMMA",DIFF_REWARD_SCALE="$DIFF_REWARD_SCALE",USE_REVERSE_PROGRESS_DIFF="$USE_REVERSE_PROGRESS_DIFF",LOCK_PATH="$online_lock",NUM_PREFIX_SAMPLES="$NUM_PREFIX_SAMPLES",REQUEST_TIMEOUT="$REQUEST_TIMEOUT",REQUEST_RETRIES="$REQUEST_RETRIES" \
     scripts/topreward_online_seed0_env_variant.sbatch)
   echo "online_group${group_id}_diff_gamma0999=${diff999_online_id}" | tee -a "$SUBMIT_MANIFEST"
-
-  stop_job_id=$(sbatch --parsable \
-    --job-name="stop_top_g${group_id}" \
-    --output="logs/stop_top_g${group_id}_%j.out" \
-    --error="logs/stop_top_g${group_id}_%j.err" \
-    --dependency="afterany:${baseline_online_id}:${diff999_online_id}" \
-    --export=ALL,TARGET_JOB_ID="${server_job_id}" \
-    scripts/stop_slurm_job_by_id.sbatch)
-  echo "stop_group${group_id}=${stop_job_id}" | tee -a "$SUBMIT_MANIFEST"
+  echo "stop_group${group_id}=(disabled_no_auto_cancel)" | tee -a "$SUBMIT_MANIFEST"
 done
