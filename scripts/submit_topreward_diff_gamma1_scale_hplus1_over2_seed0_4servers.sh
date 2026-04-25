@@ -83,6 +83,7 @@ MANIFEST="${PROJECT_DIR}/logs/topreward_${TAG}_seed0_4servers_$(date +%Y%m%d_%H%
   echo "request_timeout=${REQUEST_TIMEOUT}"
   echo "request_retries=${REQUEST_RETRIES}"
   echo "servers_total=4"
+  echo "server_gpu_constraint=a40|a100|l40s"
   echo "tasks_total=8"
   echo "tasks_per_server=2"
 } | tee "$MANIFEST"
@@ -98,6 +99,7 @@ for idx in "${!GROUP_IDS[@]}"; do
     --account=biyik_1165 \
     --partition=gpu \
     --gres=gpu:1 \
+    --constraint="a40|a100|l40s" \
     --cpus-per-task=4 \
     --mem=64G \
     --time=48:00:00 \
