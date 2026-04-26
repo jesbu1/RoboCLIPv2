@@ -27,4 +27,5 @@ reward_model:
   vlm_model_name: 'Qwen/Qwen3-VL-8B-Instruct'
   request_timeout: 900
   request_retries: 3
+  request_format: 'chat'
   lock_path: ''

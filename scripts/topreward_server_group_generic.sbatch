@@ -7,6 +7,7 @@ PROJECT_DIR="${PROJECT_DIR:-${SLURM_SUBMIT_DIR}}"
 TOPREWARD_DIR="${TOPREWARD_DIR:-/scratch1/haobaizh/rewind_topreward}"
 CONDA_ENV="${CONDA_ENV:-${TOPREWARD_DIR}/conda_envs/vllm}"
 MODEL_NAME="${MODEL_NAME:-Qwen/Qwen3-VL-8B-Instruct}"
+SERVER_BACKEND="${SERVER_BACKEND:-vllm}"
 PROJECT_CACHE="${PROJECT_CACHE:-/scratch1/haobaizh/.cache}"
 GROUP_ID="${GROUP_ID:-unknown}"
 SERVER_LABEL="${SERVER_LABEL:-topreward_group_${GROUP_ID}}"
@@ -55,6 +56,7 @@ echo "NODE=$(hostname)"
 echo "TOPREWARD_DIR=${TOPREWARD_DIR}"
 echo "CONDA_ENV=${CONDA_ENV}"
 echo "MODEL_NAME=${MODEL_NAME}"
+echo "SERVER_BACKEND=${SERVER_BACKEND}"
 which python
 python --version
 nvidia-smi
@@ -98,15 +100,29 @@ SERVER_PORT="$(pick_port)"
 HEALTH_URL="http://${SERVER_HOST}:${SERVER_PORT}/health"
 echo "Server will use: http://${SERVER_HOST}:${SERVER_PORT}"
 
-python -m vllm.entrypoints.openai.api_server \
-  --model "${MODEL_NAME}" \
-  --host 0.0.0.0 \
-  --port "${SERVER_PORT}" \
-  --dtype auto \
-  --max-model-len 32768 \
-  --max-num-seqs 1 \
-  --trust-remote-code \
-  --gpu-memory-utilization 0.90 &
+case "$SERVER_BACKEND" in
+  vllm)
+    python -m vllm.entrypoints.openai.api_server \
+      --model "${MODEL_NAME}" \
+      --host 0.0.0.0 \
+      --port "${SERVER_PORT}" \
+      --dtype auto \
+      --max-model-len 32768 \
+      --max-num-seqs 1 \
+      --trust-remote-code \
+      --gpu-memory-utilization 0.90 &
+    ;;
+  raw)
+    python -u "${PROJECT_DIR}/scripts/topreward_raw_score_server.py" \
+      --model "${MODEL_NAME}" \
+      --host 0.0.0.0 \
+      --port "${SERVER_PORT}" &
+    ;;
+  *)
+    echo "ERROR: unsupported SERVER_BACKEND=${SERVER_BACKEND}; expected vllm or raw"
+    exit 1
+    ;;
+esac
 SERVER_PID=$!
 
 for i in $(seq 1 360); do

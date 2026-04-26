@@ -23,6 +23,7 @@ MODEL_NAME="${MODEL_NAME:-Qwen/Qwen3-VL-8B-Instruct}"
 MAX_FRAMES="${MAX_FRAMES:-4}"
 REQUEST_TIMEOUT="${REQUEST_TIMEOUT:-900}"
 REQUEST_RETRIES="${REQUEST_RETRIES:-2}"
+TOPREWARD_REQUEST_FORMAT="${TOPREWARD_REQUEST_FORMAT:-chat}"
 LOCK_PATH="${LOCK_PATH:-${TOPREWARD_DIR}/logs/topreward_label_diff_gamma1.lock}"
 OUTPUT_PATH="${OUTPUT_PATH:-${TOPREWARD_DIR}/datasets/metaworld_topreward_labeled_diff_gamma1.h5}"
 
@@ -108,6 +109,7 @@ echo "OUTPUT_PATH=${OUTPUT_PATH}"
 echo "LOCK_PATH=${LOCK_PATH}"
 echo "MAX_FRAMES=${MAX_FRAMES}"
 echo "REQUEST_TIMEOUT=${REQUEST_TIMEOUT}"
+echo "TOPREWARD_REQUEST_FORMAT=${TOPREWARD_REQUEST_FORMAT}"
 echo "Stored H5 rewards are raw diff values; downstream offline/online jobs apply the selected scale."
 which python
 python --version
@@ -126,6 +128,7 @@ srun python -u scripts/topreward_label_reward_gamma.py \
   --num_prefix_samples "$MAX_FRAMES" \
   --request_timeout "$REQUEST_TIMEOUT" \
   --request_retries "$REQUEST_RETRIES" \
+  --request_format "$TOPREWARD_REQUEST_FORMAT" \
   --mode diff \
   --diff_gamma 1.0 \
   --reward_scale 1.0 \

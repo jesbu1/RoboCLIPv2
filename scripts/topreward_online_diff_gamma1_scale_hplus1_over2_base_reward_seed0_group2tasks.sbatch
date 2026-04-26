@@ -26,6 +26,7 @@ HORIZON="${HORIZON:-128}"
 MAX_FRAMES="${MAX_FRAMES:-4}"
 REQUEST_TIMEOUT="${REQUEST_TIMEOUT:-900}"
 REQUEST_RETRIES="${REQUEST_RETRIES:-2}"
+TOPREWARD_REQUEST_FORMAT="${TOPREWARD_REQUEST_FORMAT:-chat}"
 SERVER_WAIT_ATTEMPTS="${SERVER_WAIT_ATTEMPTS:-1440}"
 LOCK_PATH="${LOCK_PATH:-${TOPREWARD_DIR}/logs/topreward_online_group${GROUP_ID}.lock}"
 LOG_ROOT="${LOG_ROOT:-/scratch1/haobaizh/rewind_nochunk_online_logs/topreward}"
@@ -135,6 +136,7 @@ echo "HORIZON=${HORIZON}"
 echo "diff_reward_scale=(HORIZON+1)/2=${DIFF_REWARD_SCALE}"
 echo "MAX_FRAMES=${MAX_FRAMES}"
 echo "REQUEST_TIMEOUT=${REQUEST_TIMEOUT}"
+echo "TOPREWARD_REQUEST_FORMAT=${TOPREWARD_REQUEST_FORMAT}"
 echo "offline_training.offline_training_steps=0"
 echo "online_training.mix_buffers_ratio=0.0"
 which python
@@ -159,6 +161,7 @@ srun python -u test_scripts/test_iql.py \
   reward_model.max_frames="$MAX_FRAMES" \
   reward_model.request_timeout="$REQUEST_TIMEOUT" \
   reward_model.request_retries="$REQUEST_RETRIES" \
+  reward_model.request_format="$TOPREWARD_REQUEST_FORMAT" \
   reward_model.lock_path="$LOCK_PATH" \
   reward_model.use_progress_diff=true \
   reward_model.diff_gamma=1.0 \

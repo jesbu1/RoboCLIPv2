@@ -197,6 +197,7 @@ def parse_reward_model(reward_cfg: DictConfig) -> BaseRewardModel:
             request_timeout=reward_cfg.get("request_timeout", 900),
             request_retries=reward_cfg.get("request_retries", 3),
             lock_path=reward_cfg.get("lock_path", ""),
+            request_format=reward_cfg.get("request_format", "chat"),
         )
     elif reward_string == "liv":
         from models.reward_model.liv_reward_model import LIVRewardModel

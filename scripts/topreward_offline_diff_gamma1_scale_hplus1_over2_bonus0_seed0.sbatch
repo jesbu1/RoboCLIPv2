@@ -22,6 +22,7 @@ HORIZON="${HORIZON:-128}"
 MAX_FRAMES="${MAX_FRAMES:-4}"
 REQUEST_TIMEOUT="${REQUEST_TIMEOUT:-900}"
 REQUEST_RETRIES="${REQUEST_RETRIES:-2}"
+TOPREWARD_REQUEST_FORMAT="${TOPREWARD_REQUEST_FORMAT:-chat}"
 TOPREWARD_LOCK_PATH="${TOPREWARD_LOCK_PATH:-${TOPREWARD_DIR}/logs/topreward_offline_diff_gamma1.lock}"
 SEED=0
 H5_PATH="${TOPREWARD_DIR}/datasets/metaworld_topreward_labeled_diff_gamma1.h5"
@@ -128,6 +129,7 @@ echo "diff_reward_scale=(HORIZON+1)/2=${DIFF_REWARD_SCALE}"
 echo "reward_divisor=2/(HORIZON+1)=${REWARD_DIVISOR}"
 echo "MAX_FRAMES=${MAX_FRAMES}"
 echo "REQUEST_TIMEOUT=${REQUEST_TIMEOUT}"
+echo "TOPREWARD_REQUEST_FORMAT=${TOPREWARD_REQUEST_FORMAT}"
 echo "TOPREWARD_API_URL=${TOPREWARD_API_URL}"
 which python
 python --version
@@ -148,6 +150,7 @@ srun python -u test_scripts/test_iql.py \
   reward_model.max_frames="$MAX_FRAMES" \
   reward_model.request_timeout="$REQUEST_TIMEOUT" \
   reward_model.request_retries="$REQUEST_RETRIES" \
+  reward_model.request_format="$TOPREWARD_REQUEST_FORMAT" \
   reward_model.lock_path="$TOPREWARD_LOCK_PATH" \
   reward_model.use_progress_diff=true \
   reward_model.diff_gamma=1.0 \

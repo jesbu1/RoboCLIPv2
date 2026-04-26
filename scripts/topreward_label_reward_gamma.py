@@ -23,6 +23,7 @@ from tqdm import tqdm
 
 
 DINO_BATCH_SIZE = 64
+TOPREWARD_REQUEST_FORMATS = ("chat", "raw")
 
 ENVIRONMENT_TO_INSTRUCTION = {
     "assembly-v2": "assembly",
@@ -123,15 +124,7 @@ def frames_to_base64(frames):
     return b64_list
 
 
-def query_vlm_reward(
-    api_url,
-    model_name,
-    frames_b64,
-    instruction,
-    lock_path,
-    request_timeout,
-    request_retries,
-):
+def build_topreward_prompt(instruction):
     prompt_text = (
         "The above video shows a robot manipulation trajectory "
         "that completes the following task: "
@@ -140,16 +133,86 @@ def query_vlm_reward(
         f"{instruction} Decide whether the above statement is True or not. "
         "The answer is:"
     )
+    return f"{prompt_text}{instruction_suffix}"
 
-    content = []
-    for b64 in frames_b64:
-        content.append(
-            {
-                "type": "image_url",
-                "image_url": {"url": f"data:image/png;base64,{b64}"},
-            }
+
+def query_raw_score_reward(
+    api_url,
+    model_name,
+    frames_b64,
+    instruction,
+    lock_path,
+    request_timeout,
+    request_retries,
+):
+    payload = {
+        "model": model_name,
+        "frames_b64": frames_b64,
+        "instruction": instruction,
+    }
+
+    last_error = None
+    for attempt in range(1, request_retries + 1):
+        try:
+            with optional_file_lock(lock_path):
+                resp = requests.post(
+                    f"{api_url.rstrip('/')}/score",
+                    json=payload,
+                    timeout=request_timeout,
+                )
+                resp.raise_for_status()
+                result = resp.json()
+            return float(result["logprob"])
+        except requests.exceptions.RequestException as exc:
+            last_error = exc
+            print(
+                f"[TOPReward label raw] request failed on attempt "
+                f"{attempt}/{request_retries}: {exc}",
+                flush=True,
+            )
+            if attempt == request_retries:
+                raise
+
+    raise RuntimeError(f"TOPReward raw-score request failed: {last_error}")
+
+
+def query_vlm_reward(
+    api_url,
+    model_name,
+    frames_b64,
+    instruction,
+    lock_path,
+    request_timeout,
+    request_retries,
+    request_format,
+):
+    request_format = request_format.lower()
+    if request_format == "raw":
+        return query_raw_score_reward(
+            api_url,
+            model_name,
+            frames_b64,
+            instruction,
+            lock_path,
+            request_timeout,
+            request_retries,
         )
-    content.append({"type": "text", "text": f"{prompt_text}{instruction_suffix}"})
+    if request_format != "chat":
+        raise ValueError(
+            f"Unsupported TOPReward request_format={request_format!r}; "
+            f"expected one of {TOPREWARD_REQUEST_FORMATS}"
+        )
+
+    prompt = build_topreward_prompt(instruction)
+
+    content = [
+        {
+            "type": "image_url",
+            "image_url": {"url": f"data:image/png;base64,{b64}"},
+        }
+        for b64 in frames_b64
+    ]
+    content.append({"type": "text", "text": prompt})
 
     payload = {
         "model": model_name,
@@ -175,14 +238,14 @@ def query_vlm_reward(
         except requests.exceptions.RequestException as exc:
             last_error = exc
             print(
-                f"[TOPReward label] request failed on attempt "
+                f"[TOPReward label chat] request failed on attempt "
                 f"{attempt}/{request_retries}: {exc}",
                 flush=True,
             )
             if attempt == request_retries:
                 raise
     else:
-        raise RuntimeError(f"TOPReward request failed: {last_error}")
+        raise RuntimeError(f"TOPReward chat request failed: {last_error}")
 
     logprobs_content = result["choices"][0]["logprobs"]["content"]
     if logprobs_content:
@@ -196,6 +259,27 @@ def query_vlm_reward(
     return -10.0
 
 
+def query_vlm_reward_legacy(
+    api_url,
+    model_name,
+    frames_b64,
+    instruction,
+    lock_path,
+    request_timeout,
+    request_retries,
+):
+    return query_vlm_reward(
+        api_url,
+        model_name,
+        frames_b64,
+        instruction,
+        lock_path,
+        request_timeout,
+        request_retries,
+        "chat",
+    )
+
+
 def compute_prefix_rewards(
     api_url,
     model_name,
@@ -205,6 +289,7 @@ def compute_prefix_rewards(
     lock_path,
     request_timeout,
     request_retries,
+    request_format,
 ):
     num_frames = len(video_frames)
     max_frames_per_query = min(max_frames_per_query, num_frames)
@@ -230,6 +315,7 @@ def compute_prefix_rewards(
                 lock_path,
                 request_timeout,
                 request_retries,
+                request_format,
             )
         )
 
@@ -392,6 +478,7 @@ def label_trajectories(args):
                         args.lock_path,
                         args.request_timeout,
                         args.request_retries,
+                        args.request_format,
                     )
 
                     if args.mode == "diff":
@@ -437,6 +524,12 @@ def main():
     parser.add_argument("--num_prefix_samples", type=int, default=4)
     parser.add_argument("--request_timeout", type=float, default=600.0)
     parser.add_argument("--request_retries", type=int, default=2)
+    parser.add_argument(
+        "--request_format",
+        choices=TOPREWARD_REQUEST_FORMATS,
+        default="chat",
+        help="chat uses vLLM /v1/chat/completions; raw uses the custom /score endpoint without a chat template.",
+    )
     parser.add_argument("--mode", choices=["baseline", "diff"], required=True)
     parser.add_argument("--use_reverse_progress_diff", action="store_true")
     parser.add_argument("--diff_gamma", type=float, default=1.0)

@@ -2,7 +2,7 @@
 TOPReward reward model for no-action-chunk policy training.
 
 The policy still receives DINO features from the shared image encoder. The reward
-model stores raw rendered frames and queries a TOPReward vLLM server for progress.
+model stores raw rendered frames and queries a TOPReward server for progress.
 """
 
 import base64
@@ -30,6 +30,7 @@ class TOPRewardModel(BaseRewardModel):
         request_timeout: float = 900.0,
         request_retries: int = 3,
         lock_path: str = "",
+        request_format: str = "chat",
     ):
         super().__init__(
             device=device,
@@ -43,6 +44,12 @@ class TOPRewardModel(BaseRewardModel):
         self.request_timeout = request_timeout
         self.request_retries = max(int(request_retries), 1)
         self.lock_path = lock_path
+        self.request_format = request_format.lower()
+        if self.request_format not in ("chat", "raw"):
+            raise ValueError(
+                "TOPRewardModel request_format must be either 'chat' or 'raw', "
+                f"got {request_format!r}"
+            )
         self._frame_buffer: List[np.ndarray] = []
         self._task_text = ""
 
@@ -122,6 +129,47 @@ class TOPRewardModel(BaseRewardModel):
         import requests
 
         frames_b64 = self._frames_to_base64(self._subsample_frames())
+        if self.request_format == "raw":
+            return self._infer_raw_score(requests, frames_b64)
+
+        return self._infer_chat_completion(requests, frames_b64)
+
+    def _infer_raw_score(self, requests_module, frames_b64: List[str]) -> float:
+        payload = {
+            "model": self.model_name,
+            "frames_b64": frames_b64,
+            "instruction": self._task_text,
+        }
+
+        for attempt in range(1, self.request_retries + 1):
+            lock_file = None
+            try:
+                if self.lock_path:
+                    lock_file = open(self.lock_path, "w")
+                    fcntl.flock(lock_file, fcntl.LOCK_EX)
+                resp = requests_module.post(
+                    f"{self.server_url}/score",
+                    json=payload,
+                    timeout=self.request_timeout,
+                )
+                resp.raise_for_status()
+                result = resp.json()
+                return float(result["logprob"])
+            except Exception as exc:
+                print(
+                    f"[TOPRewardModel raw] Server inference failed on attempt "
+                    f"{attempt}/{self.request_retries}: {exc}"
+                )
+                if attempt == self.request_retries:
+                    return -10.0
+            finally:
+                if lock_file is not None:
+                    fcntl.flock(lock_file, fcntl.LOCK_UN)
+                    lock_file.close()
+
+        return -10.0
+
+    def _infer_chat_completion(self, requests_module, frames_b64: List[str]) -> float:
         prompt_text = (
             "The above video shows a robot manipulation trajectory "
             "that completes the following task: "
@@ -155,7 +203,7 @@ class TOPRewardModel(BaseRewardModel):
                 if self.lock_path:
                     lock_file = open(self.lock_path, "w")
                     fcntl.flock(lock_file, fcntl.LOCK_EX)
-                resp = requests.post(
+                resp = requests_module.post(
                     f"{self.server_url}/v1/chat/completions",
                     json=payload,
                     timeout=self.request_timeout,
@@ -164,7 +212,7 @@ class TOPRewardModel(BaseRewardModel):
                 result = resp.json()
             except Exception as exc:
                 print(
-                    f"[TOPRewardModel] Server inference failed on attempt "
+                    f"[TOPRewardModel chat] Server inference failed on attempt "
                     f"{attempt}/{self.request_retries}: {exc}"
                 )
                 if attempt == self.request_retries:

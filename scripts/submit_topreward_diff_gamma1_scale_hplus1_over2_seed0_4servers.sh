@@ -10,6 +10,8 @@ HORIZON="${HORIZON:-128}"
 MAX_FRAMES="${MAX_FRAMES:-4}"
 REQUEST_TIMEOUT="${REQUEST_TIMEOUT:-900}"
 REQUEST_RETRIES="${REQUEST_RETRIES:-2}"
+SERVER_BACKEND="${SERVER_BACKEND:-vllm}"
+TOPREWARD_REQUEST_FORMAT="${TOPREWARD_REQUEST_FORMAT:-chat}"
 
 cd "$PROJECT_DIR"
 mkdir -p logs
@@ -82,6 +84,8 @@ MANIFEST="${PROJECT_DIR}/logs/topreward_${TAG}_seed0_4servers_$(date +%Y%m%d_%H%
   echo "max_frames=${MAX_FRAMES}"
   echo "request_timeout=${REQUEST_TIMEOUT}"
   echo "request_retries=${REQUEST_RETRIES}"
+  echo "server_backend=${SERVER_BACKEND}"
+  echo "topreward_request_format=${TOPREWARD_REQUEST_FORMAT}"
   echo "servers_total=4"
   echo "server_gpu_constraint=a40|a100|l40s"
   echo "tasks_total=8"
@@ -105,7 +109,7 @@ for idx in "${!GROUP_IDS[@]}"; do
     --time=48:00:00 \
     --output="logs/topreward_server_group${group_id}_%j.out" \
     --error="logs/topreward_server_group${group_id}_%j.err" \
-    --export=ALL,PROJECT_DIR="$PROJECT_DIR",TOPREWARD_DIR="$TOPREWARD_DIR",GROUP_ID="$group_id",SERVER_LABEL="topreward group ${group_id}",INFO_FILE="$info_file" \
+    --export=ALL,PROJECT_DIR="$PROJECT_DIR",TOPREWARD_DIR="$TOPREWARD_DIR",GROUP_ID="$group_id",SERVER_LABEL="topreward group ${group_id}",INFO_FILE="$info_file",SERVER_BACKEND="$SERVER_BACKEND" \
     scripts/topreward_server_group_generic.sbatch)
 
   SERVER_JOB_IDS+=("$server_job_id")
@@ -120,7 +124,7 @@ launcher_job_id=$(sbatch --parsable \
   --job-name="top_lau_d1_h" \
   --output="logs/top_lau_d1_h_%j.out" \
   --error="logs/top_lau_d1_h_%j.err" \
-  --export=ALL,PROJECT_DIR="$PROJECT_DIR",TOPREWARD_DIR="$TOPREWARD_DIR",SERVER_JOB_IDS="$SERVER_JOB_IDS_JOINED",SERVER_INFO_FILES="$SERVER_INFO_FILES_JOINED",SUBMIT_MANIFEST="$MANIFEST",HORIZON="$HORIZON",MAX_FRAMES="$MAX_FRAMES",REQUEST_TIMEOUT="$REQUEST_TIMEOUT",REQUEST_RETRIES="$REQUEST_RETRIES" \
+  --export=ALL,PROJECT_DIR="$PROJECT_DIR",TOPREWARD_DIR="$TOPREWARD_DIR",SERVER_JOB_IDS="$SERVER_JOB_IDS_JOINED",SERVER_INFO_FILES="$SERVER_INFO_FILES_JOINED",SUBMIT_MANIFEST="$MANIFEST",HORIZON="$HORIZON",MAX_FRAMES="$MAX_FRAMES",REQUEST_TIMEOUT="$REQUEST_TIMEOUT",REQUEST_RETRIES="$REQUEST_RETRIES",TOPREWARD_REQUEST_FORMAT="$TOPREWARD_REQUEST_FORMAT" \
   scripts/topreward_launch_diff_gamma1_scale_hplus1_over2_seed0_pipeline.sbatch)
 
 echo "launcher=${launcher_job_id}" | tee -a "$MANIFEST"
