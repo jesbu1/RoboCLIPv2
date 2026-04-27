@@ -16,6 +16,7 @@ CONDA_ENV="${CONDA_ENV:-${TOPREWARD_DIR}/conda_envs/vllm}"
 MODEL_NAME="${MODEL_NAME:-Qwen/Qwen3-VL-8B-Instruct}"
 PROJECT_CACHE="${PROJECT_CACHE:-/scratch1/haobaizh/.cache}"
 ALLOW_HF_DOWNLOAD="${ALLOW_HF_DOWNLOAD:-0}"
+TOPREWARD_ATTN_IMPLEMENTATION="${TOPREWARD_ATTN_IMPLEMENTATION:-auto}"
 
 echo "========== TOPReward raw server lightweight preflight =========="
 echo "SLURM_JOB_ID=${SLURM_JOB_ID:-none}"
@@ -25,6 +26,7 @@ echo "TOPREWARD_DIR=${TOPREWARD_DIR}"
 echo "CONDA_ENV=${CONDA_ENV}"
 echo "MODEL_NAME=${MODEL_NAME}"
 echo "ALLOW_HF_DOWNLOAD=${ALLOW_HF_DOWNLOAD}"
+echo "TOPREWARD_ATTN_IMPLEMENTATION=${TOPREWARD_ATTN_IMPLEMENTATION}"
 echo "==============================================================="
 
 if [ ! -d "${PROJECT_DIR}" ]; then
@@ -67,6 +69,7 @@ python --version
 args=(
   --model "${MODEL_NAME}"
   --server-script "${PROJECT_DIR}/scripts/topreward_raw_score_server.py"
+  --attn-implementation "${TOPREWARD_ATTN_IMPLEMENTATION}"
 )
 if [ "${ALLOW_HF_DOWNLOAD}" = "1" ]; then
   args+=(--allow-download)

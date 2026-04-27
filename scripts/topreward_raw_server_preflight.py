@@ -3,8 +3,8 @@
 
 This intentionally avoids loading the 8B model weights. It checks the pieces
 that can be validated on CPU or a small/old GPU: imports, model cache metadata,
-Qwen processor prompt formatting, answer-token masking, flash-attn availability,
-and GPU architecture compatibility for flash_attention_2.
+Qwen processor prompt formatting, answer-token masking, and whether the requested
+attention backend has the needed Python package.
 """
 
 import argparse
@@ -60,9 +60,9 @@ class Reporter:
                 print(f"FAIL: {check.name}: {check.detail}", flush=True)
             return 1
         if warns:
-            print("Preflight passed with warnings. A real A40/A100 server smoke test is still needed.", flush=True)
+            print("Preflight passed with warnings. A real server smoke test is still needed.", flush=True)
         else:
-            print("Preflight passed. A real A40/A100 server smoke test is still recommended.", flush=True)
+            print("Preflight passed. A real server smoke test is still recommended.", flush=True)
         return 0
 
 
@@ -271,6 +271,11 @@ def main():
     parser.add_argument("--model", default="Qwen/Qwen3-VL-8B-Instruct")
     parser.add_argument("--server-script", default="scripts/topreward_raw_score_server.py")
     parser.add_argument("--allow-download", action="store_true")
+    parser.add_argument(
+        "--attn-implementation",
+        default=os.environ.get("TOPREWARD_ATTN_IMPLEMENTATION", "auto"),
+        help="Attention backend to preflight: auto, sdpa, default, or flash_attention_2.",
+    )
     args = parser.parse_args()
 
     reporter = Reporter()
@@ -281,6 +286,7 @@ def main():
     print(f"cwd={os.getcwd()}", flush=True)
     print(f"model={args.model}", flush=True)
     print(f"allow_download={args.allow_download}", flush=True)
+    print(f"attn_implementation={args.attn_implementation}", flush=True)
     for key in ("HF_HOME", "TRANSFORMERS_CACHE", "TORCH_HOME", "CUDA_VISIBLE_DEVICES"):
         print(f"{key}={os.environ.get(key, '')}", flush=True)
 
@@ -294,7 +300,16 @@ def main():
     import_module(reporter, "uvicorn", required=True)
     import_module(reporter, "PIL", required=True)
     import_module(reporter, "requests", required=True)
-    import_module(reporter, "flash_attn", required=True)
+    requested_attn = (args.attn_implementation or "auto").lower()
+    if requested_attn == "flash_attention_2":
+        import_module(reporter, "flash_attn", required=True)
+    elif requested_attn == "auto":
+        import_module(reporter, "flash_attn", required=False)
+    else:
+        reporter.ok(
+            "flash_attn requirement",
+            f"not required for attn_implementation={args.attn_implementation}",
+        )
 
     section("GPU / FlashAttention")
     run_command(reporter, "nvidia-smi", ["nvidia-smi"], required=False)
