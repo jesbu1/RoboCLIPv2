@@ -10,6 +10,7 @@ log-probability of the final answer token.
 import argparse
 import base64
 import io
+import os
 from typing import List, Optional
 
 import torch
@@ -42,45 +43,72 @@ def decode_image(data: str) -> Image.Image:
     return Image.open(io.BytesIO(base64.b64decode(data))).convert("RGB")
 
 
-def load_model(model_name: str, dtype: str, device_map: str):
+def _candidate_attn_implementations(attn_implementation: str):
+    requested = (attn_implementation or "auto").lower()
+    if requested in ("", "none", "default"):
+        return [None]
+    if requested != "auto":
+        return [attn_implementation]
+
+    candidates = []
+    try:
+        import flash_attn  # noqa: F401
+
+        candidates.append("flash_attention_2")
+    except Exception:
+        pass
+    candidates.extend(["sdpa", None])
+    return candidates
+
+
+def load_model(model_name: str, dtype: str, device_map: str, attn_implementation: str):
     processor = transformers.AutoProcessor.from_pretrained(
         model_name,
         trust_remote_code=True,
     )
-    model_kwargs = {
+    base_model_kwargs = {
         "trust_remote_code": True,
         "device_map": device_map,
-        "attn_implementation": "flash_attention_2",
     }
     if dtype:
-        model_kwargs["torch_dtype"] = dtype
+        base_model_kwargs["torch_dtype"] = dtype
 
     last_error = None
-    for class_name in (
-        "Qwen3VLForConditionalGeneration",
-        "AutoModelForImageTextToText",
-        "AutoModelForVision2Seq",
-        "AutoModelForCausalLM",
-    ):
-        model_cls = getattr(transformers, class_name, None)
-        if model_cls is None:
-            continue
-        try:
-            model = model_cls.from_pretrained(model_name, **model_kwargs)
-            model.eval()
-            return processor, model
-        except TypeError:
-            # Older Transformers versions may not accept torch_dtype="auto".
-            fallback_kwargs = dict(model_kwargs)
-            fallback_kwargs.pop("torch_dtype", None)
+    attn_candidates = _candidate_attn_implementations(attn_implementation)
+    for attn_impl in attn_candidates:
+        model_kwargs = dict(base_model_kwargs)
+        if attn_impl is not None:
+            model_kwargs["attn_implementation"] = attn_impl
+        print(
+            "[TOPReward raw] trying "
+            f"attn_implementation={attn_impl or 'default'}",
+            flush=True,
+        )
+        for class_name in (
+            "Qwen3VLForConditionalGeneration",
+            "AutoModelForImageTextToText",
+            "AutoModelForVision2Seq",
+            "AutoModelForCausalLM",
+        ):
+            model_cls = getattr(transformers, class_name, None)
+            if model_cls is None:
+                continue
             try:
-                model = model_cls.from_pretrained(model_name, **fallback_kwargs)
+                model = model_cls.from_pretrained(model_name, **model_kwargs)
                 model.eval()
                 return processor, model
+            except TypeError:
+                # Older Transformers versions may not accept torch_dtype="auto".
+                fallback_kwargs = dict(model_kwargs)
+                fallback_kwargs.pop("torch_dtype", None)
+                try:
+                    model = model_cls.from_pretrained(model_name, **fallback_kwargs)
+                    model.eval()
+                    return processor, model
+                except Exception as exc:  # pragma: no cover - depends on cluster env
+                    last_error = exc
             except Exception as exc:  # pragma: no cover - depends on cluster env
                 last_error = exc
-        except Exception as exc:  # pragma: no cover - depends on cluster env
-            last_error = exc
 
     raise RuntimeError(f"Unable to load {model_name}: {last_error}")
 
@@ -187,7 +215,12 @@ def compute_answer_logprob(inputs, model, tokenizer, top_logprobs: int):
 
 
 def make_app(args):
-    processor, model = load_model(args.model, args.dtype, args.device_map)
+    processor, model = load_model(
+        args.model,
+        args.dtype,
+        args.device_map,
+        args.attn_implementation,
+    )
     tokenizer = getattr(processor, "tokenizer", None)
     if tokenizer is None:
         tokenizer = transformers.AutoTokenizer.from_pretrained(
@@ -242,6 +275,15 @@ def parse_args():
     parser.add_argument("--port", type=int, default=8200)
     parser.add_argument("--dtype", default="auto")
     parser.add_argument("--device-map", default="auto")
+    parser.add_argument(
+        "--attn-implementation",
+        default=os.environ.get("TOPREWARD_ATTN_IMPLEMENTATION", "auto"),
+        help=(
+            "Attention backend for Transformers loading. The default 'auto' "
+            "tries flash_attention_2 only when flash_attn is importable, then "
+            "falls back to sdpa/default."
+        ),
+    )
     parser.add_argument("--top-logprobs", type=int, default=20)
     parser.add_argument("--fps", type=float, default=DEFAULT_FPS)
     parser.add_argument("--answer", default=DEFAULT_ANSWER)

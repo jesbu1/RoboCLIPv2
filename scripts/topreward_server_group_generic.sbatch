@@ -8,6 +8,7 @@ TOPREWARD_DIR="${TOPREWARD_DIR:-/scratch1/haobaizh/rewind_topreward}"
 CONDA_ENV="${CONDA_ENV:-${TOPREWARD_DIR}/conda_envs/vllm}"
 MODEL_NAME="${MODEL_NAME:-Qwen/Qwen3-VL-8B-Instruct}"
 SERVER_BACKEND="${SERVER_BACKEND:-vllm}"
+TOPREWARD_ATTN_IMPLEMENTATION="${TOPREWARD_ATTN_IMPLEMENTATION:-auto}"
 PROJECT_CACHE="${PROJECT_CACHE:-/scratch1/haobaizh/.cache}"
 GROUP_ID="${GROUP_ID:-unknown}"
 SERVER_LABEL="${SERVER_LABEL:-topreward_group_${GROUP_ID}}"
@@ -57,6 +58,7 @@ echo "TOPREWARD_DIR=${TOPREWARD_DIR}"
 echo "CONDA_ENV=${CONDA_ENV}"
 echo "MODEL_NAME=${MODEL_NAME}"
 echo "SERVER_BACKEND=${SERVER_BACKEND}"
+echo "TOPREWARD_ATTN_IMPLEMENTATION=${TOPREWARD_ATTN_IMPLEMENTATION}"
 which python
 python --version
 nvidia-smi
@@ -116,7 +118,8 @@ case "$SERVER_BACKEND" in
     python -u "${PROJECT_DIR}/scripts/topreward_raw_score_server.py" \
       --model "${MODEL_NAME}" \
       --host 0.0.0.0 \
-      --port "${SERVER_PORT}" &
+      --port "${SERVER_PORT}" \
+      --attn-implementation "${TOPREWARD_ATTN_IMPLEMENTATION}" &
     ;;
   *)
     echo "ERROR: unsupported SERVER_BACKEND=${SERVER_BACKEND}; expected vllm or raw"
