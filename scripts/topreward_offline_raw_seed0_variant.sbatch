@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Train one TOPReward raw baseline/diff-gamma1 seed0 offline checkpoint.
+# Train one TOPReward raw baseline/diff-gamma1 seed-configurable offline checkpoint.
 
 #SBATCH --job-name=top_off_raw
 #SBATCH --account=biyik_1165

@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Wait for any of 8 raw TOPReward servers, then submit:
-# baseline label/offline + diff label/offline + 16 seed0 online jobs.
+# baseline label/offline + diff label/offline + 16 seed-configurable online jobs.
 # Servers 0-3 run baseline online jobs, servers 4-7 run diff online jobs.
 # Each server runs one online first, then the second online after the first exits.
 
@@ -20,14 +20,15 @@ TOPREWARD_DIR="${TOPREWARD_DIR:-/scratch1/haobaizh/rewind_topreward}"
 SERVER_JOB_IDS="${SERVER_JOB_IDS:?SERVER_JOB_IDS must be provided}"
 SERVER_INFO_FILES="${SERVER_INFO_FILES:?SERVER_INFO_FILES must be provided}"
 SERVER_GROUP_IDS="${SERVER_GROUP_IDS:?SERVER_GROUP_IDS must be provided}"
-SUBMIT_MANIFEST="${SUBMIT_MANIFEST:-${PROJECT_DIR}/logs/topreward_raw_baseline_diff_seed0_manifest.txt}"
 RUN_TAG="${RUN_TAG:?RUN_TAG must be set}"
+SEED="${SEED:-0}"
+SUBMIT_MANIFEST="${SUBMIT_MANIFEST:-${PROJECT_DIR}/logs/topreward_raw_baseline_diff_seed${SEED}_manifest.txt}"
 HORIZON="${HORIZON:-128}"
 MAX_FRAMES="${MAX_FRAMES:-4}"
 REQUEST_TIMEOUT="${REQUEST_TIMEOUT:-900}"
 REQUEST_RETRIES="${REQUEST_RETRIES:-2}"
 TOPREWARD_REQUEST_FORMAT="${TOPREWARD_REQUEST_FORMAT:-raw}"
-LABEL_LOCK="${LABEL_LOCK:-${TOPREWARD_DIR}/logs/topreward_raw_label_${RUN_TAG}.lock}"
+LABEL_LOCK="${LABEL_LOCK:-${TOPREWARD_DIR}/logs/topreward_raw_label_seed${SEED}_${RUN_TAG}.lock}"
 ONLINE_LOG_ROOT="${ONLINE_LOG_ROOT:-/scratch1/haobaizh/rewind_nochunk_online_logs/topreward_raw}"
 BASELINE_H5="${BASELINE_H5:?BASELINE_H5 must be set}"
 DIFF_H5="${DIFF_H5:?DIFF_H5 must be set}"
@@ -122,6 +123,7 @@ DIFF_CKPT_PATH="${DIFF_OFFLINE_DIR}/last_offline"
   echo "launcher_first_ready_info_file=${FIRST_INFO_FILE}"
   echo "launcher_first_ready_server_job=${FIRST_SERVER_JOB_ID}"
   echo "run_tag=${RUN_TAG}"
+  echo "seed=${SEED}"
   echo "baseline_h5=${BASELINE_H5}"
   echo "diff_h5=${DIFF_H5}"
   echo "baseline_offline_dir=${BASELINE_OFFLINE_DIR}"
@@ -129,7 +131,7 @@ DIFF_CKPT_PATH="${DIFF_OFFLINE_DIR}/last_offline"
   echo "baseline_ckpt_path=${BASELINE_CKPT_PATH}"
   echo "diff_ckpt_path=${DIFF_CKPT_PATH}"
   echo "offline_training_steps=100000"
-  echo "online_seed=0"
+  echo "online_seed=${SEED}"
   echo "success_bonus=0"
   echo "diff_gamma=1.0"
   echo "horizon=${HORIZON}"
@@ -161,14 +163,14 @@ echo "label_diff_raw=${DIFF_LABEL_ID} depends_on=after:${FIRST_SERVER_JOB_ID}" |
 BASELINE_OFFLINE_ID=$(sbatch --parsable \
   --dependency="afterok:${BASELINE_LABEL_ID}" \
   --job-name="top_off_base_raw" \
-  --export=ALL,PROJECT_DIR="$PROJECT_DIR",TOPREWARD_DIR="$TOPREWARD_DIR",INFO_FILE="$FIRST_INFO_FILE",EXPECTED_SERVER_JOB_ID="$FIRST_SERVER_JOB_ID",VARIANT=baseline,H5_PATH="$BASELINE_H5",LOG_DIR="$BASELINE_OFFLINE_DIR",LOG_GROUP="offline_topreward_raw_baseline_H${HORIZON}_10critics_${RUN_TAG}",HORIZON="$HORIZON",MAX_FRAMES="$MAX_FRAMES",REQUEST_TIMEOUT="$REQUEST_TIMEOUT",REQUEST_RETRIES="$REQUEST_RETRIES",TOPREWARD_REQUEST_FORMAT="$TOPREWARD_REQUEST_FORMAT",TOPREWARD_LOCK_PATH="$LABEL_LOCK" \
+  --export=ALL,PROJECT_DIR="$PROJECT_DIR",TOPREWARD_DIR="$TOPREWARD_DIR",INFO_FILE="$FIRST_INFO_FILE",EXPECTED_SERVER_JOB_ID="$FIRST_SERVER_JOB_ID",VARIANT=baseline,H5_PATH="$BASELINE_H5",LOG_DIR="$BASELINE_OFFLINE_DIR",LOG_GROUP="offline_topreward_raw_baseline_H${HORIZON}_10critics_${RUN_TAG}",SEED="$SEED",HORIZON="$HORIZON",MAX_FRAMES="$MAX_FRAMES",REQUEST_TIMEOUT="$REQUEST_TIMEOUT",REQUEST_RETRIES="$REQUEST_RETRIES",TOPREWARD_REQUEST_FORMAT="$TOPREWARD_REQUEST_FORMAT",TOPREWARD_LOCK_PATH="$LABEL_LOCK" \
   scripts/topreward_offline_raw_seed0_variant.sbatch)
 echo "offline_baseline_raw=${BASELINE_OFFLINE_ID} depends_on=afterok:${BASELINE_LABEL_ID}" | tee -a "$SUBMIT_MANIFEST"
 
 DIFF_OFFLINE_ID=$(sbatch --parsable \
   --dependency="afterok:${DIFF_LABEL_ID}" \
   --job-name="top_off_diff_raw" \
-  --export=ALL,PROJECT_DIR="$PROJECT_DIR",TOPREWARD_DIR="$TOPREWARD_DIR",INFO_FILE="$FIRST_INFO_FILE",EXPECTED_SERVER_JOB_ID="$FIRST_SERVER_JOB_ID",VARIANT=diff_gamma1,H5_PATH="$DIFF_H5",LOG_DIR="$DIFF_OFFLINE_DIR",LOG_GROUP="offline_topreward_raw_diff_gamma1_H${HORIZON}_10critics_${RUN_TAG}",HORIZON="$HORIZON",MAX_FRAMES="$MAX_FRAMES",REQUEST_TIMEOUT="$REQUEST_TIMEOUT",REQUEST_RETRIES="$REQUEST_RETRIES",TOPREWARD_REQUEST_FORMAT="$TOPREWARD_REQUEST_FORMAT",TOPREWARD_LOCK_PATH="$LABEL_LOCK",DIFF_GAMMA=1.0 \
+  --export=ALL,PROJECT_DIR="$PROJECT_DIR",TOPREWARD_DIR="$TOPREWARD_DIR",INFO_FILE="$FIRST_INFO_FILE",EXPECTED_SERVER_JOB_ID="$FIRST_SERVER_JOB_ID",VARIANT=diff_gamma1,H5_PATH="$DIFF_H5",LOG_DIR="$DIFF_OFFLINE_DIR",LOG_GROUP="offline_topreward_raw_diff_gamma1_H${HORIZON}_10critics_${RUN_TAG}",SEED="$SEED",HORIZON="$HORIZON",MAX_FRAMES="$MAX_FRAMES",REQUEST_TIMEOUT="$REQUEST_TIMEOUT",REQUEST_RETRIES="$REQUEST_RETRIES",TOPREWARD_REQUEST_FORMAT="$TOPREWARD_REQUEST_FORMAT",TOPREWARD_LOCK_PATH="$LABEL_LOCK",DIFF_GAMMA=1.0 \
   scripts/topreward_offline_raw_seed0_variant.sbatch)
 echo "offline_diff_raw=${DIFF_OFFLINE_ID} depends_on=afterok:${DIFF_LABEL_ID}" | tee -a "$SUBMIT_MANIFEST"
 
@@ -184,7 +186,7 @@ submit_online_pair() {
   local server_job_id="${SERVER_IDS[$server_idx]}"
   local info_file="${INFO_FILES[$server_idx]}"
   local group_id="${GROUP_IDS[$server_idx]}"
-  local lock_path="${TOPREWARD_DIR}/logs/topreward_raw_online_group${group_id}_${RUN_TAG}.lock"
+  local lock_path="${TOPREWARD_DIR}/logs/topreward_raw_online_seed${SEED}_group${group_id}_${RUN_TAG}.lock"
   local variant_short first_id second_id cancel_id
 
   case "$variant" in
@@ -200,13 +202,13 @@ submit_online_pair() {
   first_id=$(sbatch --parsable \
     --dependency="after:${server_job_id},afterok:${offline_id}" \
     --job-name="top_on_${variant_short}_${pair_idx}a" \
-    --export=ALL,PROJECT_DIR="$PROJECT_DIR",TOPREWARD_DIR="$TOPREWARD_DIR",INFO_FILE="$info_file",EXPECTED_SERVER_JOB_ID="$server_job_id",GROUP_ID="$group_id",ENV_ID="$first_env",VARIANT="$variant",H5_PATH="$h5_path",CKPT_PATH="$ckpt_path",RUN_TAG="$RUN_TAG",HORIZON="$HORIZON",MAX_FRAMES="$MAX_FRAMES",REQUEST_TIMEOUT="$REQUEST_TIMEOUT",REQUEST_RETRIES="$REQUEST_RETRIES",TOPREWARD_REQUEST_FORMAT="$TOPREWARD_REQUEST_FORMAT",LOCK_PATH="$lock_path",LOG_ROOT="$ONLINE_LOG_ROOT",DIFF_GAMMA=1.0 \
+    --export=ALL,PROJECT_DIR="$PROJECT_DIR",TOPREWARD_DIR="$TOPREWARD_DIR",INFO_FILE="$info_file",EXPECTED_SERVER_JOB_ID="$server_job_id",GROUP_ID="$group_id",ENV_ID="$first_env",VARIANT="$variant",H5_PATH="$h5_path",CKPT_PATH="$ckpt_path",RUN_TAG="$RUN_TAG",SEED="$SEED",HORIZON="$HORIZON",MAX_FRAMES="$MAX_FRAMES",REQUEST_TIMEOUT="$REQUEST_TIMEOUT",REQUEST_RETRIES="$REQUEST_RETRIES",TOPREWARD_REQUEST_FORMAT="$TOPREWARD_REQUEST_FORMAT",LOCK_PATH="$lock_path",LOG_ROOT="$ONLINE_LOG_ROOT",DIFF_GAMMA=1.0 \
     scripts/topreward_online_raw_seed0_env.sbatch)
 
   second_id=$(sbatch --parsable \
     --dependency="after:${server_job_id},afterok:${offline_id},afterany:${first_id}" \
     --job-name="top_on_${variant_short}_${pair_idx}b" \
-    --export=ALL,PROJECT_DIR="$PROJECT_DIR",TOPREWARD_DIR="$TOPREWARD_DIR",INFO_FILE="$info_file",EXPECTED_SERVER_JOB_ID="$server_job_id",GROUP_ID="$group_id",ENV_ID="$second_env",VARIANT="$variant",H5_PATH="$h5_path",CKPT_PATH="$ckpt_path",RUN_TAG="$RUN_TAG",HORIZON="$HORIZON",MAX_FRAMES="$MAX_FRAMES",REQUEST_TIMEOUT="$REQUEST_TIMEOUT",REQUEST_RETRIES="$REQUEST_RETRIES",TOPREWARD_REQUEST_FORMAT="$TOPREWARD_REQUEST_FORMAT",LOCK_PATH="$lock_path",LOG_ROOT="$ONLINE_LOG_ROOT",DIFF_GAMMA=1.0 \
+    --export=ALL,PROJECT_DIR="$PROJECT_DIR",TOPREWARD_DIR="$TOPREWARD_DIR",INFO_FILE="$info_file",EXPECTED_SERVER_JOB_ID="$server_job_id",GROUP_ID="$group_id",ENV_ID="$second_env",VARIANT="$variant",H5_PATH="$h5_path",CKPT_PATH="$ckpt_path",RUN_TAG="$RUN_TAG",SEED="$SEED",HORIZON="$HORIZON",MAX_FRAMES="$MAX_FRAMES",REQUEST_TIMEOUT="$REQUEST_TIMEOUT",REQUEST_RETRIES="$REQUEST_RETRIES",TOPREWARD_REQUEST_FORMAT="$TOPREWARD_REQUEST_FORMAT",LOCK_PATH="$lock_path",LOG_ROOT="$ONLINE_LOG_ROOT",DIFF_GAMMA=1.0 \
     scripts/topreward_online_raw_seed0_env.sbatch)
 
   cancel_id=$(sbatch --parsable \

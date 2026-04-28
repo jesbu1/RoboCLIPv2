@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Run one TOPReward raw baseline/diff-gamma1 online seed0 task.
+# Run one TOPReward raw baseline/diff-gamma1 online seed-configurable task.
 
 #SBATCH --job-name=top_on_raw
 #SBATCH --account=biyik_1165
