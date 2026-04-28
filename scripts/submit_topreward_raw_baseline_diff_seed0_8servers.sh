@@ -20,6 +20,7 @@ SERVER_TIME="${SERVER_TIME:-48:00:00}"
 RUN_TAG="${RUN_TAG:-$(date +%Y%m%d_%H%M%S)}"
 SEED="${SEED:-0}"
 GROUP_IDS_RAW="${GROUP_IDS_RAW:-501 502 503 504 601 602 603 604}"
+SUBMIT_LAUNCHER="${SUBMIT_LAUNCHER:-1}"
 JOB_SEED_TAG="s${SEED}"
 
 cd "$PROJECT_DIR"
@@ -89,6 +90,7 @@ MANIFEST="${PROJECT_DIR}/logs/topreward_raw_baseline_diff_seed${SEED}_8servers_$
   echo "server_constraint=${SERVER_CONSTRAINT}"
   echo "server_mem=${SERVER_MEM}"
   echo "server_time=${SERVER_TIME}"
+  echo "submit_launcher=${SUBMIT_LAUNCHER}"
   echo "baseline_h5=${BASELINE_H5}"
   echo "diff_h5=${DIFF_H5}"
   echo "baseline_offline_dir=${BASELINE_OFFLINE_DIR}"
@@ -138,6 +140,15 @@ done
 SERVER_JOB_IDS_JOINED="$(IFS='|'; echo "${SERVER_JOB_IDS[*]}")"
 SERVER_INFO_FILES_JOINED="$(IFS='|'; echo "${SERVER_INFO_FILES[*]}")"
 SERVER_GROUP_IDS_JOINED="$(IFS='|'; echo "${GROUP_IDS[*]}")"
+
+case "${SUBMIT_LAUNCHER,,}" in
+  0|false|no)
+    echo "launcher=skipped" | tee -a "$MANIFEST"
+    squeue -j "$(IFS=,; echo "${SERVER_JOB_IDS[*]}")" \
+      -o "%.18i %.2t %.12M %.30R %.40j %.120E" | tee -a "$MANIFEST"
+    exit 0
+    ;;
+esac
 
 launcher_job_id=$(sbatch --parsable \
   --job-name="top_lau_raw_${JOB_SEED_TAG}" \
