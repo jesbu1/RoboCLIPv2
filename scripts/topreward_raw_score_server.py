@@ -106,8 +106,22 @@ def load_model(model_name: str, dtype: str, device_map: str, attn_implementation
                     model.eval()
                     return processor, model
                 except Exception as exc:  # pragma: no cover - depends on cluster env
+                    print(
+                        "[TOPReward raw] loader failed "
+                        f"class={class_name} "
+                        f"attn_implementation={attn_impl or 'default'} "
+                        f"without torch_dtype: {type(exc).__name__}: {exc}",
+                        flush=True,
+                    )
                     last_error = exc
             except Exception as exc:  # pragma: no cover - depends on cluster env
+                print(
+                    "[TOPReward raw] loader failed "
+                    f"class={class_name} "
+                    f"attn_implementation={attn_impl or 'default'}: "
+                    f"{type(exc).__name__}: {exc}",
+                    flush=True,
+                )
                 last_error = exc
 
     raise RuntimeError(f"Unable to load {model_name}: {last_error}")
