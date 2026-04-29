@@ -67,10 +67,14 @@ def resolve_server_url(args: argparse.Namespace) -> str:
         time.sleep(5)
 
 
-def health_check(server_url: str) -> None:
+def health_check(server_url: str) -> dict:
     response = requests.get(f"{server_url}/health", timeout=15)
     response.raise_for_status()
     log(f"server_health={response.text}")
+    try:
+        return response.json()
+    except Exception:
+        return {}
 
 
 def build_jobs(args: argparse.Namespace) -> list[VideoJob]:
@@ -655,7 +659,12 @@ def main() -> None:
     log(f"task={args.task}")
     log(f"max_frames={args.max_frames}")
     log(f"request_max_edge={args.request_max_edge}")
-    health_check(server_url)
+    health = health_check(server_url)
+    if args.include_success and not health.get("supports_success", False):
+        raise RuntimeError(
+            "include_success=True requires a progress+success ROBOMETER server, "
+            f"but /health returned: {health}"
+        )
 
     jobs = build_jobs(args)
     if args.start:
