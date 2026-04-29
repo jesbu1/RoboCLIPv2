@@ -73,17 +73,24 @@ def health_check(server_url: str) -> None:
     log(f"server_health={response.text}")
 
 
-def build_jobs(root: Path, only_split: str) -> list[VideoJob]:
+def build_jobs(args: argparse.Namespace) -> list[VideoJob]:
+    root = args.root
     success_input = root / "sucess"
     if not success_input.exists() and (root / "success").exists():
         success_input = root / "success"
+    if args.include_success:
+        unsuccess_output = root / args.unsuccess_output_dir
+        success_output = root / args.success_output_dir
+    else:
+        unsuccess_output = root / "unsuccess_score"
+        success_output = root / "success_score"
     specs = [
-        ("unsuccess", root / "unsuccess", root / "unsuccess_score"),
-        ("success", success_input, root / "success_score"),
+        ("unsuccess", root / "unsuccess", unsuccess_output),
+        ("success", success_input, success_output),
     ]
     jobs: list[VideoJob] = []
     for split, input_dir, output_dir in specs:
-        if only_split != "all" and split != only_split:
+        if args.only_split != "all" and split != args.only_split:
             continue
         if not input_dir.exists():
             raise RuntimeError(f"input dir not found: {input_dir}")
@@ -136,13 +143,40 @@ def prefix_for_step(frames: np.ndarray, step: int, max_frames: int) -> np.ndarra
     return frames[indices]
 
 
-def post_progress(
+def flatten_score_sequence(value) -> list[float]:
+    if value is None:
+        return []
+    if isinstance(value, (int, float)):
+        return [float(value)]
+    if isinstance(value, np.ndarray):
+        return flatten_score_sequence(value.tolist())
+    if isinstance(value, list):
+        if not value:
+            return []
+        if len(value) == 1 and isinstance(value[0], list):
+            return flatten_score_sequence(value[0])
+        flattened: list[float] = []
+        for item in value:
+            if isinstance(item, list):
+                nested = flatten_score_sequence(item)
+                if len(nested) == 1:
+                    flattened.append(nested[0])
+                else:
+                    flattened.extend(nested)
+            else:
+                flattened.append(float(item))
+        return flattened
+    return [float(value)]
+
+
+def post_scores(
     server_url: str,
     frames: np.ndarray,
     task: str,
     timeout: float,
     retries: int,
-) -> float:
+    require_success: bool,
+) -> tuple[float, float | None]:
     buf = io.BytesIO()
     np.save(buf, frames)
     frames_b64 = base64.b64encode(buf.getvalue()).decode("utf-8")
@@ -159,11 +193,15 @@ def post_progress(
             response.raise_for_status()
             result = response.json()
             progress = result.get("progress", result.get("reward", 0.0))
-            if isinstance(progress, list):
-                if not progress:
-                    return 0.0
-                return float(progress[-1])
-            return float(progress)
+            progress_values = flatten_score_sequence(progress)
+            progress_score = float(progress_values[-1]) if progress_values else 0.0
+
+            success = result.get("success_probs", result.get("success", None))
+            success_values = flatten_score_sequence(success)
+            if require_success and not success_values:
+                raise RuntimeError(f"server response did not contain success_probs: {result}")
+            success_score = float(success_values[-1]) if success_values else None
+            return progress_score, success_score
         except Exception as exc:  # noqa: BLE001 - keep server error for logs.
             last_error = exc
             if attempt == retries:
@@ -194,14 +232,26 @@ def load_completed_scores(path: Path, expected_frames: int) -> list[float] | Non
     return None
 
 
-def load_partial_scores(path: Path) -> list[float]:
+def load_completed_success_scores(path: Path, expected_frames: int) -> list[float] | None:
     if not path.exists() or path.stat().st_size == 0:
-        return []
+        return None
+    data = json.loads(path.read_text(encoding="utf-8"))
+    scores = data.get("success_scores", [])
+    if len(scores) == expected_frames:
+        return [float(x) for x in scores]
+    return None
+
+
+def load_partial_scores(path: Path) -> tuple[list[float], list[float]]:
+    if not path.exists() or path.stat().st_size == 0:
+        return [], []
     try:
         data = json.loads(path.read_text(encoding="utf-8"))
-        return [float(x) for x in data.get("raw_scores", [])]
+        raw_scores = [float(x) for x in data.get("raw_scores", [])]
+        success_scores = [float(x) for x in data.get("success_scores", [])]
+        return raw_scores, success_scores
     except Exception:
-        return []
+        return [], []
 
 
 def save_json(path: Path, payload: dict) -> None:
@@ -217,10 +267,11 @@ def make_metadata(
     request_max_edge: int,
     server_url: str,
     raw_scores: Iterable[float],
+    success_scores: Iterable[float] | None = None,
 ) -> dict:
     scores = [float(x) for x in raw_scores]
     forward_diff = np.diff(np.asarray(scores, dtype=np.float64)).tolist()
-    return {
+    payload = {
         "input_video": str(job.input_path),
         "split": job.split,
         "task": task,
@@ -232,16 +283,30 @@ def make_metadata(
         "raw_scores": scores,
         "forward_diff_pt1_minus_pt": [float(x) for x in forward_diff],
     }
+    if success_scores is not None:
+        payload["success_scores"] = [float(x) for x in success_scores]
+    return payload
 
 
-def save_scores_csv(path: Path, raw_scores: list[float]) -> None:
+def save_scores_csv(
+    path: Path,
+    raw_scores: list[float],
+    success_scores: list[float] | None = None,
+) -> None:
     diffs = np.diff(np.asarray(raw_scores, dtype=np.float64))
     with path.open("w", newline="", encoding="utf-8") as handle:
         writer = csv.writer(handle)
-        writer.writerow(["frame_index", "raw_score_p_t", "forward_diff_p_t_plus_1_minus_p_t"])
+        header = ["frame_index", "raw_score_p_t", "forward_diff_p_t_plus_1_minus_p_t"]
+        if success_scores is not None:
+            header.append("success_score_s_t")
+        writer.writerow(header)
         for i, score in enumerate(raw_scores):
             diff = "" if i >= len(diffs) else f"{float(diffs[i]):.10f}"
-            writer.writerow([i, f"{float(score):.10f}", diff])
+            row = [i, f"{float(score):.10f}", diff]
+            if success_scores is not None:
+                success = success_scores[i] if i < len(success_scores) else math.nan
+                row.append(f"{float(success):.10f}")
+            writer.writerow(row)
 
 
 def resize_keep_aspect_rgb(frame: np.ndarray, max_width: int, max_height: int) -> np.ndarray:
@@ -317,6 +382,7 @@ def save_score_video(
     path: Path,
     frames_rgb: np.ndarray,
     raw_scores: list[float],
+    success_scores: list[float] | None,
     fps: float,
     title: str,
 ) -> None:
@@ -327,7 +393,14 @@ def save_score_video(
         forward_diff[:-1] = np.diff(raw)
 
     diff_max = max(0.05, float(np.max(np.abs(forward_diff))) if frame_count else 0.05)
-    width, height = 1680, 560
+    success = None
+    if success_scores is not None and len(success_scores) == frame_count:
+        success = np.asarray(success_scores, dtype=np.float64)
+
+    if success is None:
+        width, height = 1680, 560
+    else:
+        width, height = 1280, 920
     writer = cv2.VideoWriter(
         str(path),
         cv2.VideoWriter_fourcc(*"mp4v"),
@@ -341,37 +414,81 @@ def save_score_video(
         canvas = np.full((height, width, 3), 255, dtype=np.uint8)
         draw_text(canvas, title[:120], (24, 36), scale=0.72, thickness=2)
 
-        draw_text(canvas, "Original video", (24, 78), scale=0.62, thickness=2)
-        resized = resize_keep_aspect_rgb(frame_rgb, 500, 390)
-        x = 24 + (500 - resized.shape[1]) // 2
-        y = 96 + (390 - resized.shape[0]) // 2
-        canvas[y : y + resized.shape[0], x : x + resized.shape[1]] = resized
-        cv2.rectangle(canvas, (24, 96), (524, 486), (210, 210, 210), 1)
-        draw_text(canvas, f"frame {idx}/{frame_count - 1}", (24, 526), scale=0.55)
+        if success is None:
+            draw_text(canvas, "Original video", (24, 78), scale=0.62, thickness=2)
+            resized = resize_keep_aspect_rgb(frame_rgb, 500, 390)
+            x = 24 + (500 - resized.shape[1]) // 2
+            y = 96 + (390 - resized.shape[0]) // 2
+            canvas[y : y + resized.shape[0], x : x + resized.shape[1]] = resized
+            cv2.rectangle(canvas, (24, 96), (524, 486), (210, 210, 210), 1)
+            draw_text(canvas, f"frame {idx}/{frame_count - 1}", (24, 526), scale=0.55)
 
-        draw_curve_panel(
-            canvas,
-            raw,
-            idx,
-            (620, 112, 1068, 456),
-            "ROBOMETER raw score P[t]",
-            f"current={raw[idx]:.4f}",
-            0.0,
-            1.0,
-            (190, 45, 45),
-        )
-        diff_current = forward_diff[idx] if idx < len(forward_diff) else 0.0
-        draw_curve_panel(
-            canvas,
-            forward_diff,
-            idx,
-            (1198, 112, 1646, 456),
-            "Forward diff P[t+1] - P[t]",
-            f"current={diff_current:.4f}",
-            -diff_max,
-            diff_max,
-            (35, 120, 190),
-        )
+            draw_curve_panel(
+                canvas,
+                raw,
+                idx,
+                (620, 112, 1068, 456),
+                "ROBOMETER raw score P[t]",
+                f"current={raw[idx]:.4f}",
+                0.0,
+                1.0,
+                (190, 45, 45),
+            )
+            diff_current = forward_diff[idx] if idx < len(forward_diff) else 0.0
+            draw_curve_panel(
+                canvas,
+                forward_diff,
+                idx,
+                (1198, 112, 1646, 456),
+                "Forward diff P[t+1] - P[t]",
+                f"current={diff_current:.4f}",
+                -diff_max,
+                diff_max,
+                (35, 120, 190),
+            )
+        else:
+            draw_text(canvas, "Original video", (42, 86), scale=0.62, thickness=2)
+            resized = resize_keep_aspect_rgb(frame_rgb, 520, 330)
+            x = 42 + (520 - resized.shape[1]) // 2
+            y = 112 + (330 - resized.shape[0]) // 2
+            canvas[y : y + resized.shape[0], x : x + resized.shape[1]] = resized
+            cv2.rectangle(canvas, (42, 112), (562, 442), (210, 210, 210), 1)
+            draw_text(canvas, f"frame {idx}/{frame_count - 1}", (42, 486), scale=0.55)
+
+            draw_curve_panel(
+                canvas,
+                raw,
+                idx,
+                (728, 112, 1208, 442),
+                "ROBOMETER raw score P[t]",
+                f"current={raw[idx]:.4f}",
+                0.0,
+                1.0,
+                (190, 45, 45),
+            )
+            diff_current = forward_diff[idx] if idx < len(forward_diff) else 0.0
+            draw_curve_panel(
+                canvas,
+                forward_diff,
+                idx,
+                (80, 574, 560, 840),
+                "Forward diff P[t+1] - P[t]",
+                f"current={diff_current:.4f}",
+                -diff_max,
+                diff_max,
+                (35, 120, 190),
+            )
+            draw_curve_panel(
+                canvas,
+                success,
+                idx,
+                (728, 574, 1208, 840),
+                "ROBOMETER success score S[t]",
+                f"current={success[idx]:.4f}",
+                0.0,
+                1.0,
+                (95, 55, 160),
+            )
         writer.write(cv2.cvtColor(canvas, cv2.COLOR_RGB2BGR))
     writer.release()
 
@@ -385,8 +502,17 @@ def score_video(job: VideoJob, args: argparse.Namespace, server_url: str) -> Non
     request_frames_all = maybe_resize_frames(frames_rgb, args.request_max_edge)
     log(f"Video {job.split}/{job.input_path.name}: frames={total_frames}, fps={fps:.4g}")
 
+    success_scores: list[float] | None = [] if args.include_success else None
+
     if not args.force:
         completed = load_completed_scores(paths["json"], total_frames)
+        completed_success = (
+            load_completed_success_scores(paths["json"], total_frames)
+            if args.include_success
+            else None
+        )
+        if args.include_success and completed is not None and completed_success is None:
+            completed = None
         complete_artifacts_exist = (
             paths["csv"].exists()
             and paths["csv"].stat().st_size > 0
@@ -407,25 +533,54 @@ def score_video(job: VideoJob, args: argparse.Namespace, server_url: str) -> Non
                 args.request_max_edge,
                 server_url,
                 completed,
+                completed_success,
             )
             save_json(paths["json"], metadata)
-            save_scores_csv(paths["csv"], completed)
-            save_score_video(paths["mp4"], frames_rgb, completed, fps, f"{job.split}: {job.input_path.stem}")
+            save_scores_csv(paths["csv"], completed, completed_success)
+            save_score_video(
+                paths["mp4"],
+                frames_rgb,
+                completed,
+                completed_success,
+                fps,
+                f"{job.split}: {job.input_path.stem}",
+            )
             if paths["partial"].exists():
                 paths["partial"].unlink()
             log(f"[ok] wrote {paths['mp4']}")
             return
 
-    raw_scores = [] if args.force else load_partial_scores(paths["partial"])
+    if args.force:
+        raw_scores = []
+    else:
+        raw_scores, partial_success = load_partial_scores(paths["partial"])
+        if success_scores is not None:
+            success_scores = partial_success
     if len(raw_scores) > total_frames:
         raw_scores = raw_scores[:total_frames]
+    if success_scores is not None and len(success_scores) > len(raw_scores):
+        success_scores = success_scores[: len(raw_scores)]
+    if success_scores is not None and len(success_scores) != len(raw_scores):
+        raw_scores = []
+        success_scores = []
     if raw_scores:
         log(f"[resume] {job.input_path.name}: starting from frame {len(raw_scores)}")
 
     for step in range(len(raw_scores), total_frames):
         prefix = prefix_for_step(request_frames_all, step, args.max_frames)
-        score = post_progress(server_url, prefix, args.task, args.timeout, args.retries)
+        score, success_score = post_scores(
+            server_url,
+            prefix,
+            args.task,
+            args.timeout,
+            args.retries,
+            args.include_success,
+        )
         raw_scores.append(float(score))
+        if success_scores is not None:
+            if success_score is None:
+                raise RuntimeError("include_success=True but server returned no success score")
+            success_scores.append(float(success_score))
         if (step + 1) % args.checkpoint_every == 0 or step + 1 == total_frames:
             save_json(
                 paths["partial"],
@@ -438,6 +593,7 @@ def score_video(job: VideoJob, args: argparse.Namespace, server_url: str) -> Non
                     args.request_max_edge,
                     server_url,
                     raw_scores,
+                    success_scores,
                 ),
             )
             log(f"  {job.input_path.name}: scored {step + 1}/{total_frames}")
@@ -453,10 +609,11 @@ def score_video(job: VideoJob, args: argparse.Namespace, server_url: str) -> Non
         args.request_max_edge,
         server_url,
         raw_scores,
+        success_scores,
     )
     save_json(paths["json"], metadata)
-    save_scores_csv(paths["csv"], raw_scores)
-    save_score_video(paths["mp4"], frames_rgb, raw_scores, fps, f"{job.split}: {job.input_path.stem}")
+    save_scores_csv(paths["csv"], raw_scores, success_scores)
+    save_score_video(paths["mp4"], frames_rgb, raw_scores, success_scores, fps, f"{job.split}: {job.input_path.stem}")
     if paths["partial"].exists():
         paths["partial"].unlink()
     log(f"[ok] wrote {paths['mp4']}")
@@ -479,6 +636,9 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--start", type=int, default=0)
     parser.add_argument("--limit", type=int, default=0)
     parser.add_argument("--force", action="store_true")
+    parser.add_argument("--include-success", action="store_true")
+    parser.add_argument("--success-output-dir", default="success_score_2x2")
+    parser.add_argument("--unsuccess-output-dir", default="unsuccess_score_2x2")
     return parser.parse_args()
 
 
@@ -497,7 +657,7 @@ def main() -> None:
     log(f"request_max_edge={args.request_max_edge}")
     health_check(server_url)
 
-    jobs = build_jobs(args.root, args.only_split)
+    jobs = build_jobs(args)
     if args.start:
         jobs = jobs[args.start :]
     if args.limit:

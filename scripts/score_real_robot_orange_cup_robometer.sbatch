@@ -26,6 +26,9 @@ ONLY_SPLIT="${ONLY_SPLIT:-all}"
 START="${START:-0}"
 LIMIT="${LIMIT:-0}"
 FORCE="${FORCE:-0}"
+INCLUDE_SUCCESS="${INCLUDE_SUCCESS:-0}"
+SUCCESS_OUTPUT_DIR="${SUCCESS_OUTPUT_DIR:-success_score_2x2}"
+UNSUCCESS_OUTPUT_DIR="${UNSUCCESS_OUTPUT_DIR:-unsuccess_score_2x2}"
 SERVER_URL="${SERVER_URL:-}"
 INFO_FILE="${INFO_FILE:-}"
 
@@ -59,6 +62,9 @@ echo "ONLY_SPLIT=$ONLY_SPLIT"
 echo "START=$START"
 echo "LIMIT=$LIMIT"
 echo "FORCE=$FORCE"
+echo "INCLUDE_SUCCESS=$INCLUDE_SUCCESS"
+echo "SUCCESS_OUTPUT_DIR=$SUCCESS_OUTPUT_DIR"
+echo "UNSUCCESS_OUTPUT_DIR=$UNSUCCESS_OUTPUT_DIR"
 echo "SERVER_URL=$SERVER_URL"
 echo "INFO_FILE=$INFO_FILE"
 which python
@@ -83,6 +89,13 @@ if [ "$LIMIT" != "0" ]; then
 fi
 if [ "$FORCE" = "1" ]; then
   args+=(--force)
+fi
+if [ "$INCLUDE_SUCCESS" = "1" ]; then
+  args+=(
+    --include-success
+    --success-output-dir "$SUCCESS_OUTPUT_DIR"
+    --unsuccess-output-dir "$UNSUCCESS_OUTPUT_DIR"
+  )
 fi
 if [ -n "$SERVER_URL" ]; then
   args+=(--server-url "$SERVER_URL")
