@@ -76,7 +76,7 @@ def make_video_data(frames_b64: List[str], fps: float, include_metadata: bool):
         raise ValueError("frames_b64 cannot be empty")
     video = np.stack(frames, axis=0)
     if include_metadata:
-        return [(video, {"fps": fps})]
+        return [(video, {"fps": fps, "total_num_frames": len(frames)})]
     return video
 
 
@@ -228,6 +228,7 @@ def make_app(args):
                 for output, answer_count in zip(outputs, answer_counts)
             ]
         except Exception as exc:
+            print(f"ERROR /score failed: {type(exc).__name__}: {exc}", flush=True)
             raise HTTPException(status_code=500, detail=str(exc)) from exc
 
     @app.post("/score")
