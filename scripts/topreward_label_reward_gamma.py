@@ -114,6 +114,11 @@ def center_crop_frame(frame, crop_size=224):
 
 
 def frames_to_base64(frames):
+    if len(frames) == 1:
+        # Qwen3-VL's video processor requires at least two video frames.
+        # This only affects the first prefix label for each trajectory.
+        frames = [frames[0], frames[0]]
+
     b64_list = []
     for frame in frames:
         frame = center_crop_frame(frame)
