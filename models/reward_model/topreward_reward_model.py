@@ -82,6 +82,10 @@ class TOPRewardModel(BaseRewardModel):
         self._frame_buffer = []
 
     def _subsample_frames(self) -> List[np.ndarray]:
+        if len(self._frame_buffer) == 1:
+            # Qwen3-VL's video processor requires at least two frames. The first
+            # progress-diff reward is zero anyway, so this only initializes state.
+            return [self._frame_buffer[0], self._frame_buffer[0]]
         if len(self._frame_buffer) <= self.max_frames:
             return self._frame_buffer
         indices = np.linspace(0, len(self._frame_buffer) - 1, self.max_frames, dtype=int)
