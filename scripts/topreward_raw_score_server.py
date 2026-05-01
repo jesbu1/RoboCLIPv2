@@ -252,6 +252,7 @@ def parse_args():
     parser.add_argument("--max-num-seqs", type=int, default=8)
     parser.add_argument("--tensor-parallel-size", type=int, default=1)
     parser.add_argument("--prompt-logprobs", type=int, default=20)
+    parser.add_argument("--seed", type=int, default=0)
     parser.add_argument("--fps", type=float, default=DEFAULT_FPS)
     parser.add_argument("--answer", default=DEFAULT_ANSWER)
     parser.add_argument("--video-placeholder", default=VIDEO_PLACEHOLDER)
