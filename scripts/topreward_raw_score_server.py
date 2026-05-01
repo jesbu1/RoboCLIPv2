@@ -76,7 +76,15 @@ def make_video_data(frames_b64: List[str], fps: float, include_metadata: bool):
         raise ValueError("frames_b64 cannot be empty")
     video = np.stack(frames, axis=0)
     if include_metadata:
-        return (video, {"fps": fps, "total_num_frames": len(frames)})
+        metadata = {
+            "fps": fps,
+            "duration": len(frames) / fps if fps > 0 else None,
+            "total_num_frames": len(frames),
+            "frames_indices": list(range(len(frames))),
+            "video_backend": "opencv",
+            "do_sample_frames": False,
+        }
+        return [(video, metadata)]
     return video
 
 
