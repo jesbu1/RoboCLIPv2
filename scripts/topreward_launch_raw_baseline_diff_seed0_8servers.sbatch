@@ -187,7 +187,7 @@ submit_online_pair() {
   local info_file="${INFO_FILES[$server_idx]}"
   local group_id="${GROUP_IDS[$server_idx]}"
   local lock_path="${TOPREWARD_DIR}/logs/topreward_raw_online_seed${SEED}_group${group_id}_${RUN_TAG}.lock"
-  local variant_short first_id second_id cancel_id
+  local variant_short first_id second_id
 
   case "$variant" in
     baseline) variant_short="base" ;;
@@ -211,22 +211,10 @@ submit_online_pair() {
     --export=ALL,PROJECT_DIR="$PROJECT_DIR",TOPREWARD_DIR="$TOPREWARD_DIR",INFO_FILE="$info_file",EXPECTED_SERVER_JOB_ID="$server_job_id",GROUP_ID="$group_id",ENV_ID="$second_env",VARIANT="$variant",H5_PATH="$h5_path",CKPT_PATH="$ckpt_path",RUN_TAG="$RUN_TAG",SEED="$SEED",HORIZON="$HORIZON",MAX_FRAMES="$MAX_FRAMES",REQUEST_TIMEOUT="$REQUEST_TIMEOUT",REQUEST_RETRIES="$REQUEST_RETRIES",TOPREWARD_REQUEST_FORMAT="$TOPREWARD_REQUEST_FORMAT",LOCK_PATH="$lock_path",LOG_ROOT="$ONLINE_LOG_ROOT",DIFF_GAMMA=1.0 \
     scripts/topreward_online_raw_seed0_env.sbatch)
 
-  cancel_id=$(sbatch --parsable \
-    --job-name="top_stop_${group_id}" \
-    --account=biyik_1165 \
-    --partition=main \
-    --time=00:05:00 \
-    --cpus-per-task=1 \
-    --mem=512M \
-    --dependency="afterany:${second_id}" \
-    --output="logs/top_stop_${group_id}_%j.out" \
-    --error="logs/top_stop_${group_id}_%j.err" \
-    --wrap="scancel ${server_job_id} || true")
-
   {
     echo "online_${variant}_group${group_id}_first=${first_id} env=${first_env} server=${server_job_id} lock=${lock_path} depends_on=after:${server_job_id},afterok:${offline_id}"
     echo "online_${variant}_group${group_id}_second=${second_id} env=${second_env} server=${server_job_id} lock=${lock_path} depends_on=after:${server_job_id},afterok:${offline_id},afterany:${first_id}"
-    echo "cancel_server_group${group_id}=${cancel_id} server=${server_job_id} depends_on=afterany:${second_id}"
+    echo "cancel_server_group${group_id}=(disabled_no_auto_cancel) server=${server_job_id}"
   } | tee -a "$SUBMIT_MANIFEST"
 }
 
