@@ -1,32 +1,35 @@
 #!/usr/bin/env python3
-"""TOPReward raw teacher-forced scoring server.
+"""TOPReward no-chat-template scorer served through vLLM prompt logprobs.
 
-This avoids the OpenAI chat-completions path so the prompt is not wrapped in a
-chat template. It mirrors the official TOPReward Qwen client scoring logic:
-append "True" to the prompt, mask the preceding tokens, and return the
-log-probability of the final answer token.
+The TOPReward paper scores the log probability of the affirmative answer token
+("True") appended to a raw video prompt. This server keeps that formulation:
+it does not call the OpenAI chat-completions endpoint and does not apply a chat
+template. vLLM is used only as the fast batched inference engine.
 """
 
 import argparse
 import base64
 import io
 import os
-from typing import List, Optional
+import threading
+import uuid
+from typing import Any, Dict, List, Optional
 
-import torch
-import torch.nn.functional as F
-import transformers
+import numpy as np
 import uvicorn
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 from PIL import Image
+from transformers import AutoTokenizer
+from vllm import LLM, SamplingParams
 
 
+VIDEO_PLACEHOLDER = "<|vision_start|><|video_pad|><|vision_end|>"
 PROMPT_PREFIX = (
     "The above video shows a robot manipulation trajectory "
     "that completes the following task: "
 )
-PROMPT_SUFFIX = " Decide whether the above statement is True or not. The answer is: "
+PROMPT_SUFFIX = " Decide whether the above statement is True or not. The answer is:"
 DEFAULT_ANSWER = "True"
 DEFAULT_FPS = 2.0
 
@@ -37,276 +40,233 @@ class ScoreRequest(BaseModel):
     model: Optional[str] = None
 
 
+class ScoreBatchRequest(BaseModel):
+    requests: List[ScoreRequest]
+
+
 def decode_image(data: str) -> Image.Image:
     if "," in data and data.lstrip().startswith("data:"):
         data = data.split(",", 1)[1]
     return Image.open(io.BytesIO(base64.b64decode(data))).convert("RGB")
 
 
-def _candidate_attn_implementations(attn_implementation: str):
-    requested = (attn_implementation or "auto").lower()
-    if requested in ("", "none", "default"):
-        return [None]
-    if requested != "auto":
-        return [attn_implementation]
+def build_raw_prompt(instruction: str, answer: str, video_placeholder: str) -> str:
+    return f"{video_placeholder}{PROMPT_PREFIX}{instruction}{PROMPT_SUFFIX}{answer}"
+
+
+def answer_token_count(tokenizer, instruction: str, answer: str, video_placeholder: str) -> int:
+    prefix = build_raw_prompt(instruction, "", video_placeholder)
+    full = build_raw_prompt(instruction, answer, video_placeholder)
+    prefix_ids = tokenizer.encode(prefix, add_special_tokens=False)
+    full_ids = tokenizer.encode(full, add_special_tokens=False)
+
+    if len(full_ids) <= len(prefix_ids):
+        answer_ids = tokenizer.encode(answer, add_special_tokens=False)
+    else:
+        answer_ids = full_ids[len(prefix_ids) :]
+
+    if not answer_ids:
+        raise RuntimeError(f"Answer {answer!r} produced no token ids.")
+    return len(answer_ids)
+
+
+def make_video_data(frames_b64: List[str], fps: float, include_metadata: bool):
+    frames = [np.asarray(decode_image(frame), dtype=np.uint8) for frame in frames_b64]
+    if not frames:
+        raise ValueError("frames_b64 cannot be empty")
+    video = np.stack(frames, axis=0)
+    if include_metadata:
+        return [(video, {"fps": fps})]
+    return video
+
+
+def logprob_value(entry: Any, token_id: int) -> float:
+    if entry is None:
+        raise KeyError(token_id)
 
     candidates = []
-    try:
-        import flash_attn  # noqa: F401
+    if isinstance(entry, dict):
+        candidates.extend([entry.get(token_id), entry.get(str(token_id))])
+    else:
+        try:
+            candidates.append(entry[token_id])
+        except Exception:
+            pass
 
-        candidates.append("flash_attention_2")
-    except Exception:
-        pass
-    candidates.extend(["sdpa", None])
-    return candidates
+    for candidate in candidates:
+        if candidate is None:
+            continue
+        if hasattr(candidate, "logprob"):
+            return float(candidate.logprob)
+        if isinstance(candidate, dict) and "logprob" in candidate:
+            return float(candidate["logprob"])
+        if isinstance(candidate, (float, int)):
+            return float(candidate)
 
-
-def load_model(model_name: str, dtype: str, device_map: str, attn_implementation: str):
-    processor = transformers.AutoProcessor.from_pretrained(
-        model_name,
-        trust_remote_code=True,
-    )
-    base_model_kwargs = {
-        "trust_remote_code": True,
-        "device_map": device_map,
-    }
-    if dtype:
-        base_model_kwargs["torch_dtype"] = dtype
-
-    last_error = None
-    attn_candidates = _candidate_attn_implementations(attn_implementation)
-    for attn_impl in attn_candidates:
-        model_kwargs = dict(base_model_kwargs)
-        if attn_impl is not None:
-            model_kwargs["attn_implementation"] = attn_impl
-        print(
-            "[TOPReward raw] trying "
-            f"attn_implementation={attn_impl or 'default'}",
-            flush=True,
-        )
-        for class_name in (
-            "Qwen3VLForConditionalGeneration",
-            "AutoModelForImageTextToText",
-            "AutoModelForVision2Seq",
-            "AutoModelForCausalLM",
-        ):
-            model_cls = getattr(transformers, class_name, None)
-            if model_cls is None:
-                continue
-            try:
-                model = model_cls.from_pretrained(model_name, **model_kwargs)
-                model.eval()
-                return processor, model
-            except TypeError:
-                # Older Transformers versions may not accept torch_dtype="auto".
-                fallback_kwargs = dict(model_kwargs)
-                fallback_kwargs.pop("torch_dtype", None)
-                try:
-                    model = model_cls.from_pretrained(model_name, **fallback_kwargs)
-                    model.eval()
-                    return processor, model
-                except Exception as exc:  # pragma: no cover - depends on cluster env
-                    print(
-                        "[TOPReward raw] loader failed "
-                        f"class={class_name} "
-                        f"attn_implementation={attn_impl or 'default'} "
-                        f"without torch_dtype: {type(exc).__name__}: {exc}",
-                        flush=True,
-                    )
-                    last_error = exc
-            except Exception as exc:  # pragma: no cover - depends on cluster env
-                print(
-                    "[TOPReward raw] loader failed "
-                    f"class={class_name} "
-                    f"attn_implementation={attn_impl or 'default'}: "
-                    f"{type(exc).__name__}: {exc}",
-                    flush=True,
-                )
-                last_error = exc
-
-    raise RuntimeError(f"Unable to load {model_name}: {last_error}")
+    available = list(entry.keys())[:20] if isinstance(entry, dict) else type(entry)
+    raise KeyError(f"token_id={token_id} not present in prompt_logprobs; available={available}")
 
 
-def move_inputs_to_model(inputs, model):
-    device = next(model.parameters()).device
-    try:
-        return inputs.to(device)
-    except AttributeError:
-        return {
-            key: value.to(device) if hasattr(value, "to") else value
-            for key, value in inputs.items()
+def top_logprobs_payload(entry: Any) -> List[Dict[str, Any]]:
+    if not isinstance(entry, dict):
+        return []
+
+    payload = []
+    for token_id, value in entry.items():
+        item = {
+            "token_id": int(token_id),
+            "logprob": float(getattr(value, "logprob", value.get("logprob") if isinstance(value, dict) else value)),
         }
+        decoded = getattr(value, "decoded_token", None)
+        if decoded is not None:
+            item["token"] = decoded
+        rank = getattr(value, "rank", None)
+        if rank is not None:
+            item["rank"] = rank
+        payload.append(item)
+    return payload
 
 
-def build_official_qwen_inputs(
-    processor,
-    images,
-    instruction: str,
-    answer: str,
-    fps: float,
-):
-    """Match TOPReward's QwenClient.compute_instruction_reward input path."""
-    try:
-        from qwen_vl_utils import process_vision_info
-    except ImportError as exc:  # pragma: no cover - depends on cluster env
+def score_from_prompt_logprobs(output, answer_count: int) -> Dict[str, Any]:
+    prompt_token_ids = list(output.prompt_token_ids or [])
+    prompt_logprobs = output.prompt_logprobs
+    if not prompt_token_ids or prompt_logprobs is None:
+        raise RuntimeError("vLLM did not return prompt_token_ids/prompt_logprobs.")
+    if answer_count > len(prompt_token_ids):
         raise RuntimeError(
-            "qwen_vl_utils is required for raw TOPReward scoring. Install it in "
-            "the TOPReward environment or use SERVER_BACKEND=vllm."
-        ) from exc
+            f"answer token count {answer_count} exceeds prompt length {len(prompt_token_ids)}."
+        )
 
-    content = [
-        {"type": "video", "video": images, "fps": fps},
-        {"type": "text", "text": PROMPT_PREFIX},
-    ]
-    user_messages = [{"role": "user", "content": content}]
-
-    prompt_chat = processor.apply_chat_template(
-        user_messages,
-        tokenize=False,
-        add_generation_prompt=False,
-    )
-    eos_token = getattr(processor.tokenizer, "eos_token", None)
-    if eos_token is not None:
-        prompt_chat = prompt_chat.split(eos_token)[0]
-
-    instruction_suffix = f"{instruction}{PROMPT_SUFFIX}{answer}"
-    full_text = f"{prompt_chat}{instruction_suffix}"
-    image_inputs, video_inputs = process_vision_info(user_messages)
-
-    return processor(
-        text=[full_text],
-        images=image_inputs,
-        videos=video_inputs,
-        padding=True,
-        return_tensors="pt",
-    )
-
-
-def compute_answer_logprob(inputs, model, tokenizer, top_logprobs: int):
-    """Mirror official TOPReward masking: only the final answer token is scored."""
-    labels = inputs["input_ids"].clone()
-    prompt_length = inputs["input_ids"].shape[1] - 1
-    labels[:, :prompt_length] = -100
-    if "attention_mask" in inputs:
-        labels = labels.masked_fill(inputs["attention_mask"] == 0, -100)
-
-    with torch.inference_mode():
-        outputs = model(**inputs, labels=labels)
-
-    logits = outputs.logits[:, :-1, :]
-    target_labels = labels[:, 1:]
-    log_probs = F.log_softmax(logits, dim=-1)
-    mask = target_labels != -100
-    safe_targets = target_labels.masked_fill(~mask, 0)
-    token_log_probs = log_probs.gather(-1, safe_targets.unsqueeze(-1)).squeeze(-1)
-    masked_log_probs = token_log_probs[mask]
-    if masked_log_probs.numel() == 0:
-        raise RuntimeError("No answer token was available for TOPReward scoring.")
-
-    positions = mask.nonzero(as_tuple=False)
-    batch_idx, token_pos = positions[-1]
-    token_id = int(target_labels[batch_idx, token_pos].item())
-    answer_logprob = float(masked_log_probs.sum().item())
-
-    answer_distribution = log_probs[batch_idx, token_pos]
-    top_k = min(top_logprobs, answer_distribution.numel())
-    top_values, top_indices = torch.topk(answer_distribution, k=top_k)
-    top_logprobs_payload = [
-        {
-            "token": tokenizer.decode([int(idx.item())]),
-            "logprob": float(value.item()),
-        }
-        for value, idx in zip(top_values, top_indices)
-    ]
+    answer_token_ids = prompt_token_ids[-answer_count:]
+    answer_entries = prompt_logprobs[-answer_count:]
+    answer_logprob = 0.0
+    for token_id, entry in zip(answer_token_ids, answer_entries):
+        answer_logprob += logprob_value(entry, token_id)
 
     return {
-        "logprob": answer_logprob,
-        "token": tokenizer.decode([token_id]),
-        "token_id": token_id,
-        "token_count": int(masked_log_probs.numel()),
-        "top_logprobs": top_logprobs_payload,
+        "logprob": float(answer_logprob),
+        "token": DEFAULT_ANSWER,
+        "token_ids": [int(token_id) for token_id in answer_token_ids],
+        "token_count": int(answer_count),
+        "top_logprobs": top_logprobs_payload(answer_entries[-1]),
     }
 
 
 def make_app(args):
-    processor, model = load_model(
-        args.model,
-        args.dtype,
-        args.device_map,
-        args.attn_implementation,
+    tokenizer = AutoTokenizer.from_pretrained(args.model, trust_remote_code=True)
+    llm_kwargs = {
+        "model": args.model,
+        "trust_remote_code": True,
+        "dtype": args.dtype,
+        "gpu_memory_utilization": args.gpu_memory_utilization,
+        "max_model_len": args.max_model_len,
+        "limit_mm_per_prompt": {"video": 1},
+        "seed": args.seed,
+    }
+    if args.tensor_parallel_size > 1:
+        llm_kwargs["tensor_parallel_size"] = args.tensor_parallel_size
+    if args.max_num_seqs > 0:
+        llm_kwargs["max_num_seqs"] = args.max_num_seqs
+
+    llm = LLM(**llm_kwargs)
+    sampling_params = SamplingParams(
+        temperature=0.0,
+        max_tokens=1,
+        prompt_logprobs=args.prompt_logprobs,
     )
-    tokenizer = getattr(processor, "tokenizer", None)
-    if tokenizer is None:
-        tokenizer = transformers.AutoTokenizer.from_pretrained(
-            args.model,
-            trust_remote_code=True,
-        )
+    llm_lock = threading.Lock()
 
     app = FastAPI()
 
     @app.get("/health")
     def health():
-        return {"status": "ok", "backend": "topreward_raw_score"}
+        return {
+            "status": "ok",
+            "backend": "topreward_vllm_prompt_logprobs_no_chat_template",
+            "model": args.model,
+            "prompt_logprobs": args.prompt_logprobs,
+        }
 
-    @app.post("/score")
-    def score(req: ScoreRequest):
-        if req.model is not None and req.model != args.model:
-            raise HTTPException(
-                status_code=400,
-                detail=f"Server model is {args.model}, request asked for {req.model}",
+    def score_items(items: List[ScoreRequest]):
+        if not items:
+            return []
+
+        inputs = []
+        answer_counts = []
+        for item in items:
+            if item.model is not None and item.model != args.model:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Server model is {args.model}, request asked for {item.model}",
+                )
+            if not item.frames_b64:
+                raise HTTPException(status_code=400, detail="frames_b64 cannot be empty")
+
+            prompt = build_raw_prompt(item.instruction, args.answer, args.video_placeholder)
+            answer_counts.append(
+                answer_token_count(tokenizer, item.instruction, args.answer, args.video_placeholder)
             )
-        if not req.frames_b64:
-            raise HTTPException(status_code=400, detail="frames_b64 cannot be empty")
+            inputs.append(
+                {
+                    "prompt": prompt,
+                    "multi_modal_data": {
+                        "video": make_video_data(
+                            item.frames_b64,
+                            args.fps,
+                            args.include_video_metadata,
+                        )
+                    },
+                    "multi_modal_uuids": {"video": f"topreward-{uuid.uuid4()}"},
+                }
+            )
 
-        images = [decode_image(frame) for frame in req.frames_b64]
         try:
-            inputs = build_official_qwen_inputs(
-                processor,
-                images,
-                req.instruction,
-                args.answer,
-                args.fps,
-            )
-            inputs = move_inputs_to_model(inputs, model)
-            result = compute_answer_logprob(
-                inputs,
-                model,
-                tokenizer,
-                args.top_logprobs,
-            )
+            with llm_lock:
+                outputs = llm.generate(inputs, sampling_params=sampling_params)
+            return [
+                score_from_prompt_logprobs(output, answer_count)
+                for output, answer_count in zip(outputs, answer_counts)
+            ]
         except Exception as exc:
             raise HTTPException(status_code=500, detail=str(exc)) from exc
 
-        return result
+    @app.post("/score")
+    def score(req: ScoreRequest):
+        return score_items([req])[0]
+
+    @app.post("/score_batch")
+    def score_batch(req: ScoreBatchRequest):
+        return {"scores": score_items(req.requests)}
 
     return app
 
 
 def parse_args():
-    parser = argparse.ArgumentParser(description="Serve raw TOPReward scores.")
+    parser = argparse.ArgumentParser(description="Serve no-chat-template TOPReward scores.")
     parser.add_argument("--model", default="Qwen/Qwen3-VL-8B-Instruct")
     parser.add_argument("--host", default="0.0.0.0")
     parser.add_argument("--port", type=int, default=8200)
     parser.add_argument("--dtype", default="auto")
-    parser.add_argument("--device-map", default="auto")
-    parser.add_argument(
-        "--attn-implementation",
-        default=os.environ.get("TOPREWARD_ATTN_IMPLEMENTATION", "auto"),
-        help=(
-            "Attention backend for Transformers loading. The default 'auto' "
-            "tries flash_attention_2 only when flash_attn is importable, then "
-            "falls back to sdpa/default."
-        ),
-    )
-    parser.add_argument("--top-logprobs", type=int, default=20)
+    parser.add_argument("--gpu-memory-utilization", type=float, default=0.90)
+    parser.add_argument("--max-model-len", type=int, default=32768)
+    parser.add_argument("--max-num-seqs", type=int, default=8)
+    parser.add_argument("--tensor-parallel-size", type=int, default=1)
+    parser.add_argument("--prompt-logprobs", type=int, default=20)
     parser.add_argument("--fps", type=float, default=DEFAULT_FPS)
     parser.add_argument("--answer", default=DEFAULT_ANSWER)
-    args = parser.parse_args()
-    return args
+    parser.add_argument("--video-placeholder", default=VIDEO_PLACEHOLDER)
+    parser.add_argument(
+        "--include-video-metadata",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="Qwen3-VL in vLLM expects video metadata with FPS.",
+    )
+    return parser.parse_args()
 
 
 def main():
     args = parse_args()
+    os.environ.setdefault("VLLM_USAGE_STATS", "0")
     app = make_app(args)
     uvicorn.run(app, host=args.host, port=args.port)
 

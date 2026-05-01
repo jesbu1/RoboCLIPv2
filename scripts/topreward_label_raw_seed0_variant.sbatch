@@ -19,16 +19,21 @@ TOPREWARD_CONDA="${TOPREWARD_CONDA:-${TOPREWARD_DIR}/conda_envs/rewind}"
 PROJECT_CACHE="${PROJECT_CACHE:-/scratch1/haobaizh/.cache}"
 INFO_FILE="${INFO_FILE:?INFO_FILE must point to a ready TOPReward server info file}"
 EXPECTED_SERVER_JOB_ID="${EXPECTED_SERVER_JOB_ID:-}"
-VARIANT="${VARIANT:?VARIANT must be baseline or diff_gamma1}"
-OUTPUT_PATH="${OUTPUT_PATH:?OUTPUT_PATH must be set and unique}"
+VARIANT="${VARIANT:?VARIANT must be baseline, diff_gamma1, or both}"
+OUTPUT_PATH="${OUTPUT_PATH:-}"
+BASELINE_OUTPUT_PATH="${BASELINE_OUTPUT_PATH:-}"
+DIFF_OUTPUT_PATH="${DIFF_OUTPUT_PATH:-}"
 MODEL_NAME="${MODEL_NAME:-Qwen/Qwen3-VL-8B-Instruct}"
 MAX_FRAMES="${MAX_FRAMES:-4}"
 REQUEST_TIMEOUT="${REQUEST_TIMEOUT:-900}"
 REQUEST_RETRIES="${REQUEST_RETRIES:-2}"
+REQUEST_BATCH_SIZE="${REQUEST_BATCH_SIZE:-8}"
 TOPREWARD_REQUEST_FORMAT="${TOPREWARD_REQUEST_FORMAT:-raw}"
 LOCK_PATH="${LOCK_PATH:-${TOPREWARD_DIR}/logs/topreward_raw_label.lock}"
 DIFF_GAMMA="${DIFF_GAMMA:-1.0}"
 OVERWRITE_OUTPUT="${OVERWRITE_OUTPUT:-false}"
+TASK_SHARD_INDEX="${TASK_SHARD_INDEX:-0}"
+NUM_TASK_SHARDS="${NUM_TASK_SHARDS:-1}"
 
 case "$VARIANT" in
   baseline)
@@ -41,6 +46,21 @@ case "$VARIANT" in
     REWARD_SCALE="${DIFF_LABEL_REWARD_SCALE:-1.0}"
     EXTRA_ARGS=(--diff_gamma "$DIFF_GAMMA")
     ;;
+  both)
+    MODE="both"
+    REWARD_SCALE="n/a"
+    if [ -z "$BASELINE_OUTPUT_PATH" ] || [ -z "$DIFF_OUTPUT_PATH" ]; then
+      echo "ERROR: VARIANT=both requires BASELINE_OUTPUT_PATH and DIFF_OUTPUT_PATH"
+      exit 1
+    fi
+    EXTRA_ARGS=(
+      --baseline_output_path "$BASELINE_OUTPUT_PATH"
+      --diff_output_path "$DIFF_OUTPUT_PATH"
+      --baseline_reward_scale "${BASELINE_REWARD_SCALE:-1.0}"
+      --diff_reward_scale "${DIFF_LABEL_REWARD_SCALE:-1.0}"
+      --diff_gamma "$DIFF_GAMMA"
+    )
+    ;;
   *)
     echo "ERROR: Unknown VARIANT=${VARIANT}"
     exit 1
@@ -50,10 +70,23 @@ esac
 if [ ! -d "$TOPREWARD_DIR" ]; then echo "ERROR: TOPREWARD_DIR not found: $TOPREWARD_DIR"; exit 1; fi
 if [ ! -d "$TOPREWARD_CONDA" ]; then echo "ERROR: TOPReward conda env not found: $TOPREWARD_CONDA"; exit 1; fi
 if [ ! -f "${PROJECT_DIR}/scripts/topreward_label_reward_gamma.py" ]; then echo "ERROR: label helper not found"; exit 1; fi
-if [ -e "$OUTPUT_PATH" ] && [ "$OVERWRITE_OUTPUT" != "true" ]; then
-  echo "ERROR: refusing to overwrite existing label H5: $OUTPUT_PATH"
-  exit 1
-fi
+case "$VARIANT" in
+  baseline|diff_gamma1)
+    if [ -z "$OUTPUT_PATH" ]; then echo "ERROR: OUTPUT_PATH must be set"; exit 1; fi
+    if [ -e "$OUTPUT_PATH" ] && [ "$OVERWRITE_OUTPUT" != "true" ]; then
+      echo "ERROR: refusing to overwrite existing label H5: $OUTPUT_PATH"
+      exit 1
+    fi
+    ;;
+  both)
+    for output_path in "$BASELINE_OUTPUT_PATH" "$DIFF_OUTPUT_PATH"; do
+      if [ -e "$output_path" ] && [ "$OVERWRITE_OUTPUT" != "true" ]; then
+        echo "ERROR: refusing to overwrite existing label H5: $output_path"
+        exit 1
+      fi
+    done
+    ;;
+esac
 
 read_server_url() {
   local info_line server_job_id server_url
@@ -110,35 +143,54 @@ export HF_HOME="${PROJECT_CACHE}/huggingface"
 export TORCH_HOME="${PROJECT_CACHE}/torch"
 export XDG_CACHE_HOME="${PROJECT_CACHE}"
 export TRANSFORMERS_CACHE="${PROJECT_CACHE}/huggingface"
-mkdir -p "${TOPREWARD_DIR}/logs" "$(dirname "$OUTPUT_PATH")" "$HF_HOME" "$TORCH_HOME" "$XDG_CACHE_HOME"
+mkdir -p "${TOPREWARD_DIR}/logs" "$HF_HOME" "$TORCH_HOME" "$XDG_CACHE_HOME"
+if [ "$VARIANT" = "both" ]; then
+  mkdir -p "$(dirname "$BASELINE_OUTPUT_PATH")" "$(dirname "$DIFF_OUTPUT_PATH")"
+else
+  mkdir -p "$(dirname "$OUTPUT_PATH")"
+fi
 
 echo "========== TOPReward raw label ${VARIANT} =========="
 echo "TOPREWARD_API_URL=${TOPREWARD_API_URL}"
 echo "OUTPUT_PATH=${OUTPUT_PATH}"
+echo "BASELINE_OUTPUT_PATH=${BASELINE_OUTPUT_PATH}"
+echo "DIFF_OUTPUT_PATH=${DIFF_OUTPUT_PATH}"
 echo "LOCK_PATH=${LOCK_PATH}"
 echo "MODE=${MODE}"
 echo "REWARD_SCALE=${REWARD_SCALE}"
 echo "DIFF_GAMMA=${DIFF_GAMMA}"
 echo "MAX_FRAMES=${MAX_FRAMES}"
 echo "REQUEST_TIMEOUT=${REQUEST_TIMEOUT}"
+echo "REQUEST_BATCH_SIZE=${REQUEST_BATCH_SIZE}"
 echo "TOPREWARD_REQUEST_FORMAT=${TOPREWARD_REQUEST_FORMAT}"
+echo "TASK_SHARD_INDEX=${TASK_SHARD_INDEX}"
+echo "NUM_TASK_SHARDS=${NUM_TASK_SHARDS}"
 which python
 python --version
 nvidia-smi
 
 cd "$PROJECT_DIR"
+LABEL_ARGS=()
+if [ -n "$OUTPUT_PATH" ]; then
+  LABEL_ARGS+=(--output_path "$OUTPUT_PATH")
+fi
+if [ "$MODE" != "both" ]; then
+  LABEL_ARGS+=(--mode "$MODE" --reward_scale "$REWARD_SCALE")
+fi
+LABEL_ARGS+=("${EXTRA_ARGS[@]}")
+
 srun python -u scripts/topreward_label_reward_gamma.py \
   --topreward_dir "$TOPREWARD_DIR" \
   --h5_video_path "${TOPREWARD_DIR}/datasets/metaworld_generation.h5" \
   --h5_embedding_path "${TOPREWARD_DIR}/datasets/metaworld_embeddings_train.h5" \
-  --output_path "$OUTPUT_PATH" \
   --api_url "$TOPREWARD_API_URL" \
   --model_name "$MODEL_NAME" \
   --num_prefix_samples "$MAX_FRAMES" \
   --request_timeout "$REQUEST_TIMEOUT" \
   --request_retries "$REQUEST_RETRIES" \
+  --request_batch_size "$REQUEST_BATCH_SIZE" \
   --request_format "$TOPREWARD_REQUEST_FORMAT" \
-  --mode "$MODE" \
-  --reward_scale "$REWARD_SCALE" \
   --lock_path "$LOCK_PATH" \
-  "${EXTRA_ARGS[@]}"
+  --task_shard_index "$TASK_SHARD_INDEX" \
+  --num_task_shards "$NUM_TASK_SHARDS" \
+  "${LABEL_ARGS[@]}"

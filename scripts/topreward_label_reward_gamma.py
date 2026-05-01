@@ -176,6 +176,69 @@ def query_raw_score_reward(
     raise RuntimeError(f"TOPReward raw-score request failed: {last_error}")
 
 
+def query_raw_score_rewards_batch(
+    api_url,
+    model_name,
+    batch_frames_b64,
+    instruction,
+    lock_path,
+    request_timeout,
+    request_retries,
+):
+    payload = {
+        "requests": [
+            {
+                "model": model_name,
+                "frames_b64": frames_b64,
+                "instruction": instruction,
+            }
+            for frames_b64 in batch_frames_b64
+        ]
+    }
+
+    last_error = None
+    for attempt in range(1, request_retries + 1):
+        try:
+            use_single_fallback = False
+            with optional_file_lock(lock_path):
+                resp = requests.post(
+                    f"{api_url.rstrip('/')}/score_batch",
+                    json=payload,
+                    timeout=request_timeout,
+                )
+                if resp.status_code == 404:
+                    use_single_fallback = True
+                else:
+                    resp.raise_for_status()
+                    result = resp.json()
+            if use_single_fallback:
+                # Backward-compatible fallback for older raw servers.
+                return [
+                    query_raw_score_reward(
+                        api_url,
+                        model_name,
+                        frames_b64,
+                        instruction,
+                        lock_path,
+                        request_timeout,
+                        request_retries,
+                    )
+                    for frames_b64 in batch_frames_b64
+                ]
+            return [float(item["logprob"]) for item in result["scores"]]
+        except requests.exceptions.RequestException as exc:
+            last_error = exc
+            print(
+                f"[TOPReward label raw batch] request failed on attempt "
+                f"{attempt}/{request_retries}: {exc}",
+                flush=True,
+            )
+            if attempt == request_retries:
+                raise
+
+    raise RuntimeError(f"TOPReward raw batch request failed: {last_error}")
+
+
 def query_vlm_reward(
     api_url,
     model_name,
@@ -290,11 +353,12 @@ def compute_prefix_rewards(
     request_timeout,
     request_retries,
     request_format,
+    request_batch_size,
 ):
     num_frames = len(video_frames)
     max_frames_per_query = min(max_frames_per_query, num_frames)
 
-    prefix_rewards = []
+    prefix_batches = []
     for length in range(1, num_frames + 1):
         prefix = video_frames[:length]
         if len(prefix) > max_frames_per_query:
@@ -305,7 +369,28 @@ def compute_prefix_rewards(
                 dtype=int,
             )
             prefix = [prefix[i] for i in indices]
-        b64 = frames_to_base64(prefix)
+        prefix_batches.append(frames_to_base64(prefix))
+
+    if request_format.lower() == "raw":
+        prefix_rewards = []
+        request_batch_size = max(int(request_batch_size), 1)
+        for start in range(0, len(prefix_batches), request_batch_size):
+            chunk = prefix_batches[start : start + request_batch_size]
+            prefix_rewards.extend(
+                query_raw_score_rewards_batch(
+                    api_url,
+                    model_name,
+                    chunk,
+                    instruction,
+                    lock_path,
+                    request_timeout,
+                    request_retries,
+                )
+            )
+        return np.asarray(prefix_rewards, dtype=np.float32)
+
+    prefix_rewards = []
+    for b64 in prefix_batches:
         prefix_rewards.append(
             query_vlm_reward(
                 api_url,
@@ -415,19 +500,80 @@ def get_dino_embeddings(dinov2_vits14, dino_load_image, imgs_list, device):
     return np.concatenate(embedding_list)
 
 
+def get_output_specs(args):
+    if args.baseline_output_path or args.diff_output_path:
+        specs = []
+        if args.baseline_output_path:
+            specs.append(("baseline", args.baseline_output_path, args.baseline_reward_scale))
+        if args.diff_output_path:
+            specs.append(("diff", args.diff_output_path, args.diff_reward_scale))
+        return specs
+
+    if not args.output_path:
+        raise ValueError(
+            "Either --output_path or --baseline_output_path/--diff_output_path must be set."
+        )
+    if not args.mode:
+        raise ValueError("--mode is required when writing a single --output_path.")
+    return [(args.mode, args.output_path, args.reward_scale)]
+
+
+def create_labeled_dataset(handle, total_timesteps):
+    handle.create_dataset("state", (total_timesteps, 39), dtype="float32")
+    handle.create_dataset("action", (total_timesteps, 4), dtype="float32")
+    handle.create_dataset("rewards", (total_timesteps,), dtype="float32")
+    handle.create_dataset("done", (total_timesteps,), dtype="float32")
+    handle.create_dataset(
+        "policy_lang_embedding", (total_timesteps, 384), dtype="float32"
+    )
+    handle.create_dataset("img_embedding", (total_timesteps, 768), dtype="float32")
+    handle.create_dataset("env_id", (total_timesteps,), dtype="S20")
+
+
+def write_labeled_slice(
+    dataset,
+    sl,
+    save_states,
+    save_actions,
+    save_dones,
+    save_video_slices,
+    save_reward_outputs,
+    lang_embedding,
+    key,
+):
+    num_steps = len(save_actions)
+    dataset["state"][sl] = save_states
+    dataset["action"][sl] = save_actions
+    dataset["done"][sl] = save_dones
+    dataset["rewards"][sl] = save_reward_outputs
+    dataset["policy_lang_embedding"][sl] = np.tile(lang_embedding, (num_steps, 1))
+    dataset["img_embedding"][sl] = save_video_slices[:-1]
+    dataset["env_id"][sl] = key
+
+
 def label_trajectories(args):
     environment_to_instruction, dino_load_image = load_topreward_helpers(args.topreward_dir)
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     dinov2_vits14 = load_dinov2_vitb14_offline(device)
+    output_specs = get_output_specs(args)
 
     with h5py.File(args.h5_video_path, "r") as traj_h5, h5py.File(
         args.h5_embedding_path, "r"
     ) as embedding_h5:
         training_keys = list(embedding_h5.keys())
+        if args.num_task_shards < 1:
+            raise ValueError("--num_task_shards must be >= 1")
+        if not 0 <= args.task_shard_index < args.num_task_shards:
+            raise ValueError("--task_shard_index must satisfy 0 <= index < num_task_shards")
+        selected_keys = training_keys[args.task_shard_index :: args.num_task_shards]
+        if not selected_keys:
+            raise ValueError(
+                f"No tasks selected for shard {args.task_shard_index}/{args.num_task_shards}"
+            )
 
         total_timesteps = 0
-        for key in training_keys:
+        for key in selected_keys:
             task_num_annotations = len(
                 np.array(embedding_h5[key]["minilm_lang_embedding"])
             )
@@ -436,22 +582,22 @@ def label_trajectories(args):
                     len(traj_h5[key][traj_id]["reward"]) * task_num_annotations
                 )
 
-        os.makedirs(os.path.dirname(args.output_path), exist_ok=True)
-        with h5py.File(args.output_path, "w") as labeled_dataset:
-            labeled_dataset.create_dataset("state", (total_timesteps, 39), dtype="float32")
-            labeled_dataset.create_dataset("action", (total_timesteps, 4), dtype="float32")
-            labeled_dataset.create_dataset("rewards", (total_timesteps,), dtype="float32")
-            labeled_dataset.create_dataset("done", (total_timesteps,), dtype="float32")
-            labeled_dataset.create_dataset(
-                "policy_lang_embedding", (total_timesteps, 384), dtype="float32"
-            )
-            labeled_dataset.create_dataset(
-                "img_embedding", (total_timesteps, 768), dtype="float32"
-            )
-            labeled_dataset.create_dataset("env_id", (total_timesteps,), dtype="S20")
+        handles = {}
+        try:
+            for mode, path, _scale in output_specs:
+                os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
+                handle = h5py.File(path, "w")
+                create_labeled_dataset(handle, total_timesteps)
+                handles[mode] = handle
 
+            print(
+                f"Selected {len(selected_keys)}/{len(training_keys)} tasks "
+                f"for shard {args.task_shard_index}/{args.num_task_shards}: "
+                f"{', '.join(selected_keys)}",
+                flush=True,
+            )
             current_timestep = 0
-            for key in tqdm(training_keys):
+            for key in tqdm(selected_keys):
                 instruction = environment_to_instruction.get(key, key)
 
                 for traj_id in traj_h5[key].keys():
@@ -479,38 +625,53 @@ def label_trajectories(args):
                         args.request_timeout,
                         args.request_retries,
                         args.request_format,
+                        args.request_batch_size,
                     )
 
-                    if args.mode == "diff":
-                        if args.use_reverse_progress_diff:
-                            raw_diff = per_step_rewards[1:] - args.diff_gamma * per_step_rewards[:-1]
+                    reward_outputs_by_mode = {}
+                    for mode, _path, reward_scale in output_specs:
+                        if mode == "diff":
+                            if args.use_reverse_progress_diff:
+                                raw_outputs = (
+                                    per_step_rewards[1:]
+                                    - args.diff_gamma * per_step_rewards[:-1]
+                                )
+                            else:
+                                raw_outputs = (
+                                    args.diff_gamma * per_step_rewards[1:]
+                                    - per_step_rewards[:-1]
+                                )
                         else:
-                            raw_diff = args.diff_gamma * per_step_rewards[1:] - per_step_rewards[:-1]
-                        save_reward_outputs = args.reward_scale * raw_diff
-                    else:
-                        save_reward_outputs = args.reward_scale * per_step_rewards[1:]
-
-                    if len(save_reward_outputs) != num_steps:
-                        raise RuntimeError(
-                            f"Reward length mismatch for {key}/{traj_id}: "
-                            f"{len(save_reward_outputs)} vs {num_steps}"
-                        )
+                            raw_outputs = per_step_rewards[1:]
+                        save_reward_outputs = reward_scale * raw_outputs
+                        if len(save_reward_outputs) != num_steps:
+                            raise RuntimeError(
+                                f"Reward length mismatch for {key}/{traj_id}/{mode}: "
+                                f"{len(save_reward_outputs)} vs {num_steps}"
+                            )
+                        reward_outputs_by_mode[mode] = save_reward_outputs
 
                     lang_embeddings = np.array(embedding_h5[key]["minilm_lang_embedding"])
                     for lang_embedding in lang_embeddings:
                         sl = slice(current_timestep, current_timestep + num_steps)
-                        labeled_dataset["state"][sl] = save_states
-                        labeled_dataset["action"][sl] = save_actions
-                        labeled_dataset["done"][sl] = save_dones
-                        labeled_dataset["rewards"][sl] = save_reward_outputs
-                        labeled_dataset["policy_lang_embedding"][sl] = np.tile(
-                            lang_embedding, (num_steps, 1)
-                        )
-                        labeled_dataset["img_embedding"][sl] = save_video_slices[:-1]
-                        labeled_dataset["env_id"][sl] = key
+                        for mode, dataset in handles.items():
+                            write_labeled_slice(
+                                dataset,
+                                sl,
+                                save_states,
+                                save_actions,
+                                save_dones,
+                                save_video_slices,
+                                reward_outputs_by_mode[mode],
+                                lang_embedding,
+                                key,
+                            )
                         current_timestep += num_steps
 
             print(f"Successfully processed and saved {current_timestep} timesteps.")
+        finally:
+            for handle in handles.values():
+                handle.close()
 
 
 def main():
@@ -518,23 +679,38 @@ def main():
     parser.add_argument("--topreward_dir", default=os.environ.get("TOPREWARD_DIR", "/scratch1/haobaizh/rewind_topreward"))
     parser.add_argument("--h5_video_path", required=True)
     parser.add_argument("--h5_embedding_path", required=True)
-    parser.add_argument("--output_path", required=True)
+    parser.add_argument("--output_path")
+    parser.add_argument(
+        "--baseline_output_path",
+        help="Optional H5 path for baseline raw-score rewards. If set with "
+        "--diff_output_path, both are written from one TOPReward pass.",
+    )
+    parser.add_argument(
+        "--diff_output_path",
+        help="Optional H5 path for diff rewards. If set with "
+        "--baseline_output_path, both are written from one TOPReward pass.",
+    )
     parser.add_argument("--api_url", required=True)
     parser.add_argument("--model_name", default="Qwen/Qwen3-VL-8B-Instruct")
     parser.add_argument("--num_prefix_samples", type=int, default=4)
     parser.add_argument("--request_timeout", type=float, default=600.0)
     parser.add_argument("--request_retries", type=int, default=2)
+    parser.add_argument("--request_batch_size", type=int, default=8)
     parser.add_argument(
         "--request_format",
         choices=TOPREWARD_REQUEST_FORMATS,
         default="chat",
         help="chat uses vLLM /v1/chat/completions; raw uses the custom /score endpoint without a chat template.",
     )
-    parser.add_argument("--mode", choices=["baseline", "diff"], required=True)
+    parser.add_argument("--mode", choices=["baseline", "diff"])
     parser.add_argument("--use_reverse_progress_diff", action="store_true")
     parser.add_argument("--diff_gamma", type=float, default=1.0)
     parser.add_argument("--reward_scale", type=float, default=1.0)
+    parser.add_argument("--baseline_reward_scale", type=float, default=1.0)
+    parser.add_argument("--diff_reward_scale", type=float, default=1.0)
     parser.add_argument("--lock_path", default="")
+    parser.add_argument("--task_shard_index", type=int, default=0)
+    parser.add_argument("--num_task_shards", type=int, default=1)
     args = parser.parse_args()
 
     label_trajectories(args)
