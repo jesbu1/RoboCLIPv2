@@ -6,8 +6,6 @@ import base64
 import csv
 import io
 import json
-import math
-import os
 import shutil
 import time
 from pathlib import Path
@@ -56,6 +54,8 @@ def read_video_rgb(path: Path):
     reader = imageio.get_reader(str(path))
     meta = reader.get_meta_data() or {}
     fps = float(meta.get("fps") or 20.0)
+    if not np.isfinite(fps) or fps <= 0:
+        fps = 20.0
     frames = []
     try:
         for frame in reader:
@@ -231,6 +231,156 @@ def save_plot(path, frames, raw_original, diff_original, raw_aligned, diff_align
     plt.close(fig)
 
 
+def finite_limits(*arrays):
+    values = []
+    for arr in arrays:
+        arr = np.asarray(arr, dtype=np.float64)
+        values.extend(arr[np.isfinite(arr)].tolist())
+    if not values:
+        return -1.0, 1.0
+    lo = min(values)
+    hi = max(values)
+    if lo == hi:
+        pad = max(abs(lo) * 0.05, 1.0)
+    else:
+        pad = (hi - lo) * 0.08
+    return lo - pad, hi + pad
+
+
+def draw_progress_curve(
+    ax,
+    x,
+    y,
+    upto,
+    color,
+    title,
+    ylabel,
+    xlim,
+    ylim,
+    current_frame,
+):
+    ax.plot(x, y, color=color, lw=1.2, alpha=0.25)
+    if upto > 0:
+        ax.plot(x[:upto], y[:upto], color=color, lw=2.0)
+        ax.scatter(x[upto - 1], y[upto - 1], color=color, s=24, zorder=3)
+    ax.axvline(current_frame, color="black", lw=0.8, alpha=0.35)
+    ax.set_xlim(*xlim)
+    ax.set_ylim(*ylim)
+    ax.set_title(title)
+    ax.set_ylabel(ylabel)
+    ax.grid(True, alpha=0.25)
+
+
+def save_score_video(
+    path,
+    frames,
+    fps,
+    raw_original,
+    diff_original,
+    raw_aligned,
+    diff_aligned,
+    title,
+):
+    import imageio.v2 as imageio
+    import matplotlib
+
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+
+    raw_original = np.asarray(raw_original, dtype=np.float64)
+    diff_original = np.asarray(diff_original, dtype=np.float64)
+    raw_aligned = np.asarray(raw_aligned, dtype=np.float64)
+    diff_aligned = np.asarray(diff_aligned, dtype=np.float64)
+
+    x_raw_o = np.arange(1, len(raw_original) + 1)
+    x_diff_o = np.arange(2, len(raw_original) + 1)
+    x_raw_a = np.arange(1, len(raw_aligned) + 1)
+    x_diff_a = np.arange(2, len(raw_aligned) + 1)
+
+    raw_ylim = finite_limits(raw_original, raw_aligned)
+    diff_ylim = finite_limits(diff_original, diff_aligned)
+    xlim = (1, max(len(frames), 2))
+
+    fig, axes = plt.subplots(5, 1, figsize=(12.8, 14.4), dpi=100)
+    writer = imageio.get_writer(
+        str(path),
+        fps=fps,
+        codec="libx264",
+        quality=8,
+        macro_block_size=16,
+    )
+    try:
+        for idx, frame in enumerate(frames):
+            current_frame = idx + 1
+            for ax in axes:
+                ax.clear()
+
+            axes[0].imshow(frame)
+            axes[0].set_title(f"{title} | frame {current_frame}/{len(frames)}")
+            axes[0].axis("off")
+
+            draw_progress_curve(
+                axes[1],
+                x_raw_o,
+                raw_original,
+                current_frame,
+                "#1f77b4",
+                "original prompt raw score P[t]",
+                "logprob",
+                xlim,
+                raw_ylim,
+                current_frame,
+            )
+            draw_progress_curve(
+                axes[2],
+                x_diff_o,
+                diff_original,
+                max(current_frame - 1, 0),
+                "#ff7f0e",
+                "original prompt diff reward scale*(gamma*P[t]-P[t-1])",
+                "scaled diff",
+                xlim,
+                diff_ylim,
+                current_frame,
+            )
+            axes[2].axhline(0, color="black", lw=0.8, alpha=0.45)
+
+            draw_progress_curve(
+                axes[3],
+                x_raw_a,
+                raw_aligned,
+                current_frame,
+                "#2ca02c",
+                "fully aligned prompt raw score P[t]",
+                "logprob",
+                xlim,
+                raw_ylim,
+                current_frame,
+            )
+            draw_progress_curve(
+                axes[4],
+                x_diff_a,
+                diff_aligned,
+                max(current_frame - 1, 0),
+                "#d62728",
+                "fully aligned prompt diff reward scale*(gamma*P[t]-P[t-1])",
+                "scaled diff",
+                xlim,
+                diff_ylim,
+                current_frame,
+            )
+            axes[4].axhline(0, color="black", lw=0.8, alpha=0.45)
+            axes[4].set_xlabel("prefix frame")
+
+            fig.tight_layout()
+            fig.canvas.draw()
+            canvas = np.asarray(fig.canvas.buffer_rgba())
+            writer.append_data(canvas[:, :, :3].copy())
+    finally:
+        writer.close()
+        plt.close(fig)
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--video-path", required=True)
@@ -248,6 +398,17 @@ def main():
     parser.add_argument("--request-batch-size", type=int, default=8)
     parser.add_argument("--diff-gamma", type=float, default=1.0)
     parser.add_argument("--diff-scale", type=float, default=64.5)
+    parser.add_argument(
+        "--score-video-fps",
+        type=float,
+        default=0.0,
+        help="FPS for the generated 5-panel score video. Default keeps source FPS.",
+    )
+    parser.add_argument(
+        "--skip-score-video",
+        action="store_true",
+        help="Only write json/csv/png and skip the generated 5-panel mp4.",
+    )
     args = parser.parse_args()
 
     video_path = Path(args.video_path)
@@ -301,11 +462,13 @@ def main():
     json_path = output_dir / "topreward_scores_compare.json"
     csv_path = output_dir / "topreward_scores_compare.csv"
     png_path = output_dir / "topreward_scores_compare_5panel.png"
+    mp4_path = output_dir / "topreward_scores_compare_5panel.mp4"
 
     payload = {
         "created_unix": time.time(),
         "input_video": str(video_path),
         "copied_video": str(copied_video),
+        "score_video": str(mp4_path),
         "fps": fps,
         "num_frames": len(frames),
         "model_name": args.model_name,
@@ -342,13 +505,27 @@ def main():
         diff_aligned,
         f"{video_path.parent.parent.name}/{video_path.parent.name}/{video_path.name}",
     )
+    if not args.skip_score_video:
+        video_fps = args.score_video_fps if args.score_video_fps > 0 else fps
+        save_score_video(
+            mp4_path,
+            frames,
+            video_fps,
+            raw_original,
+            diff_original,
+            raw_aligned,
+            diff_aligned,
+            f"{video_path.parent.parent.name}/{video_path.parent.name}/{video_path.name}",
+        )
 
     print("===== outputs =====", flush=True)
     print(f"OUT_DIR={output_dir}", flush=True)
     print(f"JSON={json_path}", flush=True)
     print(f"CSV={csv_path}", flush=True)
     print(f"PNG={png_path}", flush=True)
-    print(f"VIDEO={copied_video}", flush=True)
+    if not args.skip_score_video:
+        print(f"MP4={mp4_path}", flush=True)
+    print(f"INPUT_VIDEO_COPY={copied_video}", flush=True)
 
 
 if __name__ == "__main__":
