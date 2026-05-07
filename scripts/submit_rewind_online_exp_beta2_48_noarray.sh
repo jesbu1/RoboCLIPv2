@@ -9,6 +9,7 @@ SCRATCH_BASE="${SCRATCH_BASE:-/scratch1/haobaizh/rewind_nochunk_online_logs}"
 OFFLINE_BASE="${OFFLINE_BASE:-/scratch1/haobaizh/rewind_nochunk_offline_logs/rewind_exp_beta2}"
 DATA_DIR="${DATA_DIR:-/scratch1/haobaizh/rewind_valuemodel/datasets}"
 REWARD_CKPT="${REWARD_CKPT:-/scratch1/haobaizh/rewind_valuemodel/checkpoints/rewind_metaworld_exp_beta2_epoch_19.pth}"
+PROJECT_CACHE="${PROJECT_CACHE:-/home1/haobaizh/.cache}"
 BETA="${BETA:-2.0}"
 HORIZON="${HORIZON:-128}"
 BASE_REWARD_VALUE="${BASE_REWARD_VALUE:--1.0}"
@@ -83,6 +84,7 @@ EXP_DIFF_REWARD_SCALE="$(awk -v h="$HORIZON" -v beta="$BETA" 'BEGIN {
   echo "offline_base=${OFFLINE_BASE}"
   echo "data_dir=${DATA_DIR}"
   echo "reward_ckpt=${REWARD_CKPT}"
+  echo "project_cache=${PROJECT_CACHE}"
   echo "run_tag=${RUN_TAG}"
   echo "beta=${BETA}"
   echo "horizon=${HORIZON}"
@@ -118,7 +120,7 @@ for variant in "${VARIANTS[@]}"; do
           --job-name="$job_name" \
           --output="${SLURM_LOG_DIR}/${job_name}_%j.out" \
           --error="${SLURM_LOG_DIR}/${job_name}_%j.err" \
-          --export=ALL,PROJECT_DIR="$PROJECT_DIR",SCRATCH_BASE="$SCRATCH_BASE",OFFLINE_BASE="$OFFLINE_BASE",DATA_DIR="$DATA_DIR",REWARD_CKPT="$REWARD_CKPT",BETA="$BETA",HORIZON="$HORIZON",EXP_TAG="$EXP_TAG",BASE_REWARD_VALUE="$BASE_REWARD_VALUE",ONLINE_STEPS="$ONLINE_STEPS",RUN_TAG="$RUN_TAG",ENV_ID="$env_id",SEED="$seed",VARIANT="$variant" \
+          --export=ALL,PROJECT_DIR="$PROJECT_DIR",SCRATCH_BASE="$SCRATCH_BASE",OFFLINE_BASE="$OFFLINE_BASE",DATA_DIR="$DATA_DIR",REWARD_CKPT="$REWARD_CKPT",PROJECT_CACHE="$PROJECT_CACHE",BETA="$BETA",HORIZON="$HORIZON",EXP_TAG="$EXP_TAG",BASE_REWARD_VALUE="$BASE_REWARD_VALUE",ONLINE_STEPS="$ONLINE_STEPS",RUN_TAG="$RUN_TAG",ENV_ID="$env_id",SEED="$seed",VARIANT="$variant" \
           scripts/rewind_online_exp_beta2_single_task.sbatch)
       fi
       job_ids+=("$job_id")
