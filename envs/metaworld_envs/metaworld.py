@@ -253,6 +253,8 @@ def create_wrapped_env(
     use_reverse_progress_diff=False,
     diff_gamma=1.0,
     diff_reward_scale=1.0,
+    use_exponential_progress=False,
+    exponential_diff_reward_scale=None,
     use_base_reward=False,
     base_reward_value=-1.0,
 ):
@@ -324,6 +326,8 @@ def create_wrapped_env(
                 use_reverse_progress_diff=use_reverse_progress_diff,
                 diff_gamma=diff_gamma,
                 diff_reward_scale=diff_reward_scale,
+                use_exponential_progress=use_exponential_progress,
+                exponential_diff_reward_scale=exponential_diff_reward_scale,
                 use_base_reward=use_base_reward,
                 base_reward_value=base_reward_value,
             )

@@ -171,6 +171,8 @@ class LearnedRewardWrapper(gym.Wrapper):
         use_reverse_progress_diff: bool = False,
         diff_gamma: float = 1.0,
         diff_reward_scale: float = 1.0,
+        use_exponential_progress: bool = False,
+        exponential_diff_reward_scale: float = None,
         use_base_reward: bool = False,
         base_reward_value: float = -1.0,
     ):
@@ -185,6 +187,17 @@ class LearnedRewardWrapper(gym.Wrapper):
         self.use_reverse_progress_diff = use_reverse_progress_diff
         self.diff_gamma = diff_gamma
         self.diff_reward_scale = diff_reward_scale
+        self.use_exponential_progress = use_exponential_progress
+        self.exponential_diff_reward_scale = exponential_diff_reward_scale
+        if (
+            self.use_progress_diff
+            and self.use_exponential_progress
+            and self.exponential_diff_reward_scale is not None
+            and self.exponential_diff_reward_scale > 0
+        ):
+            self.active_diff_reward_scale = self.exponential_diff_reward_scale
+        else:
+            self.active_diff_reward_scale = self.diff_reward_scale
         self.prev_progress = None
         self.use_base_reward = use_base_reward
         self.base_reward_value = base_reward_value
@@ -398,11 +411,15 @@ class LearnedRewardWrapper(gym.Wrapper):
                         raw_diff = current_progress - self.diff_gamma * self.prev_progress
                     else:
                         raw_diff = self.diff_gamma * current_progress - self.prev_progress
-                    reward = self.diff_reward_scale * raw_diff
+                    reward = self.active_diff_reward_scale * raw_diff
                 else:
                     reward = 0.0  # First step after reset, no diff available
                 self.prev_progress = current_progress
-                wandb.log({"train/learned_reward_per_step": reward, "train/progress": current_progress})
+                wandb.log({
+                    "train/learned_reward_per_step": reward,
+                    "train/progress": current_progress,
+                    "train/diff_reward_scale": self.active_diff_reward_scale,
+                })
             else:
                 # Original mode: reward = P(s)
                 reward = current_progress

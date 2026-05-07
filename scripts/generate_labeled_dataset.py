@@ -12,7 +12,11 @@ Outputs a flat H5 with all keys needed by rewind_no-action-chunk's replay buffer
 Usage (on cluster):
   cd /project2/biyik_1165/haobaizh/rewind_no-action-chunk
   python scripts/generate_labeled_dataset.py
-  python scripts/generate_labeled_dataset.py --use_progress_diff --output_path datasets/metaworld_labeled_diff.h5
+  python scripts/generate_labeled_dataset.py --use_progress_diff \
+    --output_path /scratch1/haobaizh/rewind_valuemodel/datasets/metaworld_labeled_diff.h5
+  python scripts/generate_labeled_dataset.py --use_exponential_progress --use_progress_diff \
+    --reward_model_path /scratch1/haobaizh/rewind_valuemodel/checkpoints/rewind_metaworld_exp_beta2_epoch_19.pth \
+    --output_path /scratch1/haobaizh/rewind_valuemodel/datasets/metaworld_labeled_exp_beta2_diff.h5
 """
 
 import os
@@ -73,6 +77,7 @@ class ReWiNDTransformer(nn.Module):
 
 DINO_BATCH_SIZE = 64
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+DEFAULT_SCRATCH_ROOT = os.environ.get("REWIND_SCRATCH_DIR", "/scratch1/haobaizh/rewind_valuemodel")
 
 # Lazy-load DINO model (only when needed)
 _dino_model = None
@@ -80,6 +85,11 @@ _dino_model = None
 def get_dino_model():
     global _dino_model
     if _dino_model is None:
+        torch_home = os.environ.setdefault(
+            "TORCH_HOME",
+            os.path.join(DEFAULT_SCRATCH_ROOT, ".cache", "torch"),
+        )
+        os.makedirs(torch_home, exist_ok=True)
         _dino_model = torch.hub.load("facebookresearch/dinov2", "dinov2_vitb14", force_reload=False).to(device)
         _dino_model.eval()
     return _dino_model
@@ -122,6 +132,23 @@ def get_dino_embeddings(imgs_list):
 
 # ─── Utility ───
 
+def compute_exponential_diff_reward_scale(horizon, beta):
+    """Scale matching the cumulative normalized exponential progress labels."""
+    if horizon <= 0:
+        raise ValueError(f"exponential_horizon must be positive, got {horizon}")
+    if abs(beta) < 1e-12:
+        return (horizon + 1) / 2.0
+    t = np.arange(1, horizon + 1, dtype=np.float64)
+    labels = (np.exp(beta * t / horizon) - 1.0) / (np.exp(beta) - 1.0)
+    return float(labels.sum())
+
+
+def resolve_scratch_path(path):
+    if not path or os.path.isabs(path):
+        return path
+    return os.path.join(DEFAULT_SCRATCH_ROOT, path)
+
+
 def padding_video(video_frames, max_length):
     if isinstance(video_frames, np.ndarray):
         video_frames = torch.tensor(video_frames)
@@ -162,6 +189,7 @@ def label_trajectories(args, rewind_model, traj_h5, embedding_h5):
     print(f"Total timesteps to label: {total_timesteps}")
 
     # Create output H5 with ALL keys needed by rewind_no-action-chunk
+    os.makedirs(os.path.dirname(args.output_path) or ".", exist_ok=True)
     out = h5py.File(args.output_path, "w")
     out.create_dataset("state", (total_timesteps, 39), dtype="float32")
     out.create_dataset("action", (total_timesteps, 4), dtype="float32")
@@ -170,6 +198,13 @@ def label_trajectories(args, rewind_model, traj_h5, embedding_h5):
     out.create_dataset("policy_lang_embedding", (total_timesteps, 384), dtype="float32")
     out.create_dataset("img_embedding", (total_timesteps, 768), dtype="float32")
     out.create_dataset("env_id", (total_timesteps,), dtype="S20")
+    out.attrs["use_exponential_progress"] = bool(args.use_exponential_progress)
+    out.attrs["exponential_beta"] = float(args.exponential_beta)
+    out.attrs["exponential_horizon"] = int(args.exponential_horizon)
+    out.attrs["exponential_diff_reward_scale"] = float(args.exponential_diff_reward_scale)
+    out.attrs["use_progress_diff"] = bool(args.use_progress_diff)
+    out.attrs["use_reverse_progress_diff"] = bool(args.use_reverse_progress_diff)
+    out.attrs["diff_gamma"] = float(args.diff_gamma)
 
     current = 0
 
@@ -245,28 +280,55 @@ def label_trajectories(args, rewind_model, traj_h5, embedding_h5):
 
 def main():
     # Default paths assume cluster layout:
-    # /project2/biyik_1165/haobaizh/
-    #   rewind_valuemodel/datasets/   (source data)
-    #   rewind_valuemodel/checkpoints/ (reward model)
-    #   rewind_no-action-chunk/datasets/ (output)
-    base = "/project2/biyik_1165/haobaizh/rewind_valuemodel"
+    #   source data can remain on project2 or be overridden by REWIND_SOURCE_DIR
+    #   newly generated checkpoints/H5/caches default to /scratch1 via REWIND_SCRATCH_DIR
+    source_base = os.environ.get(
+        "REWIND_SOURCE_DIR",
+        "/project2/biyik_1165/haobaizh/rewind_valuemodel",
+    )
+    scratch_base = DEFAULT_SCRATCH_ROOT
 
     parser = argparse.ArgumentParser(description="Generate labeled H5 for no-action-chunk policy training.")
-    parser.add_argument("--h5_video_path", default=f"{base}/datasets/metaworld_generation.h5")
-    parser.add_argument("--h5_embedding_path", default=f"{base}/datasets/metaworld_embeddings_train.h5")
-    parser.add_argument("--reward_model_path", default=f"{base}/checkpoints/rewind_metaworld_epoch_19.pth")
-    parser.add_argument("--output_path", default="datasets/metaworld_labeled.h5")
+    parser.add_argument("--h5_video_path", default=f"{source_base}/datasets/metaworld_generation.h5")
+    parser.add_argument("--h5_embedding_path", default=f"{source_base}/datasets/metaworld_embeddings_train.h5")
+    parser.add_argument("--reward_model_path", default=f"{scratch_base}/checkpoints/rewind_metaworld_epoch_19.pth")
+    parser.add_argument("--output_path", default=f"{scratch_base}/datasets/metaworld_labeled.h5")
     parser.add_argument("--use_progress_diff", action="store_true",
                         help="Use gamma*P(s')-P(s) instead of P(s) as reward.")
     parser.add_argument("--use_reverse_progress_diff", action="store_true",
                         help="With --use_progress_diff, use P(s')-gamma*P(s) instead.")
     parser.add_argument("--diff_gamma", type=float, default=1.0,
                         help="Discount factor for PBRS diff: r = gamma*P(s') - P(s). Default 1.0.")
+    parser.add_argument("--use_exponential_progress", action="store_true",
+                        help="Mark this H5 as generated from an exponential-progress ReWiND checkpoint.")
+    parser.add_argument("--exponential_beta", type=float, default=2.0,
+                        help="Beta used when training normalized exponential progress labels.")
+    parser.add_argument("--exponential_horizon", type=int, default=128,
+                        help="Reference horizon for computing the exponential diff scale.")
+    parser.add_argument("--exponential_diff_reward_scale", type=float, default=0.0,
+                        help="Optional explicit scale for exponential diff rewards. If <=0, it is computed.")
     args = parser.parse_args()
+    args.reward_model_path = resolve_scratch_path(args.reward_model_path)
+    args.output_path = resolve_scratch_path(args.output_path)
+    if args.exponential_diff_reward_scale <= 0:
+        args.exponential_diff_reward_scale = compute_exponential_diff_reward_scale(
+            args.exponential_horizon,
+            args.exponential_beta,
+        )
 
+    print(f"Reward model path: {args.reward_model_path}")
+    print(f"Output path: {args.output_path}")
     config, rewind_model = load_rewind_model(args.reward_model_path)
     args.max_length = config.max_length
     print(f"Loaded ReWiND model (max_length={args.max_length})")
+    if args.use_exponential_progress:
+        ckpt_uses_exp = bool(getattr(config, "use_exponential_progress", False))
+        ckpt_beta = getattr(config, "exponential_beta", "unknown")
+        print(
+            "Using exponential progress mode for labeling. "
+            f"checkpoint_flag={ckpt_uses_exp}, checkpoint_beta={ckpt_beta}, "
+            f"scale={args.exponential_diff_reward_scale}"
+        )
 
     traj_h5 = h5py.File(args.h5_video_path, "r")
     embedding_h5 = h5py.File(args.h5_embedding_path, "r")

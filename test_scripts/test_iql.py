@@ -76,6 +76,60 @@ import torch as th
 
 
 # th.set_float32_matmul_precision("high")
+DEFAULT_NOCHUNK_SCRATCH_ROOT = os.environ.get(
+    "REWIND_NOCHUNK_SCRATCH_DIR",
+    "/scratch1/haobaizh/rewind_nochunk",
+)
+DEFAULT_REWIND_VALUE_SCRATCH_ROOT = os.environ.get(
+    "REWIND_SCRATCH_DIR",
+    "/scratch1/haobaizh/rewind_valuemodel",
+)
+
+
+def setup_default_scratch_runtime_dirs():
+    """Keep generated training/runtime files off the project filesystem by default."""
+    scratch_defaults = {
+        "WANDB_DIR": os.path.join(DEFAULT_NOCHUNK_SCRATCH_ROOT, "wandb"),
+        "WANDB_CACHE_DIR": os.path.join(DEFAULT_NOCHUNK_SCRATCH_ROOT, ".cache", "wandb"),
+        "WANDB_CONFIG_DIR": os.path.join(DEFAULT_NOCHUNK_SCRATCH_ROOT, ".config", "wandb"),
+    }
+    home_defaults = {
+        "WANDB_DIR": os.path.join(os.path.expanduser("~"), "wandb"),
+        "WANDB_CACHE_DIR": os.path.join(os.path.expanduser("~"), ".cache", "wandb"),
+        "WANDB_CONFIG_DIR": os.path.join(os.path.expanduser("~"), ".config", "wandb"),
+    }
+    for key, scratch_path in scratch_defaults.items():
+        current = os.environ.get(key)
+        home_default = home_defaults[key]
+        if current and os.path.abspath(current) != os.path.abspath(home_default):
+            continue
+        os.makedirs(scratch_path, exist_ok=True)
+        os.environ[key] = scratch_path
+
+
+def resolve_nochunk_scratch_path(path):
+    if not path or os.path.isabs(path):
+        return path
+    return os.path.join(DEFAULT_NOCHUNK_SCRATCH_ROOT, path)
+
+
+def resolve_rewind_value_scratch_path(path):
+    if not path or os.path.isabs(path):
+        return path
+    return os.path.join(DEFAULT_REWIND_VALUE_SCRATCH_ROOT, path)
+
+
+def compute_exponential_diff_reward_scale(horizon: int, beta: float) -> float:
+    """Scale that matches cumulative normalized exponential progress labels."""
+    if horizon <= 0:
+        raise ValueError(f"exponential_horizon must be positive, got {horizon}")
+    if abs(beta) < 1e-12:
+        return (horizon + 1) / 2.0
+    steps = np.arange(1, horizon + 1, dtype=np.float64)
+    labels = (np.exp(beta * steps / horizon) - 1.0) / (np.exp(beta) - 1.0)
+    return float(labels.sum())
+
+
 def create_exp_name(cfg: DictConfig):
     exp_name = cfg.environment.cfg_name + "_"
 
@@ -127,6 +181,9 @@ def create_exp_name(cfg: DictConfig):
         exp_name += "_dense"
     else:
         exp_name += "_sparse"
+
+    if cfg.reward_model.get("use_exponential_progress", False):
+        exp_name += f"_exp_beta_{cfg.reward_model.get('exponential_beta', 2.0)}"
 
     if cfg.general_training.normalize_reward:
         exp_name += "_normalize"
@@ -257,7 +314,7 @@ def parse_reward_model(reward_cfg: DictConfig) -> BaseRewardModel:
 # @profile
 @hydra.main(config_path="../configs", config_name="base_config")
 def main(cfg: DictConfig):
-    print(OmegaConf.to_yaml(cfg))
+    setup_default_scratch_runtime_dirs()
 
     # Extract configurations
     training_config = cfg.general_training
@@ -265,6 +322,12 @@ def main(cfg: DictConfig):
     model_config = cfg.model
     logging_config = cfg.logging
     offline_config = cfg.offline_training
+    logging_config.log_dir = resolve_nochunk_scratch_path(logging_config.log_dir)
+    offline_config.offline_h5_path = resolve_rewind_value_scratch_path(
+        offline_config.offline_h5_path
+    )
+    offline_config.ckpt_path = resolve_nochunk_scratch_path(offline_config.ckpt_path)
+    print(OmegaConf.to_yaml(cfg))
 
     experiment_name = os.environ.get("WANDB_RUN_NAME", create_exp_name(cfg))
 
@@ -522,6 +585,23 @@ def create_envs(cfg: DictConfig, reward_model: BaseRewardModel, image_encoder):
     use_reverse_progress_diff = cfg.reward_model.get("use_reverse_progress_diff", False)
     diff_gamma = cfg.reward_model.get("diff_gamma", 1.0)
     diff_reward_scale = cfg.reward_model.get("diff_reward_scale", 1.0)
+    use_exponential_progress = cfg.reward_model.get("use_exponential_progress", False)
+    exponential_beta = cfg.reward_model.get("exponential_beta", 2.0)
+    exponential_horizon = cfg.reward_model.get("exponential_horizon", 128)
+    exponential_diff_reward_scale = cfg.reward_model.get(
+        "exponential_diff_reward_scale", None
+    )
+    if use_exponential_progress and use_progress_diff:
+        if exponential_diff_reward_scale is None or exponential_diff_reward_scale <= 0:
+            exponential_diff_reward_scale = compute_exponential_diff_reward_scale(
+                int(exponential_horizon),
+                float(exponential_beta),
+            )
+        print(
+            "Using exponential progress diff scale: "
+            f"beta={exponential_beta}, horizon={exponential_horizon}, "
+            f"scale={exponential_diff_reward_scale}"
+        )
     use_base_reward = cfg.reward_model.get("use_base_reward", False)
     base_reward_value = cfg.reward_model.get("base_reward_value", -1.0)
 
@@ -548,6 +628,8 @@ def create_envs(cfg: DictConfig, reward_model: BaseRewardModel, image_encoder):
                     use_reverse_progress_diff=use_reverse_progress_diff,
                     diff_gamma=diff_gamma,
                     diff_reward_scale=diff_reward_scale,
+                    use_exponential_progress=use_exponential_progress,
+                    exponential_diff_reward_scale=exponential_diff_reward_scale,
                     use_base_reward=use_base_reward,
                     base_reward_value=base_reward_value,
                 )
@@ -577,6 +659,8 @@ def create_envs(cfg: DictConfig, reward_model: BaseRewardModel, image_encoder):
                     use_reverse_progress_diff=use_reverse_progress_diff,
                     diff_gamma=diff_gamma,
                     diff_reward_scale=diff_reward_scale,
+                    use_exponential_progress=use_exponential_progress,
+                    exponential_diff_reward_scale=exponential_diff_reward_scale,
                     use_base_reward=use_base_reward,
                     base_reward_value=base_reward_value,
                 )
@@ -603,6 +687,8 @@ def create_envs(cfg: DictConfig, reward_model: BaseRewardModel, image_encoder):
                     use_reverse_progress_diff=use_reverse_progress_diff,
                     diff_gamma=diff_gamma,
                     diff_reward_scale=diff_reward_scale,
+                    use_exponential_progress=use_exponential_progress,
+                    exponential_diff_reward_scale=exponential_diff_reward_scale,
                     use_base_reward=use_base_reward,
                     base_reward_value=base_reward_value,
                 )
@@ -629,6 +715,8 @@ def create_envs(cfg: DictConfig, reward_model: BaseRewardModel, image_encoder):
                     use_reverse_progress_diff=use_reverse_progress_diff,
                     diff_gamma=diff_gamma,
                     diff_reward_scale=diff_reward_scale,
+                    use_exponential_progress=use_exponential_progress,
+                    exponential_diff_reward_scale=exponential_diff_reward_scale,
                     use_base_reward=use_base_reward,
                     base_reward_value=base_reward_value,
                 )

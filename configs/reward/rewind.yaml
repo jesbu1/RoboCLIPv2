@@ -9,6 +9,12 @@ reward_model:
   reward_divisor: 1
   reward_at_every_step: true
   sum_reward: false
+  # Exponential progress means the ReWiND checkpoint was trained to predict
+  # normalized exponential progress labels instead of linear t / H labels.
+  use_exponential_progress: false
+  exponential_beta: 2.0
+  exponential_horizon: 128
+  exponential_diff_reward_scale: 44.46704380607797
   use_progress_diff: false
   use_reverse_progress_diff: false
   diff_gamma: 1.0
