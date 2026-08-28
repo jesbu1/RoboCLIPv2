@@ -1,0 +1,131 @@
+#!/usr/bin/env bash
+# Online IQL for pure ReWiND reverse-diff variants:
+#   r_t = scale * (P(s_{t+1}) - gamma * P(s_t)) + base_reward
+
+#SBATCH --job-name=rw_on_rev_10c
+#SBATCH --account=biyik_1165
+#SBATCH --partition=gpu
+#SBATCH --gres=gpu:1
+#SBATCH --cpus-per-task=4
+#SBATCH --mem=16G
+#SBATCH --time=12:00:00
+#SBATCH --output=logs/%x_%A_%a.out
+#SBATCH --error=logs/%x_%A_%a.err
+#SBATCH --array=0-23
+
+set -euo pipefail
+
+PROJECT_DIR="${PROJECT_DIR:-${SLURM_SUBMIT_DIR}}"
+VARIANT="${VARIANT:?VARIANT must be gamma099_scale100, gamma0999_scale1000, or gamma09999_scale10000}"
+
+case "$VARIANT" in
+  gamma099_scale100)
+    DIFF_GAMMA="0.99"
+    DIFF_REWARD_SCALE="100"
+    H5_PATH="datasets/metaworld_labeled_reverse_diff_gamma099.h5"
+    TAG="reverse_diff_gamma099_scale100"
+    ;;
+  gamma0999_scale1000)
+    DIFF_GAMMA="0.999"
+    DIFF_REWARD_SCALE="1000"
+    H5_PATH="datasets/metaworld_labeled_reverse_diff_gamma0999.h5"
+    TAG="reverse_diff_gamma0999_scale1000"
+    ;;
+  gamma09999_scale10000)
+    DIFF_GAMMA="0.9999"
+    DIFF_REWARD_SCALE="10000"
+    H5_PATH="datasets/metaworld_labeled_reverse_diff_gamma09999.h5"
+    TAG="reverse_diff_gamma09999_scale10000"
+    ;;
+  *)
+    echo "ERROR: Unknown VARIANT=${VARIANT}"
+    exit 1
+    ;;
+esac
+
+module purge
+module load gcc/13.3.0
+module load mesa/24.2.3
+module load mesa-glu/9.0.2
+module load glew/2.2.0
+module load glx/1.4
+
+export QT_XCB_GL_INTEGRATION="${QT_XCB_GL_INTEGRATION:-none}"
+source /apps/conda/miniforge3/25.11.0-1/etc/profile.d/conda.sh
+conda activate "${PROJECT_DIR}/conda_envs/rewind_nochunk"
+
+export LD_PRELOAD="$(g++ -print-file-name=libstdc++.so.6)"
+export MUJOCO_GL=egl
+export MUJOCO_PY_MUJOCO_PATH="$HOME/.mujoco/mujoco210"
+GCC_LIBDIR="$(dirname "$(g++ -print-file-name=libstdc++.so.6)")"
+export LD_LIBRARY_PATH="${GCC_LIBDIR}:$HOME/.mujoco/mujoco210/bin:/usr/lib/nvidia:${LD_LIBRARY_PATH:-}"
+
+export WANDB_CONFIG_DIR="$HOME/.config/wandb"
+export WANDB_CACHE_DIR="$HOME/.cache/wandb"
+export WANDB_DIR="$HOME/wandb"
+export WANDB_MODE=online
+
+cd "$PROJECT_DIR"
+
+ENVS=(
+  window-close-v2
+  reach-wall-v2
+  faucet-close-v2
+  coffee-button-v2
+  button-press-wall-v2
+  door-lock-v2
+  handle-press-side-v2
+  sweep-into-v2
+)
+
+SEEDS=(0 32 42)
+
+ENV_IDX=$(( SLURM_ARRAY_TASK_ID / 3 ))
+SEED_IDX=$(( SLURM_ARRAY_TASK_ID % 3 ))
+ENV_ID="${ENVS[$ENV_IDX]}"
+SEED="${SEEDS[$SEED_IDX]}"
+
+CKPT_DIR="logs/offline_rewind_${TAG}_10critics_seed${SEED}"
+
+mkdir -p /scratch1/haobaizh/rewind_nochunk_online_logs
+
+LOG_DIR="/scratch1/haobaizh/rewind_nochunk_online_logs/${ENV_ID}_nochunk_rewind_${TAG}_base_reward_10critics_seed${SEED}"
+GROUP_NAME="${ENV_ID}_nochunk_rewind_${TAG}_base_reward_10critics"
+export WANDB_RUN_NAME="${ENV_ID}_nochunk_rewind_${TAG}_base_reward_10critics_seed${SEED}"
+
+if [ ! -f "$H5_PATH" ]; then
+  echo "ERROR: Missing labeled H5: ${H5_PATH}"
+  exit 1
+fi
+
+rm -rf "$LOG_DIR"
+
+echo "========== ReWiND reverse-diff online =========="
+echo "VARIANT=${VARIANT}"
+echo "ENV_ID=${ENV_ID}"
+echo "SEED=${SEED}"
+echo "DIFF_GAMMA=${DIFF_GAMMA}"
+echo "DIFF_REWARD_SCALE=${DIFF_REWARD_SCALE}"
+echo "H5_PATH=${H5_PATH}"
+echo "CKPT_DIR=${CKPT_DIR}"
+
+srun python -u test_scripts/test_iql.py \
+  metaworld=off_on_15 \
+  algorithm=wsrl_iql \
+  reward=rewind \
+  reward_model.success_bonus=0 \
+  reward_model.use_progress_diff=true \
+  reward_model.use_reverse_progress_diff=true \
+  reward_model.diff_gamma="$DIFF_GAMMA" \
+  reward_model.diff_reward_scale="$DIFF_REWARD_SCALE" \
+  reward_model.use_base_reward=true \
+  reward_model.base_reward_value=-1.0 \
+  general_training.seed="$SEED" \
+  environment.env_id="$ENV_ID" \
+  offline_training.offline_training_steps=0 \
+  offline_training.offline_h5_path="$H5_PATH" \
+  offline_training.ckpt_path="$CKPT_DIR/last_offline" \
+  logging.wandb_group_name="$GROUP_NAME" \
+  logging.log_dir="$LOG_DIR" \
+  hydra.run.dir=. \
+  general_training.n_critics=10

@@ -6,10 +6,6 @@ import numpy as np
 import joblib
 from typing import List, Union
 import torch.nn.functional as F
-from models.reward_model.self_attention_utils import MultiHeadAttentionSubtraction, MultiHeadAttention
-from models.reward_model.liv_reward_model import LIVRewardModel
-from liv import load_liv
-import clip
 from models.encoders.dino_miniLM_encoder import Dino_miniLM_Encoder
 import torch.nn as nn
 
@@ -23,26 +19,19 @@ def normalize_embeddings(embeddings, return_tensor=True):
         return normalized_embeddings.detach().cpu().numpy()
 
 
-class ClassProgressTransformer(nn.Module):
+class ReWiNDTransformer(nn.Module):
+    """Matches the architecture used in rewind_valuemodel to load trained checkpoints."""
     def __init__(self, args, video_dim=768, text_dim=384, hidden_dim=512, num_heads=8, num_layers=4):
         super().__init__()
         self.hidden_dim = hidden_dim
         self.args = args
-        
-        # Project video and text to common dimension
+
         self.video_proj = nn.Linear(video_dim, hidden_dim)
         self.text_proj = nn.Linear(text_dim, hidden_dim)
-        
-        # Position embeddings for video sequence
-        if self.args.positional_encoding:
-            self.first_pos_embed = nn.Parameter(torch.randn(1, hidden_dim))  # 32 is max_length
-            if self.args.last_frame_pe:
-                self.last_pos_embed = nn.Parameter(torch.randn(1, hidden_dim))
-        
-        # Class token embedding
+
+        self.first_pos_embed = nn.Parameter(torch.randn(1, hidden_dim))
         self.class_token = nn.Parameter(torch.randn(1, 1, hidden_dim))
-        
-        # # Transformer encoder
+
         encoder_layer = nn.TransformerEncoderLayer(
             d_model=hidden_dim,
             nhead=num_heads,
@@ -51,19 +40,7 @@ class ClassProgressTransformer(nn.Module):
             batch_first=True
         )
         self.transformer = nn.TransformerEncoder(encoder_layer, num_layers=num_layers)
-        
-        # use a decoder-style transformer
-        # decoder_layer = nn.TransformerDecoderLayer(
-        #     d_model=hidden_dim,
-        #     nhead=num_heads,
-        #     dim_feedforward=hidden_dim * 4,
-        #     dropout=0.1,
-        #     batch_first=True
-        # )
-        # self.transformer = nn.TransformerDecoder(decoder_layer, num_layers=num_layers)
 
-        
-        # Progress prediction head (applied to each frame)
         self.progress_head = nn.Sequential(
             nn.Linear(hidden_dim, hidden_dim // 2),
             nn.LayerNorm(hidden_dim // 2),
@@ -72,58 +49,23 @@ class ClassProgressTransformer(nn.Module):
             nn.Linear(hidden_dim // 2, 1),
             nn.Sigmoid()
         )
-        
-        # Classification head (applied to class token)
-        self.classification_head = nn.Sequential(
-            nn.Linear(hidden_dim, hidden_dim // 2),
-            nn.LayerNorm(hidden_dim // 2),
-            nn.GELU(),
-            nn.Dropout(0.1),
-            nn.Linear(hidden_dim // 2, 1),
-            nn.Sigmoid()
-        )
-        self.attention_mask = nn.Transformer.generate_square_subsequent_mask(18).to('cuda')
-    
+        self.attention_mask = nn.Transformer.generate_square_subsequent_mask(args.max_length + 1).to('cuda')
+
     def forward(self, video_frames, text_embed, attention_mask=None):
         batch_size = video_frames.shape[0]
-        seq_len = video_frames.shape[1]
-        
-        # Project inputs to common dimension
-        video_embed = self.video_proj(video_frames)  # [batch_size, seq_len, hidden_dim]
-        text_embed = self.text_proj(text_embed).unsqueeze(1)  # [batch_size, 1, hidden_dim]
-        
-        # Add positional embeddings to video]
-        if self.args.positional_encoding:
-            video_embed[:,0] += self.first_pos_embed
-            if self.args.last_frame_pe:
-                video_embed[:,-1] += self.last_pos_embed
-        
-        # Expand class token for batch
-        class_tokens = self.class_token.expand(batch_size, -1, -1)
-        
-        # Combine sequence: [class_token, video_frames, text]
-        # sequence = torch.cat([class_tokens, video_embed, text_embed], dim=1)
-        sequence = torch.cat([text_embed, video_embed, class_tokens], dim=1)
-        
-        # Create attention mask if needed
-        if attention_mask is not None:
-            # Add mask positions for class token and text token
-            extended_mask = torch.ones((batch_size, 2), device=attention_mask.device)  # class token + text token
-            attention_mask = torch.cat([extended_mask, attention_mask], dim=1)
-        
-        # Pass through transformer
-        
 
-        transformed = self.transformer(sequence, is_causal=True, mask = self.attention_mask)
-        
-        # Get class prediction from class token
-        # class_pred = self.classification_head(transformed[:, 0])  # Use class token
-        class_pred = self.classification_head(transformed[:, -1])  # Use class token
-        
-        # Get progress predictions for each frame
-        progress_preds = self.progress_head(transformed[:, 1:-1])  # Exclude class token and text token
-        
-        return progress_preds, class_pred
+        video_embed = self.video_proj(video_frames)
+        text_embed = self.text_proj(text_embed).unsqueeze(1)
+
+        video_embed[:,0] += self.first_pos_embed
+
+        sequence = torch.cat([text_embed, video_embed], dim=1)
+
+        transformed = self.transformer(sequence, is_causal=True, mask=self.attention_mask)
+
+        progress_preds = self.progress_head(transformed[:, 1:])
+
+        return progress_preds
 
 
 class RewindRewardModel(BaseRewardModel):
@@ -150,21 +92,16 @@ class RewindRewardModel(BaseRewardModel):
     def _load_model(self, model_load_path: str, pca_model_path: str = None):
         video_dim = 768
         text_dim = 384
-        model_dict = torch.load(model_load_path)
+        model_dict = torch.load(model_load_path, map_location=self.device, weights_only=False)
         args = model_dict['args']
-        model = ClassProgressTransformer(
+        model = ReWiNDTransformer(
                 args=args,
-                video_dim=video_dim,  # Original video embedding dimension
-                text_dim=text_dim,   # Original text embedding dimension
-                hidden_dim=512  # Common dimension for transformer processing
+                video_dim=video_dim,
+                text_dim=text_dim,
+                hidden_dim=512
             ).to(self.device)
 
-        # # load original model
-        # model.load_state_dict(model_dict['model'])
-        # model.eval()
-
-        # load ema model
-        model.load_state_dict(model_dict['ema_model'])
+        model.load_state_dict(model_dict['model_state_dict'])
         model.eval()
         return model, args
 
@@ -231,16 +168,15 @@ class RewindRewardModel(BaseRewardModel):
         """
         # print(f"encoded_texts.shape: {encoded_texts.shape}, encoded_videos.shape: {encoded_videos.shape}")
         # TODO: add the processing for downsampling if needed @Yusen @Jiahui
-        if self.model_args.normalize_embedding:
+        if getattr(self.model_args, 'normalize_embedding', False):
             encoded_videos = self.normalize_embeddings(encoded_videos)
-        if self.model_args.subsample_video:
+        if getattr(self.model_args, 'subsample_video', True):
             processed_video_embedding = self.sample_embedding_frames(
                 encoded_videos.squeeze(0), self.model_args.max_length
             ).unsqueeze(0)
         # print(f"processed_video_embedding.shape: {processed_video_embedding.shape}")
-        pred_class, _ = self.model(processed_video_embedding.float(), encoded_texts.float())
+        pred_class = self.model(processed_video_embedding.float(), encoded_texts.float())
         pred_class = pred_class.squeeze(-1) # reward shape (1, 16, 1) -> (1, 16)
-        pred_class = pred_class[:, 1:] # remove the first element
         if self.sum_reward:
             reward = torch.sum(pred_class, dim=1)
         else:

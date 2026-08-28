@@ -20,6 +20,7 @@ from stable_baselines3.common.utils import get_device
 from stable_baselines3.common.vec_env import VecNormalize
 
 from models.reward_model.base_reward_model import BaseRewardModel
+from offline_rl_algorithms.transition_utils import build_one_step_next_observations
 
 try:
     # Check memory used by replay buffer when possible
@@ -109,7 +110,6 @@ class H5ReplayBuffer(ReplayBuffer):
         with h5py.File(h5_path, "r") as f:
             observations = f["state"][()]
             lang_embeddings = f["policy_lang_embedding"][()]
-            next_observations = observations
             actions = f["action"][()]
 
             # if 'img' in f.keys() and image_encoder is not None:
@@ -171,7 +171,12 @@ class H5ReplayBuffer(ReplayBuffer):
                     img_obs = np.concatenate((image_encodings, proprio), axis=1)
 
                 observations = img_obs
-                next_observations = img_obs
+
+            # Label files store s_t in each row. Build the actual one-step
+            # successor for non-terminal rows before applying task filters.
+            next_observations = build_one_step_next_observations(
+                observations, dones
+            )
 
             if filter_instructions is not None:
                 instructions = f["env_id"][()]
@@ -235,6 +240,8 @@ class H5ReplayBuffer(ReplayBuffer):
                 timesteps[i] = current_timestep
                 current_timestep += 1
 
+        next_timesteps = build_one_step_next_observations(timesteps, dones)
+
         self.optimize_memory_usage = False
 
         self.observations = observations
@@ -243,6 +250,7 @@ class H5ReplayBuffer(ReplayBuffer):
         self.rewards = rewards.astype(np.float32)
         self.dones = dones
         self.timesteps = timesteps
+        self.next_timesteps = next_timesteps
         self.lang_embeddings = np.squeeze(lang_embeddings)
 
         self.buffer_size = self.rewards.shape[0]
@@ -306,7 +314,7 @@ class H5ReplayBuffer(ReplayBuffer):
             )
             if self.add_timestep:
                 timesteps = (
-                    self.timesteps[batch_inds] / 500
+                    self.next_timesteps[batch_inds] / 500
                 )  # 500 is the max episode length
                 next_obs = np.concatenate((next_obs, timesteps.reshape(-1, 1)), axis=1)
 
@@ -504,4 +512,3 @@ if __name__ == "__main__":
     # buffer = CombinedBuffer(buffer, buffer)
     # print(buffer.size())
     # samples = buffer.sample(10)
-

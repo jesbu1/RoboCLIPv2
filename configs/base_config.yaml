@@ -8,10 +8,10 @@ wandb_notes: ""
 
 logging:
   wandb: true
-  wandb_entity_name: "clvr"
-  wandb_project_name: "roboclip-v2"
-  wandb_group_name: "${reward_model.name}_${general_training.algo}_${environment.env_id}_no_rewind_ablation"
-  log_dir: "./logs/${logging.wandb_group_name}_${general_training.seed}"
+  wandb_entity_name: rewind-valuemodel
+  wandb_project_name: rewind-policy-training
+  wandb_group_name: "${reward_model.name}_${general_training.algo}_${environment.env_id}_no_action_chunk"
+  log_dir: "/scratch1/haobaizh/rewind_nochunk_logs/${logging.wandb_group_name}_${general_training.seed}"
   eval_freq: 20000
   video_freq: 5000
 
@@ -75,6 +75,7 @@ reward_model:
   success_bonus: 10.0
   normalize_reward: false
   reward_at_every_step: true
+  use_reverse_progress_diff: false
 
 environment:
   text_string: null # Set to null so you must set environment yaml

@@ -50,16 +50,10 @@ from offline_rl_algorithms.callbacks import CustomWandbCallback, OfflineEvalCall
 # from models.reward_model.xclip_encoder import XCLIPEncoder
 # from models.reward_model import image_encoders
 
-from models.encoders.liv_encoder import LIVEncoder
-
 from models.reward_model.base_reward_model import BaseRewardModel
-from models.reward_model.roboclip_reward_model import RoboclipRewardModel
-from models.reward_model.vlc_reward_model import VLCRewardModel
 from models.reward_model.rewind_reward_model import RewindRewardModel
-from models.reward_model.gvl_reward_model import GVLRewardModel
 from models.encoders.dino_miniLM_encoder import Dino_miniLM_Encoder
 from models.reward_model.env_reward_model import EnvRewardModel
-from models.reward_model.liv_reward_model import LIVRewardModel
 
 from envs.metaworld_envs.metaworld import (
     create_wrapped_env,
@@ -82,6 +76,60 @@ import torch as th
 
 
 # th.set_float32_matmul_precision("high")
+DEFAULT_NOCHUNK_SCRATCH_ROOT = os.environ.get(
+    "REWIND_NOCHUNK_SCRATCH_DIR",
+    "/scratch1/haobaizh/rewind_nochunk",
+)
+DEFAULT_REWIND_VALUE_SCRATCH_ROOT = os.environ.get(
+    "REWIND_SCRATCH_DIR",
+    "/scratch1/haobaizh/rewind_valuemodel",
+)
+
+
+def setup_default_scratch_runtime_dirs():
+    """Keep generated training/runtime files off the project filesystem by default."""
+    scratch_defaults = {
+        "WANDB_DIR": os.path.join(DEFAULT_NOCHUNK_SCRATCH_ROOT, "wandb"),
+        "WANDB_CACHE_DIR": os.path.join(DEFAULT_NOCHUNK_SCRATCH_ROOT, ".cache", "wandb"),
+        "WANDB_CONFIG_DIR": os.path.join(DEFAULT_NOCHUNK_SCRATCH_ROOT, ".config", "wandb"),
+    }
+    home_defaults = {
+        "WANDB_DIR": os.path.join(os.path.expanduser("~"), "wandb"),
+        "WANDB_CACHE_DIR": os.path.join(os.path.expanduser("~"), ".cache", "wandb"),
+        "WANDB_CONFIG_DIR": os.path.join(os.path.expanduser("~"), ".config", "wandb"),
+    }
+    for key, scratch_path in scratch_defaults.items():
+        current = os.environ.get(key)
+        home_default = home_defaults[key]
+        if current and os.path.abspath(current) != os.path.abspath(home_default):
+            continue
+        os.makedirs(scratch_path, exist_ok=True)
+        os.environ[key] = scratch_path
+
+
+def resolve_nochunk_scratch_path(path):
+    if not path or os.path.isabs(path):
+        return path
+    return os.path.join(DEFAULT_NOCHUNK_SCRATCH_ROOT, path)
+
+
+def resolve_rewind_value_scratch_path(path):
+    if not path or os.path.isabs(path):
+        return path
+    return os.path.join(DEFAULT_REWIND_VALUE_SCRATCH_ROOT, path)
+
+
+def compute_exponential_diff_reward_scale(horizon: int, beta: float) -> float:
+    """Scale that matches cumulative normalized exponential progress labels."""
+    if horizon <= 0:
+        raise ValueError(f"exponential_horizon must be positive, got {horizon}")
+    if abs(beta) < 1e-12:
+        return (horizon + 1) / 2.0
+    steps = np.arange(1, horizon + 1, dtype=np.float64)
+    labels = (np.exp(beta * steps / horizon) - 1.0) / (np.exp(beta) - 1.0)
+    return float(labels.sum())
+
+
 def create_exp_name(cfg: DictConfig):
     exp_name = cfg.environment.cfg_name + "_"
 
@@ -134,6 +182,9 @@ def create_exp_name(cfg: DictConfig):
     else:
         exp_name += "_sparse"
 
+    if cfg.reward_model.get("use_exponential_progress", False):
+        exp_name += f"_exp_beta_{cfg.reward_model.get('exponential_beta', 2.0)}"
+
     if cfg.general_training.normalize_reward:
         exp_name += "_normalize"
 
@@ -149,12 +200,14 @@ def parse_reward_model(reward_cfg: DictConfig) -> BaseRewardModel:
     if reward_string is None:
         return None
     if reward_string == "roboclip":
+        from models.reward_model.roboclip_reward_model import RoboclipRewardModel
         reward_model = RoboclipRewardModel(
             model_load_path=reward_cfg.model_path,
             batch_size=reward_cfg.batch_size,
             success_bonus=reward_cfg.success_bonus,
         )
     elif reward_string == "vlc":
+        from models.reward_model.vlc_reward_model import VLCRewardModel
         reward_model = VLCRewardModel(
             server_url=reward_cfg.server_url,
             batch_size=reward_cfg.batch_size,
@@ -162,6 +215,7 @@ def parse_reward_model(reward_cfg: DictConfig) -> BaseRewardModel:
             reward_at_every_step=reward_cfg.reward_at_every_step,
         )
     elif reward_string == "gvl":
+        from models.reward_model.gvl_reward_model import GVLRewardModel
         reward_model = GVLRewardModel(
             batch_size=reward_cfg.batch_size,
             success_bonus=reward_cfg.success_bonus,
@@ -177,7 +231,33 @@ def parse_reward_model(reward_cfg: DictConfig) -> BaseRewardModel:
             sum_reward=reward_cfg.sum_reward,
             reward_at_every_step=reward_cfg.reward_at_every_step,
         )
+    elif reward_string == "robometer":
+        from models.reward_model.robometer_reward_model import RobometerRewardModel
+        reward_model = RobometerRewardModel(
+            model_path=reward_cfg.model_path,
+            batch_size=reward_cfg.batch_size,
+            success_bonus=reward_cfg.success_bonus,
+            reward_at_every_step=reward_cfg.reward_at_every_step,
+            max_frames=reward_cfg.get("max_frames", 4),
+            use_server=reward_cfg.get("use_server", False),
+            server_url=reward_cfg.get("server_url", "http://localhost:8000"),
+        )
+    elif reward_string == "topreward":
+        from models.reward_model.topreward_reward_model import TOPRewardModel
+        reward_model = TOPRewardModel(
+            model_name=reward_cfg.get("vlm_model_name", "Qwen/Qwen3-VL-8B-Instruct"),
+            batch_size=reward_cfg.batch_size,
+            success_bonus=reward_cfg.success_bonus,
+            reward_at_every_step=reward_cfg.reward_at_every_step,
+            max_frames=reward_cfg.get("max_frames", 4),
+            server_url=reward_cfg.get("server_url", "http://localhost:8000"),
+            request_timeout=reward_cfg.get("request_timeout", 900),
+            request_retries=reward_cfg.get("request_retries", 3),
+            lock_path=reward_cfg.get("lock_path", ""),
+            request_format=reward_cfg.get("request_format", "chat"),
+        )
     elif reward_string == "liv":
+        from models.reward_model.liv_reward_model import LIVRewardModel
         reward_model = LIVRewardModel(
             model_load_path=reward_cfg.model_path,
             use_pca=reward_cfg.use_pca,
@@ -234,7 +314,7 @@ def parse_reward_model(reward_cfg: DictConfig) -> BaseRewardModel:
 # @profile
 @hydra.main(config_path="../configs", config_name="base_config")
 def main(cfg: DictConfig):
-    print(OmegaConf.to_yaml(cfg))
+    setup_default_scratch_runtime_dirs()
 
     # Extract configurations
     training_config = cfg.general_training
@@ -242,8 +322,14 @@ def main(cfg: DictConfig):
     model_config = cfg.model
     logging_config = cfg.logging
     offline_config = cfg.offline_training
+    logging_config.log_dir = resolve_nochunk_scratch_path(logging_config.log_dir)
+    offline_config.offline_h5_path = resolve_rewind_value_scratch_path(
+        offline_config.offline_h5_path
+    )
+    offline_config.ckpt_path = resolve_nochunk_scratch_path(offline_config.ckpt_path)
+    print(OmegaConf.to_yaml(cfg))
 
-    experiment_name = create_exp_name(cfg)
+    experiment_name = os.environ.get("WANDB_RUN_NAME", create_exp_name(cfg))
 
     ### Setup wandb and logging ###
     if logging_config.wandb:
@@ -494,6 +580,31 @@ def create_envs(cfg: DictConfig, reward_model: BaseRewardModel, image_encoder):
     # 
     ignore_language = env_config.ignore_language
 
+    # Get use_progress_diff from config (default to False if not specified)
+    use_progress_diff = cfg.reward_model.get("use_progress_diff", False)
+    use_reverse_progress_diff = cfg.reward_model.get("use_reverse_progress_diff", False)
+    diff_gamma = cfg.reward_model.get("diff_gamma", 1.0)
+    diff_reward_scale = cfg.reward_model.get("diff_reward_scale", 1.0)
+    use_exponential_progress = cfg.reward_model.get("use_exponential_progress", False)
+    exponential_beta = cfg.reward_model.get("exponential_beta", 2.0)
+    exponential_horizon = cfg.reward_model.get("exponential_horizon", 128)
+    exponential_diff_reward_scale = cfg.reward_model.get(
+        "exponential_diff_reward_scale", None
+    )
+    if use_exponential_progress and use_progress_diff:
+        if exponential_diff_reward_scale is None or exponential_diff_reward_scale <= 0:
+            exponential_diff_reward_scale = compute_exponential_diff_reward_scale(
+                int(exponential_horizon),
+                float(exponential_beta),
+            )
+        print(
+            "Using exponential progress diff scale: "
+            f"beta={exponential_beta}, horizon={exponential_horizon}, "
+            f"scale={exponential_diff_reward_scale}"
+        )
+    use_base_reward = cfg.reward_model.get("use_base_reward", False)
+    base_reward_value = cfg.reward_model.get("base_reward_value", -1.0)
+
     # Define envs (dummy example for illustration)
     # assert env_config.n_envs == 4, "Number of environments should be 4."
     if env_config.n_envs > 1:
@@ -513,6 +624,14 @@ def create_envs(cfg: DictConfig, reward_model: BaseRewardModel, image_encoder):
                     dense_rewards_at_end=cfg.general_training.dense_rewards_at_end,
                     normalize_reward=cfg.general_training.normalize_reward,
                     terminate_on_success=cfg.general_training.terminate_on_success,
+                    use_progress_diff=use_progress_diff,
+                    use_reverse_progress_diff=use_reverse_progress_diff,
+                    diff_gamma=diff_gamma,
+                    diff_reward_scale=diff_reward_scale,
+                    use_exponential_progress=use_exponential_progress,
+                    exponential_diff_reward_scale=exponential_diff_reward_scale,
+                    use_base_reward=use_base_reward,
+                    base_reward_value=base_reward_value,
                 )
                 for _ in range(env_config.n_envs)
             ]
@@ -536,6 +655,14 @@ def create_envs(cfg: DictConfig, reward_model: BaseRewardModel, image_encoder):
                     dense_rewards_at_end=cfg.general_training.dense_rewards_at_end,
                     normalize_reward=cfg.general_training.normalize_reward,
                     terminate_on_success=cfg.general_training.terminate_on_success,
+                    use_progress_diff=use_progress_diff,
+                    use_reverse_progress_diff=use_reverse_progress_diff,
+                    diff_gamma=diff_gamma,
+                    diff_reward_scale=diff_reward_scale,
+                    use_exponential_progress=use_exponential_progress,
+                    exponential_diff_reward_scale=exponential_diff_reward_scale,
+                    use_base_reward=use_base_reward,
+                    base_reward_value=base_reward_value,
                 )
             ]
         )
@@ -556,6 +683,14 @@ def create_envs(cfg: DictConfig, reward_model: BaseRewardModel, image_encoder):
                     use_proprio=env_config.use_proprio,
                     normalize_reward=cfg.general_training.normalize_reward,
                     terminate_on_success=cfg.general_training.terminate_on_success,
+                    use_progress_diff=use_progress_diff,
+                    use_reverse_progress_diff=use_reverse_progress_diff,
+                    diff_gamma=diff_gamma,
+                    diff_reward_scale=diff_reward_scale,
+                    use_exponential_progress=use_exponential_progress,
+                    exponential_diff_reward_scale=exponential_diff_reward_scale,
+                    use_base_reward=use_base_reward,
+                    base_reward_value=base_reward_value,
                 )
                 for i in range(1)
             ]
@@ -576,6 +711,14 @@ def create_envs(cfg: DictConfig, reward_model: BaseRewardModel, image_encoder):
                     use_proprio=env_config.use_proprio,
                     normalize_reward=cfg.general_training.normalize_reward,
                     terminate_on_success=cfg.general_training.terminate_on_success,
+                    use_progress_diff=use_progress_diff,
+                    use_reverse_progress_diff=use_reverse_progress_diff,
+                    diff_gamma=diff_gamma,
+                    diff_reward_scale=diff_reward_scale,
+                    use_exponential_progress=use_exponential_progress,
+                    exponential_diff_reward_scale=exponential_diff_reward_scale,
+                    use_base_reward=use_base_reward,
+                    base_reward_value=base_reward_value,
                 )
             ]
         )  # KitchenEnvDenseOriginalReward(time=True)

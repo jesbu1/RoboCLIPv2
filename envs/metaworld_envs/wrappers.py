@@ -167,12 +167,40 @@ class LearnedRewardWrapper(gym.Wrapper):
         is_state_based: bool = False,
         dense_eval: bool = False,
         use_proprio: bool = False,
+        use_progress_diff: bool = False,
+        use_reverse_progress_diff: bool = False,
+        diff_gamma: float = 1.0,
+        diff_reward_scale: float = 1.0,
+        use_exponential_progress: bool = False,
+        exponential_diff_reward_scale: float = None,
+        use_base_reward: bool = False,
+        base_reward_value: float = -1.0,
     ):
         super(LearnedRewardWrapper, self).__init__(env)
         self.reward_model = reward_model
         self.image_encoder = encoder
         self.is_state_based = is_state_based
         self.use_proprio = use_proprio
+        # Progress diff mode defaults to gamma * P(s') - P(s). The reverse
+        # variant switches to P(s') - gamma * P(s) only when explicitly enabled.
+        self.use_progress_diff = use_progress_diff
+        self.use_reverse_progress_diff = use_reverse_progress_diff
+        self.diff_gamma = diff_gamma
+        self.diff_reward_scale = diff_reward_scale
+        self.use_exponential_progress = use_exponential_progress
+        self.exponential_diff_reward_scale = exponential_diff_reward_scale
+        if (
+            self.use_progress_diff
+            and self.use_exponential_progress
+            and self.exponential_diff_reward_scale is not None
+            and self.exponential_diff_reward_scale > 0
+        ):
+            self.active_diff_reward_scale = self.exponential_diff_reward_scale
+        else:
+            self.active_diff_reward_scale = self.diff_reward_scale
+        self.prev_progress = None
+        self.use_base_reward = use_base_reward
+        self.base_reward_value = base_reward_value
         # Use absolute path
         self.video_dir = os.path.abspath("videos")
         if not os.path.exists(self.video_dir):
@@ -238,6 +266,30 @@ class LearnedRewardWrapper(gym.Wrapper):
             print(f"Error saving video: {e}")
             print(f"Current working directory: {os.getcwd()}")
 
+    def _is_robometer_reward(self) -> bool:
+        return self.reward_model.name == "RobometerRewardModel"
+
+    def _is_topreward_reward(self) -> bool:
+        return self.reward_model.name == "TOPRewardModel"
+
+    def _uses_frame_buffer_reward(self) -> bool:
+        return self._is_robometer_reward() or self._is_topreward_reward()
+
+    def _prepare_image_for_model(self, image: np.ndarray) -> np.ndarray:
+        """
+        Prepare the render used by the encoder/reward model.
+
+        Server reward models and DINO should see the same center crop, so we crop
+        once here and let DINO's CenterCrop(224) become a no-op.
+        Other reward models keep the original full render.
+        """
+        processed_image = image
+        if self._uses_frame_buffer_reward():
+            crop_fn = getattr(self.reward_model, "_center_crop_frame", None)
+            if callable(crop_fn):
+                processed_image = crop_fn(image)
+        return processed_image[None, None, :, :, :]
+
     def step(self, action):
         self.counter += 1
         obs, original_reward, done, info = self.env.step(action)
@@ -256,16 +308,19 @@ class LearnedRewardWrapper(gym.Wrapper):
                 not self.is_state_based
             ):
                 image = self.env.render()
-                # Input should be of shape (batch_size, num_frames, height, width, channels)
-                # However, the input is of shape (height, width, channels)
-                image_for_model = image[None, None, :, :, :]
-                self.raw_observations.append(image_for_model)
+                raw_image_for_model = image[None, None, :, :, :]
+                image_for_model = self._prepare_image_for_model(image)
+                if not self._uses_frame_buffer_reward() or not self.reward_at_every_step:
+                    self.raw_observations.append(raw_image_for_model)
                 # encoded_image = self.reward_model.encode_images(
                 #     image_for_model
                 # ).squeeze()
                 encoded_image = self.image_encoder.encode_images(
                     image_for_model
                 ).squeeze()
+                # Server reward models use raw frame buffers instead of DINO history.
+                if self._uses_frame_buffer_reward() and not self.dense_eval:
+                    self.reward_model.add_frame(image_for_model)
 
         if self.is_state_based is False and encoded_image is not None:
             # obs = np.concatenate([obs, self.reward_model(obs)])
@@ -282,7 +337,7 @@ class LearnedRewardWrapper(gym.Wrapper):
                 if self.dense_eval:
                     print(f"eval success reward: {reward}")
             # print(f"obs: {obs.shape}") # 772 = 768 + 4
-            if self.dense_eval:
+            if self.dense_eval and not self._is_robometer_reward():
                 wandb.log({
                     "eval/eval_original_reward": original_reward,
                     "eval/eval_reward_with_success_bonus": reward
@@ -299,7 +354,7 @@ class LearnedRewardWrapper(gym.Wrapper):
             return obs, sparse_reward, done, info
 
         
-        if encoded_image is not None:
+        if encoded_image is not None and not self._uses_frame_buffer_reward():
             self.past_observations.append(encoded_image)
 
         assert (
@@ -324,51 +379,87 @@ class LearnedRewardWrapper(gym.Wrapper):
                 stacked_sequence = (
                     th.from_numpy(stacked_sequence).float().to(self.reward_model.device)
                 ).unsqueeze(0)
+                current_progress = self.reward_model.calculate_rewards(
+                    self.reward_language_features, stacked_sequence
+                )
             elif self.reward_model.name == "LIVRewardModel":
                 stacked_sequence = th.from_numpy(self.reward_model.encode_images(
                     image_for_model
                 )).unsqueeze(0)
                 # print(f"stacked_sequence shape: {stacked_sequence.shape}") # (1, 1, 1024)
+                current_progress = self.reward_model.calculate_rewards(
+                    self.reward_language_features, stacked_sequence
+                )
+            elif self._uses_frame_buffer_reward():
+                # Server reward models use internal raw-frame buffers and do
+                # not need the 768-dim DINO history tensor.
+                current_progress = self.reward_model.calculate_rewards(
+                    self.reward_language_features, None
+                )
 
-            reward = self.reward_model.calculate_rewards(
-                self.reward_language_features, stacked_sequence
-            )
+            if isinstance(current_progress, th.Tensor):
+                current_progress = current_progress.detach().cpu().numpy().item()
+            elif isinstance(current_progress, np.ndarray):
+                current_progress = current_progress.item()
 
-            if isinstance(reward, th.Tensor):
-                reward = reward.detach().cpu().numpy().item()
-            # print(f"reward: {reward}")
-            wandb.log({"train/learned_reward_per_step": reward})
+            if self.use_progress_diff:
+                # Progress diff mode:
+                #   default: scale * (gamma * P(s') - P(s))
+                #   reverse: scale * (P(s') - gamma * P(s))
+                if self.prev_progress is not None:
+                    if self.use_reverse_progress_diff:
+                        raw_diff = current_progress - self.diff_gamma * self.prev_progress
+                    else:
+                        raw_diff = self.diff_gamma * current_progress - self.prev_progress
+                    reward = self.active_diff_reward_scale * raw_diff
+                else:
+                    reward = 0.0  # First step after reset, no diff available
+                self.prev_progress = current_progress
+                wandb.log({
+                    "train/learned_reward_per_step": reward,
+                    "train/progress": current_progress,
+                    "train/diff_reward_scale": self.active_diff_reward_scale,
+                })
+            else:
+                # Original mode: reward = P(s)
+                reward = current_progress
+                wandb.log({"train/learned_reward_per_step": reward})
             # print(f"reward : {reward}")
             # exit()
         else:
             if done:
-                # stacked_sequence = np.stack(self.past_observations, axis=0)
-                # stacked_sequence = (
-                #     th.from_numpy(stacked_sequence).float().to(self.reward_model.device)
-                # )
-                # print(f"stacked_sequence shape: {stacked_sequence.shape}")
-                # print(f"raw_observations shape: {len(self.raw_observations)}")
-                # print(f"raw_observations shape: {self.raw_observations[0].shape}")
-                frames = [
-                          frame[
-                            :,
-                            :, 
-                            (frame.shape[2] - 224) // 2 : (frame.shape[2] + 224) // 2,
-                            (frame.shape[3] - 224) // 2 : (frame.shape[3] + 224) // 2,
-                            :3 
+                if self._uses_frame_buffer_reward():
+                    reward = self.reward_model.calculate_rewards(
+                        self.reward_language_features, None
+                    )
+                else:
+                    # stacked_sequence = np.stack(self.past_observations, axis=0)
+                    # stacked_sequence = (
+                    #     th.from_numpy(stacked_sequence).float().to(self.reward_model.device)
+                    # )
+                    # print(f"stacked_sequence shape: {stacked_sequence.shape}")
+                    # print(f"raw_observations shape: {len(self.raw_observations)}")
+                    # print(f"raw_observations shape: {self.raw_observations[0].shape}")
+                    frames = [
+                              frame[
+                                :,
+                                :, 
+                                (frame.shape[2] - 224) // 2 : (frame.shape[2] + 224) // 2,
+                                (frame.shape[3] - 224) // 2 : (frame.shape[3] + 224) // 2,
+                                :3 
+                            ]
+                            for frame in self.raw_observations
                         ]
-                        for frame in self.raw_observations
-                    ]
-                
-                frames = np.stack(frames, axis=1).squeeze(2)
-                # print(f"frames shape: {frames.shape}") # (1, 128, 224, 224, 3)
-                frames_embeddings = th.from_numpy(self.reward_model.encode_images(
-                    frames
-                )).unsqueeze(0)
-                # print(f"frames_embeddings shape: {frames_embeddings.shape}") # (1, 32, 768)
-                reward = self.reward_model.calculate_rewards(
-                    self.reward_language_features, frames_embeddings
-                )
+                    
+                    frames = np.stack(frames, axis=1).squeeze(2)
+                    # print(f"frames shape: {frames.shape}") # (1, 128, 224, 224, 3)
+                    frames_embeddings = th.from_numpy(self.reward_model.encode_images(
+                        frames
+                    )).unsqueeze(0)
+                    # print(f"frames_embeddings shape: {frames_embeddings.shape}") # (1, 32, 768)
+                    reward = self.reward_model.calculate_rewards(
+                        self.reward_language_features, frames_embeddings
+                    )
                 # print(f"reward: {reward}")
                 # exit()
                 if self.episode_counter % 350 == 0:
@@ -377,6 +468,8 @@ class LearnedRewardWrapper(gym.Wrapper):
                     self.save_video(frames_np, reward)
                 if isinstance(reward, th.Tensor):
                     reward = reward.detach().cpu().numpy().item()
+                elif isinstance(reward, np.ndarray):
+                    reward = reward.item()
                 
                 self.past_observations = []
                 self.raw_observations = []
@@ -397,6 +490,11 @@ class LearnedRewardWrapper(gym.Wrapper):
         # elif self.counter > 1:
         #     reward -= self.offset
 
+        # Base reward per step if not success
+        if self.use_base_reward:
+            if not info.get("success", False):
+                reward += self.base_reward_value
+
         # Success bonus
         if info.get("success", False):
             reward += self.reward_model.success_bonus
@@ -412,13 +510,21 @@ class LearnedRewardWrapper(gym.Wrapper):
         # print(len(self.raw_observations))
         self.raw_observations = []
         self.counter = 0
+        self.prev_progress = None
+        # Clear server reward frame buffers on reset.
+        if self._uses_frame_buffer_reward():
+            self.reward_model.clear_frame_buffer()
         obs = self.env.reset()
 
         # This is for the reward function
         image = self.env.render()
-        image_for_model = image[None, None, :, :, :]
+        raw_image_for_model = image[None, None, :, :, :]
+        image_for_model = self._prepare_image_for_model(image)
         # print(image_for_model.shape)
         encoded_image = self.image_encoder.encode_images(image_for_model).squeeze()
+        # Server reward models use raw frame buffers instead of DINO history.
+        if self._uses_frame_buffer_reward() and not self.dense_eval:
+            self.reward_model.add_frame(image_for_model)
 
         if self.is_state_based is False:
             if self.use_proprio:
@@ -427,10 +533,38 @@ class LearnedRewardWrapper(gym.Wrapper):
 
             else:
                 obs = encoded_image
-        self.past_observations.append(encoded_image)
-        self.raw_observations.append(image_for_model)
+        if not self._uses_frame_buffer_reward():
+            self.past_observations.append(encoded_image)
+        if not self._uses_frame_buffer_reward() or not self.reward_at_every_step:
+            self.raw_observations.append(raw_image_for_model)
         wandb.log({"train/total_success_bonus": self.total_success_bonus})
         self.total_success_bonus = 0
+
+        # Compute initial progress for diff mode
+        if self.use_progress_diff and self.reward_at_every_step:
+            if self.reward_model.name == "RewindRewardModel":
+                stacked_sequence = np.stack(self.past_observations, axis=0)
+                stacked_sequence = (
+                    th.from_numpy(stacked_sequence).float().to(self.reward_model.device)
+                ).unsqueeze(0)
+                initial_progress = self.reward_model.calculate_rewards(
+                    self.reward_language_features, stacked_sequence
+                )
+            elif self._uses_frame_buffer_reward():
+                if self.dense_eval:
+                    initial_progress = None
+                else:
+                    initial_progress = self.reward_model.calculate_rewards(
+                        self.reward_language_features, None
+                    )
+            else:
+                initial_progress = None
+            if initial_progress is not None:
+                if isinstance(initial_progress, th.Tensor):
+                    initial_progress = initial_progress.detach().cpu().numpy().item()
+                elif isinstance(initial_progress, np.ndarray):
+                    initial_progress = initial_progress.item()
+                self.prev_progress = initial_progress
         return obs
 
 

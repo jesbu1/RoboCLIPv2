@@ -4,6 +4,7 @@ data
 *.h5
 wandb
 logs
+figures/
 *.DS_Store
 .vscode/
 
